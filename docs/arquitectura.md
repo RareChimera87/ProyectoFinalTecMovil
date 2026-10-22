@@ -214,7 +214,7 @@ backend/src/main/kotlin/me/santiagoreina/parcheu/api/
 
 ## 4. Modelo de datos
 
-Postgres 16 es la única fuente de verdad. Convenciones: `uuid` con `gen_random_uuid()`, `timestamptz`, enums como `text` con `CHECK`. La cuenta de servicio de la API tiene solo `INSERT, SELECT` sobre `consents` (la tabla solo agrega filas).
+Postgres 16 es la única fuente de verdad. Convenciones: `uuid` con `gen_random_uuid()`, `timestamptz`, enums como `text` con `CHECK`. `consents` solo agrega filas: como la API y el job `migrate` usan el mismo usuario IAM (`sa-api`, dueño de las tablas) un `GRANT` no basta, así que un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE`; la única excepción es la purga por retención (E8.8), que activa `set local parcheu.consents_purge = 'on'` (E0.4). Las tablas que solo contienen datos de un usuario usan `ON DELETE CASCADE`; las que deben sobrevivirle (`consents`, `simulations`, `reports`, `entitlements`, `purchase_events`) no. Las tablas Exposed viven en `platform/db/tables/` (un archivo por dominio) y los enums sin equivalente en el contrato en `DbEnums.kt`.
 
 ```sql
 -- Identidad
@@ -720,7 +720,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Turbine | 1.2.1 (verificar) | Tests de Flow |
 | Spotless + ktlint | 7.x / 1.7.x (verificar) | Estilo |
 | Ktor (server, client para tests) | 3.5.2 (fijada en E0.3, vía `ktor-bom`) | Backend |
-| Exposed | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`) | SQL |
+| Exposed (`exposed-core`, `exposed-jdbc`, `exposed-java-time`, `exposed-json`) | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`; java-time y json desde E0.4) | SQL |
 | HikariCP | 7.1.0 (fijada en E0.3) | Pool |
 | PostgreSQL JDBC | 42.7.14 (fijada en E0.3) | Driver |
 | Cloud SQL Java Connector (`postgres-socket-factory`) | 1.30.1 (fijada en E0.3) | Conexión IAM |
