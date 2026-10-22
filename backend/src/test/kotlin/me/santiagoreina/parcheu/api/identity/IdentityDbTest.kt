@@ -154,7 +154,7 @@ class IdentityDbTest : FunSpec({
                         ConsentKind.TERMS to TEST_LEGAL_VERSION,
                         ConsentKind.PRIVACY to TEST_LEGAL_VERSION,
                     )
-                    client.post("/v1/chats/x/read") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+                    client.post("/v1/twin/feedback") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
                 }
                 // Se sube la versión: el mismo usuario vuelve a NEEDS_TERMS y a 403 TERMS_REQUIRED.
                 testApplication {

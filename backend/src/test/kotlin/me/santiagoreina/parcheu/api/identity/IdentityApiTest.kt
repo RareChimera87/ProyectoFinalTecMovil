@@ -150,7 +150,7 @@ class IdentityApiTest : FunSpec({
             client.get("/v1/me") { auth("lucia") }.status shouldBe HttpStatusCode.OK
             client.delete("/v1/me") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
             client.acceptTerms("lucia").status shouldBe HttpStatusCode.OK
-            client.post("/v1/chats/x/read") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+            client.post("/v1/twin/feedback") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
         }
     }
 
@@ -186,7 +186,7 @@ class IdentityApiTest : FunSpec({
             startApp(testContainer(repo = repo)).apply {
                 session("lucia")
                 acceptTerms("lucia")
-                post("/v1/chats/x/read") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+                post("/v1/twin/feedback") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
             }
         }
         testApplication {
