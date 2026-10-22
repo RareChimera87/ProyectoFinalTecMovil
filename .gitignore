@@ -1,0 +1,34 @@
+# Android
+android/.gradle/
+android/build/
+android/*/build/
+android/.kotlin/
+android/local.properties
+android/captures/
+android/.cxx/
+**/google-services.json
+*.jks
+*.keystore
+# Backend
+backend/.gradle/
+backend/build/
+backend/*/build/
+contract/.gradle/
+contract/build/
+# IDE
+**/.idea/
+*.iml
+.vscode/
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.example.tfvars
+# Secretos y entorno
+.env
+.env.*
+!.env.example
+# SO
+.DS_Store
+Thumbs.db
