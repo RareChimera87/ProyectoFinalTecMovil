@@ -63,7 +63,7 @@ class GraphApiTest : FunSpec({
             val graph = inMemoryGraphModule(FIXED_CLOCK, graphRepo)
             return AppContainer(
                 testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identity, graph,
-                allDomains(identity, graph),
+                domains = allDomains(identity, graph),
             )
         }
     }

@@ -2,7 +2,12 @@ package me.santiagoreina.parcheu.api.platform
 
 import me.santiagoreina.parcheu.api.admin.AdminRoutes
 import me.santiagoreina.parcheu.api.billing.BillingRoutes
+import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.ChatRoutes
+import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
+import me.santiagoreina.parcheu.api.chat.FirestoreChatMirror
+import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
+import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
@@ -24,6 +29,8 @@ import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
@@ -45,8 +52,12 @@ class AppContainer(
     val identity: IdentityService,
     /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
     val graph: GraphModule = inMemoryGraphModule(clock),
+    /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
+    val chat: ChatModule = inMemoryChatModule(clock, graph.policy),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, graph),
+    val domains: List<DomainRoutes> = allDomains(identity, graph, chat),
+    /** Avisos (push + bandeja). Los tests de otros dominios pasan un `FakeNotifier`. */
+    val notifier: Notifier = NoopNotifier,
 ) {
     companion object {
         /** Cableado de producción: verificadores reales (Fake solo con `ENV=local`). */
@@ -69,13 +80,22 @@ class AppContainer(
             val database = connectExposed(createDataSource(dbConfig, failFast = false))
             val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
             val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, graph)
+            // E5.3 (PR #30) cambia este valor por FcmNotifier; hasta entonces los avisos del chat no salen.
+            val notifier: Notifier = NoopNotifier
+            // En local no hay Firestore: el espejo del chat queda en memoria (Postgres sigue siendo la verdad).
+            val chatMirror = if (local) InMemoryChatMirror() else FirestoreChatMirror.forProject(requireNotNull(config.firebaseProjectId))
+            val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, graph, chat, notifier = notifier)
         }
     }
 }
 
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
-fun allDomains(identity: IdentityService, graph: GraphModule = inMemoryGraphModule(systemClock())): List<DomainRoutes> = listOf(
+fun allDomains(
+    identity: IdentityService,
+    graph: GraphModule = inMemoryGraphModule(systemClock()),
+    chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
+): List<DomainRoutes> = listOf(
     IdentityRoutes(identity),
     TwinRoutes(),
     QuotaRoutes(),
@@ -84,7 +104,7 @@ fun allDomains(identity: IdentityService, graph: GraphModule = inMemoryGraphModu
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),
-    ChatRoutes(),
+    ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     NotificationsRoutes(),
     BillingRoutes(),
     SafetyRoutes(),
