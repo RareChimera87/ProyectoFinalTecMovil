@@ -36,10 +36,10 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
         HttpMethod.Post to "/v1/match/queue", HttpMethod.Get to "/v1/match/queue", HttpMethod.Delete to "/v1/match/queue",
         HttpMethod.Get to "/v1/matches/m1", HttpMethod.Post to "/v1/matches/m1/choice",
     ),
+    // E4.3 implementó crear, listar, consultar y transcript (SimulationApiTest); informe y decisión son de E4.6.
     "simulation" to listOf(
-        HttpMethod.Post to "/v1/simulations", HttpMethod.Get to "/v1/simulations", HttpMethod.Get to "/v1/simulations/s1",
         HttpMethod.Get to "/v1/simulations/s1/report", HttpMethod.Post to "/v1/simulations/s1/report:unlock",
-        HttpMethod.Get to "/v1/simulations/s1/transcript", HttpMethod.Post to "/v1/simulations/s1/decision",
+        HttpMethod.Post to "/v1/simulations/s1/decision",
     ),
     "scenario" to listOf(HttpMethod.Get to "/v1/scenarios", HttpMethod.Post to "/v1/scenario-sessions/c1/agreement"),
     "graph" to listOf(
@@ -66,8 +66,9 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     "home" to listOf(HttpMethod.Get to "/v1/home"),
 )
 
+// `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest).
 private val internalRoutes = listOf(
-    "/internal/tasks/simulate", "/internal/tasks/judge-scenario",
+    "/internal/tasks/judge-scenario",
     "/internal/tasks/extract-memories", "/internal/tasks/moderate", "/internal/tasks/name-community",
     "/internal/tasks/purge-user", "/internal/jobs/communities", "/internal/jobs/memories",
     "/internal/jobs/twin-accuracy", "/internal/jobs/retention", "/internal/billing/rtdn",

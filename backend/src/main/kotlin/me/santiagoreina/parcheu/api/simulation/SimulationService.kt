@@ -115,6 +115,8 @@ class SimulationService(
         )
         try {
             repo.create(record)
+            // El documento de Firestore existe antes de que la tarea empiece a escribir progreso.
+            publishQueued(record, a, b)
             tasks.enqueue(TaskRequest(QueueKind.SIMULATIONS, "/tasks/simulate", "simulate-$id", """{"id":"$id"}"""))
         } catch (e: CancellationException) {
             throw e
@@ -124,10 +126,17 @@ class SimulationService(
             runCatching { repo.markFailed(id, "No se pudo encolar: ${e.message}", clock.instant()) }
             throw e
         }
-        runCatching {
-            mirror.publish(SimulationMirrorDoc(id, listOf(a.firebaseUid, b.firebaseUid), SimulationStatus.QUEUED, record.progress, null, clock.instant()))
-        }.onFailure { log.warn("No se pudo crear simulations/{} en Firestore: {}", id, it.message) }
         return repo.find(id) ?: record
+    }
+
+    private suspend fun publishQueued(record: SimulationRecord, a: Participant, b: Participant) {
+        try {
+            mirror.publish(SimulationMirrorDoc(record.id, listOf(a.firebaseUid, b.firebaseUid), SimulationStatus.QUEUED, record.progress, null, clock.instant()))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn("No se pudo crear simulations/{} en Firestore: {}", record.id, e.message)
+        }
     }
 
     /** `GET /v1/simulations`: las simulaciones del usuario, más recientes primero. */
