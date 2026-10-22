@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.api.graph
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
 import java.util.UUID
+import kotlin.reflect.KClass
 
 /** Contexto en el que un observador ve a otra persona (arquitectura.md §6.1). */
 enum class ViewContext {
@@ -104,14 +105,14 @@ interface ThirdPartyView {
 /**
  * Registro de las vistas de terceros. El ego-grafo de E3.1 no lo es (solo muestra aristas
  * directas del observador); fof (E6.3), comunidades (E6.2), presentaciones (E6.4) y sugerencias
- * de inicio (E4.7) se agregan aquí en su feature.
+ * de inicio (E4.7) agregan aquí su clase en su feature.
+ *
+ * Es declarativo (clases, no instancias) para que el test de arquitectura de E3.5 lo compare con
+ * las clases que implementan [ThirdPartyView] sin arrancar la aplicación: si una clase no está en
+ * [registered], o está pero no tiene sonda en la suite de invariantes, el build falla.
  */
 object ThirdPartyViews {
-    private val registered = linkedSetOf<String>()
+    val registered: Set<KClass<out ThirdPartyView>> = setOf()
 
-    fun register(view: ThirdPartyView) {
-        registered += view.viewName
-    }
-
-    fun names(): Set<String> = registered.toSet()
+    fun names(): Set<String> = registered.mapNotNull { it.simpleName }.toSet()
 }
