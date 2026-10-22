@@ -1,8 +1,8 @@
 package me.santiagoreina.parcheu.designsystem.components.compound
 
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.assertIsDisplayed
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import org.junit.Rule
 import org.junit.Test
