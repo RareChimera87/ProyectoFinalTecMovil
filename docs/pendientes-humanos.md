@@ -130,7 +130,11 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
 2. **API de sesión desplegada en dev:** el login llama `POST /v1/session` y `POST /v1/me/terms` (E2.1, PR #19).
    Hasta que E2.1 esté mezclado y desplegado en `https://api-388770932007.us-central1.run.app/`, el login de
    Google funciona pero A4 muestra el error de red/servidor con "Reintentar".
-3. **Verificación manual en el PR (criterio de E2.2):** con 1 y 2 listos, instala el flavor dev
+   **Prerrequisito de legales (E8.4):** antes del paso 3, mezcla E8.4 (PR #16) y despliega Hosting en dev
+   (`firebase deploy --only hosting --project parcheu-dev`). Comprueba que `curl -s -o /dev/null -w '%{http_code}'
+   https://parcheu-dev.web.app/terminos` y `/privacidad` den 200: si no, las filas TERMS y PRIVACY quedarían
+   registradas (Ley 1581, ADR-0017) sobre un texto que la persona no pudo leer.
+3. **Verificación manual en el PR (criterio de E2.2):** con 1 y 2 listos y los enlaces legales en 200, instala el flavor dev
    (`cd android && ./gradlew :app:installDevDebug`) en un teléfono o emulador **con Google Play**, firmado con
    el keystore de debug cuyo SHA-1 está registrado en Firebase. Prueba: A1 → A2 → Saltar → A4 → Continuar con
    Google → elegir cuenta → B0 (`BasicProfile`, usuario nuevo tras aceptar términos). Confirma en Firebase →
@@ -140,8 +144,18 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
 4. **Revisión lado a lado (ADR-0022):** I2 compara `android/app/src/test/screenshots/onboarding/` con los PNG de
    la Sección A y registra las diferencias aceptadas en el PR. Diferencias conocidas: wordmark, ícono y mascota
    están dibujados localmente en `feature/onboarding/OnboardingArt.kt` (E1.2 y E1.5 aún no están en dev) y el
-   grafo de A4 es una ilustración fija (el `PuGraph` real es E3.3); el destello de A2 es el carácter "✦" en
+   grafo de A4 usa el `PuGraph` de E3.3 con datos fijos de ejemplo; el destello de A2 es el carácter "✦" en
    lugar del símbolo `auto_awesome`. Cuando se mezclen E1.2/E1.5, reemplazar esas piezas y volver a grabar las
    capturas (`./gradlew :app:recordRoborazziDevDebug`).
 5. **Texto legal:** pide al docente revisar el aviso de A4 ("Al continuar aceptas los Términos y la Política de
    privacidad (Ley 1581 de 2012)…") junto con la revisión legal de E2.1.
+
+### Corrección de la revisión de la ola 6 (E2.2)
+
+- **Release 0.1 (E10.3):** cortar `release/0.1.0` desde `d7989af`, no desde `dev` (ver ficha E10.3 en backlog.md).
+- **PR #20 (E1.3):** su contenido ya entró a `dev` dentro del squash de #28. Cierra #20 como absorbido por #28
+  (o rebásalo sobre `dev`) y cuenta E1.3 en el contador de features pequeñas de `docs/revisiones.md`.
+- **Secreto `ANTHROPIC_API_KEY`:** #28 se mezcló con `revision-agente` en FAILURE por este secreto ausente;
+  créalo con `gh secret set ANTHROPIC_API_KEY` para que la revisión previa al merge vuelva a ocurrir.
+- **Spotless tras E0.3 (#7):** el `.editorconfig` de #7 exige coma final; al mezclarlo hay que correr
+  `./gradlew spotlessApply` sobre el código de E2.2 y E1.3.
