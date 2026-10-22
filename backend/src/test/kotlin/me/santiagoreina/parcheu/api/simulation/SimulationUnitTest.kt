@@ -83,7 +83,9 @@ class SimulationUnitTest : FunSpec({
         report.frictions shouldContainExactly listOf("c1", "d1")
         report.dimensions shouldContainExactly listOf(Dimension("humor", 60, "a"), Dimension("planes", 80, "b"))
         report.scenarioScores shouldContainExactly listOf(60, 90)
-        report.summary shouldBe "Uno. Dos."
+        // Empate (60 y 90 están a 15 del promedio 75): gana el primero.
+        report.summary shouldBe "Uno."
+        SimulationScoring.report(List(6) { 0.5 }, List(6) { 0.5 }, listOf(v1, v2, v2.copy(summary = "Tres."))).summary shouldBe "Dos."
     }
 
     test("pickScenarios es determinista por id, sin repetidos, y solo básicos para gratis") {

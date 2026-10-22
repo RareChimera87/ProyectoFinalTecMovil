@@ -30,13 +30,20 @@ object SimulationScoring {
             score = score(similarity, judgeAverage),
             traitSimilarity = similarity,
             judgeAverage = judgeAverage,
-            summary = verdicts.map { it.summary }.filter { it.isNotBlank() }.joinToString(" ").take(700),
+            summary = summaryOf(verdicts, judgeAverage),
             reasons = interleave(verdicts.map { it.reasons }).take(3),
             frictions = interleave(verdicts.map { it.frictions }).take(2),
             dimensions = averageDimensions(verdicts),
             scenarioScores = verdicts.map { it.affinity },
         )
     }
+
+    /**
+     * Un solo resumen: el del escenario cuya afinidad está más cerca del promedio (el más
+     * representativo); en empate, el primero. Unir los tres repetía la misma idea.
+     */
+    private fun summaryOf(verdicts: List<JudgeVerdict>, average: Double): String =
+        verdicts.filter { it.summary.isNotBlank() }.minByOrNull { kotlin.math.abs(it.affinity - average) }?.summary.orEmpty()
 
     /** Toma por turnos de cada escenario (1.º de cada uno, luego 2.º...) sin repetir. */
     private fun interleave(lists: List<List<String>>): List<String> {

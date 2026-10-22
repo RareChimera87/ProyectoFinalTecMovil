@@ -121,3 +121,15 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
 - Con `ENV=local` sin base, el gemelo corre en memoria y la tarea `build-persona` se ejecuta en línea al enviar `POST /v1/twin/answers` (cola Fake) con el LLM Fake de la pasarela.
 - Con base (dev/prod) la tarea va a la cola `ai-light` de Cloud Tasks: necesita `TASKS_QUEUE_AI_LIGHT` (nombre corto `ai-light` o ruta completa; el nombre corto se completa con `GCP_PROJECT`/`GCP_REGION`, o con `CLOUD_SQL_INSTANCE` si faltan), `SERVICE_URL`, `TASKS_SERVICE_ACCOUNT` e `INTERNAL_OIDC_AUDIENCE`.
 - Para ejecutar `TwinDbTest` sin Docker, apunta `PARCHEU_TEST_DB_URL` a un Postgres 16 desechable (ver `TestDatabase`).
+
+## Simulación (E4.3)
+
+- La tarea `simulate` va a la cola `simulations` de Cloud Tasks: además de lo que pide el gemelo necesita `TASKS_QUEUE_SIM`. Con `ENV=local` la cola es Fake y no ejecuta en línea: para correr una simulación local llama `POST /internal/tasks/simulate` con `{"id":"<simulationId>"}` y el token Fake de tareas (`oidc-tasks-fake`).
+- El espejo `simulations/{id}` escribe en Firestore con Firebase Admin (ADC de `sa-api`) solo si hay `FIREBASE_PROJECT_ID` y `ENV` no es `local`.
+- Humos manuales contra GCP dev (no corren en CI; una simulación real cuesta 1-3 centavos de USD):
+
+  ```bash
+  cd backend && ./gradlew test -Pvertex -PsinContenedores --tests '*SimulationVertexSmokeTest*'
+  ```
+
+- `SimulationDbTest` usa Postgres real: en local, `PARCHEU_TEST_DB_URL` apuntando a un Postgres 16 desechable (ver `TestDatabase`).
