@@ -45,6 +45,52 @@ class PlatformTest : FunSpec({
         shouldThrow<IllegalStateException> { AppConfig.fromEnv(mapOf("ENV" to "staging")) }
     }
 
+    test("con las variables de E0.5 el servicio arranca: audiencia custom y GCP_PROJECT") {
+        val config = AppConfig.fromEnv(
+            mapOf(
+                "ENV" to "dev", "K_SERVICE" to "api", "GCP_PROJECT" to "parcheu-dev",
+                "INTERNAL_OIDC_AUDIENCE" to "https://api.parcheu-dev.internal",
+                "SERVICE_URL" to "https://api-xyz.a.run.app",
+                "TASKS_SERVICE_ACCOUNT" to "sa-tasks@parcheu-dev.iam.gserviceaccount.com",
+            ),
+        )
+        config.firebaseProjectId shouldBe "parcheu-dev"
+        config.oidcAudience shouldBe "https://api.parcheu-dev.internal"
+    }
+
+    test("SERVICE_URL sirve de respaldo de la audiencia y FIREBASE_PROJECT_ID gana sobre GCP_PROJECT") {
+        val config = AppConfig.fromEnv(
+            mapOf(
+                "ENV" to "prod", "GCP_PROJECT" to "otro", "FIREBASE_PROJECT_ID" to "parcheu-prod",
+                "SERVICE_URL" to "https://api.example.run.app",
+                "TASKS_SERVICE_ACCOUNT" to "sa-tasks@p.iam.gserviceaccount.com",
+            ),
+        )
+        config.firebaseProjectId shouldBe "parcheu-prod"
+        config.oidcAudience shouldBe "https://api.example.run.app"
+    }
+
+    test("serve en dev exige audiencia https y cuenta de tareas explícita") {
+        val base = mapOf("ENV" to "dev", "GCP_PROJECT" to "parcheu-dev")
+        shouldThrow<IllegalArgumentException> { AppConfig.fromEnv(base) }
+        shouldThrow<IllegalArgumentException> {
+            AppConfig.fromEnv(base + ("INTERNAL_OIDC_AUDIENCE" to "https://api.parcheu-dev.internal"))
+        }
+    }
+
+    test("los jobs migrate, seed-demo y purge-demo no exigen Firebase ni OIDC (variables de E0.5)") {
+        val config = AppConfig.fromEnv(
+            mapOf(
+                "ENV" to "dev", "CLOUD_RUN_JOB" to "migrate", "DB_NAME" to "parcheu",
+                "CLOUD_SQL_INSTANCE" to "p:r:i",
+            ),
+            serving = false,
+        )
+        config.db?.name shouldBe "parcheu"
+        // ENV sigue siendo obligatorio también en los jobs.
+        shouldThrow<IllegalStateException> { AppConfig.fromEnv(emptyMap(), serving = false) }
+    }
+
     test("sin ENV no arranca ni hay Fakes, con o sin K_SERVICE") {
         shouldThrow<IllegalStateException> { AppConfig.fromEnv(emptyMap()) }
         shouldThrow<IllegalStateException> { AppConfig.fromEnv(mapOf("ENV" to " ")) }

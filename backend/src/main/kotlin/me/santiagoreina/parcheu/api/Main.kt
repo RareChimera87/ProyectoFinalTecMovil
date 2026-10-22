@@ -31,7 +31,7 @@ fun main(args: Array<String>) {
         log.error("Modo desconocido '{}'. Modos válidos: {}", args.first(), Mode.entries.joinToString { it.arg })
         exitProcess(2)
     }
-    val config = AppConfig.fromEnv()
+    val config = AppConfig.fromEnv(serving = mode == Mode.SERVE)
     when (mode) {
         Mode.SERVE -> {
             val container = AppContainer.fromConfig(config)

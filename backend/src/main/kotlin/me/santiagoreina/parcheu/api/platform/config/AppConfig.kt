@@ -17,22 +17,34 @@ data class DbConfig(
  * Configuración del servicio, leída solo de variables de entorno (nunca de archivos del repo).
  *
  * - `ENV` (local|dev|prod, obligatorio y sin valor por defecto: si falta, el arranque falla), `PORT` (8080), `APP_VERSION` (SHA del commit).
- * - `SERVICE_URL`: URL pública del servicio; es la audiencia de los tokens OIDC internos.
+ * - `INTERNAL_OIDC_AUDIENCE`: audiencia de los tokens OIDC internos (la custom audience que fija E0.5,
+ *   `https://api.parcheu-<env>.internal`). Si falta se usa `SERVICE_URL` como respaldo.
  * - `TASKS_SERVICE_ACCOUNT`: correo de `sa-tasks`, única identidad válida en las rutas `/internal`.
- * - `FIREBASE_PROJECT_ID`: proyecto de Firebase Auth.
+ * - `FIREBASE_PROJECT_ID`: proyecto de Firebase Auth; si falta se usa `GCP_PROJECT` (lo define E0.5).
+ *
+ * Obligatorias según el modo (solo `serve` valida Firebase y OIDC; `migrate`, `seed-demo` y `purge-demo` no los usan):
+ * - todos: `ENV`.
+ * - `serve` en dev/prod: proyecto de Firebase (`FIREBASE_PROJECT_ID` o `GCP_PROJECT`), audiencia
+ *   (`INTERNAL_OIDC_AUDIENCE` o `SERVICE_URL`, https) y `TASKS_SERVICE_ACCOUNT`.
+ * - `migrate`: `DB_NAME` y `CLOUD_SQL_INSTANCE` o `DB_URL`.
  * - `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `CLOUD_SQL_INSTANCE` o `DB_URL` (JDBC directo).
  */
 data class AppConfig(
     val env: Env,
     val port: Int,
     val version: String,
-    val serviceUrl: String,
+    /** Audiencia esperada en los tokens OIDC de `/internal`. */
+    val oidcAudience: String,
     val tasksServiceAccount: String,
     val firebaseProjectId: String?,
     val db: DbConfig?,
 ) {
     companion object {
-        fun fromEnv(vars: Map<String, String> = System.getenv()): AppConfig {
+        /**
+         * [serving] es verdadero solo en el modo `serve`: los jobs no necesitan Firebase ni OIDC,
+         * así que no se les exige esa configuración.
+         */
+        fun fromEnv(vars: Map<String, String> = System.getenv(), serving: Boolean = true): AppConfig {
             // Modo cerrado por defecto: sin ENV nunca se cablean tokens Fake.
             val raw = vars["ENV"]?.takeIf { it.isNotBlank() }
                 ?: error("ENV es obligatorio (local, dev o prod); sin él no se arranca para no abrir la autenticación")
@@ -55,21 +67,26 @@ data class AppConfig(
                 env = env,
                 port = vars["PORT"]?.toIntOrNull() ?: 8080,
                 version = vars["APP_VERSION"]?.takeIf { it.isNotBlank() } ?: "dev",
-                serviceUrl = vars["SERVICE_URL"] ?: "http://localhost:8080",
-                tasksServiceAccount = vars["TASKS_SERVICE_ACCOUNT"] ?: "sa-tasks@parcheu-local.iam.gserviceaccount.com",
-                firebaseProjectId = vars["FIREBASE_PROJECT_ID"],
+                oidcAudience = vars["INTERNAL_OIDC_AUDIENCE"].orNull() ?: vars["SERVICE_URL"].orNull() ?: "http://localhost:8080",
+                tasksServiceAccount = vars["TASKS_SERVICE_ACCOUNT"].orNull() ?: LOCAL_TASKS_ACCOUNT,
+                firebaseProjectId = vars["FIREBASE_PROJECT_ID"].orNull() ?: vars["GCP_PROJECT"].orNull(),
                 db = db,
             )
-            config.validate()
+            if (serving) config.validateForServe(explicitTasksAccount = !vars["TASKS_SERVICE_ACCOUNT"].isNullOrBlank())
             return config
         }
+
+        private const val LOCAL_TASKS_ACCOUNT = "sa-tasks@parcheu-local.iam.gserviceaccount.com"
+
+        private fun String?.orNull(): String? = this?.takeIf { it.isNotBlank() }
     }
 
-    /** Falla al arrancar, no en la primera petición, si falta algo que el entorno exige. */
-    fun validate() {
+    /** Falla al arrancar el servicio, no en la primera petición, si falta algo que el entorno exige. */
+    fun validateForServe(explicitTasksAccount: Boolean = true) {
         if (env != Env.LOCAL) {
-            require(!firebaseProjectId.isNullOrBlank()) { "FIREBASE_PROJECT_ID es obligatorio en $env" }
-            require(serviceUrl.startsWith("https://")) { "SERVICE_URL debe ser https en $env" }
+            require(!firebaseProjectId.isNullOrBlank()) { "FIREBASE_PROJECT_ID (o GCP_PROJECT) es obligatorio en $env" }
+            require(oidcAudience.startsWith("https://")) { "INTERNAL_OIDC_AUDIENCE (o SERVICE_URL) debe ser https en $env" }
+            require(explicitTasksAccount) { "TASKS_SERVICE_ACCOUNT es obligatorio en $env" }
             require(tasksServiceAccount.endsWith(".iam.gserviceaccount.com")) {
                 "TASKS_SERVICE_ACCOUNT debe ser un correo de cuenta de servicio en $env"
             }

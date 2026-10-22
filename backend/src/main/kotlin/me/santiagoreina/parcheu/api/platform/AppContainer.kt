@@ -49,7 +49,7 @@ class AppContainer(
             val oidcVerifier = if (local) {
                 FakeOidcVerifier(config.tasksServiceAccount)
             } else {
-                GoogleOidcVerifier(config.serviceUrl, config.tasksServiceAccount)
+                GoogleOidcVerifier(config.oidcAudience, config.tasksServiceAccount)
             }
             return AppContainer(config, systemClock(), tokenVerifier, oidcVerifier)
         }
