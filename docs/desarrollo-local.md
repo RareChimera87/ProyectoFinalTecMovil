@@ -111,3 +111,9 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
 - **Tests.** `./gradlew test -PsinContenedores` omite los tests con Testcontainers (solo CI). Los demás usan `testApplication` con `FakeTokenVerifier` y `FakeOidcVerifier`.
 - **Agregar un dominio o ruta.** Rellena el `XRoutes.kt` de tu dominio (reemplaza los `stubXxx`) y cablea sus dependencias en `platform/AppContainer.kt`; `Application.kt` no se toca.
 - **Logs.** JSON a stdout con `severity`, `traceId` (de `X-Cloud-Trace-Context`) y `route`.
+
+## Gemelo (E2.3)
+
+- Con `ENV=local` sin base, el gemelo corre en memoria y la tarea `build-persona` se ejecuta en línea al enviar `POST /v1/twin/answers` (cola Fake) con el LLM Fake de la pasarela.
+- Con base (dev/prod) la tarea va a la cola `ai-light` de Cloud Tasks: necesita `TASKS_QUEUE_AI_LIGHT`, `SERVICE_URL`, `TASKS_SERVICE_ACCOUNT` e `INTERNAL_OIDC_AUDIENCE`.
+- Para ejecutar `TwinDbTest` sin Docker, apunta `PARCHEU_TEST_DB_URL` a un Postgres 16 desechable (ver `TestDatabase`).
