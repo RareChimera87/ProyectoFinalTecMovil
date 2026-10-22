@@ -22,7 +22,7 @@ fun TwinQuestionsRoute(
     LaunchedEffect(viewModel, navigator) {
         viewModel.events.collect { event ->
             when (event) {
-                TwinQuestionsEvent.Finished -> navigator.navigate(Modes())
+                TwinQuestionsEvent.Finished -> navigator.continueToModes()
             }
         }
     }
@@ -33,4 +33,13 @@ fun TwinQuestionsRoute(
         onRetry = viewModel::retry,
         modifier = modifier
     )
+}
+
+/**
+ * Pasa de B1 a B2 sacando B1 de la pila. B1 no es reanudable tras enviar (el progreso ya se borró), así
+ * que dejarla debajo de B2 la mostraría trabada en "Enviando…" al volver atrás.
+ */
+internal fun AppNavigator.continueToModes() {
+    back()
+    navigate(Modes())
 }
