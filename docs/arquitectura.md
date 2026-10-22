@@ -501,7 +501,8 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 10. **Costo:** unas 25 llamadas cortas (24 turnos + juez por escenario); del orden de 1-3 centavos de USD por simulación con Flash (verificar con los precios vigentes en E0.9).
 
 ### 7.3 Presupuesto y modelos
-- Configuración: `AI_PROVIDER` (gemini | claude), `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`, `AI_DAILY_BUDGET_USD`. Los IDs de modelo se fijan el día del spike (E0.9) con los GA vigentes en Model Garden; no se escriben en el código.
+- Configuración: `AI_PROVIDER` (gemini | claude; `fake` solo con `ENV=local`), `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`, `AI_DAILY_BUDGET_USD`, `AI_VERTEX_PROJECT` (o `GCP_PROJECT`), `AI_VERTEX_LOCATION` (`us`). Los IDs y la tabla de precios viven en `backend/src/main/resources/ai/modelos.properties` (fijados en el spike de E0.9, ADR-0008: `gemini-3.8-flash` para chat y juez, `gemini-3.5-flash-lite` para lite, multirregión `us`); las variables los sobrescriben. Un `AI_PROVIDER` inválido, un modelo sin precio o un presupuesto ≤ 0 hacen fallar el arranque.
+- **`AiGateway`** (paquete `ai/`) es el único punto de entrada para las features: recibe un `AiPurpose` (que define el nivel CHAT, JUDGE o LITE), consulta el guard, llama al `LlmClient` (`GeminiVertexClient`, `ClaudeVertexClient` o `FakeLlmClient`) y registra la llamada en `ai_usage` y `ai_usage_daily` (misma transacción) con `cost_micros` calculado de la tabla de precios vigente ese día. Una salida JSON que no cumple el esquema se registra igual y lanza `LlmInvalidOutput`.
 - `DailyBudgetGuard` (sobre `ai_usage_daily` del día en Bogotá): < 70 % normal; 70-100 % todos los propósitos usan `AI_MODEL_LITE`; ≥ 100 % `AiBudgetExceeded` → 503 `AI_BUDGET` con `retryAt` y **sin cobrar cupo**.
 - Colas Cloud Tasks con `max_dispatches_per_second` y `max_concurrent_dispatches` como techo de gasto.
 
@@ -641,7 +642,7 @@ Mensajes de datos con `type` y `route`; canales Android `chat`, `resultados`, `s
 
 ### 10.3 Ubicación de los datos y transferencia internacional
 
-Todo se procesa en **us-central1** (Cloud Run, Cloud SQL, Vertex AI) y Firestore en **nam5** (EE. UU.). Desde Bucaramanga la latencia de red adicional es de unos 80-120 ms por petición (verificar con el uptime check), aceptable para una app sin tiempo real duro. La Ley 1581 permite transferir datos a países con nivel adecuado de protección; la SIC incluye a EE. UU. en su lista (Circular Externa 005 de 2017, verificar vigencia). Aun así, A4 y `/privacidad` lo informan de forma expresa (ADR-0020).
+Todo se procesa en **us-central1** (Cloud Run, Cloud SQL), Vertex AI en la multirregión **us** (los Gemini 3.x no están en us-central1; E0.9, ADR-0008) y Firestore en **nam5**, todo en EE. UU. Desde Bucaramanga la latencia de red adicional es de unos 80-120 ms por petición (verificar con el uptime check), aceptable para una app sin tiempo real duro. La Ley 1581 permite transferir datos a países con nivel adecuado de protección; la SIC incluye a EE. UU. en su lista (Circular Externa 005 de 2017, verificar vigencia). Aun así, A4 y `/privacidad` lo informan de forma expresa (ADR-0020).
 
 ### 10.4 Amenazas
 
@@ -726,8 +727,8 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Cloud SQL Java Connector (`postgres-socket-factory`) | 1.30.1 (fijada en E0.3) | Conexión IAM |
 | Flyway (`flyway-core`, `flyway-database-postgresql`) | 13.11.1 (fijada en E0.3) | Migraciones |
 | Firebase Admin Java | 9.11.0 (fijada en E0.3) | Auth, FCM, Firestore |
-| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
-| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
+| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
+| Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
 | google-cloud-tasks | 2.99.0 (fijada en E0.3; la dependencia la agrega la primera feature que encola) | Tareas |
 | Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev20260924-2.0.0 (fijada en E0.3; la dependencia la agrega E7.2) | Billing |
 | logback + logstash-logback-encoder | 1.6.5 / 9.0 (fijadas en E0.3) | Logs JSON |

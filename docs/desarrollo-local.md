@@ -50,6 +50,20 @@ createdb -h localhost -p 54329 -U postgres e04test
 cd backend && PARCHEU_TEST_DB_URL=jdbc:postgresql://localhost:54329/e04test ./gradlew test -PsinContenedores
 ```
 
+## Pasarela de IA (E0.9, ADR-0008)
+
+- Con `ENV=local` y sin `AI_PROVIDER` el backend usa `FakeLlmClient` y guarda el uso en memoria: no se llama a Vertex ni se gasta nada.
+- Para probar con Vertex real en local: `gcloud auth application-default login` y luego `ENV=local AI_PROVIDER=gemini AI_VERTEX_PROJECT=parcheu-dev ./gradlew run`.
+- Humo manual (no corre en CI ni en `./gradlew test`; consume unos centavos de USD):
+
+  ```bash
+  cd backend
+  ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'
+  AI_PROVIDER=claude ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'   # cuando Claude tenga cuota
+  ```
+
+- IDs de modelo, ubicación y precios: `backend/src/main/resources/ai/modelos.properties`. Un modelo nuevo necesita su fila `price.*` o el servicio no arranca.
+
 ## Migraciones (E0.4, ADR-0011)
 
 - Viven en `backend/src/main/resources/db/migration/`. `V1__esquema.sql` y `V2__semillas.sql` son fijas: **nunca edites una migración ya mezclada** (Flyway valida el checksum); agrega una nueva.
