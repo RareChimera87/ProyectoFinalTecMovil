@@ -28,7 +28,8 @@
       "photoUrl": "https://lh3.googleusercontent.com/a/laura",
       "isDemo": false
     },
-    "createdAt": "2026-10-23T15:30:00Z"
+    "createdAt": "2026-10-23T15:30:00Z",
+    "refunded": false
   },
   "ready": [
     {
@@ -43,7 +44,8 @@
       },
       "createdAt": "2026-10-23T15:30:00Z",
       "origin": "PARCHE",
-      "score": 82
+      "score": 82,
+      "refunded": false
     }
   ],
   "suggestions": [],

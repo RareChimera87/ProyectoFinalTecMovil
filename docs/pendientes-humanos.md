@@ -316,3 +316,26 @@ Lo automatizable ya quedó hecho: `ChatService`, las cuatro rutas de `/v1/chats`
 | 3 | **Revisar `backend-ci` en el PR.** Ahora corre los tests dentro de `firebase emulators:exec` (Node 24 + `npm ci` en `firebase/`). Confirmar que `ChatDbTest` y `ChatFirestoreEmulatorTest` aparecen como ejecutados (no omitidos) en el reporte. | I1 | Revisión del PR |
 | 4 | **Aprobación del revisor par** (feature major, check `major-gate`): según `docs/equipo.md` el par de E5.1 es I3, que además es dueño de la capa Firebase que toca el espejo. | I3 | Ventana de revisión de la ola 7 (6 nov) |
 | 5 | **Prueba en dev con la app (E5.2).** Cuando E5.2 y E4.6 estén en `dev`: enviar un mensaje desde la app y comprobar que el documento aparece en `chats/{id}/messages` de `parcheu-dev` y que las reglas desplegadas dejan leerlo solo a los miembros. | I2 | Ola 8 |
+
+
+## E4.5 · UI de simulación
+
+1. **Backend: llenar `summary.refunded`.** E4.5 agregó `refunded: Boolean = false` a `SimulationSummary` del
+   contrato (la ficha pide que F5 solo diga "No se descontó de tu cupo" con `refunded=true`). El motor de E4.3
+   (PR #37) ya marca `usage_events.refunded` al fallar; falta que `GET /v1/simulations/{id}` y la lista lo lean
+   de ahí y lo devuelvan en el resumen. Sin eso F5 nunca mostrará el mensaje. Dueño sugerido: I1.
+2. **Firestore en el dispositivo:** F4 escucha `simulations/{id}` con el SDK, que necesita `google-services.json`
+   (`scripts/fetch-google-services.sh`) y las reglas de E0.8 desplegadas en dev. Sin ellos F4 cae al respaldo REST
+   (una consulta a los 10 s) y no se actualiza en vivo.
+3. **Verificación manual en el PR:** con E4.3 desplegado en dev, instala el flavor dev, inicia una simulación
+   con un usuario demo y comprueba: F4 avanza 3 escenarios, sales y vuelves (se reanuda), al terminar abre
+   Resultados (F7/F8, E4.6) y "atrás" no vuelve a F4. Fuerza un fallo (apaga el modelo en dev) y confirma F5.
+4. **Revisión lado a lado (ADR-0022):** I2 compara `android/app/src/test/screenshots/simulation/` con las
+   pantallas 15a, 15b y 15c. Diferencias conocidas: la mascota está dibujada localmente en
+   `feature/simulation/SimulationParts.kt` y los iconos en `SimulationIcons.kt` (E1.4, E1.5 y E1.2 aún no están
+   en `dev`); los títulos de los escenarios se muestran como "Escenario N" porque la API no los entrega; no hay
+   burbujas con texto en el escenario porque `simulations/{id}` solo publica progreso. Cuando se mezclen
+   esas features, cambiar las piezas locales y volver a grabar (`./gradlew :app:recordRoborazziDevDebug`).
+5. **Reintentar con una persona anónima:** `POST /v1/simulations` pide `otherUserId`; en un match al azar la
+   otra persona sigue anónima, así que F5 oculta "Reintentar" y deja "Volver al inicio". Decide con I1 si el
+   servidor ofrece un reintento por `simulationId`.

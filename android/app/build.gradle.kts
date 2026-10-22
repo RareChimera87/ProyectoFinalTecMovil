@@ -129,6 +129,8 @@ dependencies {
     // Login con Google (E2.2, ADR-0021): Credential Manager + googleid → Firebase Auth.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    // Progreso en vivo de simulations/{id} (E4.5, ADR-0004: Firestore es canal de solo lectura).
+    implementation(libs.firebase.firestore)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
