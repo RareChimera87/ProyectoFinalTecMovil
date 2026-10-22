@@ -43,7 +43,8 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     ),
     "scenario" to listOf(HttpMethod.Get to "/v1/scenarios", HttpMethod.Post to "/v1/scenario-sessions/c1/agreement"),
     "graph" to listOf(
-        HttpMethod.Get to "/v1/graph", HttpMethod.Get to "/v1/graph/nodes/n1", HttpMethod.Get to "/v1/graph/fof",
+        // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest).
+        HttpMethod.Get to "/v1/graph/fof",
         HttpMethod.Get to "/v1/graph/history", HttpMethod.Get to "/v1/communities", HttpMethod.Get to "/v1/connect-requests",
     ),
     "social" to listOf(

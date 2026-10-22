@@ -71,7 +71,7 @@ class IdentityDbTest : FunSpec({
 
     fun container(db: Database, version: String): AppContainer {
         val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, version)
-        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"), identity, allDomains(identity))
+        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"), identity, domains = allDomains(identity))
     }
 
     suspend fun HttpClient.session(uid: String): SessionDto = post("/v1/session") { auth(uid) }.body()
