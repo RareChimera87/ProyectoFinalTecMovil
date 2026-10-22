@@ -16,7 +16,12 @@ import me.santiagoreina.parcheu.api.platform.auth.OidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.TokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
+import me.santiagoreina.parcheu.api.platform.db.connectExposed
+import me.santiagoreina.parcheu.api.platform.db.createDataSource
+import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
+import me.santiagoreina.parcheu.api.quota.quotaModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
@@ -34,8 +39,10 @@ class AppContainer(
     val clock: Clock,
     val tokenVerifier: TokenVerifier,
     val oidcVerifier: OidcVerifier,
+    /** Cuotas (E4.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(),
+    val domains: List<DomainRoutes> = allDomains(quota),
 ) {
     companion object {
         /** Cableado de producción: verificadores reales (Fake solo con `ENV=local`). */
@@ -51,16 +58,20 @@ class AppContainer(
             } else {
                 GoogleOidcVerifier(config.oidcAudience, config.tasksServiceAccount)
             }
-            return AppContainer(config, systemClock(), tokenVerifier, oidcVerifier)
+            val clock = systemClock()
+            // Pool perezoso (failFast = false): el servicio arranca aunque Cloud SQL tarde en responder.
+            val database = config.db?.let { connectExposed(createDataSource(it, failFast = false)) }
+            val quota = quotaModule(config.env, database, clock)
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, quota)
         }
     }
 }
 
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
-fun allDomains(): List<DomainRoutes> = listOf(
+fun allDomains(quota: QuotaModule): List<DomainRoutes> = listOf(
     IdentityRoutes(),
     TwinRoutes(),
-    QuotaRoutes(),
+    QuotaRoutes(quota),
     MatchingRoutes(),
     SimulationRoutes(),
     ScenarioRoutes(),
