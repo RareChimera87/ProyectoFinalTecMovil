@@ -10,6 +10,10 @@ import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
 import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
+import me.santiagoreina.parcheu.api.notifications.push.ExposedPushStore
+import me.santiagoreina.parcheu.api.notifications.push.FakeFcmClient
+import me.santiagoreina.parcheu.api.notifications.push.FcmNotifier
+import me.santiagoreina.parcheu.api.notifications.push.FirebaseFcmClient
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
@@ -20,6 +24,8 @@ import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
@@ -41,6 +47,8 @@ class AppContainer(
     val identity: IdentityService,
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
     val domains: List<DomainRoutes> = allDomains(identity),
+    /** Avisos (push + bandeja). Los tests de otros dominios pasan un `FakeNotifier`. */
+    val notifier: Notifier = NoopNotifier,
 ) {
     companion object {
         /** Cableado de producción: verificadores reales (Fake solo con `ENV=local`). */
@@ -61,8 +69,11 @@ class AppContainer(
                 "El servicio necesita la base de datos: define DB_NAME y CLOUD_SQL_INSTANCE (o DB_URL en local)"
             }
             val database = connectExposed(createDataSource(dbConfig, failFast = false))
+            // En local no hay credenciales de FCM: se guarda el aviso y el envío es un Fake.
+            val fcm = if (local) FakeFcmClient() else FirebaseFcmClient(requireNotNull(config.firebaseProjectId))
+            val notifier = FcmNotifier(ExposedPushStore(database), fcm, clock)
             val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity)
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, notifier = notifier)
         }
     }
 }
