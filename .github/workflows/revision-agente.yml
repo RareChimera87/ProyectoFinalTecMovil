@@ -5,8 +5,14 @@ name: revision-agente
 # hallazgo bloqueante; el informe se publica como comentario del PR y en el resumen del job.
 # Requiere el secreto ANTHROPIC_API_KEY; sin él el check falla (no se mezcla sin revisión).
 # Modelo y esfuerzo: variables de repo REVISION_MODELO (claude-opus-5-5) y REVISION_ESFUERZO (high).
+#
+# SEGURIDAD: corre con `pull_request_target`, así que el YAML, `revisar.py`, `requirements.txt` y la
+# ficha de docs/backlog.md son los de la RAMA BASE (dev), no los del PR; un PR no puede dejar en
+# verde su propia revisión editando esos archivos. El código del PR nunca se ejecuta: solo se trae
+# su commit (`refs/pull/N/head`) para calcular el diff, que se trata como datos. Los cambios a
+# revisar.py o a este workflow rigen desde el merge siguiente (y exigen revisión humana, ver auto-merge).
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
@@ -33,9 +39,14 @@ jobs:
         run: |
           echo "::error::Falta el secreto ANTHROPIC_API_KEY (docs/pendientes-humanos.md, E0.6)."
           exit 1
+      # Sin `ref`: pull_request_target hace checkout de la rama base. No cambiarlo por el head del PR.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Trae el commit del PR solo para el diff (datos, no se ejecuta)
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: git fetch --no-tags origin "+refs/pull/${PR}/head:refs/remotes/pr/head"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

@@ -685,7 +685,7 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 
 **Terraform:** `infra/terraform/bootstrap` (una vez, con el ADC del usuario), `modules/platform`, `envs/dev`, `envs/prod`; estado en GCS versionado. CI hace `plan` en PR y `apply` de dev al mezclar; el `apply` de prod lo ejecuta solo el usuario.
 
-**Secretos de GitHub:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
+**Secretos de GitHub:** `WIF_PROVIDER` (pool de dev), `WIF_PROVIDER_PROD` (pool de prod: el bootstrap crea un pool WIF por proyecto, ADR-0014), `WIF_SERVICE_ACCOUNT_{DEV,PROD}` (`sa-deployer`), `TF_PLAN_SERVICE_ACCOUNT_DEV` (`sa-terraform-plan`, solo lectura, para el `plan` de los PR), `TF_SERVICE_ACCOUNT_DEV` (`sa-terraform`, para el `apply` de dev; el de prod lo ejecuta solo el usuario), `ANTHROPIC_API_KEY` (`revision-agente`), `AUTO_MERGE_TOKEN` (PAT del auto-merge), `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
 
 ---
 

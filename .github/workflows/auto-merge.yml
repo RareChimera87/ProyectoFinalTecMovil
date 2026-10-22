@@ -11,8 +11,11 @@ name: auto-merge
 # Salvaguarda: `gh pr merge --auto` mezcla AL INSTANTE si la rama no exige checks. Por eso solo
 # se activa si la protección de dev exige `revision-agente` y `major-gate`; si no, no hace nada
 # (así se mezcló sin revisión el PR #11 el 22 oct, antes de configurar la protección).
+#
+# Corre con `pull_request_target`: el YAML es el de la rama base (dev), así que un PR no puede quitarse
+# la salvaguarda editando este archivo. Nunca ejecuta código del PR: solo llama a `gh`.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize]
     branches: [dev]
 
@@ -43,6 +46,15 @@ jobs:
               exit 0
             fi
           done
+          # Archivos que definen la propia CI y la revisión: un PR que los toque podría dejar en verde
+          # sus checks. Esos PR no se mezclan solos: se marcan `major` (major-gate pide la aprobación de
+          # otro revisor) y los mezcla una persona. Lista espejo: scripts/test/workflows.test.py.
+          sensibles='^(\.github/workflows/|\.github/CODEOWNERS$|scripts/revision-agente/|scripts/review-counter\.py$|scripts/proteger-ramas\.sh$)'
+          if gh pr diff "$PR" -R "$GITHUB_REPOSITORY" --name-only | grep -Eq "$sensibles"; then
+            echo "::warning::El PR toca la CI o la revisión automática: no se activa el auto-merge; requiere aprobación humana."
+            gh pr edit "$PR" -R "$GITHUB_REPOSITORY" --add-label major || true
+            exit 0
+          fi
           if [[ "$CON_PAT" != true ]]; then
             echo "::warning::Sin AUTO_MERGE_TOKEN: el merge no disparará deploy-dev ni review-counter (correrlos con workflow_dispatch)."
           fi
