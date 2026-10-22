@@ -1,0 +1,32 @@
+name: legal-pages-ci
+
+# E8.4. Verifica con el emulador de Hosting que las páginas legales (firebase/public) responden 200
+# y contienen sus secciones obligatorias. Corre solo si el PR toca esas páginas o el script.
+on:
+  pull_request:
+    paths:
+      - "firebase/public/**"
+      - "scripts/test/legal-pages.sh"
+      - "docs/arquitectura.md"
+      - ".github/workflows/legal-pages-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: legal-pages-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  legal-pages:
+    name: legal-pages-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Páginas legales en el emulador de Hosting
+        run: scripts/test/legal-pages.sh
