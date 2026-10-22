@@ -29,7 +29,12 @@ import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
 import me.santiagoreina.parcheu.api.social.SocialRoutes
+import me.santiagoreina.parcheu.api.platform.tasks.CloudTasksQueue
+import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
+import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.TwinRoutes
+import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
+import me.santiagoreina.parcheu.api.twin.twinModule
 import java.time.Clock
 
 /**
@@ -42,10 +47,12 @@ class AppContainer(
     val clock: Clock,
     val tokenVerifier: TokenVerifier,
     val oidcVerifier: OidcVerifier,
-    /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(),
     /** Pasarela de IA (E0.9). Por defecto Fake con uso en memoria (tests y `ENV=local`). */
     val ai: AiGateway = localAiGateway(clock),
+    /** Gemelo (E2.3). Por defecto en memoria: solo [fromConfig] cablea Postgres y Cloud Tasks. */
+    val twin: TwinModule = inMemoryTwinModule(clock, ai),
+    /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
+    val domains: List<DomainRoutes> = allDomains(twin),
 ) {
     companion object {
         /**
@@ -66,7 +73,12 @@ class AppContainer(
                 GoogleOidcVerifier(config.oidcAudience, config.tasksServiceAccount)
             }
             val clock = systemClock()
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, ai = aiGateway(config, vars, clock))
+            val ai = aiGateway(config, vars, clock)
+            // Pool perezoso (failFast = false): el servicio arranca aunque Cloud SQL tarde en responder.
+            val database = config.db?.let { connectExposed(createDataSource(it, failFast = false)) }
+            val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
+            val twin = twinModule(config.env, database, clock, ai, tasks)
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, ai = ai, twin = twin)
         }
 
         /** Pasarela de IA: uso en Postgres si hay base configurada; en memoria solo con `ENV=local`. */
@@ -89,9 +101,9 @@ class AppContainer(
 }
 
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
-fun allDomains(): List<DomainRoutes> = listOf(
+fun allDomains(twin: TwinModule): List<DomainRoutes> = listOf(
     IdentityRoutes(),
-    TwinRoutes(),
+    TwinRoutes(twin),
     QuotaRoutes(),
     MatchingRoutes(),
     SimulationRoutes(),
