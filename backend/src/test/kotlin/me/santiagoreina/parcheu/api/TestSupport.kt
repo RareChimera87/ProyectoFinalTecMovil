@@ -18,6 +18,10 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.quota.QuotaModule
+import me.santiagoreina.parcheu.api.graph.GraphModule
+import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
+import me.santiagoreina.parcheu.api.simulation.SimulationModule
+import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.contract.ContractJson
 import java.time.Clock
@@ -53,6 +57,8 @@ fun testContainer(
     twin: TwinModule = inMemoryTwinModule(FIXED_CLOCK, ai),
     quota: QuotaModule = inMemoryQuotaModule(FIXED_CLOCK),
     config: AppConfig = testConfig(),
+    graph: GraphModule = inMemoryGraphModule(FIXED_CLOCK),
+    simulation: SimulationModule = inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph),
 ): AppContainer {
     val identity = IdentityService(repo, FIXED_CLOCK, legalTextVersion)
     return AppContainer(
@@ -64,7 +70,9 @@ fun testContainer(
         ai = ai,
         twin = twin,
         quota = quota,
-        domains = allDomains(identity, twin, quota) + extra,
+        graph = graph,
+        simulation = simulation,
+        domains = allDomains(identity, twin, quota, graph, simulation) + extra,
     )
 }
 

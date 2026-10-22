@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.graph
 
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import io.kotest.core.spec.style.FunSpec
@@ -70,7 +71,7 @@ class GraphApiTest : FunSpec({
             return AppContainer(
                 testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identity,
                 ai = ai, twin = twin, quota = quota, graph = graph,
-                domains = allDomains(identity, twin, quota, graph),
+                domains = allDomains(identity, twin, quota, graph, inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph)),
             )
         }
     }

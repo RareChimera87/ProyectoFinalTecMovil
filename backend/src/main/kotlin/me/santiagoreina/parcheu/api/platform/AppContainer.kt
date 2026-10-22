@@ -36,7 +36,10 @@ import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.quota.quotaModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
+import me.santiagoreina.parcheu.api.simulation.SimulationModule
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
+import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
+import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.api.social.SocialRoutes
 import me.santiagoreina.parcheu.api.platform.tasks.CloudTasksQueue
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
@@ -65,8 +68,10 @@ class AppContainer(
     val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
     val graph: GraphModule = inMemoryGraphModule(clock),
+    /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
+    val simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, twin, quota, graph),
+    val domains: List<DomainRoutes> = allDomains(identity, twin, quota, graph, simulation),
 ) {
     companion object {
         /**
@@ -98,9 +103,10 @@ class AppContainer(
             val twin = twinModule(config.env, database, clock, ai, tasks)
             val quota = quotaModule(config.env, database, clock)
             val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
+            val simulation = simulationModule(config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity,
-                ai = ai, twin = twin, quota = quota, graph = graph,
+                ai = ai, twin = twin, quota = quota, graph = graph, simulation = simulation,
             )
         }
 
@@ -128,13 +134,14 @@ fun allDomains(
     identity: IdentityService,
     twin: TwinModule,
     quota: QuotaModule,
-    graph: GraphModule = inMemoryGraphModule(systemClock()),
+    graph: GraphModule,
+    simulation: SimulationModule,
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity),
     TwinRoutes(twin),
     QuotaRoutes(quota),
     MatchingRoutes(),
-    SimulationRoutes(),
+    SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),

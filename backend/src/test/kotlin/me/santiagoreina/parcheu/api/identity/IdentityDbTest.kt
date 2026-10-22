@@ -1,6 +1,9 @@
 package me.santiagoreina.parcheu.api.identity
 
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
+import me.santiagoreina.parcheu.api.platform.DomainRoutes
+import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import io.kotest.assertions.throwables.shouldThrow
@@ -74,7 +77,7 @@ class IdentityDbTest : FunSpec({
 
     fun container(db: Database, version: String): AppContainer {
         val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, version)
-        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"), identity, domains = allDomains(identity, inMemoryTwinModule(FIXED_CLOCK, testGateway()), inMemoryQuotaModule(FIXED_CLOCK)))
+        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"), identity, domains = testDomains(identity))
     }
 
     suspend fun HttpClient.session(uid: String): SessionDto = post("/v1/session") { auth(uid) }.body()
@@ -236,3 +239,11 @@ class IdentityDbTest : FunSpec({
             }
         }
 })
+
+/** Dominios con el resto de módulos en memoria: estas pruebas solo ejercitan identidad. */
+private fun testDomains(identity: IdentityService): List<DomainRoutes> {
+    val ai = testGateway()
+    val quota = inMemoryQuotaModule(FIXED_CLOCK)
+    val graph = inMemoryGraphModule(FIXED_CLOCK)
+    return allDomains(identity, inMemoryTwinModule(FIXED_CLOCK, ai), quota, graph, inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph))
+}
