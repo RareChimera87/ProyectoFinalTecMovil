@@ -61,7 +61,7 @@ class ModesApiTest : FunSpec({
     fun repoWithAna(ageVerified: Boolean): InMemoryIdentityRepository = InMemoryIdentityRepository().apply {
         seedAcceptedUser("ana", TEST_LEGAL_VERSION)
         if (ageVerified) {
-            replace(user("ana").copy(birthDate = LocalDate.of(2005, 3, 14), ageVerifiedAt = FIXED_CLOCK.instant()))
+            replace(user("ana").copy(birthDate = LocalDate.of(2005, 3, 14), ageVerifiedAt = FIXED_CLOCK.instant(), displayName = "Ana", universityId = 1))
         }
     }
 
