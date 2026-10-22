@@ -134,7 +134,7 @@ Navigation Compose 2.9 con rutas `@Serializable` en `navigation/Routes.kt`; `App
 | `Paywall` | G1, I4 | `source: String` |
 | `PurchaseSuccess` | G3 | `plan: String` |
 | `ManageSubscription` | G4 | - |
-| `Report` | H1 (sheet), H2, confirmaciones | `userId: String`, `chatId: String? = null` |
+| `Report` | H2 y la confirmación de reporte enviado (H1 es una hoja `SafetySheetHost` que abre la pantalla de origen, E8.1) | `userId: String` (uuid o `anonId`), `chatId: String? = null`, `name: String? = null`, `anonymous: Boolean = false` |
 | `PrivacySettings` | H3 | - |
 | `DeleteAccount` | confirmación de borrado (nueva) | - |
 | `ExportData` | descargar mis datos (nueva, E8.3) | - |
@@ -328,6 +328,8 @@ ai_usage_daily(day date, provider text, model text, tokens_in bigint, tokens_out
 ```
 
 **Columnas jsonb con datos personales** (registro `PersonalJsonPaths`, lo usan E8.3 y E8.8; un test de arquitectura falla si aparece una columna jsonb sin clasificar): `reports.snapshot`, `simulations.transcript`, `simulations.report`, `notifications.payload`, `purchase_events.payload`. Sin datos personales: `scenarios.rubric`, `questions.weights`, `simulations.progress`.
+
+Forma de `reports.snapshot` (E8.1): arreglo en orden cronológico con los últimos 20 mensajes (o todos si hay menos) del chat del reporte, cada uno `{id, senderId /* uuid interno o null */, text, createdAt, hidden}`; solo se guarda si el reporte trae `chatId` y quien reporta es miembro de ese chat. La prioridad es 2 para `SELF_HARM` y `UNDERAGE` y 0 para el resto.
 
 Índices adicionales: `edges(user_high)`, `chat_messages(chat_id, created_at)`, `chat_messages(sender_id, created_at)`, `simulations(user_a)`, `simulations(user_b)`, `notifications(user_id, created_at desc)`, `usage_events(user_id, kind, created_at)`.
 
@@ -667,6 +669,7 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 
 - **Backend:** logs JSON con `traceId`, `userId` (uuid interno, nunca email) y `route`; Error Reporting automático.
 - **Métricas basadas en logs:** simulaciones por estado, duración de simulación, rechazos de cuota, costo de IA por día, `report_created`.
+  `report_created` (E8.1) es un log INFO del logger `SafetyService` con `message = "report_created"` y los campos `event`, `reportId`, `kind`, `reason`, `priority`, `hasChat` y `snapshotMessages`; nunca lleva textos de mensajes ni el detalle. Filtro de la métrica (E10.5): `jsonPayload.message="report_created"`.
 - **Alertas** (Terraform, correo a los 3): 5xx > 2 % en 5 min, p95 > 2 s, `AiBudgetExceeded`, `report_created`, simulaciones FAILED > 3 en 10 min, uptime de `/v1/health`.
 - **Presupuesto de facturación** al 50 % y 90 %.
 - **Dashboard:** peticiones, latencias, simulaciones por estado, costo de IA por día.
