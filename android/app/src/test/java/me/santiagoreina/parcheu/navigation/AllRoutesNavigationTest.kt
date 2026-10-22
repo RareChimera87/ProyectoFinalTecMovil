@@ -69,11 +69,11 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         /**
          * Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest), B2-B5 (E2.5, ModesScreenTest y
          * ModesScreenshotTest), B0 y el bloqueo por edad (E2.6, BasicProfileScreenTest y BasicProfileViewModelTest),
-         * lista de chats y F9 (E5.2).
+         * lista de chats y F9 (E5.2), H2 y sus confirmaciones (E8.1, ReportScreenTest y SafetyScreenshotTest).
          */
         val implementedRoutes = setOf(
             Splash::class, Onboarding::class, Modes::class, Consent::class, TwinReady::class,
-            BasicProfile::class, Underage::class, ChatList::class, Chat::class,
+            BasicProfile::class, Underage::class, ChatList::class, Chat::class, Report::class,
         )
     }
 }
