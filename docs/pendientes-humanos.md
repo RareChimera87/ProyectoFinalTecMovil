@@ -339,3 +339,16 @@ Lo automatizable ya quedó hecho: `ChatService`, las cuatro rutas de `/v1/chats`
 5. **Reintentar con una persona anónima:** `POST /v1/simulations` pide `otherUserId`; en un match al azar la
    otra persona sigue anónima, así que F5 oculta "Reintentar" y deja "Volver al inicio". Decide con I1 si el
    servidor ofrece un reintento por `simulationId`.
+
+## E4.6 · Resultados y decisión mutua
+
+Lo automatizable ya quedó hecho: API de informe, desbloqueo y decisión (`backend/.../simulation/report/`), pantalla de resultados (`android/app/.../feature/results/`), pruebas (incluidas las de Postgres 16 real, ejecutadas en local contra un Postgres desechable con `PARCHEU_TEST_DB_URL`) y capturas de Roborazzi. No crea recursos en GCP.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar antes las dependencias.** `dev` aún no tiene E4.3 (PR #37), E5.1 (#41) ni E4.5 (#39), así que esta rama las integra (y con ellas E0.3, E0.4, E0.9, E2.1, E2.3, E3.1, E4.1 y E0.8). Mezclar primero esas y luego E4.6; el diff del PR queda entonces con `simulation/report/**`, `feature/results/**`, `data/results/**`, el cableado y los ajustes de pruebas. El conflicto de `AppContainer.kt` entre E4.3 y E5.1 ya está resuelto en esta rama (sirve de referencia). | I1 | Antes del merge |
+| 2 | **Push de conexión.** El aviso `NEW_CONNECTION` sale por la interfaz `Notifier`; mientras E5.3 (PR #30) no se mezcle, el contenedor cablea `NoopNotifier` y el aviso no llega al teléfono (la conexión, el chat y la arista sí se crean). Al mezclar E5.3 no hay que tocar nada de E4.6: basta con que `AppContainer.fromConfig` pase `FcmNotifier` como `notifier`. | I1 | Al mezclar E5.3 |
+| 3 | **Probar en dev con dos cuentas** (después del `apply` de E0.5 y de la primera simulación real de E4.3): abrir el resultado en las dos, desbloquear el informe en una cuenta gratis (el segundo desbloqueo del mes debe mostrar 'Ya usaste tu informe gratis…'), pulsar Conectar en ambas y comprobar que la segunda abre el chat y que el nombre aparece solo entonces. | I2 | Con el despliegue de dev |
+| 4 | **Comparación lado a lado** de F7, F8 e I3 con los PNG de Claude Design (`scripts/lado-a-lado.sh`, ADR-0022). Las capturas de esta rama están en `android/app/src/test/screenshots/results/` (I3 = `i3_light.png`). Iconos de candado, conectar y avisos son vectores locales hasta que E1.2 esté en `dev`; el mascot es el de E4.5 hasta E1.5. | I2 | Ventana de revisión de la ola 8 |
+| 5 | **Aprobación del revisor par** del PR (feature major, check `major-gate`): según `docs/equipo.md` el par de E4.6 es I3; la parte de `backend/` la aprueba además I1. | I3 + I1 | Ventana de revisión de la ola 8 (8 nov) |
+
