@@ -27,7 +27,8 @@ data class LlmRequest(
 /** Tokens que el proveedor cobra. [tokensOut] incluye los de razonamiento. */
 data class LlmUsage(val tokensIn: Int, val tokensOut: Int)
 
-data class LlmTextResult(val text: String, val model: String, val usage: LlmUsage)
+/** [truncated]: el modelo cortó la respuesta por llegar a `maxOutputTokens`. */
+data class LlmTextResult(val text: String, val model: String, val usage: LlmUsage, val truncated: Boolean = false)
 
 data class LlmJsonResult(val json: JsonObject, val model: String, val usage: LlmUsage)
 
