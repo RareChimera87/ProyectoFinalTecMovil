@@ -7,6 +7,10 @@ name: auto-merge
 # Token: AUTO_MERGE_TOKEN (PAT fine-grained del dueño del repo, contents + pull requests: write).
 # Con el GITHUB_TOKEN el auto-merge funciona, pero el push a dev que produce NO dispara
 # deploy-dev, infra-ci (apply) ni review-counter (regla de GitHub para eventos del GITHUB_TOKEN).
+#
+# Salvaguarda: `gh pr merge --auto` mezcla AL INSTANTE si la rama no exige checks. Por eso solo
+# se activa si la protección de dev exige `revision-agente` y `major-gate`; si no, no hace nada
+# (así se mezcló sin revisión el PR #11 el 22 oct, antes de configurar la protección).
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
@@ -31,6 +35,14 @@ jobs:
           CON_PAT: ${{ secrets.AUTO_MERGE_TOKEN != '' }}
           PR: ${{ github.event.pull_request.number }}
         run: |
+          requeridos="$(gh api "repos/$GITHUB_REPOSITORY/branches/dev" \
+            --jq '[.protection.required_status_checks.contexts[]?] | join(",")' 2>/dev/null || true)"
+          for check in revision-agente major-gate; do
+            if [[ ",$requeridos," != *",$check,"* ]]; then
+              echo "::warning::La protección de dev no exige '$check' (exige: '${requeridos:-nada}'): no se activa el auto-merge. Ver docs/pendientes-humanos.md (E0.6, paso 5)."
+              exit 0
+            fi
+          done
           if [[ "$CON_PAT" != true ]]; then
             echo "::warning::Sin AUTO_MERGE_TOKEN: el merge no disparará deploy-dev ni review-counter (correrlos con workflow_dispatch)."
           fi
