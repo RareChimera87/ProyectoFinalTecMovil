@@ -20,7 +20,11 @@ import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
+import me.santiagoreina.parcheu.api.matching.MatchingFlags
+import me.santiagoreina.parcheu.api.matching.MatchingModule
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
+import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
+import me.santiagoreina.parcheu.api.matching.matchingModule
 import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
@@ -30,6 +34,8 @@ import me.santiagoreina.parcheu.api.platform.auth.OidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.TokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
 import me.santiagoreina.parcheu.api.quota.QuotaModule
@@ -73,8 +79,12 @@ class AppContainer(
     val graph: GraphModule = inMemoryGraphModule(clock),
     /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
     val simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
+    /** Avisos (push + bandeja). Hasta que E5.3 se mezcle es [NoopNotifier]; los tests de otros dominios pasan un `FakeNotifier`. */
+    val notifier: Notifier = NoopNotifier,
+    /** Fila de match (E4.2). Por defecto en memoria: solo [fromConfig] cablea Postgres y Firestore. */
+    val matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, twin, quota, graph, simulation),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, twin, quota, graph, simulation, matching),
 ) {
     companion object {
         /**
@@ -108,9 +118,13 @@ class AppContainer(
             val quota = quotaModule(config.env, database, clock)
             val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
             val simulation = simulationModule(config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId)
+            val notifier: Notifier = NoopNotifier
+            val flags = MatchingFlags.fromEnv(config.env, vars)
+            val matching = matchingModule(config.env, database, clock, quota, simulation, graph, notifier, config.firebaseProjectId, flags)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile,
                 ai = ai, twin = twin, quota = quota, graph = graph, simulation = simulation,
+                notifier = notifier, matching = matching,
             )
         }
 
@@ -141,11 +155,12 @@ fun allDomains(
     quota: QuotaModule,
     graph: GraphModule,
     simulation: SimulationModule,
+    matching: MatchingModule,
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile),
     TwinRoutes(twin),
     QuotaRoutes(quota),
-    MatchingRoutes(),
+    MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
