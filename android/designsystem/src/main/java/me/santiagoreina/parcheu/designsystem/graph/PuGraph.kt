@@ -40,7 +40,12 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.sin
 import me.santiagoreina.parcheu.designsystem.graph.layout.FofNode
 import me.santiagoreina.parcheu.designsystem.graph.layout.GraphLayout
 import me.santiagoreina.parcheu.designsystem.graph.layout.LayoutNode
@@ -151,6 +156,13 @@ internal fun nodeAlpha(node: GraphNode, dimmed: Boolean): Float = when {
 }
 
 /**
+ * Opacidad de las iniciales y la etiqueta. El 0,7 de PENDING es solo del relleno, el borde y la arista:
+ * el texto conserva color pleno para cumplir AA (ADR-0030). Un nodo atenuado (0,22) es inactivo y se
+ * atenúa entero, texto incluido (WCAG 1.4.3 exime los componentes inactivos).
+ */
+internal fun textAlpha(dimmed: Boolean): Float = if (dimmed) GraphAlpha.NODE_DIMMED else 1f
+
+/**
  * Layout de G0 para un lienzo de [sizeDp] dp. Los amigos de amigos se ordenan por su conexión de
  * origen para que queden agrupados en la capa exterior. Coordenadas en dp.
  */
@@ -160,11 +172,187 @@ internal fun computeGraphLayout(
     sizeDp: Float
 ): GraphLayout {
     val modeOf = nodes.associate { it.id to it.mode.name }
-    return RadialLayout.compute(
+    val base = RadialLayout.compute(
         nodes = nodes.map { LayoutNode(it.id, it.mode.name, it.affinity) },
         size = sizeDp,
         fof = fof.map { FofNode(it.id, "${modeOf[it.parentId].orEmpty()}:${it.parentId}") }
     )
+    return if (base.fof.isEmpty()) base else base.copy(fof = alignFofToParents(base, nodes, fof))
+}
+
+/**
+ * Separación mínima en dp entre los centros de dos amigos de amigos vecinos sobre la capa exterior.
+ * Deja sitio a la etiqueta ("Alguien · 82 %", unos 68 dp de ancho) del vecino.
+ */
+private const val FOF_SPACING_DP = 62f
+
+/**
+ * Recoloca cada amigo de amigo en el ángulo de su conexión de origen (como en PU Grafo), con un abanico
+ * entre hermanos, para que la línea punteada sea corta y no cruce el grafo. Conserva el radio de la
+ * capa exterior que calculó [RadialLayout]. Si dos grupos vecinos quedarían tapándose, se separan
+ * angularmente. Un fof sin padre conocido conserva la posición de [RadialLayout].
+ */
+private fun alignFofToParents(
+    layout: GraphLayout,
+    nodes: List<GraphNode>,
+    fof: List<GraphFof>
+): List<PlacedNode> {
+    val parentOf = fof.associate { it.id to it.parentId }
+    val placedById = layout.nodes.associateBy { it.id }
+    val cx = layout.centerX
+    val cy = layout.centerY
+    fun angleOf(p: PlacedNode) = atan2(p.y - cy, p.x - cx)
+
+    val anchored = mutableListOf<Pair<PlacedNode, Double>>()
+    val loose = mutableListOf<PlacedNode>()
+    layout.fof.sortedBy { it.id }.forEach { f ->
+        val parent = parentOf[f.id]?.let { placedById[it] }
+        if (parent == null) loose += f else anchored += f to angleOf(parent).toDouble()
+    }
+    if (anchored.isEmpty()) return layout.fof
+
+    val outer = layout.ringRadii.last()
+    // Paso angular mínimo entre centros vecinos sobre el arco exterior (escala con el lienzo).
+    val step = FOF_SPACING_DP * (layout.size / RadialLayout.BASE_SIZE) / outer.toDouble()
+
+    // Abanico entre hermanos centrado en el ángulo del padre.
+    val targets = anchored.groupBy { it.second }.flatMap { (angle, group) ->
+        group.mapIndexed { i, (f, _) -> f to angle + (i - (group.size - 1) / 2.0) * step }
+    }.sortedBy { normalize(it.second) }
+
+    // Separa vecinos que se pisan: barrido circular que empuja hacia delante hasta que quepan.
+    val angles = targets.map { normalize(it.second) }.toDoubleArray()
+    repeat(targets.size) {
+        for (i in angles.indices) {
+            val j = (i + 1) % angles.size
+            if (i == j) continue
+            val gap = normalize(angles[j] - angles[i])
+            if (gap < step) {
+                val push = (step - gap) / 2.0
+                angles[i] -= push
+                angles[j] += push
+            }
+        }
+    }
+
+    val k = layout.size / RadialLayout.BASE_SIZE
+    // Cajas ocupadas por las conexiones (círculo + etiqueta) para que la capa exterior no las pise.
+    val labelOf = nodes.associate { it.id to if (it.anonymous) "Alguien" else it.name }
+    val obstacles = layout.nodes.map { n ->
+        listOf(
+            Box(n.x - n.radius, n.y - n.radius, n.x + n.radius, n.y + n.radius),
+            labelBox(n, labelOf[n.id].orEmpty(), 13f * k, CONNECTION_CHAR_DP * k)
+        )
+    }.flatten()
+    val fofLabelOf = fof.associate {
+        it.id to "${if (it.anonymous) "Alguien" else it.name} · ${it.affinity} %"
+    }
+
+    fun position(angle: Double) = (cx + outer * cos(angle)).toFloat() to
+        (cy + outer * sin(angle)).toFloat()
+
+    fun collides(
+        f: PlacedNode,
+        x: Float,
+        y: Float,
+        others: List<Pair<Float, Float>>,
+        extra: List<Box> = emptyList()
+    ): Boolean {
+        val moved = f.copy(x = x, y = y)
+        val boxes = listOf(
+            Box(x - f.radius, y - f.radius, x + f.radius, y + f.radius),
+            labelBox(moved, fofLabelOf[f.id].orEmpty(), 12f * k, FOF_CHAR_DP * k)
+        )
+        if (boxes.any { b -> (obstacles + extra).any { it.intersects(b) } }) return true
+        return others.any { (ox, oy) ->
+            hypot(ox - x, oy - y) < 2f * f.radius + FOF_GROUP_GAP_DP * k
+        }
+    }
+
+    // Desplaza cada grupo de hermanos como bloque, en pasos pequeños, hasta que ninguno pise a una
+    // conexión ni a un vecino de otro grupo. Si no hay hueco dentro del rango se conserva el abanico.
+    val finalPos = arrayOfNulls<Pair<Float, Float>>(targets.size)
+    val shifts = (0..FOF_MAX_SHIFT_STEPS).flatMap { n ->
+        if (n == 0) listOf(0.0) else listOf(n * FOF_SHIFT_STEP, -n * FOF_SHIFT_STEP)
+    }
+    val wideShifts = (0..FOF_MAX_SHIFT_STEPS * 2).flatMap { n ->
+        if (n == 0) listOf(0.0) else listOf(n * FOF_SHIFT_STEP, -n * FOF_SHIFT_STEP)
+    }
+    val groups = targets.indices.groupBy { parentOf[targets[it].first.id] }.values
+        .sortedBy { idx -> idx.minOf { angles[it] } }
+    groups.forEach { idx ->
+        val elsewhere = targets.indices.filter { it !in idx }.map { j ->
+            finalPos[j] ?: position(angles[j])
+        }
+        val chosen = shifts.firstOrNull { shift ->
+            idx.all { i ->
+                val (x, y) = position(angles[i] + shift)
+                !collides(targets[i].first, x, y, elsewhere)
+            }
+        }
+        if (chosen != null) {
+            idx.forEach { i -> finalPos[i] = position(angles[i] + chosen) }
+        } else {
+            // Ningún desplazamiento del bloque cabe: cada hermano busca su hueco por separado,
+            // esquivando también a los hermanos ya colocados (círculo y etiqueta).
+            fun boxesAt(i: Int, x: Float, y: Float): List<Box> {
+                val f = targets[i].first
+                return listOf(
+                    Box(x - f.radius, y - f.radius, x + f.radius, y + f.radius),
+                    labelBox(
+                        f.copy(x = x, y = y),
+                        fofLabelOf[f.id].orEmpty(),
+                        12f * k,
+                        FOF_CHAR_DP * k
+                    )
+                )
+            }
+            val boxesOf = idx.associateWith { i ->
+                position(angles[i]).let { (x, y) -> boxesAt(i, x, y) }
+            }.toMutableMap()
+            idx.forEach { i ->
+                val f = targets[i].first
+                val mine = boxesOf.filterKeys { it != i }.values.flatten()
+                val pick = wideShifts.map { angles[i] + it }.firstOrNull { a ->
+                    val (x, y) = position(a)
+                    !collides(f, x, y, elsewhere, mine)
+                } ?: angles[i]
+                val (x, y) = position(pick)
+                finalPos[i] = x to y
+                boxesOf[i] = boxesAt(i, x, y)
+            }
+        }
+    }
+    val placed = targets.mapIndexed { i, (f, _) ->
+        val (x, y) = finalPos[i]!!
+        f.copy(x = x, y = y)
+    }
+    return placed + loose
+}
+
+private const val CONNECTION_CHAR_DP = 5.6f
+private const val FOF_CHAR_DP = 5.0f
+
+/** Hueco mínimo en dp entre círculos de grupos distintos. */
+private const val FOF_GROUP_GAP_DP = 8f
+private const val FOF_SHIFT_STEP = 2 * PI / 180
+private const val FOF_MAX_SHIFT_STEPS = 10
+
+private data class Box(val l: Float, val t: Float, val r: Float, val b: Float) {
+    fun intersects(o: Box) = l < o.r && o.l < r && t < o.b && o.t < b
+
+    fun center() = (l + r) / 2f to (t + b) / 2f
+}
+
+/** Caja aproximada de la etiqueta centrada bajo el nodo [n], a [offset] dp por debajo del centro. */
+private fun labelBox(n: PlacedNode, text: String, offset: Float, charDp: Float): Box {
+    val half = text.length * charDp / 2f
+    return Box(n.x - half, n.y + n.radius + offset - 9f, n.x + half, n.y + n.radius + offset + 3f)
+}
+
+private fun normalize(angle: Double): Double {
+    val tau = 2 * PI
+    return ((angle % tau) + tau) % tau
 }
 
 /**
@@ -383,6 +571,11 @@ private fun DrawScope.drawGraph(
                 center = o,
                 style = Stroke(width = 2f * strokeK * u)
             )
+        }
+        withLayerAlpha(textAlpha(dimmed)) {
+            val o = p.offset()
+            val r = p.radius * u
+            val avatar = avatarColors(affinityAlpha(node.affinity), colors.isDark)
             drawCenteredText(
                 textMeasurer,
                 if (node.anonymous) "?" else node.initials,

@@ -1,5 +1,15 @@
 package me.santiagoreina.parcheu.designsystem.graph
 
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
+import me.santiagoreina.parcheu.designsystem.theme.DarkParcheUColors
+import me.santiagoreina.parcheu.designsystem.theme.LightParcheUColors
+import me.santiagoreina.parcheu.designsystem.theme.Wcag
+import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
+import me.santiagoreina.parcheu.designsystem.theme.avatarColors
+import me.santiagoreina.parcheu.designsystem.theme.contrastRatio
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -47,5 +57,72 @@ class PuGraphStyleTest {
         val layout = computeGraphLayout(PuGraphSamples.nodes, PuGraphSamples.fof, 328f)
         assertEquals(PuGraphSamples.fof.size, layout.fof.size)
         assertEquals(listOf(48f, 80f, 108f, 140f), layout.ringRadii)
+    }
+
+    @Test
+    fun `cada amigo de amigo queda cerca del angulo de su conexion de origen`() {
+        val layout = computeGraphLayout(PuGraphSamples.nodes, PuGraphSamples.fof, 328f)
+        val c = layout.centerX
+        fun angle(x: Float, y: Float) = atan2((y - c).toDouble(), (x - c).toDouble())
+        val failures = PuGraphSamples.fof.mapNotNull { f ->
+            val parent = layout.nodes.single { it.id == f.parentId }
+            val placed = layout.fof.single { it.id == f.id }
+            var diff = abs(angle(placed.x, placed.y) - angle(parent.x, parent.y))
+            if (diff > PI) diff = 2 * PI - diff
+            if (diff > Math.toRadians(60.0)) "${f.id}: ${Math.toDegrees(diff)} grados" else null
+        }
+        assertTrue("fof lejos de su padre: $failures", failures.isEmpty())
+        // Siguen en la capa exterior.
+        layout.fof.forEach { assertEquals(140f, hypot(it.x - c, it.y - c), 0.01f) }
+    }
+
+    @Test
+    fun `los amigos de amigos no se tocan entre si`() {
+        val layout = computeGraphLayout(PuGraphSamples.nodes, PuGraphSamples.fof, 328f)
+        for (a in layout.fof) {
+            for (b in layout.fof) {
+                if (a.id <
+                    b.id
+                ) {
+                    assertTrue(
+                        "${a.id}/${b.id}",
+                        hypot(a.x - b.x, a.y - b.y) >= a.radius + b.radius
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `hermanos comparten padre y se abren en abanico`() {
+        val layout = computeGraphLayout(PuGraphSamples.nodes, PuGraphSamples.fof, 328f)
+        val f1 = layout.fof.single { it.id == "f1" }
+        val f2 = layout.fof.single { it.id == "f2" }
+        assertTrue(hypot(f1.x - f2.x, f1.y - f2.y) >= 2 * f1.radius)
+    }
+
+    @Test
+    fun `el texto de un nodo pendiente conserva opacidad plena y el atenuado no`() {
+        assertEquals(1f, textAlpha(dimmed = false))
+        assertEquals(0.22f, textAlpha(dimmed = true))
+    }
+
+    @Test
+    fun `iniciales y etiqueta de nodos pendientes cumplen AA en ambos temas`() {
+        val failures = mutableListOf<String>()
+        for ((theme, colors) in listOf(
+            "oscuro" to DarkParcheUColors,
+            "claro" to LightParcheUColors
+        )) {
+            val label = contrastRatio(colors.mu, colors.bg)
+            if (label < Wcag.AA_NORMAL_TEXT) failures += "$theme etiqueta: $label"
+            for (affinity in listOf(50, 62, 70, 85, 90, 95)) {
+                val avatar = avatarColors(affinityAlpha(affinity), colors.isDark)
+                // Relleno bajo la capa de 0,7 sobre el fondo, como lo compone el Canvas.
+                val ratio = contrastRatio(avatar.content, avatar.fill, backdrop = colors.bg)
+                if (ratio < Wcag.AA_NORMAL_TEXT) failures += "$theme iniciales $affinity: $ratio"
+            }
+        }
+        assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
 }
