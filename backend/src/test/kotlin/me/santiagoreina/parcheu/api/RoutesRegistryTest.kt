@@ -19,13 +19,11 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * (o las quita de esta lista) en su propio PR.
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
+    // Identity: solo los stubs que quedan; las rutas implementadas por E2.1 las cubre IdentityApiTest.
     "identity" to listOf(
-        HttpMethod.Post to "/v1/session", HttpMethod.Post to "/v1/me/terms", HttpMethod.Get to "/v1/catalog",
-        HttpMethod.Get to "/v1/me", HttpMethod.Patch to "/v1/me", HttpMethod.Delete to "/v1/me",
-        HttpMethod.Get to "/v1/me/export", HttpMethod.Put to "/v1/me/modes",
-        HttpMethod.Post to "/v1/me/age-verification", HttpMethod.Post to "/v1/me/consent",
-        HttpMethod.Get to "/v1/me/consents", HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",
-        HttpMethod.Post to "/v1/me/fcm-token", HttpMethod.Delete to "/v1/me/fcm-token",
+        HttpMethod.Get to "/v1/catalog", HttpMethod.Delete to "/v1/me", HttpMethod.Get to "/v1/me/export",
+        HttpMethod.Put to "/v1/me/modes", HttpMethod.Post to "/v1/me/age-verification",
+        HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",
     ),
     "twin" to listOf(
         HttpMethod.Get to "/v1/twin/questions", HttpMethod.Post to "/v1/twin/answers", HttpMethod.Get to "/v1/twin",
