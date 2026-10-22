@@ -15,6 +15,8 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
+import me.santiagoreina.parcheu.api.quota.QuotaModule
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.contract.ContractJson
 import java.time.Clock
 import java.time.Instant
@@ -38,14 +40,17 @@ fun testContainer(
     extra: List<DomainRoutes> = emptyList(),
     ai: AiGateway = testGateway(),
     twin: TwinModule = inMemoryTwinModule(FIXED_CLOCK, ai),
+    quota: QuotaModule = inMemoryQuotaModule(FIXED_CLOCK),
+    config: AppConfig = testConfig(),
 ) = AppContainer(
-    config = testConfig(),
+    config = config,
     clock = FIXED_CLOCK,
     tokenVerifier = FakeTokenVerifier(),
     oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
     ai = ai,
     twin = twin,
-    domains = allDomains(twin) + extra,
+    quota = quota,
+    domains = allDomains(twin, quota) + extra,
 )
 
 /** Arranca el módulo con Fakes y devuelve un cliente que entiende el JSON del contrato. */

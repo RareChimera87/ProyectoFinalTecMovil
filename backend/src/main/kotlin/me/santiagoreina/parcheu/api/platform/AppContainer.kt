@@ -24,7 +24,10 @@ import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
+import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
+import me.santiagoreina.parcheu.api.quota.quotaModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
@@ -51,8 +54,10 @@ class AppContainer(
     val ai: AiGateway = localAiGateway(clock),
     /** Gemelo (E2.3). Por defecto en memoria: solo [fromConfig] cablea Postgres y Cloud Tasks. */
     val twin: TwinModule = inMemoryTwinModule(clock, ai),
+    /** Cuotas (E4.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(twin),
+    val domains: List<DomainRoutes> = allDomains(twin, quota),
 ) {
     companion object {
         /**
@@ -78,7 +83,8 @@ class AppContainer(
             val database = config.db?.let { connectExposed(createDataSource(it, failFast = false)) }
             val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
             val twin = twinModule(config.env, database, clock, ai, tasks)
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, ai = ai, twin = twin)
+            val quota = quotaModule(config.env, database, clock)
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, ai = ai, twin = twin, quota = quota)
         }
 
         /** Pasarela de IA: uso en Postgres si hay base configurada; en memoria solo con `ENV=local`. */
@@ -101,10 +107,10 @@ class AppContainer(
 }
 
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
-fun allDomains(twin: TwinModule): List<DomainRoutes> = listOf(
+fun allDomains(twin: TwinModule, quota: QuotaModule): List<DomainRoutes> = listOf(
     IdentityRoutes(),
     TwinRoutes(twin),
-    QuotaRoutes(),
+    QuotaRoutes(quota),
     MatchingRoutes(),
     SimulationRoutes(),
     ScenarioRoutes(),
