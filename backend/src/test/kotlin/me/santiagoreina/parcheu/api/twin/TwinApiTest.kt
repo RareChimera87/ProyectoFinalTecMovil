@@ -23,6 +23,8 @@ import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
+import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.contract.Answers
@@ -39,7 +41,16 @@ class TwinApiTest : FunSpec({
     fun userId(uid: String): UUID = DerivedTwinUserLookup.idFor(uid)
 
     suspend fun ApplicationTestBuilder.app(fixture: TwinFixture): HttpClient =
-        startApp(testContainer(twin = fixture.module, ai = fixture.gateway))
+        startApp(
+            testContainer(
+                twin = fixture.module,
+                ai = fixture.gateway,
+                // E2.1: la puerta de términos exige usuarios con TERMS y PRIVACY vigentes.
+                repo = InMemoryIdentityRepository().also { repo ->
+                    listOf("ana", "carolina.restrepo").forEach { repo.seedAcceptedUser(it, TEST_LEGAL_VERSION) }
+                },
+            ),
+        )
 
     suspend fun HttpClient.answer(uid: String, body: Answers) = post("/v1/twin/answers") {
         header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")

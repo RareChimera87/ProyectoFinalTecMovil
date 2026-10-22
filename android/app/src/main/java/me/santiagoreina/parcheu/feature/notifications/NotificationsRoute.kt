@@ -11,10 +11,6 @@ import me.santiagoreina.parcheu.navigation.Notifications
  * [notificationsModule]; AppNavHost.kt no cambia.
  */
 @Composable
-fun NotificationsRoute(
-    route: Notifications,
-    navigator: AppNavigator,
-    modifier: Modifier = Modifier
-) {
+fun NotificationsRoute(route: Notifications, navigator: AppNavigator, modifier: Modifier = Modifier) {
     StubScreen(route = route, navigator = navigator, modifier = modifier)
 }

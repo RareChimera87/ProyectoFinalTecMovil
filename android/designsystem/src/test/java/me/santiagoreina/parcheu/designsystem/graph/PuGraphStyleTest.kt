@@ -84,7 +84,7 @@ class PuGraphStyleTest {
                 ) {
                     assertTrue(
                         "${a.id}/${b.id}",
-                        hypot(a.x - b.x, a.y - b.y) >= a.radius + b.radius
+                        hypot(a.x - b.x, a.y - b.y) >= a.radius + b.radius,
                     )
                 }
             }
@@ -110,7 +110,7 @@ class PuGraphStyleTest {
         val failures = mutableListOf<String>()
         for ((theme, colors) in listOf(
             "oscuro" to DarkParcheUColors,
-            "claro" to LightParcheUColors
+            "claro" to LightParcheUColors,
         )) {
             val label = contrastRatio(colors.mu, colors.bg)
             if (label < Wcag.AA_NORMAL_TEXT) failures += "$theme etiqueta: $label"

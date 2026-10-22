@@ -40,12 +40,11 @@ private class CssLinearGradientBrush(private val gradient: ParcheUGradient) : Sh
             from = start,
             to = end,
             colors = gradient.stops.map { it.second },
-            colorStops = gradient.stops.map { it.first / maxStop }
+            colorStops = gradient.stops.map { it.first / maxStop },
         )
     }
 
-    override fun equals(other: Any?): Boolean =
-        other is CssLinearGradientBrush && other.gradient == gradient
+    override fun equals(other: Any?): Boolean = other is CssLinearGradientBrush && other.gradient == gradient
 
     override fun hashCode(): Int = gradient.hashCode()
 }
@@ -54,11 +53,7 @@ private class CssLinearGradientBrush(private val gradient: ParcheUGradient) : Sh
  * Extremos de la línea de un degradado CSS para [size]. Si la última parada pasa de 1, la línea se alarga
  * en esa proporción y las paradas se normalizan.
  */
-internal fun cssGradientLine(
-    angleDegrees: Float,
-    size: Size,
-    lastStop: Float = 1f
-): Pair<Offset, Offset> {
+internal fun cssGradientLine(angleDegrees: Float, size: Size, lastStop: Float = 1f): Pair<Offset, Offset> {
     val radians = Math.toRadians(angleDegrees.toDouble())
     val dx = sin(radians).toFloat()
     val dy = -cos(radians).toFloat()

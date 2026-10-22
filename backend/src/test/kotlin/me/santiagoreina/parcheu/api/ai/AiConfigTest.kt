@@ -56,7 +56,9 @@ class AiConfigTest : FunSpec({
     test("fake solo se admite con ENV=local y es el predeterminado ahí") {
         shouldThrow<IllegalArgumentException> { AiConfig.fromEnv(base + ("AI_PROVIDER" to "fake"), Env.PROD) }
         AiConfig.fromEnv(emptyMap(), Env.LOCAL).provider shouldBe AiProvider.FAKE
-        val container = AppContainer.fromConfig(AppConfig.fromEnv(mapOf("ENV" to "local")), mapOf("ENV" to "local"))
+        // E2.1 exige base de datos también en local; el pool es perezoso, así que no se conecta.
+        val localDb = mapOf("ENV" to "local", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu")
+        val container = AppContainer.fromConfig(AppConfig.fromEnv(localDb), localDb)
         container.ai.provider shouldBe AiProvider.FAKE
     }
 

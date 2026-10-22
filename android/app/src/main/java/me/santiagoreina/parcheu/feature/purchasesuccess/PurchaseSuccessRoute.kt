@@ -11,10 +11,6 @@ import me.santiagoreina.parcheu.navigation.PurchaseSuccess
  * [purchaseSuccessModule]; AppNavHost.kt no cambia.
  */
 @Composable
-fun PurchaseSuccessRoute(
-    route: PurchaseSuccess,
-    navigator: AppNavigator,
-    modifier: Modifier = Modifier
-) {
+fun PurchaseSuccessRoute(route: PurchaseSuccess, navigator: AppNavigator, modifier: Modifier = Modifier) {
     StubScreen(route = route, navigator = navigator, modifier = modifier)
 }

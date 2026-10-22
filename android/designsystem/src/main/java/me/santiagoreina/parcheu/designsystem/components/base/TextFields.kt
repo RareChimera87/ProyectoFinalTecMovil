@@ -22,7 +22,7 @@ import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 enum class ParcheUTextFieldStyle(val minHeight: Dp, val radius: Dp, val singleLine: Boolean) {
     Default(56.dp, ParcheURadius.Field, true),
     Code(56.dp, ParcheURadius.FieldLarge, true),
-    TextArea(96.dp, ParcheURadius.FieldLarge, false)
+    TextArea(96.dp, ParcheURadius.FieldLarge, false),
 }
 
 /**
@@ -42,7 +42,7 @@ fun ParcheUTextField(
     enabled: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
-    visualTransformation: VisualTransformation = VisualTransformation.None
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     OutlinedTextField(
         value = value,
@@ -60,7 +60,7 @@ fun ParcheUTextField(
         colors = parcheUTextFieldColors(),
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
-        visualTransformation = visualTransformation
+        visualTransformation = visualTransformation,
     )
 }
 
@@ -93,6 +93,6 @@ private fun parcheUTextFieldColors(): TextFieldColors {
         focusedSupportingTextColor = colors.mu,
         unfocusedSupportingTextColor = colors.mu,
         disabledSupportingTextColor = colors.mu.disabled(),
-        errorSupportingTextColor = colors.error
+        errorSupportingTextColor = colors.error,
     )
 }

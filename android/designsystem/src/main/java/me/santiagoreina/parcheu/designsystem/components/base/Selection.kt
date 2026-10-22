@@ -46,7 +46,7 @@ fun ParcheUSwitch(
     onCheckedChange: (Boolean) -> Unit,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
 ) {
     val colors = ParcheUTheme.colors
     val thumbSize by animateDpAsState(if (checked) 24.dp else 16.dp, label = "thumbSize")
@@ -62,10 +62,10 @@ fun ParcheUSwitch(
                 value = checked,
                 enabled = enabled,
                 role = Role.Switch,
-                onValueChange = onCheckedChange
+                onValueChange = onCheckedChange,
             )
             .semantics { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier =
@@ -80,10 +80,10 @@ fun ParcheUSwitch(
                         Modifier.border(
                             2.dp,
                             if (enabled) colors.mu else colors.mu.disabled(),
-                            CircleShape
+                            CircleShape,
                         )
-                    }
-                )
+                    },
+                ),
         ) {
             Box(
                 modifier =
@@ -93,13 +93,13 @@ fun ParcheUSwitch(
                     .size(thumbSize)
                     .clip(CircleShape)
                     .background(thumb),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 if (checked) {
                     Canvas(Modifier.size(14.dp)) {
                         drawCheck(
                             if (enabled) colors.primary else colors.primary.disabled(),
-                            2.dp.toPx()
+                            2.dp.toPx(),
                         )
                     }
                 }
@@ -115,7 +115,7 @@ fun ParcheUCheckbox(
     onCheckedChange: (Boolean) -> Unit,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
 ) {
     val colors = ParcheUTheme.colors
     val shape = ParcheUTheme.shapes.checkbox
@@ -127,10 +127,10 @@ fun ParcheUCheckbox(
                 value = checked,
                 enabled = enabled,
                 role = Role.Checkbox,
-                onValueChange = onCheckedChange
+                onValueChange = onCheckedChange,
             )
             .semantics { this.contentDescription = contentDescription },
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier =
@@ -140,17 +140,17 @@ fun ParcheUCheckbox(
                 .then(
                     if (checked) {
                         Modifier.background(
-                            if (enabled) colors.primary else colors.primary.disabled()
+                            if (enabled) colors.primary else colors.primary.disabled(),
                         )
                     } else {
                         Modifier.border(
                             2.dp,
                             if (enabled) colors.mu else colors.mu.disabled(),
-                            shape
+                            shape,
                         )
-                    }
+                    },
                 ),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             if (checked) {
                 Canvas(Modifier.size(14.dp)) {
@@ -169,7 +169,7 @@ fun ParcheURadioRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
 ) {
     val colors = ParcheUTheme.colors
     val ring = if (selected) colors.primary else colors.mu
@@ -182,25 +182,25 @@ fun ParcheURadioRow(
                 selected = selected,
                 enabled = enabled,
                 role = Role.RadioButton,
-                onClick = onClick
+                onClick = onClick,
             )
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Box(
             modifier = Modifier.size(
-                22.dp
+                22.dp,
             ).border(2.dp, if (enabled) ring else ring.disabled(), CircleShape),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             if (selected) {
                 Box(
                     Modifier.size(
-                        10.dp
+                        10.dp,
                     ).clip(
-                        CircleShape
-                    ).background(if (enabled) colors.primary else colors.primary.disabled())
+                        CircleShape,
+                    ).background(if (enabled) colors.primary else colors.primary.disabled()),
                 )
             }
         }
@@ -208,13 +208,13 @@ fun ParcheURadioRow(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (enabled) colors.tx else colors.tx.disabled()
+                color = if (enabled) colors.tx else colors.tx.disabled(),
             )
             if (supportingText != null) {
                 Text(
                     text = supportingText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (enabled) colors.mu else colors.mu.disabled()
+                    color = if (enabled) colors.mu else colors.mu.disabled(),
                 )
             }
         }

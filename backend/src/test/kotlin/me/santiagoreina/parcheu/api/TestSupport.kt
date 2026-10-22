@@ -6,6 +6,8 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.identity.IdentityService
+import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
@@ -36,22 +38,35 @@ fun testConfig() = AppConfig(
     db = null,
 )
 
+const val TEST_LEGAL_VERSION = "2026-10-29"
+
+/**
+ * Contenedor con Fakes. El usuario `ana` ya existe con términos aceptados, así que las pruebas de
+ * otros dominios pasan la puerta de `TERMS_REQUIRED` sin repetir el alta; para probar la sesión
+ * se pasa un repositorio propio.
+ */
 fun testContainer(
     extra: List<DomainRoutes> = emptyList(),
+    repo: InMemoryIdentityRepository = InMemoryIdentityRepository().also { it.seedAcceptedUser("ana", TEST_LEGAL_VERSION) },
+    legalTextVersion: String = TEST_LEGAL_VERSION,
     ai: AiGateway = testGateway(),
     twin: TwinModule = inMemoryTwinModule(FIXED_CLOCK, ai),
     quota: QuotaModule = inMemoryQuotaModule(FIXED_CLOCK),
     config: AppConfig = testConfig(),
-) = AppContainer(
-    config = config,
-    clock = FIXED_CLOCK,
-    tokenVerifier = FakeTokenVerifier(),
-    oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
-    ai = ai,
-    twin = twin,
-    quota = quota,
-    domains = allDomains(twin, quota) + extra,
-)
+): AppContainer {
+    val identity = IdentityService(repo, FIXED_CLOCK, legalTextVersion)
+    return AppContainer(
+        config = config,
+        clock = FIXED_CLOCK,
+        tokenVerifier = FakeTokenVerifier(),
+        oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
+        identity = identity,
+        ai = ai,
+        twin = twin,
+        quota = quota,
+        domains = allDomains(identity, twin, quota) + extra,
+    )
+}
 
 /** Arranca el módulo con Fakes y devuelve un cliente que entiende el JSON del contrato. */
 fun ApplicationTestBuilder.startApp(container: AppContainer = testContainer()): HttpClient {

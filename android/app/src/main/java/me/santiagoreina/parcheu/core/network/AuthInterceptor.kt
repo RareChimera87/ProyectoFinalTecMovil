@@ -12,8 +12,7 @@ internal fun bearer(token: String): String = "Bearer $token"
  * Agrega `Authorization: Bearer <ID token>` a las peticiones a [apiHost] si hay sesión. Otros hosts
  * (fotos de Google, Hosting) nunca reciben el token.
  */
-class AuthInterceptor(private val tokenProvider: TokenProvider, private val apiHost: String) :
-    Interceptor {
+class AuthInterceptor(private val tokenProvider: TokenProvider, private val apiHost: String) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (request.url.host != apiHost ||

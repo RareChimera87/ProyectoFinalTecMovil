@@ -42,7 +42,7 @@ fun TokenSheet(modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .background(colors.bg)
             .padding(spacing.gutter),
-        verticalArrangement = Arrangement.spacedBy(spacing.blockGap)
+        verticalArrangement = Arrangement.spacedBy(spacing.blockGap),
     ) {
         Text(
             text =
@@ -50,7 +50,7 @@ fun TokenSheet(modifier: Modifier = Modifier) {
                 withStyle(SpanStyle(color = colors.wordmark)) { append("Parche") }
                 withStyle(SpanStyle(color = colors.accent.solid)) { append("U") }
             },
-            style = MaterialTheme.typography.displayMedium
+            style = MaterialTheme.typography.displayMedium,
         )
         Overline(if (colors.isDark) "Sistema · tema oscuro" else "Sistema · tema claro")
 
@@ -61,8 +61,8 @@ fun TokenSheet(modifier: Modifier = Modifier) {
                     "s1" to colors.s1,
                     "s2" to colors.s2,
                     "ln" to colors.ln,
-                    "prc" to colors.prc
-                )
+                    "prc" to colors.prc,
+                ),
             )
             SwatchRow(
                 listOf(
@@ -70,8 +70,8 @@ fun TokenSheet(modifier: Modifier = Modifier) {
                     "prt" to colors.prt,
                     "onprc" to colors.onprc,
                     "tx" to colors.tx,
-                    "mu" to colors.mu
-                )
+                    "mu" to colors.mu,
+                ),
             )
         }
 
@@ -95,20 +95,20 @@ fun TokenSheet(modifier: Modifier = Modifier) {
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.xs)) {
                 GradientBox(
                     "plus",
-                    Modifier.background(colors.plusGradient.brush(), ParcheUTheme.shapes.card)
+                    Modifier.background(colors.plusGradient.brush(), ParcheUTheme.shapes.card),
                 )
                 GradientBox(
                     "paywall",
                     Modifier.background(
                         colors.paywallHeroGradient.brush(),
-                        ParcheUTheme.shapes.card
-                    )
+                        ParcheUTheme.shapes.card,
+                    ),
                 )
                 GradientBox(
                     "celebración",
                     Modifier
                         .background(colors.s1, ParcheUTheme.shapes.card)
-                        .background(colors.celebrationGradient.brush(), ParcheUTheme.shapes.card)
+                        .background(colors.celebrationGradient.brush(), ParcheUTheme.shapes.card),
                 )
             }
         }
@@ -149,7 +149,7 @@ private fun Overline(text: String) {
     Text(
         text = text.uppercase(),
         style = ParcheUTheme.textStyles.overline,
-        color = ParcheUTheme.colors.mu
+        color = ParcheUTheme.colors.mu,
     )
 }
 
@@ -161,7 +161,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
             .fillMaxWidth()
             .background(ParcheUTheme.colors.s1, ParcheUTheme.shapes.card)
             .padding(ParcheUTheme.spacing.cardPadding),
-        verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.sm)
+        verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.sm),
     ) {
         Overline(title)
         content()
@@ -178,18 +178,18 @@ private fun SwatchRow(swatches: List<Pair<String, Color>>) {
                     Modifier
                         .size(52.dp, 36.dp)
                         .background(color, ParcheUTheme.shapes.buttonCompact)
-                        .border(1.dp, ParcheUTheme.colors.ln, ParcheUTheme.shapes.buttonCompact)
+                        .border(1.dp, ParcheUTheme.colors.ln, ParcheUTheme.shapes.buttonCompact),
                 )
                 Spacer(Modifier.height(ParcheUTheme.spacing.xxs))
                 Text(
                     name,
                     style = MaterialTheme.typography.labelSmall,
-                    color = ParcheUTheme.colors.tx
+                    color = ParcheUTheme.colors.tx,
                 )
                 Text(
                     color.hex(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = ParcheUTheme.colors.mu
+                    color = ParcheUTheme.colors.mu,
                 )
             }
         }
@@ -204,7 +204,7 @@ private fun ModeTag(label: String, mode: ModeColors) {
             .height(ParcheUSizes.ModeChipMedium)
             .background(mode.solid, ParcheUTheme.shapes.pill)
             .padding(horizontal = 11.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = mode.onSolid)
     }
@@ -214,7 +214,7 @@ private fun ModeTag(label: String, mode: ModeColors) {
 private fun GradientBox(label: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier.size(width = 88.dp, height = 56.dp),
-        contentAlignment = Alignment.BottomStart
+        contentAlignment = Alignment.BottomStart,
     ) {
         Text(
             text = label,
@@ -226,7 +226,7 @@ private fun GradientBox(label: String, modifier: Modifier = Modifier) {
                 ParcheUTheme.colors.tx
             } else {
                 ParcheUTheme.colors.white
-            }
+            },
         )
     }
 }
@@ -242,14 +242,14 @@ private fun AffinityAvatar(affinity: Int) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier.size(40.dp).background(avatar.fill, ParcheUTheme.shapes.avatar),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             Text("LP", style = ParcheUTheme.textStyles.initials, color = avatar.content)
         }
         Text(
             "$affinity",
             style = MaterialTheme.typography.labelSmall,
-            color = ParcheUTheme.colors.mu
+            color = ParcheUTheme.colors.mu,
         )
     }
 }
@@ -262,7 +262,7 @@ private fun RadiusSample(label: String, shape: Shape) {
             .size(40.dp)
             .background(ParcheUTheme.colors.prc, shape)
             .border(1.dp, ParcheUTheme.colors.prt, shape),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = ParcheUTheme.colors.onprc)
     }

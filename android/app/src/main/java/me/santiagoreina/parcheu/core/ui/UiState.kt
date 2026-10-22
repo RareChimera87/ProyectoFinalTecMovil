@@ -17,6 +17,5 @@ sealed interface UiState<out T> {
 }
 
 /** Convierte un resultado en estado: lista o colección vacía → [UiState.Empty]. */
-fun <T> T.toUiState(
-    isEmpty: (T) -> Boolean = { (it as? Collection<*>)?.isEmpty() == true }
-): UiState<T> = if (isEmpty(this)) UiState.Empty else UiState.Loaded(this)
+fun <T> T.toUiState(isEmpty: (T) -> Boolean = { (it as? Collection<*>)?.isEmpty() == true }): UiState<T> =
+    if (isEmpty(this)) UiState.Empty else UiState.Loaded(this)

@@ -13,7 +13,7 @@ const val AFFINITY_ALPHA_MIN = 0.22f
 fun affinityAlpha(affinity: Float): Float =
     (AFFINITY_ALPHA_MIN + (1f - AFFINITY_ALPHA_MIN) * (affinity - 50f) / 45f).coerceIn(
         AFFINITY_ALPHA_MIN,
-        1f
+        1f,
     )
 
 fun affinityAlpha(affinity: Int): Float = affinityAlpha(affinity.toFloat())
@@ -46,7 +46,7 @@ fun avatarColors(alpha: Float, darkTheme: Boolean): AvatarColors {
     return AvatarColors(
         fillAlpha = fillAlpha,
         fill = ParcheUPalette.Violet.copy(alpha = fillAlpha),
-        content = onAvatarColor(requested, darkTheme)
+        content = onAvatarColor(requested, darkTheme),
     )
 }
 
