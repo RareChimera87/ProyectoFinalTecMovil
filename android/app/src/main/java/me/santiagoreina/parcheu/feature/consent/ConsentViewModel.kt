@@ -44,15 +44,22 @@ class ConsentViewModel(private val repository: ConsentRepository) : ViewModel() 
 
     fun onNotNow() {
         if (_state.value.submitting) return
+        _state.update { ConsentUiState(submitting = true) }
         viewModelScope.launch {
-            // Si un 'Acepto' anterior falló a medias, no se conserva lo que alcanzó a concederse.
-            repository.revokePartialGrants()
-            _effects.send(ConsentEffect.Done)
+            // Si un 'Acepto' anterior falló a medias, no se conserva lo que alcanzó a concederse; si la
+            // revocación falla no se avanza a B5 (el usuario puede reintentar).
+            when (val result = repository.revokePartialGrants()) {
+                is ApiResult.Failure -> _state.update { ConsentUiState(error = result.error) }
+                is ApiResult.Success -> {
+                    _state.update { ConsentUiState() }
+                    _effects.send(ConsentEffect.Done)
+                }
+            }
         }
     }
 }
 
 fun consentErrorMessage(error: AppError): String = when (error) {
     AppError.Network -> "No hay conexión. Revisa tu internet e inténtalo de nuevo."
-    else -> "No pudimos guardar tu respuesta. Inténtalo de nuevo o elige 'Ahora no'."
+    else -> "No pudimos guardar tu respuesta. Inténtalo de nuevo."
 }

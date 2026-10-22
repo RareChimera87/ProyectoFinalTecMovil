@@ -36,9 +36,10 @@ interface ConsentRepository {
     /**
      * Revoca (granted=false) lo que un intento fallido de [grantOnboardingLearning] haya dejado concedido y
      * no se pudo deshacer. 'Ahora no' lo llama: si el usuario rechaza, el gemelo no aprende de esos chats.
-     * No hace nada si no queda nada por revocar.
+     * Devuelve [ApiResult.Failure] si alguna revocación falla (queda pendiente para reintentar) y
+     * [ApiResult.Success] si no queda nada concedido.
      */
-    suspend fun revokePartialGrants()
+    suspend fun revokePartialGrants(): ApiResult<Unit>
 }
 
 /**
@@ -60,8 +61,10 @@ class ApiConsentRepository(
             val legalVersion = sessionApi.session().legalTextVersion
             version = legalVersion
             ONBOARDING_LEARNING.forEach { kind ->
-                api.change(ConsentChange(kind, granted = true, textVersion = legalVersion))
+                // Se anota antes de llamar: si el servidor confirma pero la respuesta se pierde (timeout),
+                // igual hay que revocarlo. Revocar algo no concedido es inocuo.
                 granted += kind
+                api.change(ConsentChange(kind, granted = true, textVersion = legalVersion))
             }
         }
         if (result is ApiResult.Failure) revokeGranted() else granted.clear()
@@ -71,12 +74,17 @@ class ApiConsentRepository(
     override suspend fun revokePartialGrants() = mutex.withLock { revokeGranted() }
 
     /** Revoca cada tipo concedido; los que no se logran revocar quedan pendientes para 'Ahora no'. */
-    private suspend fun revokeGranted() {
-        val legalVersion = version ?: return
+    private suspend fun revokeGranted(): ApiResult<Unit> {
+        val legalVersion = version ?: return ApiResult.Success(Unit)
+        var failure: ApiResult.Failure? = null
         granted.toList().forEach { kind ->
             val revoked =
                 apiCall(errorMapper) { api.change(ConsentChange(kind, granted = false, textVersion = legalVersion)) }
-            if (revoked is ApiResult.Success) granted -= kind
+            when (revoked) {
+                is ApiResult.Success -> granted -= kind
+                is ApiResult.Failure -> if (failure == null) failure = revoked
+            }
         }
+        return failure ?: ApiResult.Success(Unit)
     }
 }
