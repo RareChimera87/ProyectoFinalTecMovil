@@ -1,0 +1,13 @@
+{
+  "id": "intro-1",
+  "status": "PROPOSED",
+  "simulationId": "5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+  "report": {
+    "score": 82,
+    "summary": "Buen parche",
+    "locked": true,
+    "unlockAvailable": true,
+    "otherDecided": false
+  },
+  "myResponse": true
+}

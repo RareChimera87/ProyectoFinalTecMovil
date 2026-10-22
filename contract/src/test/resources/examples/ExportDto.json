@@ -1,0 +1,151 @@
+{
+  "generatedAt": "2026-10-23T15:30:00Z",
+  "me": {
+    "id": "6f1c2a9e-3b7d-4c55-9a10-2f8e4d6b1c01",
+    "email": "santi@example.com",
+    "displayName": "Santiago Reina",
+    "photoUrl": "https://lh3.googleusercontent.com/a/santi",
+    "career": "Ingeniería de Sistemas",
+    "universityId": 1,
+    "interests": [
+      "musica",
+      "cafe",
+      "senderismo"
+    ],
+    "birthDate": "2004-05-17",
+    "ageVerified": true,
+    "underage": false,
+    "parejaConfirmed": true,
+    "visibility": "ANONYMOUS",
+    "modes": {
+      "AMISTAD": true,
+      "PAREJA": false,
+      "ESTUDIO": true
+    },
+    "plus": false,
+    "isDemo": false,
+    "createdAt": "2026-10-20T14:00:00Z"
+  },
+  "consents": [
+    {
+      "kind": "TERMS",
+      "granted": true,
+      "textVersion": "2026-10-01",
+      "updatedAt": "2026-10-23T15:30:00Z"
+    }
+  ],
+  "twin": {
+    "traits": [
+      {
+        "key": "SOCIAL_ENERGY",
+        "value": 0.72
+      },
+      {
+        "key": "PLANNING",
+        "value": 0.41
+      },
+      {
+        "key": "CONFLICT_HANDLING",
+        "value": 0.58
+      },
+      {
+        "key": "HUMOR",
+        "value": 0.83
+      },
+      {
+        "key": "ACADEMIC_AMBITION",
+        "value": 0.66
+      },
+      {
+        "key": "OPENNESS",
+        "value": 0.77
+      }
+    ],
+    "level": 2,
+    "xp": 640,
+    "xpNext": 1000,
+    "version": 3,
+    "personaReady": true,
+    "accuracy": 71
+  },
+  "twinAnswers": [
+    {
+      "questionId": 1,
+      "answer": "DEPENDS"
+    }
+  ],
+  "memories": [
+    {
+      "id": "mem-1",
+      "text": "Prefiere planes al aire libre los domingos",
+      "mode": "AMISTAD",
+      "status": "PENDING",
+      "createdAt": "2026-10-23T15:30:00Z"
+    }
+  ],
+  "simulations": [
+    {
+      "id": "5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+      "status": "DONE",
+      "mode": "AMISTAD",
+      "other": {
+        "anonId": "h7Kq2xP9",
+        "label": "Alguien de la UIS",
+        "initials": "A",
+        "isDemo": false
+      },
+      "createdAt": "2026-10-23T15:30:00Z",
+      "origin": "PARCHE",
+      "score": 82
+    }
+  ],
+  "chats": [
+    {
+      "id": "c1a2b3c4-d5e6-4f70-8192-a3b4c5d6e7f8",
+      "type": "DIRECT",
+      "mode": "AMISTAD",
+      "messages": [
+        {
+          "id": "m-01",
+          "senderId": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
+          "text": "¿Nos vemos mañana en la biblioteca?",
+          "createdAt": "2026-10-23T15:30:00Z",
+          "hidden": false
+        }
+      ]
+    }
+  ],
+  "notifications": [
+    {
+      "id": "notif-1",
+      "kind": "SIMULATION_READY",
+      "title": "Tu simulación está lista",
+      "body": "Mira qué tal te fue con Alguien de la UIS",
+      "route": "parcheu://results/5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+      "actor": {
+        "anonId": "h7Kq2xP9",
+        "label": "Alguien de la UIS",
+        "initials": "A",
+        "isDemo": false
+      },
+      "locked": false,
+      "read": false,
+      "createdAt": "2026-10-23T15:30:00Z"
+    }
+  ],
+  "blocks": [
+    {
+      "userId": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
+      "label": "Laura Pinzón",
+      "initials": "LP",
+      "blockedAt": "2026-10-23T15:30:00Z"
+    }
+  ],
+  "entitlement": {
+    "plus": true,
+    "state": "ACTIVE",
+    "basePlan": "anual",
+    "expiresAt": "2027-10-23T15:30:00Z",
+    "autoRenewing": true
+  }
+}

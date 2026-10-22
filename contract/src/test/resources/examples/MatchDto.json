@@ -1,0 +1,17 @@
+{
+  "id": "match-1",
+  "mode": "AMISTAD",
+  "other": {
+    "label": "Alguien de la UIS",
+    "ageRange": "20-22",
+    "university": "UIS",
+    "interests": [
+      "musica"
+    ],
+    "isDemo": false
+  },
+  "status": "PENDING_CHOICE",
+  "myChoice": "SIMULATION",
+  "decideBy": "2026-10-23T15:40:00Z",
+  "scenarioAvailable": false
+}
