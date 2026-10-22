@@ -111,7 +111,7 @@ cd backend && ./gradlew test -PsinContenedores --tests 'me.santiagoreina.parcheu
 PRIVACY_SEED=-6985993149784619260 ./gradlew test -PsinContenedores --tests 'me.santiagoreina.parcheu.api.privacy.*'
 # Demo de mutación para la sustentación (sale ≠ 0 con mutación, 0 sin ella; deja el árbol limpio)
 scripts/demo-mutacion-privacidad.sh            # quita el filtro de Pareja de GraphVisibilityPolicy
-scripts/demo-mutacion-privacidad.sh memorias   # TwinPromptBuilder deja de filtrar memorias por modo
+scripts/demo-mutacion-privacidad.sh memorias   # MemorySelection deja de filtrar memorias por modo
 scripts/demo-mutacion-privacidad.sh ninguna    # control: suite en verde
 scripts/test/demo-mutacion-privacidad.test.sh  # comprobación rápida de las anclas, sin Gradle
 ```

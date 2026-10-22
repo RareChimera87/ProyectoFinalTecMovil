@@ -66,6 +66,11 @@ val sinContenedores = providers.gradleProperty("sinContenedores").isPresent
 tasks.test {
     useJUnitPlatform()
     if (sinContenedores) systemProperty("sinContenedores", "true")
+    // Semilla de la suite de privacidad (E3.5): es entrada de la tarea para que cambiarla vuelva a
+    // correr los tests (si no, Gradle responde UP-TO-DATE) y se reenvía a la JVM de pruebas.
+    val privacySeed = providers.environmentVariable("PRIVACY_SEED").orElse(providers.gradleProperty("privacySeed")).orElse("")
+    inputs.property("privacySeed", privacySeed)
+    if (privacySeed.get().isNotBlank()) systemProperty("privacy.seed", privacySeed.get())
     testLogging {
         events("failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

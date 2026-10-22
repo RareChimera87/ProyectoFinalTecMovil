@@ -8,7 +8,7 @@ El gemelo aprende de los chats con consentimiento por modo. Si una memoria extra
 
 ## Decisión
 - `twin_memories.mode` es obligatorio; la extracción procesa cada modo por separado.
-- `TwinPromptBuilder` es el único lugar que arma el prompt de un `TwinAgent` y solo incluye memorias aceptadas **del modo de la simulación**.
+- `TwinPromptBuilder` es el único lugar que arma el prompt de un `TwinAgent` y toma sus memorias de `MemorySelection.select` (E3.5), que solo incluye memorias aceptadas **del modo de la simulación**.
 - `persona_summary` se construye **solo con las 12 respuestas**; las memorias nunca se mezclan en la persona general.
 - Pruebas: captura de prompt en E4.3 y E9.2, y una propiedad en la suite E3.5 (con su variante de mutación para la sustentación).
 

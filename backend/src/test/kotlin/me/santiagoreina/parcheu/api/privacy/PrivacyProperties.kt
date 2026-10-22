@@ -11,7 +11,7 @@ import kotlin.random.Random
  * propiedad y una semilla que siempre se imprime para poder reproducir la corrida.
  *
  * Reproducir: `PRIVACY_SEED=<semilla> ./gradlew test -PsinContenedores --tests '*.privacy.*'`
- * (o `-Dprivacy.seed=<semilla>` dentro del IDE).
+ * (o `-PprivacySeed=<semilla>`; en el IDE, `-Dprivacy.seed=<semilla>`).
  */
 object PrivacyProperties {
     const val ITERATIONS = 1_000
