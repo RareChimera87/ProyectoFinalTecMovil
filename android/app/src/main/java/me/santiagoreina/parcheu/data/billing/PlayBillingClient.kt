@@ -50,11 +50,20 @@ class AndroidPlayBillingClient(
 
     override val isReady: Boolean get() = client.isReady
 
+    private val setups = SetupCoalescer()
+
+    @Volatile
+    private var disconnectedCallback: () -> Unit = {}
+
     override suspend fun startConnection(onDisconnected: () -> Unit): BillingResult {
+        disconnectedCallback = onDisconnected
+        return setups.getOrStart(::beginSetup).await()
+    }
+
+    private fun beginSetup(): CompletableDeferred<BillingResult> {
         // endConnection() deja el BillingClient en CLOSED y Play no permite reutilizarlo
         // ("Client was already closed and can't be reused"): se crea uno nuevo para reconectar.
         if (client.connectionState == BillingClient.ConnectionState.CLOSED) client = newClient()
-        val client = client
         val setup = CompletableDeferred<BillingResult>()
         client.startConnection(
             object : BillingClientStateListener {
@@ -73,11 +82,11 @@ class AndroidPlayBillingClient(
                                 )
                                 .build()
                         )
-                    if (!pending) onDisconnected()
+                    if (!pending) disconnectedCallback()
                 }
             }
         )
-        return setup.await()
+        return setup
     }
 
     override suspend fun querySubscriptionDetails(productIds: List<String>): ProductDetailsResult {
@@ -94,4 +103,19 @@ class AndroidPlayBillingClient(
     }
 
     override fun endConnection() = client.endConnection()
+}
+
+/**
+ * Reutiliza el setup en curso. Si quien llamó se cancela, Play sigue en CONNECTING y rechaza otro
+ * `startConnection` con DEVELOPER_ERROR ("Client is already in the process of connecting"); por eso el
+ * siguiente llamador espera el mismo setup en vez de iniciar otro.
+ */
+internal class SetupCoalescer {
+    private var pending: CompletableDeferred<BillingResult>? = null
+
+    @Synchronized
+    fun getOrStart(
+        start: () -> CompletableDeferred<BillingResult>
+    ): CompletableDeferred<BillingResult> =
+        pending?.takeIf { it.isActive } ?: start().also { pending = it }
 }
