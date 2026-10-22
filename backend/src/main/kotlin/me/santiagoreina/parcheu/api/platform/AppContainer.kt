@@ -18,6 +18,8 @@ import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
+import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
 import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
@@ -60,6 +62,7 @@ class AppContainer(
     val tokenVerifier: TokenVerifier,
     val oidcVerifier: OidcVerifier,
     val identity: IdentityService,
+    val profile: ProfileService,
     /** Pasarela de IA (E0.9). Por defecto Fake con uso en memoria (tests y `ENV=local`). */
     val ai: AiGateway = localAiGateway(clock),
     /** Gemelo (E2.3). Por defecto en memoria: solo [fromConfig] cablea Postgres y Cloud Tasks. */
@@ -71,7 +74,7 @@ class AppContainer(
     /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
     val simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, twin, quota, graph, simulation),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, twin, quota, graph, simulation),
 ) {
     companion object {
         /**
@@ -100,12 +103,13 @@ class AppContainer(
             val database = connectExposed(createDataSource(dbConfig, failFast = false))
             val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
             val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
+            val profile = ProfileService(identity, ExposedProfileRepository(database), clock)
             val twin = twinModule(config.env, database, clock, ai, tasks)
             val quota = quotaModule(config.env, database, clock)
             val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
             val simulation = simulationModule(config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId)
             return AppContainer(
-                config, clock, tokenVerifier, oidcVerifier, identity,
+                config, clock, tokenVerifier, oidcVerifier, identity, profile,
                 ai = ai, twin = twin, quota = quota, graph = graph, simulation = simulation,
             )
         }
@@ -132,12 +136,13 @@ class AppContainer(
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
 fun allDomains(
     identity: IdentityService,
+    profile: ProfileService,
     twin: TwinModule,
     quota: QuotaModule,
     graph: GraphModule,
     simulation: SimulationModule,
 ): List<DomainRoutes> = listOf(
-    IdentityRoutes(identity),
+    IdentityRoutes(identity, profile),
     TwinRoutes(twin),
     QuotaRoutes(quota),
     MatchingRoutes(),

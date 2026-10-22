@@ -8,6 +8,8 @@ import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
+import me.santiagoreina.parcheu.api.identity.profile.InMemoryProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
@@ -59,20 +61,23 @@ fun testContainer(
     config: AppConfig = testConfig(),
     graph: GraphModule = inMemoryGraphModule(FIXED_CLOCK),
     simulation: SimulationModule = inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph),
+    clock: Clock = FIXED_CLOCK,
 ): AppContainer {
-    val identity = IdentityService(repo, FIXED_CLOCK, legalTextVersion)
+    val identity = IdentityService(repo, clock, legalTextVersion)
+    val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
     return AppContainer(
         config = config,
-        clock = FIXED_CLOCK,
+        clock = clock,
         tokenVerifier = FakeTokenVerifier(),
         oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
         identity = identity,
+        profile = profile,
         ai = ai,
         twin = twin,
         quota = quota,
         graph = graph,
         simulation = simulation,
-        domains = allDomains(identity, twin, quota, graph, simulation) + extra,
+        domains = allDomains(identity, profile, twin, quota, graph, simulation) + extra,
     )
 }
 

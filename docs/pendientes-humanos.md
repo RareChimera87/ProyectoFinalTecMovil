@@ -250,18 +250,6 @@ El código y las pruebas están completos: 31 pruebas nuevas con FakeLlm y la AP
 | 5 | **`refunded` para F5 (E4.5).** El criterio de E4.5 pide mostrar "No se descontó de tu cupo" solo si el resumen trae `refunded = true`, pero `SimulationSummary` del contrato no tiene ese campo. El servidor ya devuelve el cupo; falta agregar `refunded: Boolean = false` al contrato (cambio compatible) y llenarlo desde `usage_events`. Decidir si lo hace E4.5 o un PR corto del contrato. | I1 + I2 | Antes de E4.5 |
 | 6 | **Aprobación del revisor par** del PR (feature major, check `major-gate`): según `docs/equipo.md` el par de E4.3 es I2. | I2 | Ventana de revisión de la ola 7 (6 nov) |
 
-## E2.1 · API de sesión y usuarios
-
-No hay pasos bloqueantes: la feature no crea recursos en GCP, Firebase ni consolas.
-
-1. **Texto legal vigente (`LEGAL_TEXT_VERSION`).** Por defecto es `2026-10-29` (constante en `AppConfig`). Cuando E8.4 publique
-   las páginas `/privacidad` y `/terminos`, confirma que su versión sea exactamente esa o cambia el valor: o bien se actualiza
-   `DEFAULT_LEGAL_TEXT_VERSION`, o bien se define la variable `LEGAL_TEXT_VERSION` en el servicio de Cloud Run (Terraform de E0.5).
-   Cada cambio de versión devuelve a todos los usuarios a `NEEDS_TERMS` (es lo que exige la Ley 1581).
-2. **Variables de la base en el servicio.** Desde E2.1 el modo `serve` exige `DB_NAME` y `CLOUD_SQL_INSTANCE`. Antes del primer
-   `deploy-dev` verifica que el servicio de Cloud Run las recibe (hoy solo las usa el job `migrate`).
-3. **Revisión legal.** Pide al docente o a un abogado revisar el texto de aceptación de A4 y el plazo de conservación de
-   `consents` (5 años, arquitectura.md §10.2) antes de la prueba cerrada.
 
 ## E1.4 · Componentes compuestos
 
@@ -287,3 +275,16 @@ No crea recursos en GCP, Firebase ni consolas.
 | 3 | **Revisión visual lado a lado.** Comparar `screenshots/modes/*.png` con 03b-03e de 'PU Seccion B'. Diferencias intencionales: B2 arranca con todo apagado y valida 0 modos; B3 muestra la fecha verificada en B0 en solo lectura y la casilla 'Confirmo que soy mayor de 18 y quiero activar Pareja'; B4 cambia el interruptor por 'Acepto' / 'Ahora no' y aclara que Pareja queda fuera; los íconos son trazos de Material dibujados en código hasta que se mezcle E1.2. | I2 | Ventana de revisión de la ola 7 |
 | 4 | **Prueba de punta a punta en un dispositivo** cuando E2.6 (B0 y `POST /v1/me/age-verification`) esté en `dev`: sin fecha verificada B3 no deja confirmar; con fecha, activar Pareja, Continuar, B4 'Acepto' y revisar en Cloud SQL de dev que `consents` tenga CHAT_LEARNING_AMISTAD y CHAT_LEARNING_ESTUDIO y ninguna de Pareja. | I1 + I2 | Tras mezclar E2.6 |
 | 5 | **Revisión legal del texto de B4** (qué aprende y qué nunca hace) junto con la de A4 (E2.1, paso 3). | Equipo | Antes de la prueba cerrada |
+## E2.6 · Perfil básico y edad
+
+Lo automatizable ya quedó hecho: `POST /v1/me/age-verification`, `GET /v1/catalog`, la puerta 403 `UNDERAGE`, la migración
+`V20261022_0745__universidad_unipaz.sql`, B0 'Tu perfil', el bloqueo por edad y sus pruebas (API, ViewModel, semántica y
+Roborazzi en ambos temas). No se crean recursos en GCP ni en consolas.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Confirmar la lista de universidades.** La ficha pide UIS, UNAB, UPB, UDES, UTS, USTA, UCC, UNIPAZ y 'Otra'. V2 sembró además UMB, UDI, UNISANGIL y SENA (siguen activas) y E2.6 agregó UNIPAZ (id 12). Si el equipo decide ocultar alguna, crear una migración `V<yyyyMMdd>_<HHmm>__universidades.sql` con `update universities set active = false where short_name in (...)` (no borrar filas: puede haber usuarios que ya la eligieron). | I1 + equipo | Antes de la prueba cerrada |
+| 2 | **Revisión de B0 y del bloqueo (ADR-0022).** No hay mockup: I2 revisa `android/app/src/test/screenshots/basicprofile/*.png` contra el sistema de diseño y anota las diferencias aceptadas en el PR. La flecha de 'Editar perfil' es un vector local hasta que E1.2 (iconos) se mezcle. | I2 | Ventana de revisión de la ola 7 |
+| 3 | **'Borrar mi cuenta' depende de E8.3.** El bloqueo por edad abre la ruta `DeleteAccount`, que sigue siendo stub, y `DELETE /v1/me` responde 501 hasta que E8.3 lo implemente. La puerta de edad ya deja pasar `DELETE /v1/me`. | I1/I3 | Al mezclar E8.3 |
+| 4 | **Prueba manual en un teléfono** (tras desplegar E2.1 y E2.6 en dev): cuenta nueva → A4 → B0 → elegir fecha de alguien de 18 años, universidad e intereses → B1. Con otra cuenta de prueba, una fecha de menor de 18 → pantalla de bloqueo; cerrar y abrir la app debe volver al bloqueo (el Splash recibe 403 `UNDERAGE`). Para repetir con la misma cuenta hay que limpiar `birth_date`, `age_verified_at` y `underage_at` en la base de dev. | I2 | Antes de cerrar la ola 7 |
+| 5 | **Texto del bloqueo.** Pedir al docente revisar el mensaje "ParcheU es solo para mayores de 18…" junto con la revisión legal de E2.1. | I3 | Antes de la prueba cerrada |
