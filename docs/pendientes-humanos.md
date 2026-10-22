@@ -145,3 +145,13 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
    capturas (`./gradlew :app:recordRoborazziDevDebug`).
 5. **Texto legal:** pide al docente revisar el aviso de A4 ("Al continuar aceptas los Términos y la Política de
    privacidad (Ley 1581 de 2012)…") junto con la revisión legal de E2.1.
+
+## E1.4 · Componentes compuestos
+
+Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/.../components/compound/`, pruebas de semántica, de LockedOverlay (sdk 30 y 35) y de avatares, y capturas Roborazzi en ambos temas (`android/designsystem/src/test/screenshots/compound/`).
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar primero E1.3 (PR #20).** Esta rama parte de `feature/components-base` porque los compuestos reutilizan los botones, tarjetas y `touchTarget()` de E1.3; el PR muestra también su commit hasta que #20 se mezcle en `dev`. | I2 | Antes del merge de E1.4 |
+| 2 | **Revisión visual lado a lado.** Comparar las capturas de `screenshots/compound/*.png` con los mockups B-H de Claude Design (radios, paddings, colores de burbujas, anillo de afinidad, QR). Diferencias aceptadas: el QR de las capturas es sintético (el codificador llega con E6.1) y los iconos son círculos de prueba hasta que E1.2 se mezcle. | I2 | Ventana de revisión de la ola 6 |
+| 3 | **Prueba del blur en un dispositivo real.** Robolectric no renderiza `RenderEffect`, así que el desenfoque de `LockedOverlay` solo se verifica por rama (etiqueta `locked_overlay_blur`) y no por píxeles. Abrir una pantalla que lo use (D7 o F7, cuando existan) en un dispositivo/emulador con API >= 31 y en otro con API < 31 y confirmar blur y scrim opaco respectivamente. | I2 | Cuando exista la primera pantalla con LockedOverlay |
