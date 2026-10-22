@@ -1,57 +1,48 @@
 package me.santiagoreina.parcheu.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+private val DarkColors =
+    darkColorScheme(
+        primary = Violet,
+        onPrimary = Color.White,
+        primaryContainer = PrimaryContainer,
+        onPrimaryContainer = OnPrimaryContainer,
+        background = Ink,
+        onBackground = TextPrimary,
+        surface = Ink,
+        onSurface = TextPrimary,
+        surfaceVariant = Surface2,
+        onSurfaceVariant = TextMuted,
+        surfaceContainer = Surface1,
+        outline = Outline,
+        // prt: texto y enlaces sobre fondo oscuro.
+        tertiary = PrimaryTint
+    )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+private val LightColors =
+    lightColorScheme(
+        primary = Violet,
+        onPrimary = Color.White,
+        background = Bone,
+        onBackground = LightText,
+        surface = Bone,
+        onSurface = LightText
+    )
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
-)
-
+/**
+ * Tema provisional del esqueleto. El oscuro es el principal (inventario §3.1). Sin color dinámico:
+ * la marca no cambia con el fondo de pantalla del usuario (`dynamicColor = false`).
+ */
 @Composable
-fun ParcheUTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
+fun ParcheUTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = Typography,
         content = content
     )
