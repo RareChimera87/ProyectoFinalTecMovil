@@ -9,7 +9,7 @@ sealed interface ChargeResult {
     /** Se registró un evento nuevo en `usage_events`. */
     data object Charged : ChargeResult
 
-    /** Ya existía un evento con ese `(kind, ref_id)`: no se cobra de nuevo. */
+    /** Ya existía un evento vigente (o de otra persona) con ese `(kind, ref_id)`: no se cobra de nuevo. */
     data class AlreadyCharged(val ownerId: UUID, val refunded: Boolean) : ChargeResult
 
     /** El usuario ya gastó todo el cupo de la ventana. */
@@ -24,6 +24,8 @@ sealed interface ChargeResult {
 interface UsageRepository {
     /**
      * Cobra un uso de forma atómica: si ya existe `(kind, refId)` devuelve [ChargeResult.AlreadyCharged];
+     * si ese evento es del mismo usuario y estaba devuelto, lo reactiva (`refunded = false`,
+     * `created_at = now`) con las mismas reglas de límite y devuelve [ChargeResult.Charged];
      * si el usuario tiene `limit` o más usos no devueltos en `[window.start, window.end)` devuelve
      * [ChargeResult.LimitReached]; si no, inserta con `created_at = now`. Dos cobros simultáneos del
      * mismo usuario se serializan, así que nunca se pasa del límite.

@@ -28,16 +28,17 @@ class QuotaService(
 
     /** Resultado de [consume]. */
     enum class Outcome {
-        /** Se cobró un uso nuevo. */
+        /** Se cobró un uso nuevo (incluye reactivar un uso devuelto que su dueño reintenta). */
         CHARGED,
 
-        /** Ese `ref_id` ya estaba registrado (repetición o reintento): no se cobra de nuevo. */
+        /** Ese `ref_id` ya tiene un cobro vigente (repetición): no se cobra de nuevo. */
         ALREADY_CHARGED,
     }
 
     /**
      * Cobra un uso de [kind]. Idempotente por `(kind, refId)`: repetir el mismo `refId` no cobra
-     * dos veces, aunque ese uso se haya devuelto. Lanza [QuotaExceeded] (402, `resetsAt` = fin de
+     * dos veces mientras el cobro siga vigente. Si el uso se devolvió y su dueño lo reintenta, se
+     * reactiva y se cobra de nuevo ([Outcome.CHARGED]) respetando el límite. Lanza [QuotaExceeded] (402, `resetsAt` = fin de
      * la ventana) si no queda cupo y [Conflict] si el `refId` ya lo usó otra persona.
      */
     fun consume(userId: UUID, kind: QuotaKind, refId: String): Outcome {

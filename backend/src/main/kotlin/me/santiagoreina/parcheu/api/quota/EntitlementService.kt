@@ -32,8 +32,18 @@ interface DevPlusGranter {
     fun grantPlus(userId: UUID, days: Int, now: Instant)
 }
 
-/** Estados de `entitlements` que dan Plus (arquitectura.md §7: periodo de gracia incluido). */
+/** Estados de `entitlements` que dan Plus siempre (arquitectura.md §9: periodo de gracia incluido). */
 internal val PLUS_STATES = setOf(EntitlementState.ACTIVE, EntitlementState.IN_GRACE_PERIOD)
+
+/**
+ * ¿Una fila de `entitlements` da Plus en [at]? ACTIVE e IN_GRACE_PERIOD mientras no hayan vencido
+ * (sin `expires_at` cuenta); CANCELED solo antes de `expires_at` (periodo ya pagado).
+ */
+internal fun grantsPlus(state: EntitlementState, expiresAt: Instant?, at: Instant): Boolean = when (state) {
+    in PLUS_STATES -> expiresAt?.isAfter(at) ?: true
+    EntitlementState.CANCELED -> expiresAt?.isAfter(at) ?: false
+    else -> false
+}
 
 internal const val DEV_GRANT_PRODUCT = "dev-grant"
 internal const val MAX_GRANT_DAYS = 365
@@ -49,7 +59,7 @@ internal fun validateGrantDays(days: Int) {
 class ExposedDevEntitlementService(private val db: Database) : EntitlementService, DevPlusGranter {
     override fun isPlus(userId: UUID, at: Instant): Boolean = transaction(db) {
         Entitlements.selectAll().where { Entitlements.userId eq userId }.singleOrNull()?.let { row ->
-            row[Entitlements.state] in PLUS_STATES && row[Entitlements.expiresAt]?.toInstant()?.isAfter(at) ?: true
+            grantsPlus(row[Entitlements.state], row[Entitlements.expiresAt]?.toInstant(), at)
         } ?: false
     }
 

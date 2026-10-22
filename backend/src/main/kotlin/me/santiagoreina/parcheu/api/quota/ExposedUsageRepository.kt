@@ -29,7 +29,16 @@ class ExposedUsageRepository(private val db: Database) : UsageRepository {
         transaction(db) {
             val locked = Users.select(Users.id).where { Users.id eq userId }.forUpdate().any()
             if (!locked) throw NotFound("Usuario no encontrado")
-            existing(kind, refId)?.let { return@transaction it }
+            existing(kind, refId)?.let { found ->
+                if (found.ownerId != userId || !found.refunded) return@transaction found
+                // Uso devuelto y reintentado por su dueño: se reactiva bajo el mismo bloqueo, respetando el límite.
+                if (active(userId, kind, window) >= limit) return@transaction ChargeResult.LimitReached
+                UsageEvents.update({ (UsageEvents.kind eq kind) and (UsageEvents.refId eq refId) }) {
+                    it[refunded] = false
+                    it[createdAt] = now.toOffset()
+                }
+                return@transaction ChargeResult.Charged
+            }
             if (active(userId, kind, window) >= limit) return@transaction ChargeResult.LimitReached
             val inserted = UsageEvents.insertIgnore {
                 it[UsageEvents.userId] = userId

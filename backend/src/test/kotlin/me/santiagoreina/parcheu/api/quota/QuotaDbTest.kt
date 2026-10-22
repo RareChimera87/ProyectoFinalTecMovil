@@ -16,6 +16,7 @@ import me.santiagoreina.parcheu.api.platform.db.tables.UsageEvents
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
+import me.santiagoreina.parcheu.contract.EntitlementState
 import me.santiagoreina.parcheu.contract.QuotaKind
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -65,11 +66,16 @@ class QuotaDbTest : FunSpec({
 
                 service.refund(QuotaKind.SIMULATION, "sim-2") shouldBe true
                 service.status(ana).simulations.used shouldBe 4
-                service.consume(ana, QuotaKind.SIMULATION, "sim-2") shouldBe QuotaService.Outcome.ALREADY_CHARGED
-                service.consume(ana, QuotaKind.SIMULATION, "sim-5") shouldBe QuotaService.Outcome.CHARGED
+                // Reintentar el uso devuelto lo reactiva y vuelve a cobrar.
+                service.consume(ana, QuotaKind.SIMULATION, "sim-2") shouldBe QuotaService.Outcome.CHARGED
+                service.status(ana).simulations.used shouldBe 5
                 transaction(db) {
                     UsageEvents.selectAll().where { UsageEvents.refId eq "sim-2" }.single()[UsageEvents.refunded]
-                } shouldBe true
+                } shouldBe false
+                // Con el cupo lleno, reintentar un uso devuelto da 402 y no corre gratis.
+                service.refund(QuotaKind.SIMULATION, "sim-2") shouldBe true
+                service.consume(ana, QuotaKind.SIMULATION, "sim-5") shouldBe QuotaService.Outcome.CHARGED
+                shouldThrow<QuotaExceeded> { service.consume(ana, QuotaKind.SIMULATION, "sim-2") }
             }
         }
 
@@ -118,6 +124,28 @@ class QuotaDbTest : FunSpec({
                 // Un usuario borrado ya no resuelve su UID.
                 transaction(db) { Users.update({ Users.id eq ana }) { it[deletedAt] = OffsetDateTime.now() } }
                 quota.users.userIdFor("ana") shouldBe null
+            }
+        }
+
+    test("Postgres: un usuario CANCELED sigue siendo Plus hasta expires_at y deja de serlo después")
+        .config(enabled = TestDatabase.enabled) {
+            withQuota(Env.DEV, "2026-10-26T08:00-05:00") { quota, clock, db ->
+                val ana = newUser(db, "ana")
+                transaction(db) {
+                    Entitlements.insert {
+                        it[userId] = ana
+                        it[productId] = "parcheu_plus"
+                        it[basePlan] = "monthly"
+                        it[purchaseToken] = "tok-ana"
+                        it[state] = EntitlementState.CANCELED
+                        it[expiresAt] = clock.instant().plusSeconds(20 * 86_400L).atOffset(java.time.ZoneOffset.UTC)
+                        it[autoRenewing] = false
+                        it[updatedAt] = clock.instant().atOffset(java.time.ZoneOffset.UTC)
+                    }
+                }
+                quota.service.isPlus(ana) shouldBe true
+                clock.now = bogota("2026-11-20T08:00-05:00")
+                quota.service.isPlus(ana) shouldBe false
             }
         }
 })

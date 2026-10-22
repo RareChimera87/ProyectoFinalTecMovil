@@ -6,6 +6,7 @@ import io.kotest.matchers.shouldBe
 import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
+import me.santiagoreina.parcheu.contract.EntitlementState
 import me.santiagoreina.parcheu.contract.QuotaKind
 import java.util.UUID
 import kotlin.time.Instant as KInstant
@@ -57,12 +58,17 @@ class QuotaServiceTest : FunSpec({
         quota.refund(QuotaKind.SIMULATION, "sim-4") shouldBe true
         quota.refund(QuotaKind.SIMULATION, "sim-4") shouldBe true // idempotente
         quota.status(ana).simulations.used shouldBe 4
-        // Un reintento del uso devuelto tampoco vuelve a cobrar.
-        quota.consume(ana, QuotaKind.SIMULATION, "sim-4") shouldBe QuotaService.Outcome.ALREADY_CHARGED
-        quota.status(ana).simulations.used shouldBe 4
-        // El cupo liberado sirve para una simulación nueva.
-        quota.consume(ana, QuotaKind.SIMULATION, "sim-nueva") shouldBe QuotaService.Outcome.CHARGED
+        // Un reintento del uso devuelto vuelve a cobrar (no sale gratis) porque hay cupo.
+        quota.consume(ana, QuotaKind.SIMULATION, "sim-4") shouldBe QuotaService.Outcome.CHARGED
         quota.status(ana).simulations.used shouldBe 5
+        quota.consume(ana, QuotaKind.SIMULATION, "sim-4") shouldBe QuotaService.Outcome.ALREADY_CHARGED
+        // Sin cupo, reintentar un uso devuelto da QUOTA_EXCEEDED en vez de correr gratis.
+        quota.refund(QuotaKind.SIMULATION, "sim-4")
+        quota.consume(ana, QuotaKind.SIMULATION, "sim-nueva") shouldBe QuotaService.Outcome.CHARGED
+        shouldThrow<QuotaExceeded> { quota.consume(ana, QuotaKind.SIMULATION, "sim-4") }
+        quota.status(ana).simulations.used shouldBe 5
+        // Otra persona no puede reactivar un uso devuelto ajeno.
+        shouldThrow<Conflict> { quota.consume(beto, QuotaKind.SIMULATION, "sim-4") }
         quota.refund(QuotaKind.SIMULATION, "no-existe") shouldBe false
     }
 
@@ -168,5 +174,19 @@ class QuotaServiceTest : FunSpec({
         val (_, clock, entitlements) = setup("2026-10-28T15:00-05:00")
         shouldThrow<ValidationFailed> { entitlements.grantPlus(ana, 0, clock.instant()) }
         shouldThrow<ValidationFailed> { entitlements.grantPlus(ana, 366, clock.instant()) }
+    }
+
+    test("grantsPlus: CANCELED da Plus solo antes de expires_at; ON_HOLD, PAUSED, EXPIRED y REVOKED no") {
+        val at = java.time.Instant.parse("2026-10-28T20:00:00Z")
+        val future = at.plusSeconds(86_400)
+        val past = at.minusSeconds(1)
+        grantsPlus(EntitlementState.CANCELED, future, at) shouldBe true
+        grantsPlus(EntitlementState.CANCELED, past, at) shouldBe false
+        grantsPlus(EntitlementState.CANCELED, null, at) shouldBe false
+        grantsPlus(EntitlementState.ACTIVE, future, at) shouldBe true
+        grantsPlus(EntitlementState.ACTIVE, past, at) shouldBe false
+        grantsPlus(EntitlementState.IN_GRACE_PERIOD, future, at) shouldBe true
+        listOf(EntitlementState.ON_HOLD, EntitlementState.PAUSED, EntitlementState.EXPIRED, EntitlementState.REVOKED)
+            .forEach { grantsPlus(it, future, at) shouldBe false }
     }
 })

@@ -6,14 +6,19 @@ import java.util.UUID
 
 /** `usage_events` en memoria: pruebas y `ENV=local` sin base de datos. Seguro entre hilos. */
 class InMemoryUsageRepository : UsageRepository {
-    private data class Event(val userId: UUID, val kind: QuotaKind, val refId: String, var refunded: Boolean, val createdAt: Instant)
+    private data class Event(val userId: UUID, val kind: QuotaKind, val refId: String, var refunded: Boolean, var createdAt: Instant)
 
     private val events = mutableListOf<Event>()
 
     @Synchronized
     override fun charge(userId: UUID, kind: QuotaKind, refId: String, window: QuotaWindow, limit: Int, now: Instant): ChargeResult {
         events.firstOrNull { it.kind == kind && it.refId == refId }?.let {
-            return ChargeResult.AlreadyCharged(it.userId, it.refunded)
+            if (it.userId != userId || !it.refunded) return ChargeResult.AlreadyCharged(it.userId, it.refunded)
+            // Uso devuelto y reintentado por su dueño: se reactiva respetando el límite.
+            if (countActive(userId, kind, window) >= limit) return ChargeResult.LimitReached
+            it.refunded = false
+            it.createdAt = now
+            return ChargeResult.Charged
         }
         if (countActive(userId, kind, window) >= limit) return ChargeResult.LimitReached
         events += Event(userId, kind, refId, refunded = false, createdAt = now)
