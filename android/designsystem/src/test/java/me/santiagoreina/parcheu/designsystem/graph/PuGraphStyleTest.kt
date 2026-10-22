@@ -7,8 +7,6 @@ import kotlin.math.hypot
 import me.santiagoreina.parcheu.designsystem.theme.DarkParcheUColors
 import me.santiagoreina.parcheu.designsystem.theme.LightParcheUColors
 import me.santiagoreina.parcheu.designsystem.theme.Wcag
-import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
-import me.santiagoreina.parcheu.designsystem.theme.avatarColors
 import me.santiagoreina.parcheu.designsystem.theme.contrastRatio
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -65,7 +63,7 @@ class PuGraphStyleTest {
         val c = layout.centerX
         fun angle(x: Float, y: Float) = atan2((y - c).toDouble(), (x - c).toDouble())
         val failures = PuGraphSamples.fof.mapNotNull { f ->
-            val parent = layout.nodes.single { it.id == f.parentId }
+            val parent = layout.nodes.single { it.id == f.parentId!! }
             val placed = layout.fof.single { it.id == f.id }
             var diff = abs(angle(placed.x, placed.y) - angle(parent.x, parent.y))
             if (diff > PI) diff = 2 * PI - diff
@@ -116,13 +114,23 @@ class PuGraphStyleTest {
         )) {
             val label = contrastRatio(colors.mu, colors.bg)
             if (label < Wcag.AA_NORMAL_TEXT) failures += "$theme etiqueta: $label"
-            for (affinity in listOf(50, 62, 70, 85, 90, 95)) {
-                val avatar = avatarColors(affinityAlpha(affinity), colors.isDark)
-                // Relleno bajo la capa de 0,7 sobre el fondo, como lo compone el Canvas.
-                val ratio = contrastRatio(avatar.content, avatar.fill, backdrop = colors.bg)
+            for (affinity in 50..100) {
+                val node =
+                    GraphNode("x", "Ana", "A", affinity, GraphMode.ESTUDIO, GraphEdgeState.PENDING)
+                val avatar = nodeAvatarColors(node, colors.isDark)
+                // Relleno compuesto con el 0,7 de PENDING sobre el fondo, como lo pinta el Canvas.
+                val composed = avatar.fill.copy(alpha = avatar.fill.alpha * GraphAlpha.NODE_PENDING)
+                val ratio = contrastRatio(avatar.content, composed, backdrop = colors.bg)
                 if (ratio < Wcag.AA_NORMAL_TEXT) failures += "$theme iniciales $affinity: $ratio"
             }
         }
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test
+    fun `un amigo de amigo sin padre conserva su posicion radial y no falla`() {
+        val fof = listOf(GraphFof("f1", null, "", "", 80), GraphFof("f2", "no-existe", "", "", 75))
+        val layout = computeGraphLayout(PuGraphSamples.nodes, fof, 300f)
+        assertEquals(2, layout.fof.size)
     }
 }

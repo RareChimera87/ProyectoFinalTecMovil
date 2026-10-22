@@ -625,6 +625,8 @@ API del grafo, layout radial, componente G0, pantalla D1-D5 y suite de invariant
 
 **Descripción.** D1 con grafo, chips de filtro funcionales (modo, afinidad 70 %+, comunidad), StatCards, banner bloqueado para gratis, D2 bottom sheet con variantes conectados, simularon y pendiente ('Simular de nuevo' → F4, 'Chatear' → F9), D3 vacío, D4 skeleton, D5 error con reintentar, I2 claro. Pinta al instante el último grafo guardado en DataStore.
 
+**Hueco de contrato (E3.3, ronda 2).** `GraphFof.parentId` (la conexión por la que se llega al amigo de amigo) es nulo porque `FofCandidate` y la consulta de arquitectura §6.2 no lo devuelven. Sin él, el fof conserva la posición radial y no dibuja la línea punteada. Coordinar con E3.1/E6.3 un campo `viaId` (uno de los mutuals; nunca la Pareja, que ya se excluye de 'mine') en `FofCandidate` y en la consulta SQL; mientras tanto, mapear `parentId = null`.
+
 **Criterios de aceptación (verificables):**
 
 - [ ] ViewModel con `FakeGraphRepository`: Loading → Loaded, Empty y Error; reintentar vuelve a Loading.

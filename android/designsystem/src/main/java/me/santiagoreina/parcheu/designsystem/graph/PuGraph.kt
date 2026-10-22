@@ -51,6 +51,7 @@ import me.santiagoreina.parcheu.designsystem.graph.layout.GraphLayout
 import me.santiagoreina.parcheu.designsystem.graph.layout.LayoutNode
 import me.santiagoreina.parcheu.designsystem.graph.layout.PlacedNode
 import me.santiagoreina.parcheu.designsystem.graph.layout.RadialLayout
+import me.santiagoreina.parcheu.designsystem.theme.AvatarColors
 import me.santiagoreina.parcheu.designsystem.theme.InterFontFamily
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUColors
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
@@ -90,12 +91,13 @@ data class GraphNode(
 
 /**
  * Amigo de amigo (capa ParcheU+). [parentId] es la conexión directa a través de la cual se llega;
- * [affinity] es la estimación de ADR-0023.
+ * es nulo mientras el contrato (FofCandidate de E3.1) no lo entregue: el fof conserva la posición
+ * del layout radial y no dibuja línea punteada de origen. [affinity] es la estimación de ADR-0023.
  */
 @Immutable
 data class GraphFof(
     val id: String,
-    val parentId: String,
+    val parentId: String?,
     val name: String,
     val initials: String,
     val affinity: Int,
@@ -163,6 +165,24 @@ internal fun nodeAlpha(node: GraphNode, dimmed: Boolean): Float = when {
 internal fun textAlpha(dimmed: Boolean): Float = if (dimmed) GraphAlpha.NODE_DIMMED else 1f
 
 /**
+ * Colores del avatar de un nodo. El relleno se pinta con la afinidad; pero el color de las iniciales
+ * se elige con la opacidad efectiva del relleno (afinidad por el 0,7 de PENDING), porque el relleno
+ * queda compuesto sobre el fondo del tema y el blanco pleno podría no llegar a AA (ADR-0030).
+ */
+internal fun nodeAvatarColors(node: GraphNode, isDark: Boolean): AvatarColors {
+    val fillAlpha = affinityAlpha(node.affinity)
+    val effective = if (node.state ==
+        GraphEdgeState.PENDING
+    ) {
+        fillAlpha * GraphAlpha.NODE_PENDING
+    } else {
+        fillAlpha
+    }
+    val fill = avatarColors(fillAlpha, isDark).fill
+    return avatarColors(effective, isDark).copy(fill = fill)
+}
+
+/**
  * Layout de G0 para un lienzo de [sizeDp] dp. Los amigos de amigos se ordenan por su conexión de
  * origen para que queden agrupados en la capa exterior. Coordenadas en dp.
  */
@@ -175,7 +195,9 @@ internal fun computeGraphLayout(
     val base = RadialLayout.compute(
         nodes = nodes.map { LayoutNode(it.id, it.mode.name, it.affinity) },
         size = sizeDp,
-        fof = fof.map { FofNode(it.id, "${modeOf[it.parentId].orEmpty()}:${it.parentId}") }
+        fof = fof.map {
+            FofNode(it.id, it.parentId?.let { p -> "${modeOf[p].orEmpty()}:$p" } ?: "")
+        }
     )
     return if (base.fof.isEmpty()) base else base.copy(fof = alignFofToParents(base, nodes, fof))
 }
@@ -197,7 +219,7 @@ private fun alignFofToParents(
     nodes: List<GraphNode>,
     fof: List<GraphFof>
 ): List<PlacedNode> {
-    val parentOf = fof.associate { it.id to it.parentId }
+    val parentOf = fof.mapNotNull { f -> f.parentId?.let { f.id to it } }.toMap()
     val placedById = layout.nodes.associateBy { it.id }
     val cx = layout.centerX
     val cy = layout.centerY
@@ -500,7 +522,7 @@ private fun DrawScope.drawGraph(
     // Líneas de amigos de amigos: prt, dash "2 4", .8, desde su conexión de origen.
     val fofDash = PathEffect.dashPathEffect(floatArrayOf(2f * u, 4f * u))
     layout.fof.forEach { f ->
-        val parent = fof[f.id]?.let { placedById[it.parentId] } ?: return@forEach
+        val parent = fof[f.id]?.parentId?.let { placedById[it] } ?: return@forEach
         drawLine(
             color = colors.prt,
             start = parent.offset(),
@@ -562,7 +584,7 @@ private fun DrawScope.drawGraph(
                     style = Stroke(width = 2f * u)
                 )
             }
-            val avatar = avatarColors(affinityAlpha(node.affinity), colors.isDark)
+            val avatar = nodeAvatarColors(node, colors.isDark)
             drawCircle(colors.bg, radius = r, center = o)
             drawCircle(avatar.fill, radius = r, center = o)
             drawCircle(
@@ -575,7 +597,7 @@ private fun DrawScope.drawGraph(
         withLayerAlpha(textAlpha(dimmed)) {
             val o = p.offset()
             val r = p.radius * u
-            val avatar = avatarColors(affinityAlpha(node.affinity), colors.isDark)
+            val avatar = nodeAvatarColors(node, colors.isDark)
             drawCenteredText(
                 textMeasurer,
                 if (node.anonymous) "?" else node.initials,
