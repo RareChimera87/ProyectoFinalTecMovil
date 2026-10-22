@@ -4,7 +4,11 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
+import me.santiagoreina.parcheu.api.ai.AiGateway
+import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.platform.AppContainer
+import me.santiagoreina.parcheu.api.twin.TwinModule
+import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.allDomains
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
@@ -30,12 +34,18 @@ fun testConfig() = AppConfig(
     db = null,
 )
 
-fun testContainer(extra: List<DomainRoutes> = emptyList()) = AppContainer(
+fun testContainer(
+    extra: List<DomainRoutes> = emptyList(),
+    ai: AiGateway = testGateway(),
+    twin: TwinModule = inMemoryTwinModule(FIXED_CLOCK, ai),
+) = AppContainer(
     config = testConfig(),
     clock = FIXED_CLOCK,
     tokenVerifier = FakeTokenVerifier(),
     oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
-    domains = allDomains() + extra,
+    ai = ai,
+    twin = twin,
+    domains = allDomains(twin) + extra,
 )
 
 /** Arranca el módulo con Fakes y devuelve un cliente que entiende el JSON del contrato. */

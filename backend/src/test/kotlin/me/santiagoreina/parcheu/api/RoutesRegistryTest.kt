@@ -27,9 +27,9 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
         HttpMethod.Get to "/v1/me/consents", HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",
         HttpMethod.Post to "/v1/me/fcm-token", HttpMethod.Delete to "/v1/me/fcm-token",
     ),
+    // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest); el resto sigue en 501.
     "twin" to listOf(
-        HttpMethod.Get to "/v1/twin/questions", HttpMethod.Post to "/v1/twin/answers", HttpMethod.Get to "/v1/twin",
-        HttpMethod.Get to "/v1/twin/evolution", HttpMethod.Get to "/v1/twin/memories",
+        HttpMethod.Get to "/v1/twin/memories",
         HttpMethod.Post to "/v1/twin/memories/m1/accept", HttpMethod.Post to "/v1/twin/memories/m1/reject",
         HttpMethod.Get to "/v1/twin/feedback-prompts", HttpMethod.Post to "/v1/twin/feedback",
     ),
@@ -68,7 +68,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
 )
 
 private val internalRoutes = listOf(
-    "/internal/tasks/simulate", "/internal/tasks/judge-scenario", "/internal/tasks/build-persona",
+    "/internal/tasks/simulate", "/internal/tasks/judge-scenario",
     "/internal/tasks/extract-memories", "/internal/tasks/moderate", "/internal/tasks/name-community",
     "/internal/tasks/purge-user", "/internal/jobs/communities", "/internal/jobs/memories",
     "/internal/jobs/twin-accuracy", "/internal/jobs/retention", "/internal/billing/rtdn", "/internal/dev/grant-plus",
