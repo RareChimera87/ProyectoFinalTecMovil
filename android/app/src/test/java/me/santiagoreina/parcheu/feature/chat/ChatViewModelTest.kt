@@ -11,6 +11,7 @@ import me.santiagoreina.parcheu.contract.PersonRef
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
+import me.santiagoreina.parcheu.feature.safety.SafetyTarget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -28,23 +29,18 @@ class ChatViewModelTest {
             type = ChatType.DIRECT,
             mode = Mode.AMISTAD,
             other = PersonRef(id = "user-2", label = "Laura Pinzón", initials = "LP"),
-            muted = false
+            muted = false,
         )
 
-    private fun remote(
-        id: String,
-        sender: String?,
-        text: String,
-        hidden: Boolean = false,
-        sec: Long = 1
-    ) = RemoteMessage(
-        id,
-        sender,
-        system = sender == null,
-        text = text,
-        createdAt = Instant.fromEpochSeconds(sec),
-        hidden = hidden
-    )
+    private fun remote(id: String, sender: String?, text: String, hidden: Boolean = false, sec: Long = 1) =
+        RemoteMessage(
+            id,
+            sender,
+            system = sender == null,
+            text = text,
+            createdAt = Instant.fromEpochSeconds(sec),
+            hidden = hidden,
+        )
 
     private fun viewModel(repo: FakeChatRepository): ChatViewModel {
         var n = 0
@@ -59,7 +55,7 @@ class ChatViewModelTest {
         repo.messages.value =
             listOf(
                 remote("m1", "uid-other", "Hola"),
-                remote("m2", FakeChatRepository.ME, "Qué más")
+                remote("m2", FakeChatRepository.ME, "Qué más"),
             )
         val vm = viewModel(repo)
 
@@ -165,14 +161,19 @@ class ChatViewModelTest {
     fun reportOpensH1WithTheOtherPerson() = runTest {
         val vm = viewModel(repo())
         vm.report()
-        assertEquals(ChatEffect.OpenReport("user-2", "chat-1"), vm.effects.first())
+        assertEquals(
+            ChatEffect.OpenReport(
+                SafetyTarget("user-2", "Laura Pinzón", anonymous = false, chatId = "chat-1", muted = false),
+            ),
+            vm.effects.first(),
+        )
     }
 
     @Test
     fun closedChatCannotSend() = runTest {
         val repo =
             FakeChatRepository(
-                chats = ApiResult.Success(listOf(summary.copy(status = ChatStatus.CLOSED)))
+                chats = ApiResult.Success(listOf(summary.copy(status = ChatStatus.CLOSED))),
             )
         val vm = viewModel(repo)
         vm.onDraftChange("Hola")
@@ -220,18 +221,21 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun anonymousChatNeverReportsAnonIdAsUserId() = runTest {
+    fun anonymousChatReportsWithAnonIdNeverAsUserId() = runTest {
         val anon =
             summary.copy(
                 type = ChatType.SCENARIO,
-                other = PersonRef(anonId = "hmac-anon", label = "Alguien de la UIS", initials = "A")
+                other = PersonRef(anonId = "hmac-anon", label = "Alguien de la UIS", initials = "A"),
             )
         val repo = FakeChatRepository(chats = ApiResult.Success(listOf(anon)))
         val vm = viewModel(repo)
         assertNull(vm.state.value.header?.otherUserId)
-        assertFalse(vm.state.value.header!!.canReport)
+        assertTrue(vm.state.value.header!!.canReport)
         vm.report()
-        // Sin objetivo válido no se emite OpenReport.
-        assertNull(kotlinx.coroutines.withTimeoutOrNull(50) { vm.effects.first() })
+        // El anonId viaja marcado como anónimo: H2 lo manda como `anonId` y el bloqueo lo resuelve el servidor.
+        val target = (vm.effects.first() as ChatEffect.OpenReport).target
+        assertEquals("hmac-anon", target.id)
+        assertTrue(target.anonymous)
+        assertEquals("chat-1", target.chatId)
     }
 }
