@@ -70,5 +70,37 @@ expect fail "sa-api sin cloudsql.instanceUser" "$ROOT/scripts/check-iam.sh" \
 expect fail "sa-deployer sin firebaserules.admin" "$ROOT/scripts/check-iam.sh" \
   "$(drop plan-bootstrap-dev.json '.type=="google_project_iam_member" and .values.role=="roles/firebaserules.admin"')"
 
+echo "check-iam.sh (bootstrap: identidades de CI)"
+SAP='serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com'
+expect fail "sa-terraform-plan con roles/viewer" "$ROOT/scripts/check-iam.sh" \
+  "$(add plan-bootstrap-dev.json "{\"address\":\"x\",\"type\":\"google_project_iam_member\",\"name\":\"x\",\"values\":{\"role\":\"roles/viewer\",\"member\":\"$SAP\"}}")"
+expect fail "sa-terraform-plan con securityReviewer" "$ROOT/scripts/check-iam.sh" \
+  "$(add plan-bootstrap-dev.json "{\"address\":\"x\",\"type\":\"google_project_iam_member\",\"name\":\"x\",\"values\":{\"role\":\"roles/iam.securityReviewer\",\"member\":\"$SAP\"}}")"
+expect fail "rol de plan con datastore.entities.list" "$ROOT/scripts/check-iam.sh" \
+  "$(mutate plan-bootstrap-dev.json 'if .type=="google_project_iam_custom_role" then .values.permissions += ["datastore.entities.list"] else . end')"
+expect fail "rol de plan con logging.logEntries.list" "$ROOT/scripts/check-iam.sh" \
+  "$(mutate plan-bootstrap-dev.json 'if .type=="google_project_iam_custom_role" then .values.permissions += ["logging.logEntries.list"] else . end')"
+expect fail "sa-terraform con costsManager en la facturación" "$ROOT/scripts/check-iam.sh" \
+  "$(add plan-bootstrap-dev.json '{"address":"x","type":"google_billing_account_iam_member","name":"x","values":{"role":"roles/billing.costsManager","member":"serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com"}}')"
+expect fail "projectIamAdmin sin condición" "$ROOT/scripts/check-iam.sh" \
+  "$(mutate plan-bootstrap-dev.json 'if .values.role=="roles/resourcemanager.projectIamAdmin" then .values.condition=[] else . end')"
+
+echo "check-plan.sh (bootstrap y presupuesto)"
+expect ok   "bootstrap con presupuesto al 50 % y 90 %" "$ROOT/scripts/check-plan.sh" "$FIX/plan-bootstrap-dev.json"
+expect fail "bootstrap sin presupuesto" "$ROOT/scripts/check-plan.sh" \
+  "$(drop plan-bootstrap-dev.json '.type=="google_billing_budget"')"
+expect fail "plataforma con presupuesto (CI sin roles de facturación)" "$ROOT/scripts/check-plan.sh" \
+  "$(add plan-dev.json '{"address":"x","type":"google_billing_budget","name":"x","values":{"threshold_rules":[{"threshold_percent":0.5},{"threshold_percent":0.9}]}}')"
+
+# Los principals de WIF dependen del pool y no se conocen en el plan: su restricción
+# a la rama dev se verifica en el código.
+echo "bootstrap/main.tf (WIF)"
+TF="$ROOT/infra/terraform/bootstrap/main.tf"
+block() { awk -v n="$1" '$0 ~ "resource \"google_service_account_iam_member\" \"" n "\"" {p=1} p {print} p && /^}/ {exit}' "$TF"; }
+expect ok   "sa-terraform (apply) solo desde la rama dev" grep -q 'local.dev_branch_principal' <(block terraform_wif)
+expect fail "sa-terraform no acepta el principal de todo el repo" grep -q 'local.repo_principal' <(block terraform_wif)
+expect ok   "el principal dev apunta a refs/heads/dev" grep -q 'dev_branch_principal = .*attribute.ref/refs/heads/dev' "$TF"
+expect ok   "sa-terraform-plan en prod solo desde la rama dev" grep -q 'plan_principal = local.is_prod ? local.dev_branch_principal : local.repo_principal' "$TF"
+
 echo "$pass pasaron, $failed fallaron"
 [ "$failed" -eq 0 ]

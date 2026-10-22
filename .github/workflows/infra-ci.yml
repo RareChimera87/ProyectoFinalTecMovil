@@ -9,6 +9,8 @@ on:
       - "scripts/check-plan.sh"
       - "scripts/check-iam.sh"
       - "scripts/test/check-plan.test.sh"
+      - "scripts/test/cargar-secretos.test.sh"
+      - "scripts/cargar-secretos.sh"
       - "scripts/test/fixtures/**"
       - ".github/workflows/infra-ci.yml"
   push:
@@ -42,8 +44,10 @@ jobs:
             terraform -chdir=infra/terraform/$d validate
             echo "::endgroup::"
           done
-      - name: Pruebas de check-plan y check-iam
-        run: scripts/test/check-plan.test.sh
+      - name: Pruebas de check-plan, check-iam y cargar-secretos
+        run: |
+          scripts/test/check-plan.test.sh
+          scripts/test/cargar-secretos.test.sh
 
   plan-dev:
     name: infra-plan-dev
@@ -54,7 +58,6 @@ jobs:
       id-token: write
     env:
       WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }}
-      TF_VAR_billing_account: ${{ secrets.BILLING_ACCOUNT_ID }}
     steps:
       - name: Requiere los secretos del bootstrap
         if: env.WIF_PROVIDER == ''
@@ -65,7 +68,8 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.TF_SERVICE_ACCOUNT_DEV }}
+          # Identidad de solo lectura de metadatos: cualquier PR puede usarla en dev.
+          service_account: ${{ secrets.TF_PLAN_SERVICE_ACCOUNT_DEV }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
@@ -74,7 +78,8 @@ jobs:
         working-directory: infra/terraform/envs/dev
         run: |
           terraform init -input=false
-          terraform plan -input=false -lock-timeout=120s -out=plan.tfplan
+          # sa-terraform-plan solo lee el estado: sin lock (el apply de dev sí lo toma).
+          terraform plan -input=false -lock=false -out=plan.tfplan
           terraform show -json plan.tfplan > plan.json
       - name: check-plan y check-iam
         run: |

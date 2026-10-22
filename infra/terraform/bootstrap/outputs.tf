@@ -17,6 +17,11 @@ output "deployer_service_account" {
 }
 
 output "terraform_service_account" {
-  description = "Valor de TF_SERVICE_ACCOUNT_{DEV,PROD}."
-  value       = google_service_account.terraform.email
+  description = "Valor de TF_SERVICE_ACCOUNT_DEV (apply desde la rama dev). Vacío en prod."
+  value       = local.is_prod ? "" : google_service_account.terraform[0].email
+}
+
+output "terraform_plan_service_account" {
+  description = "Valor de TF_PLAN_SERVICE_ACCOUNT_{DEV,PROD} (plan en CI)."
+  value       = google_service_account.terraform_plan.email
 }

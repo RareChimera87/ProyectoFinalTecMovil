@@ -1,5 +1,5 @@
 # Entorno prod (parcheu-prod). `apply` SOLO lo ejecuta el usuario con su ADC;
-# CI solo hace `plan` (sa-terraform de prod es de solo lectura).
+# CI solo hace `plan` (sa-terraform-plan de prod, solo metadatos, desde la rama dev).
 
 terraform {
   required_version = ">= 1.15.0, < 2.0.0"
@@ -40,11 +40,6 @@ provider "google-beta" {
   user_project_override = true
 }
 
-variable "billing_account" {
-  description = "Cuenta de facturación (TF_VAR_billing_account; secreto BILLING_ACCOUNT_ID en CI)."
-  type        = string
-}
-
 variable "simulations_max_dispatches_per_second" {
   description = "Techo de gasto de IA: simulaciones despachadas por segundo."
   type        = number
@@ -63,7 +58,6 @@ module "platform" {
   project_id                     = local.project_id
   environment                    = "prod"
   region                         = local.region
-  billing_account                = var.billing_account
   deployer_service_account_email = "sa-deployer@${local.project_id}.iam.gserviceaccount.com"
 
   api_min_instances   = 1
@@ -84,7 +78,6 @@ module "platform" {
   }
 
   rtdn_push_enabled = true
-  budget_amount_usd = 60
 }
 
 output "api_url" {

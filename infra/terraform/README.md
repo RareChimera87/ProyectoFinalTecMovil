@@ -8,7 +8,7 @@ Terraform 1.15 con los providers `google` y `google-beta` 7.x (fijados en cada
 
 ```
 infra/terraform/
-├─ bootstrap/          bucket de estado, WIF para GitHub, sa-deployer y sa-terraform (una vez por proyecto, ADC del usuario)
+├─ bootstrap/          bucket de estado, WIF para GitHub, sa-deployer, sa-terraform(-plan) y presupuesto (una vez por proyecto, ADC del usuario)
 ├─ modules/platform/   APIs, Artifact Registry, Cloud Run api + jobs, Cloud SQL, Secret Manager,
 │                      Cloud Tasks, Scheduler, Pub/Sub, Firestore, Firebase, IAM, presupuesto, uptime
 └─ envs/{dev,prod}/    instancia de platform por entorno (estado en gs://<proyecto>-tfstate/platform)
@@ -16,8 +16,8 @@ infra/terraform/
 
 | Entorno | Proyecto | Estado | `apply` |
 |---|---|---|---|
-| dev | `parcheu-dev` | `gs://parcheu-dev-tfstate` | I1 o CI (`sa-terraform` vía WIF) |
-| prod | `parcheu-prod` | `gs://parcheu-prod-tfstate` | **solo el usuario**, con su ADC; CI solo hace `plan` (sa-terraform de prod es de solo lectura) |
+| dev | `parcheu-dev` | `gs://parcheu-dev-tfstate` | I1 o CI (`sa-terraform` vía WIF, solo desde la rama `dev`) |
+| prod | `parcheu-prod` | `gs://parcheu-prod-tfstate` | **solo el usuario**, con su ADC; CI solo hace `plan` (`sa-terraform-plan`, solo metadatos, solo desde la rama `dev`) |
 
 ## Mapa de colas de Cloud Tasks
 
@@ -64,16 +64,24 @@ de la base al usuario IAM una vez (como `postgres`, desde Cloud SQL Studio o `gc
 | `sa-api` | platform | `cloudsql.client`, `cloudsql.instanceUser`, `aiplatform.user`, `cloudtasks.enqueuer`, `datastore.user`, `firebaseauth.admin`, `firebasecloudmessaging.admin`, `logging.logWriter`, `monitoring.metricWriter`, `cloudtrace.agent`; `secretAccessor` solo sobre sus dos secretos; `serviceAccountUser` sobre `sa-tasks` |
 | `sa-tasks` | platform | `run.invoker` sobre `api` |
 | `sa-deployer` | bootstrap | `run.admin`, `artifactregistry.writer`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin`, `serviceusage.serviceUsageConsumer`; `serviceAccountUser` sobre `sa-api` (platform). En prod solo la puede usar un job del environment `production` de GitHub |
-| `sa-terraform` | bootstrap | dev: administradores de cada servicio usado (sin owner/editor) + `billing.costsManager`; prod: `viewer`, `iam.securityReviewer`, `billing.viewer` (solo `plan`) |
+| `sa-terraform` | bootstrap (solo dev) | `apply` en CI, **solo desde la rama `dev`** (principal `attribute.ref/refs/heads/dev`): administradores de cada servicio usado (sin owner/editor). `projectIamAdmin` con condición: solo puede otorgar los roles de `sa-api`, nunca `owner`. Sin roles sobre la facturación. No existe en prod (allí aplica el usuario) |
+| `sa-terraform-plan` | bootstrap | `plan` en CI, solo metadatos: `run.viewer`, `secretmanager.viewer`, `cloudtasks.viewer`, `cloudscheduler.viewer`, `pubsub.viewer`, `monitoring.viewer`, `iam.serviceAccountViewer`, `serviceusage.*` y el rol personalizado `parcheuTerraformPlan` (solo `*.get/list` de bases, repos, instancias y proyecto). **Sin** `roles/viewer`, `securityReviewer` ni `firebase.viewer`: incluyen `datastore.entities.*` y `logging.logEntries.list`. Lee el estado (`objectViewer`; el plan de CI corre con `-lock=false`). En dev cualquier PR del repo puede usarla (no hay datos reales); en prod solo jobs de la rama `dev` (ADR-0012) |
 
-`scripts/check-iam.sh` falla si alguna cuenta de servicio recibe `roles/owner` o `roles/editor` o si a
-`sa-api`/`sa-deployer` les falta un rol esperado.
+`scripts/check-iam.sh` falla si alguna cuenta de servicio recibe `roles/owner` o `roles/editor`, si a
+`sa-api`/`sa-deployer` les falta un rol esperado, si `sa-terraform-plan` recibe un rol con acceso a datos
+(o su rol personalizado incluye `datastore.entities.*`, `logging.logEntries.*`...), si alguna cuenta
+recibe roles sobre la facturación o si `projectIamAdmin` se asigna sin condición.
+
+El **presupuesto de facturación** (50 % y 90 %) se crea en `bootstrap/` con el ADC del usuario, no en la
+plataforma: la cuenta de facturación se comparte con otros proyectos y ninguna identidad de CI tiene roles
+sobre ella (`billing.viewer` expone `getPaymentInfo` y `costsManager` permite borrar los presupuestos de
+los demás proyectos). Los roles personalizados no existen a nivel de cuenta de facturación sin organización.
 
 ## Puesta en marcha (una vez por entorno)
 
 Requisitos: gcloud con ADC (`gcloud auth application-default login`), Terraform 1.15, jq.
 La cuenta de facturación nunca se versiona: se pasa por `TF_VAR_billing_account`
-(en local, `~/.parcheu/terraform.env`; en CI, el secreto `BILLING_ACCOUNT_ID`).
+(en local, `~/.parcheu/terraform.env`). Solo la usan `crear-proyectos.sh` y el bootstrap; CI no la necesita.
 
 ```bash
 export TF_VAR_billing_account=XXXXXX-XXXXXX-XXXXXX
@@ -82,7 +90,7 @@ ENV=dev   # o prod (solo el usuario)
 # 1. Proyecto, facturación, APIs mínimas y bucket de estado.
 BILLING_ACCOUNT=$TF_VAR_billing_account scripts/crear-proyectos.sh $ENV
 
-# 2. Bootstrap (importa el bucket y crea WIF, sa-deployer y sa-terraform).
+# 2. Bootstrap (importa el bucket y crea WIF, sa-deployer, sa-terraform, sa-terraform-plan y el presupuesto).
 cd infra/terraform/bootstrap
 terraform init -reconfigure -backend-config=bucket=parcheu-$ENV-tfstate -backend-config=prefix=bootstrap
 terraform apply -var environment=$ENV
@@ -111,15 +119,16 @@ proyecto desde https://console.firebase.google.com (una vez) y luego
 | `WIF_PROVIDER` | `terraform output wif_provider` de dev |
 | `WIF_PROVIDER_PROD` | `terraform output wif_provider` de prod (cada proyecto tiene su pool) |
 | `WIF_SERVICE_ACCOUNT_DEV` / `_PROD` | `deployer_service_account` |
-| `TF_SERVICE_ACCOUNT_DEV` / `_PROD` | `terraform_service_account` |
-| `BILLING_ACCOUNT_ID` | cuenta de facturación (la usa el `plan`) |
+| `TF_PLAN_SERVICE_ACCOUNT_DEV` / `_PROD` | `terraform_plan_service_account` (el `plan` de CI) |
+| `TF_SERVICE_ACCOUNT_DEV` | `terraform_service_account` (el `apply` de dev, E0.6; no hay en prod) |
 
 ## Verificaciones
 
 ```bash
 terraform fmt -check -recursive infra/terraform
 for d in bootstrap envs/dev envs/prod; do (cd infra/terraform/$d && terraform init -backend=false && terraform validate); done
-scripts/test/check-plan.test.sh     # pruebas de check-plan.sh y check-iam.sh con fixtures
+scripts/test/check-plan.test.sh        # check-plan.sh y check-iam.sh con fixtures y mutaciones
+scripts/test/cargar-secretos.test.sh   # cargar-secretos.sh con un gcloud falso
 ```
 
 `.github/workflows/infra-ci.yml` repite esto en cada PR que toca `infra/**` y hace el `plan` de dev vía WIF.

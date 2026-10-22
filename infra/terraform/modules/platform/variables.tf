@@ -25,11 +25,6 @@ variable "firestore_location" {
   default     = "nam5"
 }
 
-variable "billing_account" {
-  description = "Cuenta de facturación para el presupuesto (TF_VAR_billing_account)."
-  type        = string
-}
-
 variable "deployer_service_account_email" {
   description = "Email de sa-deployer (lo crea bootstrap)."
   type        = string
@@ -128,12 +123,7 @@ variable "rtdn_push_enabled" {
   type        = bool
 }
 
-# --- Presupuesto y monitoreo -------------------------------------------------
-
-variable "budget_amount_usd" {
-  description = "Presupuesto mensual del proyecto en USD (alertas al 50 % y 90 %)."
-  type        = number
-}
+# --- Monitoreo -------------------------------------------------
 
 variable "scheduler_time_zone" {
   type    = string

@@ -1,21 +1,118 @@
 {
   "planned_values": {
+    "outputs": {
+      "deployer_service_account": {
+        "sensitive": false,
+        "type": "string",
+        "value": "sa-deployer@parcheu-dev.iam.gserviceaccount.com"
+      },
+      "project_id": {
+        "sensitive": false,
+        "type": "string",
+        "value": "parcheu-dev"
+      },
+      "state_bucket": {
+        "sensitive": false,
+        "type": "string",
+        "value": "parcheu-dev-tfstate"
+      },
+      "terraform_plan_service_account": {
+        "sensitive": false,
+        "type": "string",
+        "value": "sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com"
+      },
+      "terraform_service_account": {
+        "sensitive": false,
+        "type": "string",
+        "value": "sa-terraform@parcheu-dev.iam.gserviceaccount.com"
+      },
+      "wif_provider": {
+        "sensitive": false
+      }
+    },
     "root_module": {
       "resources": [
         {
-          "address": "google_billing_account_iam_member.terraform_budget",
-          "name": "terraform_budget",
-          "type": "google_billing_account_iam_member",
+          "address": "google_billing_budget.project",
+          "mode": "managed",
+          "type": "google_billing_budget",
+          "name": "project",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 1,
           "values": {
-            "condition": [],
-            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
-            "role": "roles/billing.costsManager"
+            "all_updates_rule": [],
+            "amount": [
+              {
+                "last_period_amount": null,
+                "specified_amount": [
+                  {
+                    "currency_code": "USD",
+                    "nanos": null,
+                    "units": "30"
+                  }
+                ]
+              }
+            ],
+            "billing_account": "000000-000000-000000",
+            "budget_filter": [
+              {
+                "calendar_period": null,
+                "credit_types": null,
+                "credit_types_treatment": "INCLUDE_ALL_CREDITS",
+                "custom_period": [],
+                "projects": [
+                  "projects/388770932007"
+                ],
+                "resource_ancestors": null,
+                "subaccounts": null
+              }
+            ],
+            "display_name": "parcheu-dev",
+            "ownership_scope": null,
+            "threshold_rules": [
+              {
+                "spend_basis": "CURRENT_SPEND",
+                "threshold_percent": 0.5
+              },
+              {
+                "spend_basis": "CURRENT_SPEND",
+                "threshold_percent": 0.9
+              }
+            ],
+            "timeouts": null
+          },
+          "sensitive_values": {
+            "all_updates_rule": [],
+            "amount": [
+              {
+                "specified_amount": [
+                  {}
+                ]
+              }
+            ],
+            "budget_filter": [
+              {
+                "custom_period": [],
+                "labels": {},
+                "projects": [
+                  false
+                ],
+                "services": []
+              }
+            ],
+            "threshold_rules": [
+              {},
+              {}
+            ]
           }
         },
         {
           "address": "google_iam_workload_identity_pool.github",
-          "name": "github",
+          "mode": "managed",
           "type": "google_iam_workload_identity_pool",
+          "name": "github",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "attestation_rules": [],
             "deletion_policy": "DELETE",
@@ -27,12 +124,25 @@
             "project": "parcheu-dev",
             "timeouts": null,
             "workload_identity_pool_id": "github"
+          },
+          "sensitive_values": {
+            "attestation_rules": [],
+            "inline_certificate_issuance_config": [],
+            "inline_trust_config": []
+          },
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "workload_identity_pool_id": null
           }
         },
         {
           "address": "google_iam_workload_identity_pool_provider.github",
-          "name": "github",
+          "mode": "managed",
           "type": "google_iam_workload_identity_pool_provider",
+          "name": "github",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "attribute_condition": "assertion.repository == 'RareChimera87/ProyectoFinalTecMovil'",
             "attribute_mapping": {
@@ -64,232 +174,634 @@
             "workload_identity_pool_id": "github",
             "workload_identity_pool_provider_id": "github-oidc",
             "x509": []
+          },
+          "sensitive_values": {
+            "attribute_mapping": {},
+            "aws": [],
+            "oidc": [
+              {}
+            ],
+            "saml": [],
+            "x509": []
+          },
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "workload_identity_pool_id": null,
+            "workload_identity_pool_provider_id": null
+          }
+        },
+        {
+          "address": "google_project_iam_custom_role.terraform_plan",
+          "mode": "managed",
+          "type": "google_project_iam_custom_role",
+          "name": "terraform_plan",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "deletion_policy": "DELETE",
+            "description": "Lee metadatos de Firestore, Artifact Registry, Cloud SQL, Firebase e IAM del proyecto. Sin datastore.entities.*, sin logs, sin imágenes.",
+            "permissions": [
+              "artifactregistry.repositories.get",
+              "artifactregistry.repositories.getIamPolicy",
+              "artifactregistry.repositories.list",
+              "cloudsql.databases.get",
+              "cloudsql.databases.list",
+              "cloudsql.instances.get",
+              "cloudsql.instances.list",
+              "cloudsql.users.get",
+              "cloudsql.users.list",
+              "datastore.databases.get",
+              "datastore.databases.getMetadata",
+              "datastore.databases.list",
+              "firebase.projects.get",
+              "resourcemanager.projects.get",
+              "resourcemanager.projects.getIamPolicy"
+            ],
+            "project": "parcheu-dev",
+            "role_id": "parcheuTerraformPlan",
+            "stage": "GA",
+            "title": "ParcheU Terraform plan (metadatos)"
+          },
+          "sensitive_values": {
+            "permissions": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ]
+          },
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "role_id": null
           }
         },
         {
           "address": "google_project_iam_member.deployer[\"roles/artifactregistry.writer\"]",
-          "name": "deployer",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "deployer",
+          "index": "roles/artifactregistry.writer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/artifactregistry.writer"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.deployer[\"roles/datastore.indexAdmin\"]",
-          "name": "deployer",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "deployer",
+          "index": "roles/datastore.indexAdmin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/datastore.indexAdmin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.deployer[\"roles/firebasehosting.admin\"]",
-          "name": "deployer",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "deployer",
+          "index": "roles/firebasehosting.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/firebasehosting.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.deployer[\"roles/firebaserules.admin\"]",
-          "name": "deployer",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "deployer",
+          "index": "roles/firebaserules.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/firebaserules.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.deployer[\"roles/run.admin\"]",
-          "name": "deployer",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "deployer",
+          "index": "roles/run.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/run.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.deployer[\"roles/serviceusage.serviceUsageConsumer\"]",
-          "name": "deployer",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "deployer",
+          "index": "roles/serviceusage.serviceUsageConsumer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/serviceusage.serviceUsageConsumer"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/artifactregistry.admin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/artifactregistry.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/artifactregistry.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/cloudscheduler.admin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/cloudscheduler.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/cloudscheduler.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/cloudsql.admin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/cloudsql.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/cloudsql.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/cloudtasks.admin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/cloudtasks.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/cloudtasks.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/datastore.owner\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/datastore.owner",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/datastore.owner"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/firebase.admin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/firebase.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/firebase.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/iam.serviceAccountAdmin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/iam.serviceAccountAdmin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/iam.serviceAccountAdmin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/iam.serviceAccountUser\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/iam.serviceAccountUser",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/iam.serviceAccountUser"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/monitoring.admin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/monitoring.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/monitoring.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/pubsub.admin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/pubsub.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/pubsub.admin"
-          }
-        },
-        {
-          "address": "google_project_iam_member.terraform[\"roles/resourcemanager.projectIamAdmin\"]",
-          "name": "terraform",
-          "type": "google_project_iam_member",
-          "values": {
-            "condition": [],
-            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
-            "project": "parcheu-dev",
-            "role": "roles/resourcemanager.projectIamAdmin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/run.admin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/run.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/run.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/secretmanager.admin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/secretmanager.admin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/secretmanager.admin"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_iam_member.terraform[\"roles/serviceusage.serviceUsageAdmin\"]",
-          "name": "terraform",
+          "mode": "managed",
           "type": "google_project_iam_member",
+          "name": "terraform",
+          "index": "roles/serviceusage.serviceUsageAdmin",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "role": "roles/serviceusage.serviceUsageAdmin"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_iam_admin[0]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_iam_admin",
+          "index": 0,
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [
+              {
+                "description": "sa-terraform solo otorga los roles de sa-api (nunca owner/editor).",
+                "expression": "api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly(['roles/aiplatform.user','roles/cloudsql.client','roles/cloudsql.instanceUser','roles/cloudtasks.enqueuer','roles/cloudtrace.agent','roles/datastore.user','roles/firebaseauth.admin','roles/firebasecloudmessaging.admin','roles/logging.logWriter','roles/monitoring.metricWriter'])",
+                "title": "solo-roles-de-la-plataforma"
+              }
+            ],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/resourcemanager.projectIamAdmin"
+          },
+          "sensitive_values": {
+            "condition": [
+              {}
+            ]
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan[\"roles/cloudscheduler.viewer\"]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan",
+          "index": "roles/cloudscheduler.viewer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/cloudscheduler.viewer"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan[\"roles/cloudtasks.viewer\"]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan",
+          "index": "roles/cloudtasks.viewer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/cloudtasks.viewer"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan[\"roles/iam.serviceAccountViewer\"]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan",
+          "index": "roles/iam.serviceAccountViewer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/iam.serviceAccountViewer"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan[\"roles/monitoring.viewer\"]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan",
+          "index": "roles/monitoring.viewer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/monitoring.viewer"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan[\"roles/pubsub.viewer\"]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan",
+          "index": "roles/pubsub.viewer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/pubsub.viewer"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan[\"roles/run.viewer\"]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan",
+          "index": "roles/run.viewer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/run.viewer"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan[\"roles/secretmanager.viewer\"]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan",
+          "index": "roles/secretmanager.viewer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/secretmanager.viewer"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan[\"roles/serviceusage.serviceUsageConsumer\"]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan",
+          "index": "roles/serviceusage.serviceUsageConsumer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/serviceusage.serviceUsageConsumer"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan[\"roles/serviceusage.serviceUsageViewer\"]",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan",
+          "index": "roles/serviceusage.serviceUsageViewer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/serviceusage.serviceUsageViewer"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform_plan_custom",
+          "mode": "managed",
+          "type": "google_project_iam_member",
+          "name": "terraform_plan_custom",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_project_service.bootstrap[\"billingbudgets.googleapis.com\"]",
-          "name": "bootstrap",
+          "mode": "managed",
           "type": "google_project_service",
+          "name": "bootstrap",
+          "index": "billingbudgets.googleapis.com",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "deletion_policy": "DELETE",
             "disable_dependent_services": null,
@@ -297,12 +809,22 @@
             "project": "parcheu-dev",
             "service": "billingbudgets.googleapis.com",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "service": null
           }
         },
         {
           "address": "google_project_service.bootstrap[\"cloudbilling.googleapis.com\"]",
-          "name": "bootstrap",
+          "mode": "managed",
           "type": "google_project_service",
+          "name": "bootstrap",
+          "index": "cloudbilling.googleapis.com",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "deletion_policy": "DELETE",
             "disable_dependent_services": null,
@@ -310,12 +832,22 @@
             "project": "parcheu-dev",
             "service": "cloudbilling.googleapis.com",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "service": null
           }
         },
         {
           "address": "google_project_service.bootstrap[\"cloudresourcemanager.googleapis.com\"]",
-          "name": "bootstrap",
+          "mode": "managed",
           "type": "google_project_service",
+          "name": "bootstrap",
+          "index": "cloudresourcemanager.googleapis.com",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "deletion_policy": "DELETE",
             "disable_dependent_services": null,
@@ -323,12 +855,22 @@
             "project": "parcheu-dev",
             "service": "cloudresourcemanager.googleapis.com",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "service": null
           }
         },
         {
           "address": "google_project_service.bootstrap[\"iam.googleapis.com\"]",
-          "name": "bootstrap",
+          "mode": "managed",
           "type": "google_project_service",
+          "name": "bootstrap",
+          "index": "iam.googleapis.com",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "deletion_policy": "DELETE",
             "disable_dependent_services": null,
@@ -336,12 +878,22 @@
             "project": "parcheu-dev",
             "service": "iam.googleapis.com",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "service": null
           }
         },
         {
           "address": "google_project_service.bootstrap[\"iamcredentials.googleapis.com\"]",
-          "name": "bootstrap",
+          "mode": "managed",
           "type": "google_project_service",
+          "name": "bootstrap",
+          "index": "iamcredentials.googleapis.com",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "deletion_policy": "DELETE",
             "disable_dependent_services": null,
@@ -349,12 +901,22 @@
             "project": "parcheu-dev",
             "service": "iamcredentials.googleapis.com",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "service": null
           }
         },
         {
           "address": "google_project_service.bootstrap[\"serviceusage.googleapis.com\"]",
-          "name": "bootstrap",
+          "mode": "managed",
           "type": "google_project_service",
+          "name": "bootstrap",
+          "index": "serviceusage.googleapis.com",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "deletion_policy": "DELETE",
             "disable_dependent_services": null,
@@ -362,12 +924,22 @@
             "project": "parcheu-dev",
             "service": "serviceusage.googleapis.com",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "service": null
           }
         },
         {
           "address": "google_project_service.bootstrap[\"storage.googleapis.com\"]",
-          "name": "bootstrap",
+          "mode": "managed",
           "type": "google_project_service",
+          "name": "bootstrap",
+          "index": "storage.googleapis.com",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "deletion_policy": "DELETE",
             "disable_dependent_services": null,
@@ -375,12 +947,22 @@
             "project": "parcheu-dev",
             "service": "storage.googleapis.com",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "service": null
           }
         },
         {
           "address": "google_project_service.bootstrap[\"sts.googleapis.com\"]",
-          "name": "bootstrap",
+          "mode": "managed",
           "type": "google_project_service",
+          "name": "bootstrap",
+          "index": "sts.googleapis.com",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "deletion_policy": "DELETE",
             "disable_dependent_services": null,
@@ -388,12 +970,21 @@
             "project": "parcheu-dev",
             "service": "sts.googleapis.com",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "project": null,
+            "service": null
           }
         },
         {
           "address": "google_service_account.deployer",
-          "name": "deployer",
+          "mode": "managed",
           "type": "google_service_account",
+          "name": "deployer",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "account_id": "sa-deployer",
             "create_ignore_already_exists": null,
@@ -405,47 +996,120 @@
             "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "email": null,
+            "project": null
           }
         },
         {
-          "address": "google_service_account.terraform",
-          "name": "terraform",
+          "address": "google_service_account.terraform[0]",
+          "mode": "managed",
           "type": "google_service_account",
+          "name": "terraform",
+          "index": 0,
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "account_id": "sa-terraform",
             "create_ignore_already_exists": null,
             "deletion_policy": "DELETE",
-            "description": "Plan y apply de Terraform en CI.",
+            "description": "Apply de Terraform en CI; solo desde la rama dev.",
             "disabled": false,
-            "display_name": "ParcheU Terraform (GitHub Actions)",
+            "display_name": "ParcheU Terraform apply (GitHub Actions)",
             "email": "sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "project": "parcheu-dev",
             "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "email": null,
+            "project": null
+          }
+        },
+        {
+          "address": "google_service_account.terraform_plan",
+          "mode": "managed",
+          "type": "google_service_account",
+          "name": "terraform_plan",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "account_id": "sa-terraform-plan",
+            "create_ignore_already_exists": null,
+            "deletion_policy": "DELETE",
+            "description": "Plan de Terraform en CI (solo metadatos, sin datos de Firestore ni logs).",
+            "disabled": false,
+            "display_name": "ParcheU Terraform plan (GitHub Actions)",
+            "email": "sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "timeouts": null
+          },
+          "sensitive_values": {},
+          "identity_schema_version": 1,
+          "identity": {
+            "email": null,
+            "project": null
           }
         },
         {
           "address": "google_service_account_iam_member.deployer_wif",
-          "name": "deployer_wif",
+          "mode": "managed",
           "type": "google_service_account_iam_member",
+          "name": "deployer_wif",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "role": "roles/iam.workloadIdentityUser"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
-          "address": "google_service_account_iam_member.terraform_wif",
-          "name": "terraform_wif",
+          "address": "google_service_account_iam_member.terraform_plan_wif",
+          "mode": "managed",
           "type": "google_service_account_iam_member",
+          "name": "terraform_plan_wif",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "condition": [],
             "role": "roles/iam.workloadIdentityUser"
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_service_account_iam_member.terraform_wif[0]",
+          "mode": "managed",
+          "type": "google_service_account_iam_member",
+          "name": "terraform_wif",
+          "index": 0,
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "condition": [],
+            "role": "roles/iam.workloadIdentityUser"
+          },
+          "sensitive_values": {
+            "condition": []
           }
         },
         {
           "address": "google_storage_bucket.state",
-          "name": "state",
+          "mode": "managed",
           "type": "google_storage_bucket",
+          "name": "state",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 4,
           "values": {
             "autoclass": [],
             "cors": [],
@@ -524,18 +1188,84 @@
               }
             ],
             "website": []
+          },
+          "sensitive_values": {
+            "autoclass": [],
+            "cors": [],
+            "custom_placement_config": [],
+            "effective_labels": {},
+            "encryption": [],
+            "hierarchical_namespace": [
+              {}
+            ],
+            "ip_filter": [],
+            "labels": {},
+            "lifecycle_rule": [
+              {
+                "action": [
+                  {}
+                ],
+                "condition": [
+                  {
+                    "matches_prefix": [],
+                    "matches_storage_class": [],
+                    "matches_suffix": []
+                  }
+                ]
+              }
+            ],
+            "logging": [],
+            "retention_policy": [],
+            "soft_delete_policy": [
+              {}
+            ],
+            "terraform_labels": {},
+            "versioning": [
+              {}
+            ],
+            "website": []
+          },
+          "identity_schema_version": 1,
+          "identity": {
+            "name": "parcheu-dev-tfstate",
+            "project": "parcheu-dev"
           }
         },
         {
-          "address": "google_storage_bucket_iam_member.terraform_state",
-          "name": "terraform_state",
+          "address": "google_storage_bucket_iam_member.terraform_plan_state",
+          "mode": "managed",
           "type": "google_storage_bucket_iam_member",
+          "name": "terraform_plan_state",
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
+          "values": {
+            "bucket": "parcheu-dev-tfstate",
+            "condition": [],
+            "member": "serviceAccount:sa-terraform-plan@parcheu-dev.iam.gserviceaccount.com",
+            "role": "roles/storage.objectViewer",
+            "timeouts": null
+          },
+          "sensitive_values": {
+            "condition": []
+          }
+        },
+        {
+          "address": "google_storage_bucket_iam_member.terraform_state[0]",
+          "mode": "managed",
+          "type": "google_storage_bucket_iam_member",
+          "name": "terraform_state",
+          "index": 0,
+          "provider_name": "registry.terraform.io/hashicorp/google",
+          "schema_version": 0,
           "values": {
             "bucket": "parcheu-dev-tfstate",
             "condition": [],
             "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
             "role": "roles/storage.objectAdmin",
             "timeouts": null
+          },
+          "sensitive_values": {
+            "condition": []
           }
         }
       ]

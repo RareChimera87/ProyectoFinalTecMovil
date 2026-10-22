@@ -7,10 +7,9 @@ Pasos que solo puede hacer una persona (consolas, pagos, términos, identidad). 
 Estado al 22 oct: el proyecto `parcheu-dev` existe, tiene facturación y el bucket versionado
 `gs://parcheu-dev-tfstate`. Los `plan` de bootstrap y de la plataforma de dev pasan (63 recursos) y
 `check-plan.sh`/`check-iam.sh` están en verde. **No se aplicó nada con Terraform**: el entorno del agente no
-tuvo permiso para ejecutar `terraform apply` (ni siquiera en dev) ni para crear `parcheu-prod`. El secreto de
-GitHub `BILLING_ACCOUNT_ID` ya está cargado y la cuenta de facturación está en `~/.parcheu/terraform.env`.
+tuvo permiso para ejecutar `terraform apply` (ni siquiera en dev) ni para crear `parcheu-prod`. La cuenta de facturación está en `~/.parcheu/terraform.env`.
 
-1. **Aplicar el bootstrap de dev** (crea WIF, `sa-deployer`, `sa-terraform`; importa el bucket):
+1. **Aplicar el bootstrap de dev** (crea WIF, `sa-deployer`, `sa-terraform`, `sa-terraform-plan` y el presupuesto de facturación; importa el bucket):
 
    ```bash
    source ~/.parcheu/terraform.env
@@ -25,7 +24,8 @@ GitHub `BILLING_ACCOUNT_ID` ya está cargado y la cuenta de facturación está e
    R=RareChimera87/ProyectoFinalTecMovil
    terraform output -raw wif_provider              | gh secret set WIF_PROVIDER -R $R
    terraform output -raw deployer_service_account  | gh secret set WIF_SERVICE_ACCOUNT_DEV -R $R
-   terraform output -raw terraform_service_account | gh secret set TF_SERVICE_ACCOUNT_DEV -R $R
+   terraform output -raw terraform_plan_service_account | gh secret set TF_PLAN_SERVICE_ACCOUNT_DEV -R $R
+   terraform output -raw terraform_service_account | gh secret set TF_SERVICE_ACCOUNT_DEV -R $R   # apply (E0.6)
    ```
 
    Luego vuelve a correr el job `infra-ci` del PR de E0.5 (`gh run rerun --failed <id>`): el `plan` de dev vía
@@ -71,7 +71,7 @@ GitHub `BILLING_ACCOUNT_ID` ya está cargado y la cuenta de facturación está e
    R=RareChimera87/ProyectoFinalTecMovil
    terraform output -raw wif_provider              | gh secret set WIF_PROVIDER_PROD -R $R
    terraform output -raw deployer_service_account  | gh secret set WIF_SERVICE_ACCOUNT_PROD -R $R
-   terraform output -raw terraform_service_account | gh secret set TF_SERVICE_ACCOUNT_PROD -R $R
+   terraform output -raw terraform_plan_service_account | gh secret set TF_PLAN_SERVICE_ACCOUNT_PROD -R $R
    ```
 
 6. **Plan y apply de prod (27 oct, solo tú).** El plan de prod se validó con un número de proyecto ficticio

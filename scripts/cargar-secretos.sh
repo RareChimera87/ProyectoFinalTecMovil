@@ -20,7 +20,12 @@ case "$ENVIRONMENT" in dev|prod) ;; *) echo "Entorno inválido: $ENVIRONMENT" >&
 if [ -z "${PROJECT_ID:-}" ]; then
   var="PROJECT_ID_$(echo "$ENVIRONMENT" | tr '[:lower:]' '[:upper:]')"
   file="${PARCHEU_HOME:-$HOME/.parcheu}/proyectos.env"
-  PROJECT_ID="$( [ -f "$file" ] && sed -n "s/^$var=//p" "$file" | tail -1 )"
+  PROJECT_ID=""
+  # proyectos.env solo existe donde corrió crear-proyectos.sh; con `[ -f ] && ...` dentro
+  # de $( ) y `set -e`, su ausencia hacía salir al script en silencio.
+  if [ -f "$file" ]; then
+    PROJECT_ID="$(sed -n "s/^$var=//p" "$file" | tail -1)"
+  fi
   PROJECT_ID="${PROJECT_ID:-parcheu-$ENVIRONMENT}"
 fi
 echo "Proyecto: $PROJECT_ID"

@@ -11,7 +11,8 @@
 #   - los secretos hmac-anon-key y play-sa sin valor (ninguna secret_version ni secret_data);
 #   - escalado de la API: dev min 0; prod min 1 y máx 5;
 #   - Firestore nativo en nam5, Firebase, Pub/Sub play-rtdn, 4 trabajos de Scheduler,
-#     presupuesto con umbrales 50 % y 90 %, uptime check.
+#     uptime check. El presupuesto (50 % y 90 %) lo crea el bootstrap, no la
+#     plataforma; para un plan de bootstrap solo se verifica eso.
 set -euo pipefail
 
 PLAN="${1:?Uso: $0 plan.json [README]}"
@@ -26,6 +27,13 @@ ok() { echo "ok: $*"; }
 # Recursos planeados (raíz y módulos) como un arreglo plano.
 RES="$(jq -c '[.planned_values.root_module | recurse(.child_modules[]?) | .resources[]?]' "$PLAN")"
 q() { jq -r "$1" <<<"$RES"; }
+
+# --- Plan de bootstrap: solo presupuesto ---------------------------------------
+if [ "$(q '[.[] | select(.type=="google_service_account" and .values.account_id=="sa-deployer")] | length')" != "0" ]; then
+  thr="$(q '[.[] | select(.type=="google_billing_budget") | .values.threshold_rules[].threshold_percent] | sort | map(tostring) | join(",")')"
+  if [ "$thr" = "0.5,0.9" ]; then echo "check-plan (bootstrap): presupuesto al 50 % y 90 %: OK"; exit 0; fi
+  echo "FALLA: el presupuesto debe avisar al 50 % y 90 % (tiene '$thr')" >&2; exit 1
+fi
 
 # --- Cloud Run Jobs --------------------------------------------------------
 for job in migrate seed-demo purge-demo; do
@@ -102,8 +110,9 @@ fs="$(q '[.[] | select(.type=="google_firestore_database") | "\(.values.type) \(
 [ "$(q '[.[] | select(.type=="google_pubsub_topic" and .values.name=="play-rtdn")] | length')" = "1" ] && ok "Pub/Sub play-rtdn" || fail "falta el tema play-rtdn"
 sched="$(q '[.[] | select(.type=="google_cloud_scheduler_job") | .values.name] | sort | join(",")')"
 [ "$sched" = "communities,memories,retention,twin-accuracy" ] && ok "Scheduler: $sched" || fail "Scheduler esperado communities,memories,retention,twin-accuracy (es '$sched')"
-thr="$(q '[.[] | select(.type=="google_billing_budget") | .values.threshold_rules[].threshold_percent] | sort | map(tostring) | join(",")')"
-[ "$thr" = "0.5,0.9" ] && ok "presupuesto al 50 % y 90 %" || fail "el presupuesto debe avisar al 50 % y 90 % (tiene '$thr')"
+[ "$(q '[.[] | select(.type=="google_billing_budget")] | length')" = "0" ] \
+  && ok "sin presupuesto en la plataforma (vive en bootstrap)" \
+  || fail "el presupuesto no debe estar en la plataforma: CI no tiene roles de facturación (va en bootstrap)"
 [ "$(q '[.[] | select(.type=="google_monitoring_uptime_check_config")] | length')" -ge 1 ] && ok "uptime check" || fail "falta el uptime check"
 sql="$(q '[.[] | select(.type=="google_sql_database_instance") | .values.database_version] | first')"
 [ "$sql" = "POSTGRES_16" ] && ok "Cloud SQL Postgres 16" || fail "Cloud SQL debe ser POSTGRES_16 (es '$sql')"
