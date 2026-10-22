@@ -16,7 +16,8 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 /**
  * Rutas de arquitectura.md §5.2, agrupadas por dominio. Mientras el dominio sea un stub todas
  * responden 501; cuando una feature implementa su dominio, ajusta el estado esperado de sus rutas
- * (o las quita de esta lista) en su propio PR.
+ * (o las quita de esta lista) en su propio PR. Quitadas: `GET /v1/quota` y `POST /internal/dev/grant-plus`
+ * (E4.1, probadas en `QuotaApiTest`).
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     "identity" to listOf(
@@ -33,7 +34,6 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
         HttpMethod.Post to "/v1/twin/memories/m1/accept", HttpMethod.Post to "/v1/twin/memories/m1/reject",
         HttpMethod.Get to "/v1/twin/feedback-prompts", HttpMethod.Post to "/v1/twin/feedback",
     ),
-    "quota" to listOf(HttpMethod.Get to "/v1/quota"),
     "matching" to listOf(
         HttpMethod.Post to "/v1/match/queue", HttpMethod.Get to "/v1/match/queue", HttpMethod.Delete to "/v1/match/queue",
         HttpMethod.Get to "/v1/matches/m1", HttpMethod.Post to "/v1/matches/m1/choice",
@@ -71,7 +71,7 @@ private val internalRoutes = listOf(
     "/internal/tasks/simulate", "/internal/tasks/judge-scenario", "/internal/tasks/build-persona",
     "/internal/tasks/extract-memories", "/internal/tasks/moderate", "/internal/tasks/name-community",
     "/internal/tasks/purge-user", "/internal/jobs/communities", "/internal/jobs/memories",
-    "/internal/jobs/twin-accuracy", "/internal/jobs/retention", "/internal/billing/rtdn", "/internal/dev/grant-plus",
+    "/internal/jobs/twin-accuracy", "/internal/jobs/retention", "/internal/billing/rtdn",
 )
 
 class RoutesRegistryTest : FunSpec({

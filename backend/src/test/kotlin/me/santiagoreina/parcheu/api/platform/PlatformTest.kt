@@ -109,11 +109,15 @@ class PlatformTest : FunSpec({
             mapOf(
                 "ENV" to "prod", "K_SERVICE" to "api", "SERVICE_URL" to "https://api.example.run.app",
                 "FIREBASE_PROJECT_ID" to "parcheu-prod", "TASKS_SERVICE_ACCOUNT" to "sa-tasks@p.iam.gserviceaccount.com",
+                // Sin conexión real: el pool no se cae al construirse (initializationFailTimeout = -1).
+                "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu",
             ),
         )
         val c = AppContainer.fromConfig(config)
         (c.tokenVerifier is FakeTokenVerifier) shouldBe false
         (c.oidcVerifier is FakeOidcVerifier) shouldBe false
+        // E4.1: en prod no existe la concesión de Plus de desarrollo.
+        c.quota.devPlus shouldBe null
     }
 
     test("FirebaseTokenVerifier no resuelve credenciales al construirse (ADC diferido)") {
