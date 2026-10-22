@@ -103,3 +103,24 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
 
 9. **Después de mezclar E0.8:** quitar el disparador `pull_request` de `firebase-deploy.yml` (su job
    `rules-ci` queda duplicado con el workflow `rules-ci` de E0.6).
+
+## E10.3 · Prueba cerrada temprana (0.1)
+
+Lo automatizable ya quedó hecho: guía completa en [`docs/play-console.md` §12](play-console.md) (proceso de release,
+comandos de Firebase probados contra `parcheu-dev`, respuestas de Contenido de la app, borrador de Data safety,
+cuestionario IARC, texto para testers, notas de versión y cálculo de los 14 días). Casi todo lo demás es consola de
+Play y aprobaciones del usuario. Al 22 oct `parcheu-prod` no existe, así que nada de prod se pudo hacer por CLI.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar las dependencias en `dev`:** E0.7 (#8), E0.8 (#6), E8.4 (#16), E7.0 (#17) y, si se puede, E10.2. Al mezclar las ramas que crean `docs/play-console.md` (E10.1, E7.0, E8.4 y esta), conservar todas las secciones. | usuario / revisores | Antes del 28 oct |
+| 2 | **Crear `parcheu-prod` y aplicar Terraform de prod**; registrar la app Android de prod en Firebase (pendientes de E0.5 y E0.8). | usuario | 27 oct |
+| 3 | **Rama `release/0.1.0`** desde `dev` y `fix/version-0.1.0` con `versionName = "0.1.0"` y `versionCode` > 1 (§12.3 pasos 1-2). | I3 | 28 oct |
+| 4 | **Aprobar el PR `release/0.1.0` → `main`**, crear el tag `v0.1.0` y aprobar `deploy-prod` (Hosting). Verificar 200 en `/privacidad`, `/terminos` y `/borrar-cuenta` de prod (§12.3 paso 5). | usuario | 28-29 oct |
+| 5 | **Subir el AAB 0.1.0 a la pista cerrada** (con `android-release` o el plan B manual de §12.3 paso 6). | I3 | 29 oct |
+| 6 | **Contenido de la app** (privacidad, sin anuncios, acceso, IARC, 18+, Data safety) con las respuestas de §12.5-§12.7; ficha mínima e instrucciones para testers de §12.8. Verificar en la ayuda de Play si 'Historial de compras' aplica a la 0.1. | I3 | 29 oct |
+| 7 | **Enviar a revisión** y registrar la fecha en §12.11. | I3 | 29 oct |
+| 8 | **Huellas de Play App Signing en Firebase prod** (SHA-1 y SHA-256 del certificado de firma de la app) con los comandos de §12.4; recargar `GOOGLE_SERVICES_JSON_PROD`; captura en el PR. | I3 | 28-29 oct (tras la subida de E7.0) |
+| 9 | **Enviar el enlace de inscripción el mismo día de la aprobación**, contar inscritos (≥ 12) y calcular la fecha de los 14 días (§12.9). Conteo diario hasta el ≈ 14 nov. | I3 | 30-31 oct en adelante |
+| 10 | **Prueba de instalación** desde la pista cerrada: abre la app y A4 lleva a `/terminos` y `/privacidad` de prod (§12.10); capturas en el PR. | I3 | Tras la aprobación |
+| 11 | **Aprobación del revisor par** del PR (feature major): según `docs/equipo.md` el par de E10.3 es I1. | I1 | Revisión del PR |
