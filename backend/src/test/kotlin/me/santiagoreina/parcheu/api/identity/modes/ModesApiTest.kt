@@ -9,6 +9,7 @@ import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
@@ -29,6 +30,7 @@ import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.contract.ApiError
 import me.santiagoreina.parcheu.contract.ConsentChange
 import me.santiagoreina.parcheu.contract.ConsentKind
+import me.santiagoreina.parcheu.contract.ConsentsDto
 import me.santiagoreina.parcheu.contract.ErrorCode
 import me.santiagoreina.parcheu.contract.MeDto
 import me.santiagoreina.parcheu.contract.Mode
@@ -160,6 +162,31 @@ class ModesApiTest : FunSpec({
             client.consent("ana", ConsentKind.CHAT_LEARNING_PAREJA).status shouldBe HttpStatusCode.OK
             repo.latestConsents(repo.user("ana").id)
                 .first { it.kind == ConsentKind.CHAT_LEARNING_PAREJA }.granted shouldBe true
+        }
+    }
+
+    test("apagar Pareja revoca CHAT_LEARNING_PAREJA; mantenerlo encendido o apagar otro modo no toca el consentimiento") {
+        val repo = repoWithAna(ageVerified = true)
+        testApplication {
+            val client = startApp(testContainer(repo = repo))
+            suspend fun learningParejaGranted() = client.get("/v1/me/consents") { auth("ana") }
+                .body<ConsentsDto>().items.first { it.kind == ConsentKind.CHAT_LEARNING_PAREJA }.granted
+
+            client.putModes("ana", UpdateModes(pareja + (Mode.AMISTAD to true), parejaConfirmed = true)).status shouldBe HttpStatusCode.OK
+            client.consent("ana", ConsentKind.CHAT_LEARNING_PAREJA).status shouldBe HttpStatusCode.OK
+            learningParejaGranted() shouldBe true
+
+            // Seguir con Pareja encendido (apagando Amistad) no revoca nada.
+            client.putModes("ana", UpdateModes(pareja)).status shouldBe HttpStatusCode.OK
+            learningParejaGranted() shouldBe true
+
+            // Apagar Pareja revoca el aprendizaje y GET /v1/me/consents lo refleja.
+            client.putModes("ana", UpdateModes(mapOf(Mode.AMISTAD to true))).status shouldBe HttpStatusCode.OK
+            learningParejaGranted() shouldBe false
+
+            // Volver a encender Pareja no reanuda el aprendizaje: hay que pasar por H3.
+            client.putModes("ana", UpdateModes(pareja + (Mode.AMISTAD to true), parejaConfirmed = true)).status shouldBe HttpStatusCode.OK
+            learningParejaGranted() shouldBe false
         }
     }
 

@@ -151,4 +151,25 @@ class ModesDbTest : FunSpec({
                 )
             }
         }
+
+    test("apagar Pareja agrega la revocación de CHAT_LEARNING_PAREJA en la misma transacción")
+        .config(enabled = TestDatabase.enabled) {
+            withApp { client, db ->
+                val userId = client.onboard("lucia")
+                verifyAge(db, userId)
+                client.putModes("lucia", UpdateModes(pareja + (Mode.AMISTAD to true), parejaConfirmed = true)).status shouldBe HttpStatusCode.OK
+                client.post("/v1/me/consent") {
+                    auth("lucia"); contentType(ContentType.Application.Json)
+                    setBody(ConsentChange(ConsentKind.CHAT_LEARNING_PAREJA, granted = true, textVersion = TEST_LEGAL_VERSION))
+                }.status shouldBe HttpStatusCode.OK
+
+                client.putModes("lucia", UpdateModes(mapOf(Mode.AMISTAD to true))).status shouldBe HttpStatusCode.OK
+                val history = transaction(db) {
+                    Consents.selectAll().where { (Consents.userId eq userId) and (Consents.kind eq ConsentKind.CHAT_LEARNING_PAREJA) }
+                        .orderBy(Consents.id)
+                        .map { it[Consents.granted] to it[Consents.textVersion] }
+                }
+                history shouldContainExactly listOf(true to TEST_LEGAL_VERSION, false to TEST_LEGAL_VERSION)
+            }
+        }
 })

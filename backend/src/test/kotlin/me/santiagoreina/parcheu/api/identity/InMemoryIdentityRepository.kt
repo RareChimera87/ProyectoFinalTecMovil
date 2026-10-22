@@ -71,9 +71,16 @@ class InMemoryIdentityRepository : IdentityRepository {
     override suspend fun modes(userId: UUID) = Mode.entries.associateWith { it in enabledModes[userId].orEmpty() }
 
     /** Última escritura de modos: estado y si fijó `pareja_confirmed_at`. */
-    override suspend fun saveModes(userId: UUID, modes: Map<Mode, Boolean>, parejaConfirmedAt: Instant?, now: Instant) {
+    override suspend fun saveModes(
+        userId: UUID,
+        modes: Map<Mode, Boolean>,
+        parejaConfirmedAt: Instant?,
+        now: Instant,
+        consentRevocations: List<NewConsent>,
+    ) {
         enabledModes[userId] = modes.filterValues { it }.keys.toMutableSet()
         if (parejaConfirmedAt != null) replace(users.first { it.id == userId }.copy(parejaConfirmedAt = parejaConfirmedAt))
+        appendConsents(userId, consentRevocations, now)
     }
 
     override suspend fun hasTwin(userId: UUID) = userId in twins
