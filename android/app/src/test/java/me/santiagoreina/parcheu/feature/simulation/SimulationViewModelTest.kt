@@ -1,7 +1,13 @@
 package me.santiagoreina.parcheu.feature.simulation
 
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.test.TestResult
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -12,6 +18,7 @@ import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.data.simulation.FakeLiveSource
 import me.santiagoreina.parcheu.data.simulation.FakeSimulationRepository
+import me.santiagoreina.parcheu.data.simulation.SimulationLiveSource
 import me.santiagoreina.parcheu.data.simulation.SimulationSnapshot
 import me.santiagoreina.parcheu.data.simulation.snapshot
 import me.santiagoreina.parcheu.data.simulation.summary
@@ -30,12 +37,28 @@ class SimulationViewModelTest {
     private val repository = FakeSimulationRepository()
     private val live = FakeLiveSource()
 
-    private fun viewModel(id: String = "sim-1") = SimulationViewModel(id, repository, live)
+    private val created = mutableListOf<SimulationViewModel>()
+
+    private fun track(viewModel: SimulationViewModel) = viewModel.also { created += it }
+
+    /**
+     * Los bucles de escucha y consulta son infinitos: se cancelan antes de que runTest termine, porque al
+     * terminar drena el planificador (compartido con Main) y nunca acabaría.
+     */
+    private fun runVmTest(body: suspend TestScope.() -> Unit): TestResult = runTest {
+        try {
+            body()
+        } finally {
+            created.forEach { it.viewModelScope.cancel() }
+        }
+    }
+
+    private fun viewModel(id: String = "sim-1") = track(SimulationViewModel(id, repository, live))
 
     private fun running(state: SimulationUiState) = state as SimulationUiState.Running
 
     @Test
-    fun mapsScenarioIndexAndTurnToSteps() = runTest {
+    fun mapsScenarioIndexAndTurnToSteps() = runVmTest {
         val viewModel = viewModel()
         live.flow.emit(snapshot(scenarioIndex = 1, turn = 4, of = 5))
 
@@ -54,7 +77,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun startsAtZeroPercent() = runTest {
+    fun startsAtZeroPercent() = runVmTest {
         val viewModel = viewModel()
         live.flow.emit(snapshot(status = SimulationStatus.QUEUED))
 
@@ -64,7 +87,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun doneOpensResultsOnce() = runTest {
+    fun doneOpensResultsOnce() = runVmTest {
         val viewModel = viewModel()
         viewModel.effects.test {
             live.flow.emit(snapshot(scenarioIndex = 2, turn = 3))
@@ -77,7 +100,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun failedShowsF5() = runTest {
+    fun failedShowsF5() = runVmTest {
         val viewModel = viewModel()
         live.flow.emit(snapshot(status = SimulationStatus.FAILED, scenarioIndex = 1, turn = 2))
 
@@ -87,7 +110,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun refundedIsOnlyTrueWhenSummaryCarriesIt() = runTest {
+    fun refundedIsOnlyTrueWhenSummaryCarriesIt() = runVmTest {
         repository.getResult =
             ApiResult.Success(
                 SimulationDto(
@@ -107,13 +130,13 @@ class SimulationViewModelTest {
                     Progress(1, 2, 5)
                 )
             )
-        val other = SimulationViewModel("sim-1", repository, notRefunded)
+        val other = track(SimulationViewModel("sim-1", repository, notRefunded))
         notRefunded.flow.emit(snapshot(status = SimulationStatus.FAILED, scenarioIndex = 1))
         assertFalse((other.state.value as SimulationUiState.Failed).refunded)
     }
 
     @Test
-    fun silentListenerFallsBackToRestExactlyOnceAndKeepsListening() = runTest {
+    fun silentListenerFallsBackToRestExactlyOnceAndKeepsListening() = runVmTest {
         repository.getResult =
             ApiResult.Success(
                 SimulationDto(summary(), Progress(scenarioIndex = 0, turn = 2, of = 5))
@@ -139,7 +162,59 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun listenerThatAnswersInTimeSkipsTheFallback() = runTest {
+    fun failingListenerResubscribesWithBackoffAndPollsRestUntilDone() = runVmTest {
+        val failing = FailingLiveSource()
+        repository.getResult =
+            ApiResult.Success(
+                SimulationDto(summary(), Progress(scenarioIndex = 0, turn = 1, of = 5))
+            )
+        val viewModel = track(SimulationViewModel("sim-1", repository, failing))
+        viewModel.effects.test {
+            advanceTimeBy(LISTENER_SILENCE_TIMEOUT + 1.milliseconds)
+            runCurrent()
+            assertTrue(failing.subscriptions > 1)
+            assertEquals(1, repository.getCalls)
+            assertTrue(viewModel.state.value is SimulationUiState.Running)
+
+            // El listener sigue roto: la API se consulta periodicamente y no se congela en "En curso".
+            advanceTimeBy(REST_POLL_INTERVAL)
+            runCurrent()
+            assertTrue(repository.getCalls >= 2)
+
+            repository.getResult =
+                ApiResult.Success(
+                    SimulationDto(summary(status = SimulationStatus.DONE), Progress(2, 5, 5))
+                )
+            advanceTimeBy(REST_POLL_INTERVAL)
+            runCurrent()
+            assertEquals(SimulationEffect.OpenResults("sim-1"), awaitItem())
+
+            // Estado final: ya no se consulta ni se resuscribe.
+            val calls = repository.getCalls
+            val subs = failing.subscriptions
+            advanceTimeBy(LISTENER_RETRY_MAX * 4)
+            runCurrent()
+            assertEquals(calls, repository.getCalls)
+            assertEquals(subs, failing.subscriptions)
+        }
+    }
+
+    @Test
+    fun listenerRecoversAfterErrorAndStopsPolling() = runVmTest {
+        val flaky = FailingLiveSource(failFirst = 1)
+        val viewModel = track(SimulationViewModel("sim-1", repository, flaky))
+        advanceTimeBy(LISTENER_RETRY_INITIAL + 1.milliseconds)
+        runCurrent()
+        flaky.flow.emit(snapshot(scenarioIndex = 1, turn = 2))
+        assertEquals(2, running(viewModel.state.value).currentScenario)
+        val calls = repository.getCalls
+        advanceTimeBy(REST_POLL_INTERVAL * 3)
+        runCurrent()
+        assertEquals(calls, repository.getCalls)
+    }
+
+    @Test
+    fun listenerThatAnswersInTimeSkipsTheFallback() = runVmTest {
         val viewModel = viewModel()
         live.flow.emit(snapshot(scenarioIndex = 0, turn = 1))
         val callsAfterFirstSnapshot = repository.getCalls // solo el resumen (con quién se simula)
@@ -151,7 +226,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun leavingAndComingBackResumesTheCurrentState() = runTest {
+    fun leavingAndComingBackResumesTheCurrentState() = runVmTest {
         // "Salir" = soltar este ViewModel; la simulación sigue corriendo en el servidor.
         val first = viewModel()
         live.flow.emit(snapshot(scenarioIndex = 1, turn = 2))
@@ -164,7 +239,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun silentListenerAndApiFailureShowsAnErrorThatCanBeReloaded() = runTest {
+    fun silentListenerAndApiFailureShowsAnErrorThatCanBeReloaded() = runVmTest {
         repository.getResult = ApiResult.Failure(AppError.Network)
         val viewModel = viewModel()
         advanceTimeBy(LISTENER_SILENCE_TIMEOUT + 1.milliseconds)
@@ -177,7 +252,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun retryStartsANewSimulationWithTheSamePerson() = runTest {
+    fun retryStartsANewSimulationWithTheSamePerson() = runVmTest {
         repository.getResult =
             ApiResult.Success(
                 SimulationDto(
@@ -196,7 +271,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun retryErrorKeepsF5AndShowsTheReason() = runTest {
+    fun retryErrorKeepsF5AndShowsTheReason() = runVmTest {
         repository.getResult =
             ApiResult.Success(
                 SimulationDto(summary(status = SimulationStatus.FAILED), Progress(1, 2, 5))
@@ -212,7 +287,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun anonymousOtherCannotBeRetried() = runTest {
+    fun anonymousOtherCannotBeRetried() = runVmTest {
         repository.getResult =
             ApiResult.Success(
                 SimulationDto(
@@ -235,5 +310,21 @@ class SimulationViewModelTest {
         val done = SimulationSnapshot(SimulationStatus.DONE, Progress(2, 5, 5), 80)
         assertEquals(100, progressPercent(done))
         assertTrue(scenarioSteps(done).all { it.state == StepState.DONE })
+    }
+}
+
+/** Canal en vivo que lanza error al suscribirse (reglas, token vencido): las primeras [failFirst] veces, o siempre. */
+private class FailingLiveSource(private val failFirst: Int = Int.MAX_VALUE) : SimulationLiveSource {
+    val flow = MutableSharedFlow<SimulationSnapshot>(replay = 1, extraBufferCapacity = 8)
+    var subscriptions = 0
+        private set
+
+    override fun observe(id: String): Flow<SimulationSnapshot> {
+        subscriptions++
+        return if (subscriptions <= failFirst) {
+            kotlinx.coroutines.flow.flow { throw IllegalStateException("PERMISSION_DENIED") }
+        } else {
+            flow
+        }
     }
 }

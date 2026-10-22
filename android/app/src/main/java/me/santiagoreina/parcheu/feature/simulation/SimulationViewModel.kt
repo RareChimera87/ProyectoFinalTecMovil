@@ -30,6 +30,13 @@ const val SCENARIO_COUNT = 3
 /** Tiempo sin datos del listener antes de consultar la API una vez (respaldo). */
 val LISTENER_SILENCE_TIMEOUT: Duration = 10.seconds
 
+/** Intervalo de consulta REST mientras el canal en vivo no esté sano (sin datos o con error). */
+val REST_POLL_INTERVAL: Duration = 10.seconds
+
+/** Esperas de resuscripción del listener tras un error: crecen al doble hasta el tope. */
+val LISTENER_RETRY_INITIAL: Duration = 1.seconds
+val LISTENER_RETRY_MAX: Duration = 30.seconds
+
 enum class StepState { DONE, IN_PROGRESS, PENDING }
 
 /** Un renglón de la lista de escenarios de F4. [number] empieza en 1. */
@@ -76,14 +83,17 @@ sealed interface SimulationEffect {
 
 /**
  * F4/F5 (E4.5). Escucha `simulations/{id}` (ADR-0004); si en [silenceTimeout] el listener no entrega nada
- * consulta `GET /v1/simulations/{id}` una vez y sigue escuchando. Salir de la pantalla no detiene la
+ * consulta `GET /v1/simulations/{id}` y sigue escuchando. Si el listener falla, se vuelve a suscribir con
+ * backoff exponencial y, mientras el canal en vivo no esté sano, consulta la API cada [pollInterval] hasta
+ * que la simulación llegue a DONE o FAILED. Salir de la pantalla no detiene la
  * simulación: al volver, un ViewModel nuevo se suscribe y recibe el estado actual.
  */
 class SimulationViewModel(
     private val simulationId: String,
     private val repository: SimulationRepository,
     private val live: SimulationLiveSource,
-    private val silenceTimeout: Duration = LISTENER_SILENCE_TIMEOUT
+    private val silenceTimeout: Duration = LISTENER_SILENCE_TIMEOUT,
+    private val pollInterval: Duration = REST_POLL_INTERVAL
 ) : ViewModel() {
     private val _state = MutableStateFlow<SimulationUiState>(SimulationUiState.Connecting)
     val state: StateFlow<SimulationUiState> = _state.asStateFlow()
@@ -93,19 +103,39 @@ class SimulationViewModel(
 
     private var summary: SimulationSummary? = null
     private var received = false
+    private var liveHealthy = false
+    private var terminal = false
     private var finished = false
     private var summaryRequested = false
     private var failedRefetched = false
 
     init {
-        viewModelScope.launch {
-            live.observe(simulationId).catch {
-                if (!received) fetchFromApi()
-            }.collect { onSnapshot(it) }
-        }
+        viewModelScope.launch { listenWithRetry() }
         viewModelScope.launch {
             delay(silenceTimeout)
-            if (!received) fetchFromApi()
+            while (!terminal) {
+                if (!liveHealthy) fetchFromApi()
+                delay(pollInterval)
+            }
+        }
+    }
+
+    /** Escucha el canal en vivo; si falla o termina, se suscribe de nuevo con backoff hasta el estado final. */
+    private suspend fun listenWithRetry() {
+        var backoff = LISTENER_RETRY_INITIAL
+        while (!terminal) {
+            liveHealthy = false
+            live.observe(simulationId)
+                .catch { /* el respaldo REST cubre el hueco; se reintenta abajo */ }
+                .collect {
+                    liveHealthy = true
+                    backoff = LISTENER_RETRY_INITIAL
+                    onSnapshot(it)
+                }
+            liveHealthy = false
+            if (terminal) return
+            delay(backoff)
+            backoff = (backoff * 2).coerceAtMost(LISTENER_RETRY_MAX)
         }
     }
 
@@ -147,6 +177,11 @@ class SimulationViewModel(
 
     private suspend fun onSnapshot(snapshot: SimulationSnapshot, fresh: Boolean = false) {
         received = true
+        if (snapshot.status == SimulationStatus.DONE ||
+            snapshot.status == SimulationStatus.FAILED
+        ) {
+            terminal = true
+        }
         // El encabezado (con quién y en qué modo) y `refunded` solo existen en la API: se pide el resumen
         // una vez mientras corre y una vez más al fallar (el reembolso se registra junto con FAILED).
         val failed = snapshot.status == SimulationStatus.FAILED
