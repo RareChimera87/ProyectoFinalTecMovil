@@ -67,6 +67,7 @@ class MatchingDbTest : FunSpec({
         isDemo: Boolean = false,
         ageVerified: Boolean = true,
         deleted: Boolean = false,
+        suspended: Boolean = false,
     ): UUID = transaction(this) {
         val id = Users.insert {
             it[firebaseUid] = "uid-$name"
@@ -80,6 +81,7 @@ class MatchingDbTest : FunSpec({
             }
             it[Users.isDemo] = isDemo
             if (deleted) it[deletedAt] = now
+            if (suspended) it[suspendedUntil] = start.plus(Duration.ofDays(1)).atOffset(java.time.ZoneOffset.UTC)
             it[createdAt] = now
             it[updatedAt] = now
         }[Users.id]
@@ -201,6 +203,7 @@ class MatchingDbTest : FunSpec({
             val apagado = db.user("apagado", modes = setOf(Mode.AMISTAD))
             val borrado = db.user("borrado", deleted = true)
             val demo = db.user("demo", isDemo = true)
+            val suspendido = db.user("suspendido", suspended = true)
             transaction(db) {
                 Blocks.insert {
                     it[blockerId] = bloqueado
@@ -218,7 +221,7 @@ class MatchingDbTest : FunSpec({
                 }
             }
             // Los candidatos entran directo al repositorio (la API no deja entrar a borrados ni a demos sin bandera).
-            listOf(bloqueado, conectado, apagado, borrado, demo).forEach { id ->
+            listOf(bloqueado, conectado, apagado, borrado, demo, suspendido).forEach { id ->
                 db.seed(id, Mode.ESTUDIO, 0, 60)
             }
             w.service.enqueue(ana, Mode.ESTUDIO).status shouldBe TicketStatus.WAITING

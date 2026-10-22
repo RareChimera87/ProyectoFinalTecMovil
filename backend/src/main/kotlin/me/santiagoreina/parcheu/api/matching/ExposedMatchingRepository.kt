@@ -53,7 +53,7 @@ import java.util.UUID
  * 1. `pg_advisory_xact_lock` por persona y luego por modo. Sin él, dos personas que entran a la vez
  *    no se ven (READ COMMITTED no muestra filas sin confirmar) y quedan esperando para siempre.
  * 2. Se guarda el ticket propio.
- * 3. `SELECT ... FROM match_queue JOIN users ... FOR UPDATE OF match_queue SKIP LOCKED LIMIT 1`
+ * 3. `SELECT ... FROM match_queue JOIN users ... FOR UPDATE OF match_queue SKIP LOCKED LIMIT 1` (sin borrados ni suspendidos)
  *    elige a la pareja; SKIP LOCKED impide que otra transacción (cancelar, vencer, otro emparejamiento)
  *    la tome a la vez.
  * 4. Se crea el match y los dos tickets pasan a MATCHED.
@@ -146,6 +146,7 @@ class ExposedMatchingRepository(private val db: Database) : MatchingRepository {
             (MatchQueue.userId neq own.userId) and
             (MatchQueue.expiresAt greater now.odt()) and
             Users.deletedAt.isNull() and
+            (Users.suspendedUntil.isNull() or (Users.suspendedUntil lessEq now.odt())) and
             exists(
                 UserModes.select(UserModes.userId)
                     .where { (UserModes.userId eq MatchQueue.userId) and (UserModes.mode eq own.mode) and (UserModes.enabled eq true) },
