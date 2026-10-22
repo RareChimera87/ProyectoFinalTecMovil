@@ -145,3 +145,18 @@ No hay pasos bloqueantes: la feature no crea recursos en GCP, Firebase ni consol
    `deploy-dev` verifica que el servicio de Cloud Run las recibe (hoy solo las usa el job `migrate`).
 3. **Revisión legal.** Pide al docente o a un abogado revisar el texto de aceptación de A4 y el plazo de conservación de
    `consents` (5 años, arquitectura.md §10.2) antes de la prueba cerrada.
+
+## E3.1 · API del grafo
+
+La feature no crea recursos en GCP; solo necesita que exista el valor del secreto de E0.5.
+
+1. **Valor de `hmac-anon-key` en dev y prod.** `GET /v1/graph` enmascara a las personas sin conexión mutua con
+   `anonId = HMAC(clave, observador || persona)`. El servicio lee la clave del secreto que indica `SECRET_HMAC_ANON_KEY`
+   (variable que ya define `modules/platform/cloud_run.tf` de E0.5). Tras el `terraform apply` de cada entorno ejecuta
+   `scripts/cargar-secretos.sh` (dev: I1; prod: el usuario) para crear la primera versión. Sin valor, el grafo responde 500.
+   Verifica con: `gcloud secrets versions list hmac-anon-key --project=<proyecto>` (debe haber una versión `enabled`).
+2. **No rotar la clave en prod sin avisar.** Rotarla cambia todos los `anonId`: los ids anónimos que el cliente tenga en
+   caché (DataStore del último grafo) dejan de resolver en `GET /v1/graph/nodes/{id}` hasta refrescar el grafo.
+3. **Permiso de lectura.** La cuenta de servicio del API necesita `roles/secretmanager.secretAccessor` sobre `hmac-anon-key`
+   (E0.5 lo declara como `api_accessor`); compruébalo tras el primer despliegue en dev llamando a `GET /v1/graph`.
+
