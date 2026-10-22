@@ -2,6 +2,8 @@ package me.santiagoreina.parcheu.api.identity
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.santiagoreina.parcheu.api.identity.modes.ExposedModesRepository
+import me.santiagoreina.parcheu.api.identity.modes.ModesRepository
 import me.santiagoreina.parcheu.api.platform.db.tables.Consents
 import me.santiagoreina.parcheu.api.platform.db.tables.FcmTokens
 import me.santiagoreina.parcheu.api.platform.db.tables.Interests
@@ -29,7 +31,9 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 /** Repositorio de identity sobre Postgres con Exposed. Cada operación abre su transacción (arquitectura.md §3.2). */
-class ExposedIdentityRepository(private val db: Database) : IdentityRepository {
+class ExposedIdentityRepository(private val db: Database) :
+    IdentityRepository,
+    ModesRepository by ExposedModesRepository(db) {
 
     private suspend fun <T> tx(block: () -> T): T = withContext(Dispatchers.IO) { transaction(db) { block() } }
 
