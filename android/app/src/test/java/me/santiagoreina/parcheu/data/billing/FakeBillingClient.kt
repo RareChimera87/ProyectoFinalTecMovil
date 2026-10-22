@@ -20,12 +20,22 @@ class FakeBillingClient(
         private set
     var endConnectionCalls = 0
         private set
+
+    /** Cuántos clientes de Play se crearon (uno inicial + uno por cada reconexión tras cerrar). */
+    var clientsCreated = 1
+        private set
+    private var closed = false
     private var onDisconnected: (() -> Unit)? = null
 
     override var isReady: Boolean = false
         private set
 
     override suspend fun startConnection(onDisconnected: () -> Unit): BillingResult {
+        // Modela BillingClient real: tras endConnection queda CLOSED y hay que crear uno nuevo.
+        if (closed) {
+            closed = false
+            clientsCreated++
+        }
         val code = connectionResponses[minOf(connectionAttempts, connectionResponses.lastIndex)]
         connectionAttempts++
         isReady = code == BillingResponseCode.OK
@@ -49,6 +59,7 @@ class FakeBillingClient(
     override fun endConnection() {
         endConnectionCalls++
         isReady = false
+        closed = true
     }
 
     /** Simula que Play corta el servicio después de conectar. */

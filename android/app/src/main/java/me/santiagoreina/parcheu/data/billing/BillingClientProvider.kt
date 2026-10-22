@@ -106,8 +106,11 @@ class BillingClientProvider(
         return _plusProductDetails.value
     }
 
-    /** Cierra la conexión (al cerrar sesión o en tests). */
-    fun disconnect() {
+    /**
+     * Cierra la conexión (al cerrar sesión o en tests). Toma [connectMutex] para no pisar un [connect]
+     * en pleno backoff; después se puede volver a llamar a [connect].
+     */
+    suspend fun disconnect() = connectMutex.withLock {
         client.endConnection()
         _connectionState.value = BillingConnectionState.Disconnected
     }

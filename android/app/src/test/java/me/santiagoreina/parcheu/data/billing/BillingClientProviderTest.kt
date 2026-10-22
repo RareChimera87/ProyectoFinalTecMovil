@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.data.billing
 
 import com.android.billingclient.api.BillingClient.BillingResponseCode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
@@ -176,6 +177,40 @@ class BillingClientProviderTest {
         provider.connect()
 
         provider.disconnect()
+
+        assertEquals(1, client.endConnectionCalls)
+        assertEquals(BillingConnectionState.Disconnected, provider.connectionState.value)
+    }
+
+    @Test
+    fun connectsAgainAfterDisconnect() = runTest {
+        val client = FakeBillingClient()
+        val provider = provider(client)
+        provider.connect()
+        provider.disconnect()
+
+        assertTrue(provider.connect())
+
+        assertEquals(BillingConnectionState.Connected, provider.connectionState.value)
+        assertEquals(2, client.clientsCreated)
+        assertEquals(2, client.connectionAttempts)
+    }
+
+    @Test
+    fun disconnectWaitsForConnectInBackoff() = runTest {
+        val client =
+            FakeBillingClient(
+                listOf(BillingResponseCode.SERVICE_UNAVAILABLE, BillingResponseCode.OK)
+            )
+        val provider = provider(client)
+        val connecting = backgroundScope.launch { provider.connect() }
+        runCurrent()
+        val disconnecting = backgroundScope.launch { provider.disconnect() }
+        runCurrent()
+        assertEquals(0, client.endConnectionCalls)
+
+        connecting.join()
+        disconnecting.join()
 
         assertEquals(1, client.endConnectionCalls)
         assertEquals(BillingConnectionState.Disconnected, provider.connectionState.value)

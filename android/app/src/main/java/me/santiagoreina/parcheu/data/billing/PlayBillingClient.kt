@@ -20,7 +20,8 @@ interface PlayBillingClient {
 
     /**
      * Inicia la conexión y suspende hasta `onBillingSetupFinished`. [onDisconnected] se llama si Play
-     * corta el servicio después de una conexión exitosa.
+     * corta el servicio después de una conexión exitosa. Debe funcionar también después de
+     * [endConnection] (p. ej. al volver a iniciar sesión sin matar el proceso).
      */
     suspend fun startConnection(onDisconnected: () -> Unit): BillingResult
 
@@ -32,21 +33,28 @@ interface PlayBillingClient {
 
 /** Implementación real con Play Billing Library 8 (`billing-ktx`). */
 class AndroidPlayBillingClient(
-    context: Context,
-    purchasesUpdatedListener: PurchasesUpdatedListener = PurchasesUpdatedListener { _, _ -> }
+    private val context: Context,
+    private val purchasesUpdatedListener: PurchasesUpdatedListener =
+        PurchasesUpdatedListener { _, _ -> }
 ) : PlayBillingClient {
     // La compra (launchBillingFlow y el listener real) llega en E7.2; aquí solo se conecta y se consulta.
-    private val client: BillingClient =
-        BillingClient
-            .newBuilder(context.applicationContext)
-            .setListener(purchasesUpdatedListener)
-            .enablePendingPurchases(
-                PendingPurchasesParams.newBuilder().enableOneTimeProducts().build()
-            ).build()
+    private fun newClient(): BillingClient = BillingClient
+        .newBuilder(context.applicationContext)
+        .setListener(purchasesUpdatedListener)
+        .enablePendingPurchases(
+            PendingPurchasesParams.newBuilder().enableOneTimeProducts().build()
+        ).build()
+
+    @Volatile
+    private var client: BillingClient = newClient()
 
     override val isReady: Boolean get() = client.isReady
 
     override suspend fun startConnection(onDisconnected: () -> Unit): BillingResult {
+        // endConnection() deja el BillingClient en CLOSED y Play no permite reutilizarlo
+        // ("Client was already closed and can't be reused"): se crea uno nuevo para reconectar.
+        if (client.connectionState == BillingClient.ConnectionState.CLOSED) client = newClient()
+        val client = client
         val setup = CompletableDeferred<BillingResult>()
         client.startConnection(
             object : BillingClientStateListener {
