@@ -3,6 +3,8 @@ package me.santiagoreina.parcheu.feature.conocer.match
 import app.cash.turbine.test
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
+import me.santiagoreina.parcheu.contract.MatchChoice
+import me.santiagoreina.parcheu.contract.MatchStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.TicketDto
@@ -169,7 +171,7 @@ class MatchQueueViewModelTest {
     }
 
     @Test
-    fun resumesMatchedTicketAndOpensF2() = runTest {
+    fun resumesMatchedTicketPendingChoiceAndOpensF2() = runTest {
         repository.currentTicketResult = ApiResult.Success(matchedTicket("m9"))
         val vm = viewModel()
         vm.effects.test {
@@ -178,6 +180,40 @@ class MatchQueueViewModelTest {
             assertEquals(QueuePhase.Matched("m9"), vm.state.value.phase)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun matchedTicketOfExpiredMatchEnqueuesAgain() {
+        repository.currentTicketResult = ApiResult.Success(matchedTicket("m1"))
+        repository.matchResults = mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
+
+        val vm = viewModel()
+
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+    }
+
+    @Test
+    fun matchedTicketOfSimulationMatchEnqueuesAgain() {
+        repository.currentTicketResult = ApiResult.Success(matchedTicket("m1"))
+        repository.matchResults = mutableListOf(
+            ApiResult.Success(testMatch(status = MatchStatus.SIMULATION, myChoice = MatchChoice.SIMULATION))
+        )
+
+        val vm = viewModel()
+
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+    }
+
+    @Test
+    fun matchedTicketWithOwnChoiceEnqueuesAgain() {
+        repository.currentTicketResult = ApiResult.Success(matchedTicket("m1"))
+        repository.matchResults = mutableListOf(ApiResult.Success(testMatch(myChoice = MatchChoice.SCENARIO)))
+
+        viewModel()
+
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
     }
 
     @Test

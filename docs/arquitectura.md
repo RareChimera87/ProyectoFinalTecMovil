@@ -426,6 +426,8 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | POST `/internal/billing/rtdn` | sobre Pub/Sub push | 204 | (OIDC) |
 | POST `/internal/dev/grant-plus` | `{userId, days}` | 204 (404 en prod) | - |
 
+Nota: tras un match, `GET /v1/match/queue` sigue devolviendo el ticket `MATCHED` (estado terminal de la fila, con `matchId`). El cliente solo lo reanuda si `GET /v1/matches/{id}` está en `PENDING_CHOICE` sin `myChoice`; si no, vuelve a encolar con POST.
+
 `PersonRef{id?, anonId?, label, initials, photoUrl?, isDemo}`: antes de la conexión mutua `id` y `photoUrl` son nulos y `label` = "Alguien de la UIS". Los usuarios gratis nunca reciben los campos marcados como premium (`reasons`, `frictions`, `dimensions`, `transcript`, `items` de fof, comunidades y connect-requests): el servidor los omite, el borroso de la UI es decorativo.
 
 ---

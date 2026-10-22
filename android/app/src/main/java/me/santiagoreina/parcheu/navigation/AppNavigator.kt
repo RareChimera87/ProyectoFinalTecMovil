@@ -13,9 +13,10 @@ interface AppNavigator {
 
     /**
      * Abre [route] quitando antes [replacing] de la pila (con todo lo que tenga encima), si estaba.
-     * Evita apilar una segunda copia de una pantalla que ya existe.
+     * Evita apilar una segunda copia de una pantalla que ya existe. Por defecto solo navega, para
+     * no romper implementaciones (fakes de tests) que no lo necesitan.
      */
-    fun navigateReplacing(route: AppRoute, replacing: KClass<out AppRoute>)
+    fun navigateReplacing(route: AppRoute, replacing: KClass<out AppRoute>) = navigate(route)
 
     /** Cambia de pestaña de la NavBar conservando el estado de cada raíz. */
     fun navigateToTopLevel(route: AppRoute)

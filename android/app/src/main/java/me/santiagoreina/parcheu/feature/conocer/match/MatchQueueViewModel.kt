@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.santiagoreina.parcheu.contract.MatchStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.TicketDto
@@ -155,10 +156,23 @@ class MatchQueueViewModel(
         }
     }
 
-    /** Reanuda el ticket `WAITING` o `MATCHED` del servidor; `true` si había uno. */
+    /**
+     * Reanuda el ticket del servidor; `true` si había uno vivo. `WAITING` siempre se reanuda.
+     * `MATCHED` es el estado terminal de la fila (el GET lo sigue devolviendo tras el match), así
+     * que solo se reanuda si el match aún espera elección propia (`PENDING_CHOICE` sin `myChoice`);
+     * si venció, ya se eligió o está en simulación, se encola de nuevo.
+     */
     private suspend fun resumeLiveTicket(): Boolean {
         val ticket = (repository.currentTicket() as? ApiResult.Success)?.value ?: return false
-        if (ticket.status == TicketStatus.EXPIRED) return false
+        when (ticket.status) {
+            TicketStatus.EXPIRED -> return false
+            TicketStatus.WAITING -> Unit
+            TicketStatus.MATCHED -> {
+                val id = ticket.matchId ?: return false
+                val match = (repository.match(id) as? ApiResult.Success)?.value ?: return false
+                if (match.status != MatchStatus.PENDING_CHOICE || match.myChoice != null) return false
+            }
+        }
         _state.update { it.copy(mode = ticket.mode) }
         follow(ticket)
         return true
