@@ -183,14 +183,21 @@ Primera versión de prueba cerrada: navegación de la app, enlaces a Términos y
 
 1. **29 oct:** con la versión en la pista cerrada y el contenido de la app completo (§12.5-§12.8), *Resumen de
    la publicación > Enviar cambios a revisión*. Registra la fecha.
-2. **Al llegar la aprobación** (correo de Play o *Resumen de la publicación*): copia el **enlace de inscripción**
-   de *Prueba cerrada > Testers* y envíalo **ese mismo día** al grupo de testers con un mensaje corto: abrir el
+2. **Al llegar la aprobación** (correo de Play o *Resumen de la publicación*): con la publicación administrada
+   (§12.3 paso 4) la versión aprobada queda **retenida y no instalable**. Ese mismo día pulsa *Resumen de la
+   publicación > Publicar cambios* y registra la fecha en la fila 'Publicada en la pista cerrada' de §12.11. Después
+   **desactiva la publicación administrada** (*Descripción general de la publicación > Publicación administrada*,
+   con la 0.1 ya publicada; no la desactives antes, porque se publicaría lo pendiente sin control) para que la 0.2 y
+   la 0.3 no queden retenidas; si prefieres mantenerla, habrá que pulsar 'Publicar cambios' tras cada aprobación.
+   Comprueba que la pista cerrada muestre la 0.1.0 como 'Disponible' y solo entonces copia el **enlace de
+   inscripción** de *Prueba cerrada > Testers* y envíalo **ese mismo día** al grupo de testers con un mensaje corto: abrir el
    enlace con la cuenta de Google del teléfono, pulsar 'Convertirse en tester', instalar desde Play y **no salirse
    de la prueba durante 14 días**.
 3. **Conteo diario** de inscritos: *Prueba cerrada > Testers* muestra cuántos se inscribieron. Anota el conteo del
-   día de la aprobación (meta ≥ 12, con 15-20 reclutados) y repórtalo cada día en el diario del equipo. Si baja de
+   día de la publicación (meta ≥ 12, con 15-20 reclutados) y repórtalo cada día en el diario del equipo. Si baja de
    12, el reloj de Play se reinicia: recluta reemplazos el mismo día.
-4. **Fecha de los 14 días.** Con `INICIO` = primer día con ≥ 12 inscritos (día 1):
+4. **Fecha de los 14 días.** Con `INICIO` = primer día en que la 0.1 está **publicada** en la pista cerrada **y** hay ≥ 12 inscritos (día 1;
+   inscribirse sin la versión publicada no cuenta, porque nadie puede instalarla):
 
    ```bash
    INICIO=2026-10-31   # reemplazar por la fecha real
@@ -226,8 +233,9 @@ para que Play pueda instalar):
 | Clasificación de contenido obtenida | _pendiente_ | | I3 |
 | **Envío a revisión** | _pendiente (meta 29 oct)_ | | I3 |
 | **Aprobación** | _pendiente (estimada 30-31 oct)_ | | I3 |
-| Inscritos el día de la aprobación (meta ≥ 12) | _pendiente_ | | I3 |
-| **Primer día con ≥ 12 inscritos** (día 1 del reloj) | _pendiente_ | | I3 |
+| **Publicada en la pista cerrada** ('Publicar cambios' tras la aprobación) y publicación administrada desactivada o no | _pendiente_ | | I3 |
+| Inscritos el día de la publicación (meta ≥ 12) | _pendiente_ | | I3 |
+| **Primer día con la 0.1 publicada y ≥ 12 inscritos** (día 1 del reloj) | _pendiente_ | | I3 |
 | **Fecha calculada de los 14 días** (§12.9 paso 4) | _pendiente (≈ 13-14 nov)_ | | I3 |
 | Instalación desde la pista cerrada y enlaces de A4 a prod verificados (§12.10) | _pendiente_ | | I3 |
 
@@ -255,7 +263,8 @@ para que Play pueda instalar):
 - [ ] Contenido de la app completo: privacidad, sin anuncios, acceso, IARC, 18+, Data safety (borrador 0.1).
 - [ ] Ficha mínima e instrucciones para testers publicadas.
 - [ ] 0.1 enviada a revisión el 29 oct.
+- [ ] Tras la aprobación: 'Publicar cambios' pulsado, 0.1 disponible en la pista cerrada y publicación administrada desactivada.
 - [ ] SHA-1 y SHA-256 de Play App Signing en la app Android de Firebase prod (captura en el PR).
-- [ ] Enlace de inscripción enviado el día de la aprobación; ≥ 12 inscritos ese día.
+- [ ] Enlace de inscripción enviado el día de la publicación; ≥ 12 inscritos ese día.
 - [ ] Fechas de §12.11 completas, incluida la de los 14 días.
 - [ ] Instalación desde la pista cerrada abre la app y A4 lleva a `/terminos` y `/privacidad` de prod.
