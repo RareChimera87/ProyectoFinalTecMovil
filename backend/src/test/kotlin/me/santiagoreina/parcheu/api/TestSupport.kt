@@ -10,7 +10,11 @@ import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.identity.profile.InMemoryProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
+import me.santiagoreina.parcheu.api.matching.MatchingModule
+import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
 import me.santiagoreina.parcheu.api.platform.AppContainer
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
@@ -62,6 +66,8 @@ fun testContainer(
     graph: GraphModule = inMemoryGraphModule(FIXED_CLOCK),
     simulation: SimulationModule = inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph),
     clock: Clock = FIXED_CLOCK,
+    notifier: Notifier = NoopNotifier,
+    matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
 ): AppContainer {
     val identity = IdentityService(repo, clock, legalTextVersion)
     val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
@@ -77,7 +83,9 @@ fun testContainer(
         quota = quota,
         graph = graph,
         simulation = simulation,
-        domains = allDomains(identity, profile, twin, quota, graph, simulation) + extra,
+        notifier = notifier,
+        matching = matching,
+        domains = allDomains(identity, profile, twin, quota, graph, simulation, matching) + extra,
     )
 }
 
@@ -85,4 +93,16 @@ fun testContainer(
 fun ApplicationTestBuilder.startApp(container: AppContainer = testContainer()): HttpClient {
     application { module(container) }
     return createClient { install(ContentNegotiation) { json(ContractJson) } }
+}
+
+/** Dominios con todos los módulos en memoria salvo identidad: para pruebas que cablean su propio `AppContainer`. */
+fun inMemoryDomains(identity: IdentityService, profile: ProfileService): List<DomainRoutes> {
+    val ai = testGateway()
+    val quota = inMemoryQuotaModule(FIXED_CLOCK)
+    val graph = inMemoryGraphModule(FIXED_CLOCK)
+    val simulation = inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph)
+    return allDomains(
+        identity, profile, inMemoryTwinModule(FIXED_CLOCK, ai), quota, graph, simulation,
+        inMemoryMatchingModule(FIXED_CLOCK, quota, simulation, graph, NoopNotifier),
+    )
 }

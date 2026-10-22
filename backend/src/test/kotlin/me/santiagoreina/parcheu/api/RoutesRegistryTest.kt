@@ -31,10 +31,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
         HttpMethod.Post to "/v1/twin/memories/m1/accept", HttpMethod.Post to "/v1/twin/memories/m1/reject",
         HttpMethod.Get to "/v1/twin/feedback-prompts", HttpMethod.Post to "/v1/twin/feedback",
     ),
-    "matching" to listOf(
-        HttpMethod.Post to "/v1/match/queue", HttpMethod.Get to "/v1/match/queue", HttpMethod.Delete to "/v1/match/queue",
-        HttpMethod.Get to "/v1/matches/m1", HttpMethod.Post to "/v1/matches/m1/choice",
-    ),
+    // E4.2 implementó todo el dominio matching (MatchingApiTest); ya no queda ningún stub.
     // E4.3 implementó crear, listar, consultar y transcript (SimulationApiTest); informe y decisión son de E4.6.
     "simulation" to listOf(
         HttpMethod.Get to "/v1/simulations/s1/report", HttpMethod.Post to "/v1/simulations/s1/report:unlock",

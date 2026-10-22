@@ -19,6 +19,9 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
+import me.santiagoreina.parcheu.api.inMemoryDomains
 import me.santiagoreina.parcheu.api.TASKS_ACCOUNT
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
@@ -65,7 +68,8 @@ class ModesDbTest : FunSpec({
 
     fun container(db: Database): AppContainer {
         val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, TEST_LEGAL_VERSION)
-        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identity, allDomains(identity))
+        val profile = ProfileService(identity, ExposedProfileRepository(db), FIXED_CLOCK)
+        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identity, profile, domains = inMemoryDomains(identity, profile))
     }
 
     suspend fun HttpClient.onboard(uid: String): UUID {

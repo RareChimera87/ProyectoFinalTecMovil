@@ -32,6 +32,7 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.inMemoryDomains
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
@@ -80,7 +81,7 @@ class IdentityDbTest : FunSpec({
     fun container(db: Database, version: String): AppContainer {
         val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, version)
         val profile = ProfileService(identity, ExposedProfileRepository(db), FIXED_CLOCK)
-        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"), identity, profile, domains = testDomains(identity, profile))
+        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"), identity, profile, domains = inMemoryDomains(identity, profile))
     }
 
     suspend fun HttpClient.session(uid: String): SessionDto = post("/v1/session") { auth(uid) }.body()
@@ -245,11 +246,3 @@ class IdentityDbTest : FunSpec({
             }
         }
 })
-
-/** Dominios con el resto de módulos en memoria: estas pruebas solo ejercitan identidad. */
-private fun testDomains(identity: IdentityService, profile: ProfileService): List<DomainRoutes> {
-    val ai = testGateway()
-    val quota = inMemoryQuotaModule(FIXED_CLOCK)
-    val graph = inMemoryGraphModule(FIXED_CLOCK)
-    return allDomains(identity, profile, inMemoryTwinModule(FIXED_CLOCK, ai), quota, graph, inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph))
-}
