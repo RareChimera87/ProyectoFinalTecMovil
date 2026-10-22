@@ -34,7 +34,8 @@ fun MatchFoundRoute(
             when (effect) {
                 is MatchFoundEffect.OpenScenario -> navigator.navigate(ScenarioChat(effect.matchId))
                 is MatchFoundEffect.OpenSimulation -> navigator.navigate(Simulation(effect.matchId))
-                MatchFoundEffect.SearchAgain -> navigator.navigate(MatchQueue())
+                is MatchFoundEffect.SearchAgain ->
+                    navigator.navigateReplacing(MatchQueue(mode = effect.mode), MatchQueue::class)
                 MatchFoundEffect.Close ->
                     if (navigator.canGoBack()) {
                         navigator.back()

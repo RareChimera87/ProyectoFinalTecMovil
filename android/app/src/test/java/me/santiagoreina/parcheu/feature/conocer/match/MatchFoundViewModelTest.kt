@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.contract.MatchStatus
+import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
@@ -124,5 +125,18 @@ class MatchFoundViewModelTest {
             mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
 
         assertTrue(viewModel().loaded().expired)
+    }
+
+    @Test
+    fun searchAgainCarriesTheModeOfTheMatch() = runTest {
+        repository.matchResults = mutableListOf(
+            ApiResult.Success(testMatch(status = MatchStatus.EXPIRED, mode = Mode.ESTUDIO))
+        )
+        val vm = viewModel()
+        vm.effects.test {
+            vm.onSearchAgain()
+
+            assertEquals(MatchFoundEffect.SearchAgain(Mode.ESTUDIO), awaitItem())
+        }
     }
 }

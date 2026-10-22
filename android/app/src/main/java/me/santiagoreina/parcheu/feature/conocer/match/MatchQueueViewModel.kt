@@ -7,7 +7,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -38,6 +40,8 @@ data class MatchLimitSheet(val resetsAt: Instant?)
 
 data class MatchQueueUiState(
     val mode: Mode,
+    /** Modos que el usuario puede elegir (los que tiene activos). */
+    val activeModes: List<Mode> = Mode.entries,
     val phase: QueuePhase = QueuePhase.Searching,
     val limitSheet: MatchLimitSheet? = null
 )
@@ -57,9 +61,21 @@ sealed interface MatchQueueEffect {
  * F1 (E4.4): entra a la fila con `POST /v1/match/queue` y escucha `matchTickets/{uid}`; al pasar a
  * `MATCHED` abre F2. Cambiar de modo cancela la fila y entra a la del modo nuevo (no cobra nada).
  */
-class MatchQueueViewModel(initialMode: Mode?, private val repository: MatchRepository) :
-    ViewModel() {
-    private val _state = MutableStateFlow(MatchQueueUiState(mode = initialMode ?: Mode.AMISTAD))
+class MatchQueueViewModel(
+    initialMode: Mode?,
+    private val repository: MatchRepository,
+    activeModes: List<Mode> = Mode.entries,
+    private val pollIntervalMs: Long = POLL_INTERVAL_MS
+) : ViewModel() {
+    private val _state = MutableStateFlow(
+        MatchQueueUiState(
+            mode = initialMode
+                ?: repository.lastMode?.takeIf { it in activeModes }
+                ?: activeModes.firstOrNull()
+                ?: Mode.AMISTAD,
+            activeModes = activeModes
+        )
+    )
     val state: StateFlow<MatchQueueUiState> = _state.asStateFlow()
 
     private val _effects = Channel<MatchQueueEffect>(Channel.BUFFERED)
@@ -70,6 +86,11 @@ class MatchQueueViewModel(initialMode: Mode?, private val repository: MatchRepos
 
     init {
         search(cancelPrevious = false)
+    }
+
+    companion object {
+        /** Cada cuánto se consulta `GET /v1/match/queue` si el listener de Firestore falla. */
+        const val POLL_INTERVAL_MS = 10_000L
     }
 
     fun onModeSelected(mode: Mode) {
@@ -109,19 +130,52 @@ class MatchQueueViewModel(initialMode: Mode?, private val repository: MatchRepos
         viewModelScope.launch { _effects.send(MatchQueueEffect.OpenPaywall) }
     }
 
+    /**
+     * Entra a la fila. Si [cancelPrevious] es falso primero reanuda un ticket vivo
+     * (`GET /v1/match/queue`), por ejemplo tras morir la app o perderse la respuesta del POST.
+     */
     private fun search(cancelPrevious: Boolean) {
         searchJob?.cancel()
         opened = false
         _state.update { it.copy(phase = QueuePhase.Searching, limitSheet = null) }
         searchJob = viewModelScope.launch {
-            if (cancelPrevious) repository.cancel()
-            when (val result = repository.enqueue(_state.value.mode)) {
-                is ApiResult.Failure -> onEnqueueFailed(result.error)
-                is ApiResult.Success -> {
-                    onTicket(result.value)
-                    repository.observeTicket().collect { ticket -> ticket?.let { onTicket(it) } }
-                }
+            if (cancelPrevious) {
+                repository.cancel()
+            } else if (resumeLiveTicket()) {
+                return@launch
             }
+            when (val result = repository.enqueue(_state.value.mode)) {
+                is ApiResult.Failure -> {
+                    // 409: ya estás en la fila (la respuesta del POST anterior se perdió).
+                    if (result.error == AppError.Conflict && resumeLiveTicket()) return@launch
+                    onEnqueueFailed(result.error)
+                }
+                is ApiResult.Success -> follow(result.value)
+            }
+        }
+    }
+
+    /** Reanuda el ticket `WAITING` o `MATCHED` del servidor; `true` si había uno. */
+    private suspend fun resumeLiveTicket(): Boolean {
+        val ticket = (repository.currentTicket() as? ApiResult.Success)?.value ?: return false
+        if (ticket.status == TicketStatus.EXPIRED) return false
+        _state.update { it.copy(mode = ticket.mode) }
+        follow(ticket)
+        return true
+    }
+
+    private suspend fun follow(ticket: TicketDto) {
+        onTicket(ticket)
+        repository.observeTicket()
+            .catch { pollTicket() }
+            .collect { latest -> latest?.let { onTicket(it) } }
+    }
+
+    /** Respaldo si el listener falla: consulta el ticket hasta que deje de estar `WAITING`. */
+    private suspend fun pollTicket() {
+        while (_state.value.phase == QueuePhase.Searching) {
+            delay(pollIntervalMs)
+            (repository.currentTicket() as? ApiResult.Success)?.value?.let { onTicket(it) }
         }
     }
 
@@ -134,6 +188,8 @@ class MatchQueueViewModel(initialMode: Mode?, private val repository: MatchRepos
     }
 
     private suspend fun onTicket(ticket: TicketDto) {
+        // Un ticket de otro modo es de una fila anterior (cambio de modo en curso).
+        if (ticket.mode != _state.value.mode) return
         when (ticket.status) {
             TicketStatus.WAITING -> _state.update { it.copy(phase = QueuePhase.Searching) }
             TicketStatus.EXPIRED -> _state.update { it.copy(phase = QueuePhase.Expired) }

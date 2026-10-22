@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.feature.conocer.match
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.flow
 import me.santiagoreina.parcheu.contract.AnonProfile
 import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.contract.MatchDto
@@ -45,6 +46,7 @@ fun testMatch(
 /** Repositorio en memoria: las respuestas y los cambios del ticket se controlan desde la prueba. */
 class FakeMatchRepository : MatchRepository {
     var enqueueResult: ApiResult<TicketDto> = ApiResult.Success(waitingTicket())
+    var currentTicketResult: ApiResult<TicketDto?> = ApiResult.Success(null)
     var cancelResult: ApiResult<Unit> = ApiResult.Success(Unit)
     var matchResults: MutableList<ApiResult<MatchDto>> =
         mutableListOf(ApiResult.Success(testMatch()))
@@ -56,12 +58,21 @@ class FakeMatchRepository : MatchRepository {
     val tickets = MutableSharedFlow<TicketDto?>(replay = 1)
     val enqueued = mutableListOf<Mode>()
     var cancelCalls = 0
+    var currentTicketCalls = 0
+    var failListener = false
+    override var lastMode: Mode? = null
     val chosen = mutableListOf<MatchChoice>()
     var matchCalls = 0
 
     override suspend fun enqueue(mode: Mode): ApiResult<TicketDto> {
         enqueued += mode
+        lastMode = mode
         return enqueueResult
+    }
+
+    override suspend fun currentTicket(): ApiResult<TicketDto?> {
+        currentTicketCalls++
+        return currentTicketResult
     }
 
     override suspend fun cancel(): ApiResult<Unit> {
@@ -69,7 +80,8 @@ class FakeMatchRepository : MatchRepository {
         return cancelResult
     }
 
-    override fun observeTicket(): Flow<TicketDto?> = tickets
+    override fun observeTicket(): Flow<TicketDto?> =
+        if (failListener) flow { throw IllegalStateException("PERMISSION_DENIED") } else tickets
 
     override suspend fun match(id: String): ApiResult<MatchDto> {
         matchCalls++

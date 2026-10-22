@@ -156,4 +156,110 @@ class MatchQueueViewModelTest {
             viewModel(Mode.PAREJA).state.value.phase
         )
     }
+
+    @Test
+    fun resumesLiveWaitingTicketWithoutPosting() {
+        repository.currentTicketResult = ApiResult.Success(waitingTicket(Mode.ESTUDIO))
+
+        val vm = viewModel(Mode.AMISTAD)
+
+        assertTrue(repository.enqueued.isEmpty())
+        assertEquals(Mode.ESTUDIO, vm.state.value.mode)
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+    }
+
+    @Test
+    fun resumesMatchedTicketAndOpensF2() = runTest {
+        repository.currentTicketResult = ApiResult.Success(matchedTicket("m9"))
+        val vm = viewModel()
+        vm.effects.test {
+            assertEquals(MatchQueueEffect.OpenMatch("m9"), awaitItem())
+            assertTrue(repository.enqueued.isEmpty())
+            assertEquals(QueuePhase.Matched("m9"), vm.state.value.phase)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun conflictOnEnqueueResumesTicketInsteadOfError() {
+        repository.enqueueResult = ApiResult.Failure(AppError.Conflict)
+        val live: ApiResult<TicketDto?> = ApiResult.Success(waitingTicket())
+        // Primer GET (antes del POST): nada; tras el 409: el ticket vivo.
+        val vm = MatchQueueViewModel(
+            Mode.AMISTAD,
+            object : MatchRepository by repository {
+                var calls = 0
+                override suspend fun currentTicket(): ApiResult<TicketDto?> =
+                    if (calls++ == 0) ApiResult.Success(null) else live
+            }
+        )
+
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+    }
+
+    @Test
+    fun conflictWithoutLiveTicketStillShowsError() {
+        repository.enqueueResult = ApiResult.Failure(AppError.Conflict)
+
+        assertEquals(QueuePhase.Error(AppError.Conflict), viewModel().state.value.phase)
+    }
+
+    @Test
+    fun expiredTicketOnStartEnqueuesAgain() {
+        repository.currentTicketResult =
+            ApiResult.Success(TicketDto(TicketStatus.EXPIRED, Mode.AMISTAD, TEST_EXPIRES))
+
+        viewModel()
+
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
+    }
+
+    @Test
+    fun errorPhaseLetsUserSwitchModeAndRetry() {
+        repository.enqueueResult = ApiResult.Failure(AppError.Underage)
+        val vm = viewModel(Mode.PAREJA)
+        assertTrue(vm.state.value.phase is QueuePhase.Error)
+
+        repository.enqueueResult = ApiResult.Success(waitingTicket(Mode.AMISTAD))
+        vm.onModeSelected(Mode.AMISTAD)
+
+        assertEquals(listOf(Mode.PAREJA, Mode.AMISTAD), repository.enqueued)
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+    }
+
+    @Test
+    fun defaultModeIsLastUsedThenFirstActive() {
+        repository.lastMode = Mode.PAREJA
+        assertEquals(Mode.PAREJA, viewModel(null).state.value.mode)
+
+        repository.lastMode = Mode.PAREJA
+        val vm = MatchQueueViewModel(null, repository, activeModes = listOf(Mode.ESTUDIO))
+        assertEquals(Mode.ESTUDIO, vm.state.value.mode)
+        assertEquals(listOf(Mode.ESTUDIO), vm.state.value.activeModes)
+    }
+
+    @Test
+    fun ignoresTicketOfAnotherMode() = runTest {
+        val vm = viewModel(Mode.ESTUDIO)
+        vm.effects.test {
+            repository.tickets.emit(matchedTicket("old", Mode.AMISTAD))
+
+            expectNoEvents()
+            assertEquals(QueuePhase.Searching, vm.state.value.phase)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun listenerFailureFallsBackToPollingTheTicket() = runTest {
+        repository.failListener = true
+        val vm = MatchQueueViewModel(Mode.AMISTAD, repository, pollIntervalMs = 100)
+        vm.effects.test {
+            repository.currentTicketResult = ApiResult.Success(matchedTicket("m5"))
+            mainRule.dispatcher.scheduler.advanceTimeBy(150)
+
+            assertEquals(MatchQueueEffect.OpenMatch("m5"), awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

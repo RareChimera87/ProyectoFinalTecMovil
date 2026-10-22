@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.navigation
 
 import androidx.navigation.NavHostController
+import kotlin.reflect.KClass
 
 /**
  * Lo que una pantalla puede pedirle a la navegación. Cada `XRoute` recibe uno; así las features no
@@ -9,6 +10,12 @@ import androidx.navigation.NavHostController
 interface AppNavigator {
     /** Abre [route] encima de la pantalla actual. */
     fun navigate(route: AppRoute)
+
+    /**
+     * Abre [route] quitando antes [replacing] de la pila (con todo lo que tenga encima), si estaba.
+     * Evita apilar una segunda copia de una pantalla que ya existe.
+     */
+    fun navigateReplacing(route: AppRoute, replacing: KClass<out AppRoute>)
 
     /** Cambia de pestaña de la NavBar conservando el estado de cada raíz. */
     fun navigateToTopLevel(route: AppRoute)
@@ -26,6 +33,13 @@ interface AppNavigator {
 class NavControllerNavigator(private val navController: NavHostController) : AppNavigator {
     override fun navigate(route: AppRoute) {
         navController.navigate(route)
+    }
+
+    override fun navigateReplacing(route: AppRoute, replacing: KClass<out AppRoute>) {
+        navController.navigate(route) {
+            popUpTo(replacing) { inclusive = true }
+            launchSingleTop = true
+        }
     }
 
     override fun navigateToTopLevel(route: AppRoute) {

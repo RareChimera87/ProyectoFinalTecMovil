@@ -16,6 +16,10 @@ interface MatchApi {
     @POST("v1/match/queue")
     suspend fun enqueue(@Body body: Enqueue): TicketDto
 
+    /** Ticket vigente del usuario; 404 si no está en la fila. */
+    @GET("v1/match/queue")
+    suspend fun ticket(): TicketDto
+
     /** Sale de la fila (204). Cancelar antes del match no cobra nada. */
     @DELETE("v1/match/queue")
     suspend fun cancel()

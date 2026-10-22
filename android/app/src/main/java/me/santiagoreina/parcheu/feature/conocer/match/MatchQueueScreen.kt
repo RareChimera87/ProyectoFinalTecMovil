@@ -68,7 +68,9 @@ fun MatchQueueScreen(
             onNavigationClick = onCancel
         )
         when (val phase = state.phase) {
-            is QueuePhase.Error ->
+            is QueuePhase.Error -> {
+                // El selector sigue visible: un error de edad o de modo se arregla cambiando de modo.
+                ModeSelector(state, onModeSelected, Modifier.padding(horizontal = 16.dp))
                 ErrorState(
                     title = MatchStrings.QUEUE_TITLE,
                     message = MatchStrings.errorMessage(phase.error),
@@ -76,6 +78,7 @@ fun MatchQueueScreen(
                     onRetryClick = onRetry,
                     modifier = Modifier.testTag(MatchQueueTags.RETRY)
                 )
+            }
             QueuePhase.Expired ->
                 ErrorState(
                     title = MatchStrings.EXPIRED_TITLE,
@@ -102,19 +105,13 @@ private fun QueueBody(
     animate: Boolean
 ) {
     val colors = ParcheUTheme.colors
-    val modes = Mode.entries
     val matched = state.phase is QueuePhase.Matched
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ModeSegmentedControl(
-                segments = modes.map { ModeSegment(MatchStrings.modeName(it), it.colors()) },
-                selectedIndex = modes.indexOf(state.mode),
-                onSelect = { onModeSelected(modes[it]) },
-                modifier = Modifier.fillMaxWidth()
-            )
+            ModeSelector(state, onModeSelected)
             Spacer(Modifier.height(40.dp))
             TwinMascot(
                 size = TwinMascotSize.XL,
@@ -178,6 +175,23 @@ private fun QueueBody(
             }
         }
     }
+}
+
+/** Selector de modo con los modos activos del usuario. */
+@Composable
+private fun ModeSelector(
+    state: MatchQueueUiState,
+    onModeSelected: (Mode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val modes = state.activeModes
+    if (modes.size < 2) return
+    ModeSegmentedControl(
+        segments = modes.map { ModeSegment(MatchStrings.modeName(it), it.colors()) },
+        selectedIndex = modes.indexOf(state.mode).coerceAtLeast(0),
+        onSelect = { onModeSelected(modes[it]) },
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 /** Contenido de la hoja de límite de match diario; se expone aparte para capturarlo sin ventana. */

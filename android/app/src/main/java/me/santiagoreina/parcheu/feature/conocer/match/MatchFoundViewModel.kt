@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.contract.MatchDto
 import me.santiagoreina.parcheu.contract.MatchStatus
+import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 
@@ -48,7 +49,8 @@ sealed interface MatchFoundEffect {
     data class OpenSimulation(val matchId: String) : MatchFoundEffect
 
     /** Vuelve a F1 para buscar de nuevo. */
-    data object SearchAgain : MatchFoundEffect
+    /** Vuelve a F1 con el modo del match que venció. */
+    data class SearchAgain(val mode: Mode) : MatchFoundEffect
 
     data object Close : MatchFoundEffect
 }
@@ -110,7 +112,8 @@ class MatchFoundViewModel(
     }
 
     fun onSearchAgain() {
-        viewModelScope.launch { _effects.send(MatchFoundEffect.SearchAgain) }
+        val loaded = _state.value as? MatchFoundUiState.Loaded ?: return
+        viewModelScope.launch { _effects.send(MatchFoundEffect.SearchAgain(loaded.match.mode)) }
     }
 
     fun onClose() {

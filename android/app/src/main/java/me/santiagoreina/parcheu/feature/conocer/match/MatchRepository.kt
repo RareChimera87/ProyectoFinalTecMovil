@@ -15,6 +15,7 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.TicketDto
 import me.santiagoreina.parcheu.contract.TicketStatus
 import me.santiagoreina.parcheu.core.error.ApiErrorMapper
+import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.core.network.apiCall
 
@@ -22,12 +23,19 @@ import me.santiagoreina.parcheu.core.network.apiCall
 interface MatchRepository {
     suspend fun enqueue(mode: Mode): ApiResult<TicketDto>
 
+    /** `GET /v1/match/queue`: ticket vigente o `null` si el usuario no está en la fila (404). */
+    suspend fun currentTicket(): ApiResult<TicketDto?>
+
+    /** Último modo con el que el usuario entró a la fila en esta sesión, para preseleccionarlo. */
+    var lastMode: Mode?
+
     /** `DELETE /v1/match/queue`. */
     suspend fun cancel(): ApiResult<Unit>
 
     /**
      * Escucha `matchTickets/{uid}` (solo lectura, ADR-0004). Emite `null` si el documento no existe
-     * (el ticket se borró al cancelar).
+     * (el ticket se borró al cancelar). Ignora las lecturas de la caché local y termina con
+     * error si el listener falla (permisos, token vencido).
      */
     fun observeTicket(): Flow<TicketDto?>
 
@@ -41,7 +49,19 @@ class MatchRepositoryImpl(
     private val mapper: ApiErrorMapper,
     private val tickets: MatchTicketSource
 ) : MatchRepository {
-    override suspend fun enqueue(mode: Mode) = apiCall(mapper) { api.enqueue(Enqueue(mode)) }
+    override var lastMode: Mode? = null
+
+    override suspend fun enqueue(mode: Mode): ApiResult<TicketDto> {
+        lastMode = mode
+        return apiCall(mapper) { api.enqueue(Enqueue(mode)) }
+    }
+
+    override suspend fun currentTicket(): ApiResult<TicketDto?> =
+        when (val result = apiCall(mapper) { api.ticket() }) {
+            is ApiResult.Success -> ApiResult.Success(result.value)
+            is ApiResult.Failure ->
+                if (result.error == AppError.NotFound) ApiResult.Success(null) else result
+        }
 
     override suspend fun cancel() = apiCall(mapper) { api.cancel() }
 
@@ -87,8 +107,12 @@ class FirestoreMatchTicketSource(
         }
         val registration = firestore.collection("matchTickets").document(uid)
             .addSnapshotListener { snapshot, error ->
-                // Un error de permisos o de red no cierra el flujo: la UI sigue con el último estado.
-                if (error == null && snapshot != null) {
+                if (error != null) {
+                    // Tras un error Firestore no entrega más eventos: se cierra el flujo para que
+                    // quien escucha lo sepa y recurra a GET /v1/match/queue.
+                    close(error)
+                } else if (snapshot != null && !snapshot.metadata.isFromCache) {
+                    // Una lectura de la caché puede traer un ticket MATCHED de un match anterior.
                     trySend(snapshot.data?.let(::ticketFromFields))
                 }
             }
