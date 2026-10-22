@@ -1,0 +1,262 @@
+name: android-release
+
+# E10.2. Construye el AAB `prod` firmado con la llave de subida y lo sube a Play con Gradle Play
+# Publisher 4.1.1 (compatible con AGP 9; plan B no necesario). La PRIMERA subida de la app fue manual
+# desde la consola (E7.0, Play lo exige); este workflow hace todas las siguientes.
+#
+# Disparadores:
+#   - A mano (Actions → android-release → Run workflow, o `gh workflow run android-release --ref <rama>`):
+#     pista interna por defecto (también admite la cerrada, `alpha`).
+#   - Después de `deploy-prod` (tag v*): cuando la corrida del tag termina bien, sube a la pista cerrada
+#     (`alpha`) con versionName = tag sin la v. `workflow_run` solo se activa con la copia de este archivo
+#     en la rama por defecto (main), que es donde viven los tags.
+#   - En PR que tocan este workflow o scripts/version-code*: solo las pruebas (sin firmar ni subir).
+#
+# versionCode = scripts/version-code.sh (número de ejecución y reintento): estrictamente creciente.
+# Secretos (nunca en el repo): UPLOAD_KEYSTORE (base64), UPLOAD_KEYSTORE_PASSWORD, UPLOAD_KEY_ALIAS,
+# UPLOAD_KEY_PASSWORD, PLAY_SERVICE_ACCOUNT_JSON y, si existe, GOOGLE_SERVICES_JSON_PROD (base64).
+# Variable opcional UPLOAD_CERT_SHA256: huella esperada del certificado de subida (por defecto, la de
+# docs/play-console.md).
+on:
+  workflow_dispatch:
+    inputs:
+      pista:
+        description: Pista de Play
+        type: choice
+        options: [internal, alpha]
+        default: internal
+      estado:
+        description: Estado de la versión (draft si Play aún trata la app como borrador)
+        type: choice
+        options: [completed, draft]
+        default: completed
+      version_name:
+        description: versionName (vacío = último tag v* + '-int.<ejecución>', o 0.0.1)
+        type: string
+        required: false
+      notas:
+        description: Notas de versión en es-419 (vacío = android/app/src/prod/play/release-notes)
+        type: string
+        required: false
+  workflow_run:
+    workflows: [deploy-prod]
+    types: [completed]
+  pull_request:
+    paths:
+      - '.github/workflows/android-release.yml'
+      - 'scripts/version-code.sh'
+      - 'scripts/test/version-code.test.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  # Nunca se cancela una subida en curso: las corridas se encolan.
+  group: android-release-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'play' }}
+  cancel-in-progress: false
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  # Huella pública del certificado de la llave de subida (CN=ParcheU Upload, docs/play-console.md).
+  UPLOAD_CERT_SHA256_DEFECTO: 7F:51:20:F3:06:45:12:A5:B4:A5:6C:0D:44:E1:67:2B:18:A4:BA:1F:EA:CB:62:1F:B5:E3:A2:AE:FF:8F:03:D3
+
+jobs:
+  pruebas:
+    name: android-release-pruebas
+    # Tras deploy-prod solo sigue si la corrida del tag terminó bien.
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+      - name: Pruebas de versionCode (estrictamente creciente)
+        run: scripts/test/version-code.test.sh
+      - name: gitleaks (ningún keystore ni contraseña en el repo)
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tgz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --exit-code 1 .
+          # Ningún keystore versionado, aunque no tenga forma de secreto para gitleaks.
+          if git ls-files | grep -Ei '\.(jks|keystore|p12)$'; then
+            echo "::error::Hay un keystore versionado."
+            exit 1
+          fi
+
+  publicar:
+    name: android-release
+    needs: pruebas
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+
+      - name: Parámetros de la versión
+        id: p
+        env:
+          EVENTO: ${{ github.event_name }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+          PISTA: ${{ inputs.pista }}
+          ESTADO: ${{ inputs.estado }}
+          VERSION_NAME: ${{ inputs.version_name }}
+          NOTAS: ${{ inputs.notas }}
+        run: |
+          codigo="$(scripts/version-code.sh "$GITHUB_RUN_NUMBER" "$GITHUB_RUN_ATTEMPT")"
+          if [[ "$EVENTO" == workflow_run ]]; then
+            [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Tag inválido: $TAG"; exit 1; }
+            nombre="${TAG#v}"; pista=alpha; estado=completed
+          else
+            pista="$PISTA"; estado="$ESTADO"
+            if [[ -n "$VERSION_NAME" ]]; then
+              nombre="$VERSION_NAME"
+            else
+              ultimo="$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || echo v0.0.1)"
+              nombre="${ultimo#v}-int.${GITHUB_RUN_NUMBER}"
+            fi
+          fi
+          [[ "$nombre" =~ ^[0-9A-Za-z.+-]{1,50}$ ]] || { echo "::error::versionName inválido: $nombre"; exit 1; }
+          [[ "$pista" =~ ^(internal|alpha)$ ]] || { echo "::error::Pista inválida: $pista"; exit 1; }
+          [[ "$estado" =~ ^(completed|draft)$ ]] || { echo "::error::Estado inválido: $estado"; exit 1; }
+          if [[ -n "$NOTAS" ]]; then
+            if (( ${#NOTAS} > 500 )); then echo "::error::Las notas superan 500 caracteres (límite de Play)."; exit 1; fi
+            printf '%s\n' "$NOTAS" > android/app/src/prod/play/release-notes/es-419/default.txt
+          fi
+          {
+            echo "version_code=$codigo"
+            echo "version_name=$nombre"
+            echo "pista=$pista"
+            echo "estado=$estado"
+          } >> "$GITHUB_OUTPUT"
+          echo "versionCode=$codigo versionName=$nombre pista=$pista estado=$estado"
+
+      - name: Secretos requeridos
+        env:
+          UPLOAD_KEYSTORE: ${{ secrets.UPLOAD_KEYSTORE }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          faltan=()
+          for s in UPLOAD_KEYSTORE UPLOAD_KEYSTORE_PASSWORD UPLOAD_KEY_ALIAS UPLOAD_KEY_PASSWORD PLAY_SERVICE_ACCOUNT_JSON; do
+            [[ -n "${!s}" ]] || faltan+=("$s")
+          done
+          if (( ${#faltan[@]} > 0 )); then
+            echo "::error::Faltan secretos: ${faltan[*]} (ver docs/pendientes-humanos.md, E10.2)."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # 21 para el contrato y el daemon; 17 es el toolchain de la app (queda como JAVA_HOME).
+          java-version: |
+            21
+            17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          # La caché de un build firmado no se comparte con otros workflows.
+          cache-read-only: true
+
+      - name: google-services.json de prod (secreto, nunca versionado)
+        env:
+          GOOGLE_SERVICES_JSON_PROD: ${{ secrets.GOOGLE_SERVICES_JSON_PROD }}
+        run: |
+          if [[ -n "$GOOGLE_SERVICES_JSON_PROD" ]]; then
+            mkdir -p android/app/src/prod
+            base64 -d <<<"$GOOGLE_SERVICES_JSON_PROD" > android/app/src/prod/google-services.json
+          else
+            echo "::notice::Sin GOOGLE_SERVICES_JSON_PROD: el AAB sale sin Firebase (la 0.1 no lo usa)."
+          fi
+
+      - name: Llave de subida (fuera del repo, en RUNNER_TEMP)
+        env:
+          UPLOAD_KEYSTORE: ${{ secrets.UPLOAD_KEYSTORE }}
+        run: |
+          umask 077
+          base64 -d <<<"$UPLOAD_KEYSTORE" > "$RUNNER_TEMP/upload-keystore.jks"
+          echo "UPLOAD_KEYSTORE_FILE=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_ENV"
+
+      - name: Construir el AAB prod firmado
+        working-directory: android
+        env:
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          VERSION_CODE: ${{ steps.p.outputs.version_code }}
+          VERSION_NAME: ${{ steps.p.outputs.version_name }}
+        run: >-
+          ./gradlew --stacktrace :app:bundleProdRelease
+          -Pparcheu.versionCode="$VERSION_CODE"
+          -Pparcheu.versionName="$VERSION_NAME"
+          -Pparcheu.release.requireUploadKey=true
+
+      - name: Verificar la firma (llave de subida, nunca la de debug)
+        env:
+          ESPERADA: ${{ vars.UPLOAD_CERT_SHA256 || env.UPLOAD_CERT_SHA256_DEFECTO }}
+        run: |
+          aab=android/app/build/outputs/bundle/prodRelease/app-prod-release.aab
+          huella="$(keytool -printcert -jarfile "$aab" | awk '/SHA256:/ {print $2; exit}')"
+          echo "Huella del certificado: $huella"
+          if [[ "${huella^^}" != "${ESPERADA^^}" ]]; then
+            echo "::error::El AAB no está firmado con la llave de subida esperada ($ESPERADA)."
+            exit 1
+          fi
+
+      - name: Guardar el AAB y el mapping de R8
+        uses: actions/upload-artifact@v4
+        with:
+          name: parcheu-${{ steps.p.outputs.version_name }}-${{ steps.p.outputs.version_code }}
+          path: |
+            android/app/build/outputs/bundle/prodRelease/app-prod-release.aab
+            android/app/build/outputs/mapping/prodRelease/mapping.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Subir a Play (Gradle Play Publisher)
+        working-directory: android
+        env:
+          ANDROID_PUBLISHER_CREDENTIALS: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          VERSION_CODE: ${{ steps.p.outputs.version_code }}
+          VERSION_NAME: ${{ steps.p.outputs.version_name }}
+          PISTA: ${{ steps.p.outputs.pista }}
+          ESTADO: ${{ steps.p.outputs.estado }}
+        run: >-
+          ./gradlew --stacktrace :app:publishProdReleaseBundle
+          -Pparcheu.versionCode="$VERSION_CODE"
+          -Pparcheu.versionName="$VERSION_NAME"
+          -Pparcheu.release.requireUploadKey=true
+          --artifact-dir app/build/outputs/bundle/prodRelease
+          --track "$PISTA"
+          --release-status "$ESTADO"
+          --release-name "$VERSION_NAME ($VERSION_CODE)"
+
+      - name: Resumen
+        env:
+          VERSION_CODE: ${{ steps.p.outputs.version_code }}
+          VERSION_NAME: ${{ steps.p.outputs.version_name }}
+          PISTA: ${{ steps.p.outputs.pista }}
+          ESTADO: ${{ steps.p.outputs.estado }}
+        run: |
+          {
+            echo "### AAB subido a Play"
+            echo "| versionName | versionCode | Pista | Estado |"
+            echo "|---|---|---|---|"
+            echo "| $VERSION_NAME | $VERSION_CODE | $PISTA | $ESTADO |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Borrar la llave de subida
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload-keystore.jks" android/app/src/prod/google-services.json
