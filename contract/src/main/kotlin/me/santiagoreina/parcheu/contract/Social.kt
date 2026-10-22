@@ -107,10 +107,16 @@ public data class Introduce(
     val userB: String,
 )
 
-/** POST/GET /v1/introductions[/{id}]; `myResponse` nulo = sin responder. */
+/**
+ * POST/GET /v1/introductions[/{id}]; `myResponse` nulo = sin responder. `introducer` es quien
+ * presenta y `other` la persona propuesta al usuario (E3); ambos permiten Reportar o bloquear (E8.1).
+ */
 @Serializable
 public data class IntroductionDto(
     val id: String,
+    val mode: Mode,
+    val introducer: PersonRef,
+    val other: PersonRef,
     val status: IntroductionStatus,
     val simulationId: String? = null,
     val report: ReportDto? = null,

@@ -4,11 +4,9 @@
   "mode": "AMISTAD",
   "messages": [
     {
-      "id": "m-01",
-      "senderId": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
-      "text": "¿Nos vemos mañana en la biblioteca?",
-      "createdAt": "2026-10-23T15:30:00Z",
-      "hidden": false
+      "id": "m-02",
+      "text": "Nos vemos en la biblioteca a las 3",
+      "createdAt": "2026-10-23T15:31:00Z"
     }
   ]
 }

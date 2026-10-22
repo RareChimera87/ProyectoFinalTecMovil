@@ -22,13 +22,18 @@ public data class QuotaDto(
     val plus: Boolean,
 )
 
-/** Sugerencia de persona para simular en Inicio. */
+/**
+ * Sugerencia de persona para simular en Inicio. `mutualCount` (amigos en común) es dato
+ * premium: se omite (null) para usuarios gratis. `reason` es texto libre sin conteos ni
+ * datos premium.
+ */
 @Serializable
 public data class Suggestion(
     val other: PersonRef,
     val mode: Mode,
     val estimatedAffinity: Int? = null,
     val reason: String? = null,
+    val mutualCount: Int? = null,
 )
 
 /** GET /v1/home */

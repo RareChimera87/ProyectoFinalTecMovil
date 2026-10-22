@@ -7,5 +7,6 @@
   },
   "mode": "ESTUDIO",
   "estimatedAffinity": 74,
-  "reason": "Comparten 3 amigos"
+  "reason": "Estudian en la misma universidad",
+  "mutualCount": 3
 }

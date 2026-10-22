@@ -53,13 +53,30 @@ public data class BlockedDto(
     val blockedAt: Instant,
 )
 
-/** Chat con sus mensajes dentro de la exportación. */
+/** Mensaje propio dentro de la exportación; sin `senderId` ni textos de terceros (E8.3). */
+@Serializable
+public data class ExportMessage(
+    val id: String,
+    val text: String,
+    val createdAt: Instant,
+)
+
+/** Chat dentro de la exportación: solo los mensajes propios del usuario, nunca los de terceros. */
 @Serializable
 public data class ExportChat(
     val id: String,
     val type: ChatType,
     val mode: Mode,
-    val messages: List<MessageDto> = emptyList(),
+    val messages: List<ExportMessage> = emptyList(),
+)
+
+/** Conexión dentro de la exportación; sin ids internos de la otra persona. */
+@Serializable
+public data class ExportConnection(
+    val label: String,
+    val mode: Mode,
+    val state: EdgeState,
+    val connectedAt: Instant? = null,
 )
 
 /** GET /v1/me/export: copia completa de los datos del usuario (E8.3). */
@@ -72,6 +89,7 @@ public data class ExportDto(
     val twinAnswers: List<Answer> = emptyList(),
     val memories: List<MemoryDto> = emptyList(),
     val simulations: List<SimulationSummary> = emptyList(),
+    val connections: List<ExportConnection> = emptyList(),
     val chats: List<ExportChat> = emptyList(),
     val notifications: List<NotificationDto> = emptyList(),
     val blocks: List<BlockedDto> = emptyList(),

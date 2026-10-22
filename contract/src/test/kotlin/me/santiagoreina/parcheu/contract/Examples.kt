@@ -107,6 +107,8 @@ object Examples {
         "HelpResource" to HelpResource.serializer(),
         "ReportCreated" to ReportCreated.serializer(),
         "BlockedDto" to BlockedDto.serializer(),
+        "ExportMessage" to ExportMessage.serializer(),
+        "ExportConnection" to ExportConnection.serializer(),
         "ExportChat" to ExportChat.serializer(),
         "ExportDto" to ExportDto.serializer(),
         // Admin

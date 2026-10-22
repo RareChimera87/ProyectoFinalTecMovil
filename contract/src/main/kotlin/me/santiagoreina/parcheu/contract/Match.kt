@@ -33,9 +33,13 @@ public data class TicketDto(
     val matchId: String? = null,
 )
 
-/** Perfil anónimo del match; sin nombre, foto, carrera ni id interno. `ageRange`: 18-19, 20-22, 23-25 o 26+. */
+/**
+ * Perfil anónimo del match; sin nombre, foto, carrera ni id interno. `anonId` es el seudónimo
+ * estable que el cliente manda a `ReportRequest.anonId` (Reportar o bloquear desde F2, E8.1).
+ * `ageRange`: 18-19, 20-22, 23-25 o 26+. */
 @Serializable
 public data class AnonProfile(
+    val anonId: String,
     val label: String,
     val ageRange: String,
     val university: String? = null,
