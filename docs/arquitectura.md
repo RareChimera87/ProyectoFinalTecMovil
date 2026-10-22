@@ -711,7 +711,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Credential Manager (`credentials`, `credentials-play-services-auth`) | 1.6.0 (fijada en E0.7) | Login |
 | googleid | 1.1.1 (fijada en E0.7; 1.2.x está compilada con Kotlin 2.4) | Login |
 | Firebase BoM (auth, firestore, messaging, crashlytics) + plugin `google-services` | BoM 34.19.0; plugin 4.5.0 (fijadas en E0.7; la BoM 35 trae firebase-auth 25, compilada con Kotlin 2.4) | Firebase |
-| Play Billing (`billing-ktx`) | 8.3.0 (fijada en E0.7, la agrega E7.0; existe 9.x, cambiar solo si Play lo exige) | Suscripciones |
+| Play Billing (`billing-ktx`) | 8.3.0 (fijada en E0.7, agregada en E7.0; compilada con Kotlin 2.2.10; existe 9.x, cambiar solo si Play lo exige) | Suscripciones |
 | ZXing core | 3.5.4 (fijada en E0.7) | Generar QR |
 | play-services-code-scanner | 16.1.0 (fijada en E0.7) | Escanear QR |
 | Robolectric | 4.16.1 (fijada en E0.7; `@Config(sdk=[35])`) | Tests JVM |
