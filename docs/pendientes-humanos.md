@@ -103,3 +103,11 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
 
 9. **Después de mezclar E0.8:** quitar el disparador `pull_request` de `firebase-deploy.yml` (su job
    `rules-ci` queda duplicado con el workflow `rules-ci` de E0.6).
+
+## E1.3 · Componentes base
+
+1. **Logo oficial de Google para `GoogleSignInButton`:** descargar el recurso "G" de las pautas de marca de
+   Google Sign-In (developers.google.com/identity/branding-guidelines), agregarlo como vector drawable en
+   `:designsystem` y pasarlo en el parámetro `logo`. Mientras tanto el botón dibuja una "G" provisional.
+2. **Revisión lado a lado (ADR-0022):** I2 compara las capturas de `android/designsystem/src/test/screenshots/components/`
+   con los PNG de los mockups y registra las diferencias aceptadas en el PR.
