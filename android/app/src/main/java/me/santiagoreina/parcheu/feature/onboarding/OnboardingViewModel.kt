@@ -55,6 +55,13 @@ class OnboardingViewModel(private val repository: AuthRepository) : ViewModel() 
     private val _effects = Channel<OnboardingEffect>(Channel.BUFFERED)
     val effects: Flow<OnboardingEffect> = _effects.receiveAsFlow()
 
+    /**
+     * `true` cuando el login de este flujo lo inició la persona en A4 (tocó "Continuar con Google" sin
+     * sesión previa): solo entonces el texto bajo el botón cuenta como aceptación expresa. Una sesión
+     * preexistente con términos nuevos exige siempre la hoja de reconfirmación.
+     */
+    private var signInStartedHere = false
+
     init {
         if (repository.hasSession()) {
             viewModelScope.launch {
@@ -73,9 +80,10 @@ class OnboardingViewModel(private val repository: AuthRepository) : ViewModel() 
         viewModelScope.launch {
             setLogin(LoginState.Loading)
             if (repository.hasSession()) {
-                handleSession(repository.refreshSession(), acceptedNow = true)
+                handleSession(repository.refreshSession(), acceptedNow = signInStartedHere)
                 return@launch
             }
+            signInStartedHere = true
             when (val result = repository.signInWithGoogle(activityContext)) {
                 SignInResult.Cancelled -> setLogin(LoginState.Idle)
                 is SignInResult.Failure -> fail(result.error)

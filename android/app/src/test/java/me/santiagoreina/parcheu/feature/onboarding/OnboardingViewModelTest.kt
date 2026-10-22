@@ -168,6 +168,25 @@ class OnboardingViewModelTest {
     }
 
     @Test
+    fun retryWithPreexistingSessionShowsSheetInsteadOfAcceptingTerms() = runTest {
+        val newVersion = "2026-12-01"
+        val repository =
+            FakeAuthRepository(signedIn = true).apply {
+                nextSessions(
+                    ApiResult.Failure(AppError.Network),
+                    ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, newVersion))
+                )
+            }
+        val viewModel = OnboardingViewModel(repository)
+        assertEquals(LoginState.Error(AppError.Network), viewModel.state.value.login)
+
+        viewModel.onContinueWithGoogle(context)
+
+        assertEquals(LoginState.TermsSheet(newVersion), viewModel.state.value.login)
+        assertEquals(0, repository.calls.count { it.startsWith("terms:") })
+    }
+
+    @Test
     fun decliningTermsSignsOut() = runTest {
         val repository =
             FakeAuthRepository(signedIn = true).apply {

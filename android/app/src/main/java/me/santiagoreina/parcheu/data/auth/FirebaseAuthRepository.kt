@@ -15,6 +15,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseException
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
@@ -78,6 +79,9 @@ class FirebaseAuthRepository(
             return SignInResult.Failure(AppError.Network)
         } catch (e: FirebaseAuthException) {
             return SignInResult.Failure(AppError.Unknown(message = e.errorCode))
+        } catch (e: FirebaseException) {
+            // FirebaseTooManyRequestsException, "internal error" genérico (CONFIGURATION_NOT_FOUND), etc.
+            return SignInResult.Failure(AppError.Unknown(message = e.message))
         }
         return when (val session = refreshSession()) {
             is ApiResult.Success -> SignInResult.Success(session.value)
