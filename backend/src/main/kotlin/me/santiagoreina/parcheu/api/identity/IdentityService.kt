@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.identity
 
+import me.santiagoreina.parcheu.api.identity.consent.LearningConsentPolicy
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Suspended
@@ -28,8 +29,8 @@ import java.time.Instant
  * está al día solo si la última fila de TERMS y de PRIVACY está concedida con esa versión.
  */
 class IdentityService(
-    private val repo: IdentityRepository,
-    private val clock: Clock,
+    internal val repo: IdentityRepository,
+    internal val clock: Clock,
     val legalTextVersion: String,
 ) {
     /** Alta o login idempotente por `firebase_uid`. No exige términos: es la puerta de entrada. */
@@ -97,6 +98,8 @@ class IdentityService(
         if (change.granted && change.textVersion != legalTextVersion) {
             throw ValidationFailed("La versión del texto vigente es $legalTextVersion")
         }
+        // Aprender de los chats de Pareja exige Pareja activo y +18 confirmado (E2.5).
+        LearningConsentPolicy.checkGrant(change.kind, change.granted, user, repo.modes(user.id))
         val current = repo.latestConsents(user.id).firstOrNull { it.kind == change.kind }
         val unchanged = current != null && current.granted == change.granted && current.textVersion == change.textVersion
         if (!unchanged) repo.appendConsents(user.id, listOf(NewConsent(change.kind, change.granted, change.textVersion)), clock.instant())

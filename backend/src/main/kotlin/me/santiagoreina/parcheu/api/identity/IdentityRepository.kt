@@ -1,14 +1,16 @@
 package me.santiagoreina.parcheu.api.identity
 
+import me.santiagoreina.parcheu.api.identity.modes.ModesRepository
 import me.santiagoreina.parcheu.contract.Mode
 import java.time.Instant
 import java.util.UUID
 
 /**
  * Acceso a datos del dominio identity. La implementación real es [ExposedIdentityRepository];
- * los tests de rutas usan una en memoria y los de esquema, Postgres de verdad.
+ * los tests de rutas usan una en memoria y los de esquema, Postgres de verdad. La escritura de modos
+ * (E2.5) viene de [ModesRepository].
  */
-interface IdentityRepository {
+interface IdentityRepository : ModesRepository {
     suspend fun findByFirebaseUid(uid: String): UserRecord?
 
     /** Alta idempotente por `firebase_uid`: dos llamadas (incluso concurrentes) dejan un solo usuario. */
