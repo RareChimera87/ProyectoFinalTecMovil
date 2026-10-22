@@ -6,6 +6,10 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.chat.ChatModule
+import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
+import me.santiagoreina.parcheu.api.safety.SafetyModule
+import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.identity.profile.InMemoryProfileRepository
@@ -68,6 +72,8 @@ fun testContainer(
     clock: Clock = FIXED_CLOCK,
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
+    chat: ChatModule = inMemoryChatModule(clock, graph.policy, notifier),
+    safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
 ): AppContainer {
     val identity = IdentityService(repo, clock, legalTextVersion)
     val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
@@ -85,7 +91,9 @@ fun testContainer(
         simulation = simulation,
         notifier = notifier,
         matching = matching,
-        domains = allDomains(identity, profile, twin, quota, graph, simulation, matching) + extra,
+        chat = chat,
+        safety = safety,
+        domains = allDomains(identity, profile, twin, quota, graph, simulation, matching, chat, safety) + extra,
     )
 }
 
