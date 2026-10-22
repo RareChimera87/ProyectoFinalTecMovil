@@ -58,14 +58,14 @@ fun SimulationsScreen(
     onRandomMatch: () -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize().background(ParcheUTheme.colors.bg)) {
         ParcheUChildTopBar(
             title = "Simulaciones",
             navigationIcon = rememberIcon(SimulationIcons.ArrowBack),
             navigationContentDescription = "Volver",
-            onNavigationClick = onBack
+            onNavigationClick = onBack,
         )
         when (state) {
             SimulationsUiState.Loading ->
@@ -75,7 +75,7 @@ fun SimulationsScreen(
             is SimulationsUiState.Empty -> EmptyContent(
                 state.available,
                 onPickFromParche,
-                onRandomMatch
+                onRandomMatch,
             )
             is SimulationsUiState.Loaded -> ListContent(state, onOpen, onLoadMore)
             is SimulationsUiState.Error -> ErrorContent(state, onRetry)
@@ -89,14 +89,14 @@ private fun EmptyContent(available: Int?, onPickFromParche: () -> Unit, onRandom
     Column(
         Modifier.fillMaxSize().testTag(SimulationsTags.EMPTY).padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
     ) {
         SimulationMascot(colors.primary, 84.dp)
         Text(
             "Aún no tienes simulaciones",
             style = MaterialTheme.typography.headlineSmall,
             color = colors.tx,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         val quota =
             when (available) {
@@ -108,28 +108,24 @@ private fun EmptyContent(available: Int?, onPickFromParche: () -> Unit, onRandom
             "Elige a alguien de tu parche o prueba un match al azar.$quota",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.mu,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         PrimaryButton(
             text = "Elegir de mi parche",
             onClick = onPickFromParche,
             icon = rememberIcon(SimulationIcons.Hub),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
         ParcheUTextButton(text = "Match al azar", onClick = onRandomMatch)
     }
 }
 
 @Composable
-private fun ListContent(
-    state: SimulationsUiState.Loaded,
-    onOpen: (SimulationSummary) -> Unit,
-    onLoadMore: () -> Unit
-) {
+private fun ListContent(state: SimulationsUiState.Loaded, onOpen: (SimulationSummary) -> Unit, onLoadMore: () -> Unit) {
     LazyColumn(
         Modifier.fillMaxSize().testTag(SimulationsTags.LIST),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         items(state.items, key = { it.id }) { item -> SimulationRow(item, onOpen) }
         if (state.nextCursor != null) {
@@ -138,7 +134,7 @@ private fun ListContent(
                     text = if (state.loadingMore) "Cargando…" else "Ver más",
                     onClick = onLoadMore,
                     enabled = !state.loadingMore,
-                    modifier = Modifier.fillMaxWidth().testTag(SimulationsTags.LOAD_MORE)
+                    modifier = Modifier.fillMaxWidth().testTag(SimulationsTags.LOAD_MORE),
                 )
             }
         }
@@ -153,16 +149,16 @@ private fun SimulationRow(item: SimulationSummary, onOpen: (SimulationSummary) -
     }, modifier = Modifier.fillMaxWidth().testTag(SimulationsTags.item(item.id))) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
                 Modifier.size(44.dp).clip(CircleShape).background(colors.forMode(item.mode).solid),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     item.other.initials,
                     style = ParcheUTheme.textStyles.initials,
-                    color = colors.onMode
+                    color = colors.onMode,
                 )
             }
             Column(Modifier.weight(1f)) {
@@ -171,12 +167,12 @@ private fun SimulationRow(item: SimulationSummary, onOpen: (SimulationSummary) -
                     style = MaterialTheme.typography.titleSmall,
                     color = colors.tx,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     "${item.mode.label()} · ${statusText(item)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = colors.mu
+                    color = colors.mu,
                 )
             }
         }
@@ -187,7 +183,8 @@ private fun statusText(item: SimulationSummary): String = when (item.status) {
     SimulationStatus.DONE -> item.score?.let { "Resultado $it %" } ?: "Lista"
     SimulationStatus.FAILED -> "No se completó"
     SimulationStatus.QUEUED,
-    SimulationStatus.RUNNING -> "En curso"
+    SimulationStatus.RUNNING,
+    -> "En curso"
 }
 
 @Composable
@@ -196,19 +193,19 @@ private fun ErrorContent(state: SimulationsUiState.Error, onRetry: () -> Unit) {
     Column(
         Modifier.fillMaxSize().testTag(SimulationsTags.ERROR).padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
     ) {
         Text(
             "No pudimos cargar tus simulaciones",
             style = MaterialTheme.typography.headlineSmall,
             color = colors.tx,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         Text(
             errorMessage(state.error),
             style = MaterialTheme.typography.bodyMedium,
             color = colors.mu,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         PrimaryButton(text = "Reintentar", onClick = onRetry, modifier = Modifier.fillMaxWidth())
     }

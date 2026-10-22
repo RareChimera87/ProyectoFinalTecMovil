@@ -20,7 +20,7 @@ fun summary(
     refunded: Boolean = false,
     otherId: String? = "user-2",
     score: Int? = null,
-    mode: Mode = Mode.ESTUDIO
+    mode: Mode = Mode.ESTUDIO,
 ) = SimulationSummary(
     id = id,
     status = status,
@@ -28,15 +28,11 @@ fun summary(
     other = PersonRef(id = otherId, label = "Laura", initials = "LP"),
     createdAt = Instant.parse("2026-11-03T15:00:00Z"),
     score = score,
-    refunded = refunded
+    refunded = refunded,
 )
 
-fun snapshot(
-    status: SimulationStatus = SimulationStatus.RUNNING,
-    scenarioIndex: Int = 0,
-    turn: Int = 0,
-    of: Int = 5
-) = SimulationSnapshot(status, Progress(scenarioIndex, turn, of), score = null)
+fun snapshot(status: SimulationStatus = SimulationStatus.RUNNING, scenarioIndex: Int = 0, turn: Int = 0, of: Int = 5) =
+    SimulationSnapshot(status, Progress(scenarioIndex, turn, of), score = null)
 
 /** Repositorio de simulaciones en memoria que cuenta las llamadas a la API. */
 class FakeSimulationRepository : SimulationRepository {

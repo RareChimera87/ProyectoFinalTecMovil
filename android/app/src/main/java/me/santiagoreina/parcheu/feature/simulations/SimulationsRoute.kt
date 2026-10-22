@@ -19,7 +19,7 @@ fun SimulationsRoute(
     route: Simulations,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: SimulationsViewModel = koinViewModel()
+    viewModel: SimulationsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     SimulationsScreen(
@@ -28,13 +28,13 @@ fun SimulationsRoute(
         onOpen = { item ->
             // Lista o en curso/fallida: DONE abre resultados; el resto, la pantalla de simulación (F4/F5).
             navigator.navigate(
-                if (item.status == SimulationStatus.DONE) Results(item.id) else Simulation(item.id)
+                if (item.status == SimulationStatus.DONE) Results(item.id) else Simulation(item.id),
             )
         },
         onPickFromParche = { navigator.navigate(Parche()) },
         onRandomMatch = { navigator.navigate(MatchQueue()) },
         onLoadMore = viewModel::loadMore,
         onRetry = viewModel::load,
-        modifier = modifier
+        modifier = modifier,
     )
 }

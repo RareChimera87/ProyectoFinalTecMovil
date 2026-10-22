@@ -28,10 +28,8 @@ interface SimulationRepository {
     suspend fun quota(): ApiResult<QuotaDto>
 }
 
-class RemoteSimulationRepository(
-    private val api: SimulationApi,
-    private val mapper: ApiErrorMapper
-) : SimulationRepository {
+class RemoteSimulationRepository(private val api: SimulationApi, private val mapper: ApiErrorMapper) :
+    SimulationRepository {
     override suspend fun get(id: String) = apiCall(mapper) { api.simulation(id) }
 
     override suspend fun list(cursor: String?) = apiCall(mapper) { api.simulations(cursor) }
@@ -46,8 +44,7 @@ class RemoteSimulationRepository(
 data class SimulationSnapshot(val status: SimulationStatus, val progress: Progress, val score: Int?)
 
 /** Convierte la respuesta REST al mismo formato que entrega el canal en vivo. */
-fun SimulationDto.toSnapshot() =
-    SimulationSnapshot(summary.status, progress, score ?: summary.score)
+fun SimulationDto.toSnapshot() = SimulationSnapshot(summary.status, progress, score ?: summary.score)
 
 /**
  * Canal en vivo de `simulations/{id}` (ADR-0004). Cada colección emite el estado actual al suscribirse, así

@@ -42,20 +42,19 @@ class SimulationScreenshotTest(private val dark: Boolean) {
             filePath = "src/test/screenshots/simulation/${name}_$theme.png",
             roborazziOptions =
             RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
-            )
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
+            ),
         )
     }
 
     private val laura = Participants("Laura", Mode.ESTUDIO, isDemo = false)
 
-    private fun running(percent: Int, current: Int, steps: List<StepState>) =
-        SimulationUiState.Running(
-            participants = laura,
-            steps = steps.mapIndexed { index, state -> ScenarioStep(index + 1, state) },
-            currentScenario = current,
-            percent = percent
-        )
+    private fun running(percent: Int, current: Int, steps: List<StepState>) = SimulationUiState.Running(
+        participants = laura,
+        steps = steps.mapIndexed { index, state -> ScenarioStep(index + 1, state) },
+        currentScenario = current,
+        percent = percent,
+    )
 
     @Composable
     private fun F4(state: SimulationUiState) = SimulationScreen(
@@ -64,7 +63,7 @@ class SimulationScreenshotTest(private val dark: Boolean) {
         onReload = {},
         onRetry = {},
         onHome = {},
-        animate = false
+        animate = false,
     )
 
     @Composable
@@ -76,7 +75,7 @@ class SimulationScreenshotTest(private val dark: Boolean) {
         onPickFromParche = {},
         onRandomMatch = {},
         onLoadMore = {},
-        onRetry = {}
+        onRetry = {},
     )
 
     @Test
@@ -105,10 +104,10 @@ class SimulationScreenshotTest(private val dark: Boolean) {
                 listOf(
                     summary(id = "a", status = SimulationStatus.DONE, score = 82),
                     summary(id = "b", status = SimulationStatus.RUNNING, mode = Mode.AMISTAD),
-                    summary(id = "c", status = SimulationStatus.FAILED, mode = Mode.PAREJA)
+                    summary(id = "c", status = SimulationStatus.FAILED, mode = Mode.PAREJA),
                 ),
-                nextCursor = "next"
-            )
+                nextCursor = "next",
+            ),
         )
     }
 

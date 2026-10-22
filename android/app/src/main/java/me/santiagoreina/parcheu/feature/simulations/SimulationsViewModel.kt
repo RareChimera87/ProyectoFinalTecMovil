@@ -17,11 +17,8 @@ sealed interface SimulationsUiState {
     /** F6. [available] = simulaciones que quedan en la semana; `null` si no se pudo saber o son ilimitadas. */
     data class Empty(val available: Int?) : SimulationsUiState
 
-    data class Loaded(
-        val items: List<SimulationSummary>,
-        val nextCursor: String?,
-        val loadingMore: Boolean = false
-    ) : SimulationsUiState
+    data class Loaded(val items: List<SimulationSummary>, val nextCursor: String?, val loadingMore: Boolean = false) :
+        SimulationsUiState
 
     data class Error(val error: AppError) : SimulationsUiState
 }
@@ -63,7 +60,7 @@ class SimulationsViewModel(private val repository: SimulationRepository) : ViewM
                     _state.value =
                         SimulationsUiState.Loaded(
                             items = current.items + result.value.items,
-                            nextCursor = result.value.nextCursor
+                            nextCursor = result.value.nextCursor,
                         )
             }
         }

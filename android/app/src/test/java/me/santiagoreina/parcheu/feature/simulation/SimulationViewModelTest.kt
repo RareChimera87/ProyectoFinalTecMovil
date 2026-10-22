@@ -67,9 +67,9 @@ class SimulationViewModelTest {
             listOf(
                 ScenarioStep(1, StepState.DONE),
                 ScenarioStep(2, StepState.IN_PROGRESS),
-                ScenarioStep(3, StepState.PENDING)
+                ScenarioStep(3, StepState.PENDING),
             ),
-            state.steps
+            state.steps,
         )
         assertEquals(2, state.currentScenario)
         assertEquals(60, state.percent)
@@ -115,8 +115,8 @@ class SimulationViewModelTest {
             ApiResult.Success(
                 SimulationDto(
                     summary(status = SimulationStatus.FAILED, refunded = true),
-                    Progress(1, 2, 5)
-                )
+                    Progress(1, 2, 5),
+                ),
             )
         val refunded = viewModel()
         live.flow.emit(snapshot(status = SimulationStatus.FAILED, scenarioIndex = 1))
@@ -127,8 +127,8 @@ class SimulationViewModelTest {
             ApiResult.Success(
                 SimulationDto(
                     summary(status = SimulationStatus.FAILED, refunded = false),
-                    Progress(1, 2, 5)
-                )
+                    Progress(1, 2, 5),
+                ),
             )
         val other = track(SimulationViewModel("sim-1", repository, notRefunded))
         notRefunded.flow.emit(snapshot(status = SimulationStatus.FAILED, scenarioIndex = 1))
@@ -139,7 +139,7 @@ class SimulationViewModelTest {
     fun silentListenerFallsBackToRestExactlyOnceAndKeepsListening() = runVmTest {
         repository.getResult =
             ApiResult.Success(
-                SimulationDto(summary(), Progress(scenarioIndex = 0, turn = 2, of = 5))
+                SimulationDto(summary(), Progress(scenarioIndex = 0, turn = 2, of = 5)),
             )
         val viewModel = viewModel()
 
@@ -166,7 +166,7 @@ class SimulationViewModelTest {
         val failing = FailingLiveSource()
         repository.getResult =
             ApiResult.Success(
-                SimulationDto(summary(), Progress(scenarioIndex = 0, turn = 1, of = 5))
+                SimulationDto(summary(), Progress(scenarioIndex = 0, turn = 1, of = 5)),
             )
         val viewModel = track(SimulationViewModel("sim-1", repository, failing))
         viewModel.effects.test {
@@ -183,7 +183,7 @@ class SimulationViewModelTest {
 
             repository.getResult =
                 ApiResult.Success(
-                    SimulationDto(summary(status = SimulationStatus.DONE), Progress(2, 5, 5))
+                    SimulationDto(summary(status = SimulationStatus.DONE), Progress(2, 5, 5)),
                 )
             advanceTimeBy(REST_POLL_INTERVAL)
             runCurrent()
@@ -257,8 +257,8 @@ class SimulationViewModelTest {
             ApiResult.Success(
                 SimulationDto(
                     summary(status = SimulationStatus.FAILED, refunded = true),
-                    Progress(1, 2, 5)
-                )
+                    Progress(1, 2, 5),
+                ),
             )
         val viewModel = viewModel()
         live.flow.emit(snapshot(status = SimulationStatus.FAILED, scenarioIndex = 1))
@@ -274,7 +274,7 @@ class SimulationViewModelTest {
     fun retryErrorKeepsF5AndShowsTheReason() = runVmTest {
         repository.getResult =
             ApiResult.Success(
-                SimulationDto(summary(status = SimulationStatus.FAILED), Progress(1, 2, 5))
+                SimulationDto(summary(status = SimulationStatus.FAILED), Progress(1, 2, 5)),
             )
         repository.startResult = ApiResult.Failure(AppError.QuotaExceeded(null, null))
         val viewModel = viewModel()
@@ -292,8 +292,8 @@ class SimulationViewModelTest {
             ApiResult.Success(
                 SimulationDto(
                     summary(status = SimulationStatus.FAILED, otherId = null),
-                    Progress(1, 2, 5)
-                )
+                    Progress(1, 2, 5),
+                ),
             )
         val viewModel = viewModel()
         live.flow.emit(snapshot(status = SimulationStatus.FAILED, scenarioIndex = 1))

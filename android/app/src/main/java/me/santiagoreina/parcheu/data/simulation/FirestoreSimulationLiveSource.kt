@@ -12,13 +12,13 @@ import me.santiagoreina.parcheu.contract.SimulationStatus
 class FirestoreSimulationLiveSource(
     private val firestore: () -> FirebaseFirestore = {
         FirebaseFirestore.getInstance()
-    }
+    },
 ) : SimulationLiveSource {
     override fun observe(id: String): Flow<SimulationSnapshot> = callbackFlow {
         val registration =
             firestore().collection("simulations").document(id).addSnapshotListener {
                     snapshot,
-                    error
+                    error,
                 ->
                 if (error != null) {
                     close(error)
@@ -43,8 +43,8 @@ internal fun DocumentSnapshot.toSimulationSnapshot(): SimulationSnapshot? {
         Progress(
             scenarioIndex = (progress?.get("scenarioIndex") as? Number)?.toInt() ?: 0,
             turn = (progress?.get("turn") as? Number)?.toInt() ?: 0,
-            of = (progress?.get("of") as? Number)?.toInt() ?: 0
+            of = (progress?.get("of") as? Number)?.toInt() ?: 0,
         ),
-        score = getLong("score")?.toInt()
+        score = getLong("score")?.toInt(),
     )
 }

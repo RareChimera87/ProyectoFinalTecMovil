@@ -54,7 +54,7 @@ sealed interface SimulationUiState {
         val participants: Participants?,
         val steps: List<ScenarioStep>,
         val currentScenario: Int,
-        val percent: Int
+        val percent: Int,
     ) : SimulationUiState
 
     /**
@@ -66,7 +66,7 @@ sealed interface SimulationUiState {
         val refunded: Boolean,
         val canRetry: Boolean,
         val retrying: Boolean = false,
-        val retryError: AppError? = null
+        val retryError: AppError? = null,
     ) : SimulationUiState
 
     /** No hubo forma de saber el estado (sin red y sin datos del listener). */
@@ -93,7 +93,7 @@ class SimulationViewModel(
     private val repository: SimulationRepository,
     private val live: SimulationLiveSource,
     private val silenceTimeout: Duration = LISTENER_SILENCE_TIMEOUT,
-    private val pollInterval: Duration = REST_POLL_INTERVAL
+    private val pollInterval: Duration = REST_POLL_INTERVAL,
 ) : ViewModel() {
     private val _state = MutableStateFlow<SimulationUiState>(SimulationUiState.Connecting)
     val state: StateFlow<SimulationUiState> = _state.asStateFlow()
@@ -215,11 +215,12 @@ class SimulationViewModel(
                         refunded = summary?.refunded == true,
                         canRetry = summary?.other?.id != null,
                         retrying = previous?.retrying == true,
-                        retryError = previous?.retryError
+                        retryError = previous?.retryError,
                     )
             }
             SimulationStatus.QUEUED,
-            SimulationStatus.RUNNING -> {
+            SimulationStatus.RUNNING,
+            -> {
                 val current = snapshot.progress.scenarioIndex.coerceIn(0, SCENARIO_COUNT - 1)
                 _state.value =
                     SimulationUiState.Running(
@@ -228,7 +229,7 @@ class SimulationViewModel(
                         },
                         steps = scenarioSteps(snapshot),
                         currentScenario = current + 1,
-                        percent = progressPercent(snapshot)
+                        percent = progressPercent(snapshot),
                     )
             }
         }
