@@ -61,6 +61,22 @@ class ReportViewModelTest {
     }
 
     @Test
+    fun selfHarmDoesNotBlockByDefaultButRespectsAnExplicitChoice() = runTest {
+        val vm = ReportViewModel(FakeSafetyRepository.laura, repo)
+        vm.selectReason(ReportReason.SELF_HARM)
+        assertFalse(vm.state.value.alsoBlock)
+        vm.selectReason(ReportReason.HARASSMENT)
+        assertTrue(vm.state.value.alsoBlock)
+        vm.selectReason(ReportReason.SELF_HARM)
+        vm.setAlsoBlock(true)
+        vm.selectReason(ReportReason.HARASSMENT)
+        vm.selectReason(ReportReason.SELF_HARM)
+        assertTrue(vm.state.value.alsoBlock)
+        vm.submit()
+        assertEquals(1, repo.blocks.size)
+    }
+
+    @Test
     fun selfHarmShowsHelpResources() = runTest {
         val vm = ReportViewModel(FakeSafetyRepository.laura, repo)
         vm.selectReason(ReportReason.SELF_HARM)

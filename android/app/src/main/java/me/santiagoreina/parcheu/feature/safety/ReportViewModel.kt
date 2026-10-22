@@ -27,6 +27,8 @@ data class ReportUiState(
     /** "Adjuntar los últimos mensajes": solo existe si el reporte sale de un chat. */
     val attachMessages: Boolean = target.chatId != null,
     val alsoBlock: Boolean = true,
+    /** La persona tocó la casilla: su elección manda sobre el valor por defecto del motivo. */
+    val alsoBlockTouched: Boolean = false,
     val submitting: Boolean = false,
     val error: AppError? = null,
     val sent: ReportSent? = null,
@@ -45,7 +47,13 @@ class ReportViewModel(target: SafetyTarget, private val repository: SafetyReposi
     val state: StateFlow<ReportUiState> = _state.asStateFlow()
 
     fun selectReason(reason: ReportReason) {
-        _state.update { it.copy(reason = reason, error = null) }
+        _state.update { it.copy(
+                reason = reason,
+                error = null,
+                // Autolesión: no se bloquea por defecto a quien puede estar en riesgo (se corta el contacto).
+                alsoBlock = if (it.alsoBlockTouched) it.alsoBlock else reason != ReportReason.SELF_HARM,
+            )
+        }
     }
 
     fun onDetailsChange(value: String) {
@@ -57,7 +65,7 @@ class ReportViewModel(target: SafetyTarget, private val repository: SafetyReposi
     }
 
     fun setAlsoBlock(value: Boolean) {
-        _state.update { it.copy(alsoBlock = value) }
+        _state.update { it.copy(alsoBlock = value, alsoBlockTouched = true) }
     }
 
     fun submit() {

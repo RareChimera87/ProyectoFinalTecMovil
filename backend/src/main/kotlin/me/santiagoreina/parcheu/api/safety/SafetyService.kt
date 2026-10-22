@@ -152,9 +152,14 @@ class SafetyService(
             .log()
     }
 
-    /** `DELETE /v1/blocks/{userId}`: solo con el uuid (la lista de bloqueados lo trae). Idempotente. */
+    /**
+     * `DELETE /v1/blocks/{userId}`: acepta el id que devuelve `GET /v1/blocks` (uuid si estaban conectados,
+     * `anonId` si no). El `anonId` se resuelve entre los bloqueados de [blocker]. Idempotente.
+     */
     suspend fun unblock(blocker: UUID, rawTarget: String) {
-        val target = parseUuid(rawTarget) ?: resolveTarget(blocker, rawTarget, chatId = null)
+        val target = parseUuid(rawTarget)
+            ?: repo.blocksOf(blocker).map { it.blocked.id }.firstOrNull { anonIds.anonId(blocker, it) == rawTarget }
+            ?: throw NotFound("La persona no existe")
         // Los chats cerrados siguen cerrados: un DIRECT se reabre solo con una nueva conexión mutua.
         repo.unblock(blocker, target)
     }
@@ -165,7 +170,8 @@ class SafetyService(
         return repo.blocksOf(viewer).map { row ->
             val view = policy.present(viewer, row.blocked, connected = row.blocked.id in connected, context = ViewContext.EGO)
             BlockedDto(
-                userId = row.blocked.id.toString(),
+                // view.id es el anonId si no hay conexión mutua: nunca se expone el uuid de una persona anónima.
+                userId = view.id,
                 label = view.label,
                 initials = view.initials,
                 blockedAt = row.createdAt.toKotlin(),

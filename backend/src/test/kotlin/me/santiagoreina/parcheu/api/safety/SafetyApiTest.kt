@@ -22,6 +22,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -174,11 +175,13 @@ class SafetyApiTest : FunSpec({
             client.post("/v1/blocks/$anonId") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
             w.chatRepo.chat(scenario.id)!!.status shouldBe ChatStatus.CLOSED
             val blocked = client.get("/v1/blocks") { auth("ana") }.body<List<BlockedDto>>().single()
-            blocked.userId shouldBe w.caro.toString()
+            blocked.userId shouldBe anonId
+            // Regla 3: la lista no revela el uuid interno de una persona anónima.
+            client.get("/v1/blocks") { auth("ana") }.bodyAsText() shouldNotContain w.caro.toString()
             // Sin conexión mutua sigue anónimo: el nombre nunca se revela al bloquear.
             blocked.label shouldNotContain "Nombre Secreto"
 
-            client.delete("/v1/blocks/${w.caro}") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
+            client.delete("/v1/blocks/${blocked.userId}") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
             client.get("/v1/blocks") { auth("ana") }.body<List<BlockedDto>>().shouldBeEmpty()
             w.safetyRepo.allBlocks.shouldBeEmpty()
             // Un anonId que no es de nadie de su contexto → 404.
