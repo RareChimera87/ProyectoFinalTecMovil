@@ -1,0 +1,154 @@
+package me.santiagoreina.parcheu.api
+
+import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
+import io.ktor.client.call.body
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.get
+import io.ktor.server.testing.testApplication
+import me.santiagoreina.parcheu.api.platform.DomainRoutes
+import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
+import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
+import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
+import me.santiagoreina.parcheu.api.platform.errors.Conflict
+import me.santiagoreina.parcheu.api.platform.errors.NotFound
+import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
+import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
+import me.santiagoreina.parcheu.contract.ApiError
+import me.santiagoreina.parcheu.contract.ErrorCode
+import me.santiagoreina.parcheu.contract.Health
+import me.santiagoreina.parcheu.contract.QuotaKind
+import kotlin.time.Instant
+
+/** Dominio de prueba que lanza excepciones de dominio para comprobar la traducción a ApiError. */
+private class ThrowingRoutes : DomainRoutes {
+    override fun Route.v1() {
+        get("/_test/quota") { throw QuotaExceeded(Instant.parse("2026-10-26T05:00:00Z"), QuotaKind.SIMULATION) }
+        get("/_test/not-found") { throw NotFound() }
+        get("/_test/conflict") { throw Conflict("ya existe") }
+        get("/_test/validation") { throw ValidationFailed("campo inválido") }
+        get("/_test/budget") { throw AiBudgetExceeded(Instant.parse("2026-10-26T05:00:00Z")) }
+        get("/_test/boom") { error("detalle interno que no debe filtrarse") }
+    }
+}
+
+private fun bearer(token: String): io.ktor.client.request.HttpRequestBuilder.() -> Unit =
+    { header(HttpHeaders.Authorization, "Bearer $token") }
+
+class ApplicationTest : FunSpec({
+    val fakeToken = FakeTokenVerifier.tokenFor("ana")
+
+    test("GET /v1/health responde 200 con la versión y sin token") {
+        testApplication {
+            val client = startApp()
+            val response = client.get("/v1/health")
+            response.status shouldBe HttpStatusCode.OK
+            val health = response.body<Health>()
+            health.version shouldBe "abc1234"
+            health.time shouldBe Instant.parse("2026-10-25T12:00:00Z")
+        }
+    }
+
+    test("GET /v1/me sin token responde 401 UNAUTHENTICATED") {
+        testApplication {
+            val response = startApp().get("/v1/me")
+            response.status shouldBe HttpStatusCode.Unauthorized
+            response.body<ApiError>().code shouldBe ErrorCode.UNAUTHENTICATED
+        }
+    }
+
+    test("GET /v1/me con token inválido responde 401") {
+        testApplication {
+            startApp().get("/v1/me", bearer("no-es-un-token")).status shouldBe HttpStatusCode.Unauthorized
+        }
+    }
+
+    test("GET /v1/me con el token Fake no es 401 (el stub responde 501)") {
+        testApplication {
+            val response = startApp().get("/v1/me", bearer(fakeToken))
+            response.status shouldNotBe HttpStatusCode.Unauthorized
+            response.status shouldBe HttpStatusCode.NotImplemented
+        }
+    }
+
+    test("QuotaExceeded produce 402 con ApiError QUOTA_EXCEEDED y resetsAt") {
+        testApplication {
+            val response = startApp(testContainer(listOf(ThrowingRoutes()))).get("/v1/_test/quota", bearer(fakeToken))
+            response.status shouldBe HttpStatusCode.PaymentRequired
+            val error = response.body<ApiError>()
+            error.code shouldBe ErrorCode.QUOTA_EXCEEDED
+            error.kind shouldBe "SIMULATION"
+            error.resetsAt shouldBe Instant.parse("2026-10-26T05:00:00Z")
+        }
+    }
+
+    test("Cada excepción de dominio usa el status de su código") {
+        testApplication {
+            val client = startApp(testContainer(listOf(ThrowingRoutes())))
+            suspend fun check(path: String, status: HttpStatusCode, code: ErrorCode) {
+                val response: HttpResponse = client.get("/v1/_test/$path", bearer(fakeToken))
+                response.status shouldBe status
+                response.body<ApiError>().code shouldBe code
+            }
+            check("not-found", HttpStatusCode.NotFound, ErrorCode.NOT_FOUND)
+            check("conflict", HttpStatusCode.Conflict, ErrorCode.CONFLICT)
+            check("validation", HttpStatusCode.BadRequest, ErrorCode.VALIDATION)
+            check("budget", HttpStatusCode.ServiceUnavailable, ErrorCode.AI_BUDGET)
+        }
+    }
+
+    test("Un error inesperado responde 500 sin filtrar el detalle") {
+        testApplication {
+            val response = startApp(testContainer(listOf(ThrowingRoutes()))).get("/v1/_test/boom", bearer(fakeToken))
+            response.status shouldBe HttpStatusCode.InternalServerError
+            val text = response.body<String>()
+            (text.contains("detalle interno")) shouldBe false
+        }
+    }
+
+    test("Una ruta inexistente responde 404 NOT_FOUND") {
+        testApplication {
+            val response = startApp().get("/v1/no-existe", bearer(fakeToken))
+            response.status shouldBe HttpStatusCode.NotFound
+            response.body<ApiError>().code shouldBe ErrorCode.NOT_FOUND
+        }
+    }
+
+    test("POST /internal/tasks/simulate sin token OIDC responde 403") {
+        testApplication {
+            val response = startApp().post("/internal/tasks/simulate")
+            response.status shouldBe HttpStatusCode.Forbidden
+            response.body<ApiError>().code shouldBe ErrorCode.FORBIDDEN
+        }
+    }
+
+    test("POST /internal/tasks/simulate con token inválido o de usuario responde 403") {
+        testApplication {
+            val client = startApp()
+            client.post("/internal/tasks/simulate", bearer("basura")).status shouldBe HttpStatusCode.Forbidden
+            // Un ID token de usuario de Firebase no sirve en /internal.
+            client.post("/internal/tasks/simulate", bearer(fakeToken)).status shouldBe HttpStatusCode.Forbidden
+        }
+    }
+
+    test("POST /internal/tasks/simulate con el token Fake de la cuenta de tareas no es 403") {
+        testApplication {
+            val response = startApp().post("/internal/tasks/simulate", bearer(FakeOidcVerifier.VALID_TOKEN))
+            response.status shouldNotBe HttpStatusCode.Forbidden
+            response.status shouldBe HttpStatusCode.NotImplemented
+        }
+    }
+
+    test("El token OIDC no sirve en /v1") {
+        testApplication {
+            startApp().get("/v1/me", bearer(FakeOidcVerifier.VALID_TOKEN)).status shouldBe HttpStatusCode.Unauthorized
+        }
+    }
+})

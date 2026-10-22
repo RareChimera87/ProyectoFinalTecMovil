@@ -1,0 +1,61 @@
+# Versiones del backend (E0.3). Son las que compilan y las que documenta arquitectura.md §13.
+# Kotlin va alineado con contract/ y android/ (2.2.10).
+[versions]
+kotlin = "2.2.10"
+kotlinxSerialization = "1.9.0"
+kotlinxCoroutines = "1.11.0"
+ktor = "3.5.2"
+exposed = "1.6.0"
+hikari = "7.1.0"
+postgresql = "42.7.14"
+cloudSqlConnector = "1.30.1"
+flyway = "13.11.1"
+firebaseAdmin = "9.11.0"
+googleApiClient = "2.9.1"
+googleGenai = "1.78.0"
+cloudTasks = "2.99.0"
+androidPublisher = "v3-rev20260924-2.0.0"
+logback = "1.6.5"
+logstashEncoder = "9.0"
+kotest = "6.2.6"
+testcontainers = "2.0.5"
+jib = "3.5.4"
+
+[libraries]
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+ktor-bom = { group = "io.ktor", name = "ktor-bom", version.ref = "ktor" }
+ktor-server-core = { group = "io.ktor", name = "ktor-server-core" }
+ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty" }
+ktor-server-content-negotiation = { group = "io.ktor", name = "ktor-server-content-negotiation" }
+ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json" }
+ktor-server-status-pages = { group = "io.ktor", name = "ktor-server-status-pages" }
+ktor-server-auth = { group = "io.ktor", name = "ktor-server-auth" }
+ktor-server-call-logging = { group = "io.ktor", name = "ktor-server-call-logging" }
+ktor-server-test-host = { group = "io.ktor", name = "ktor-server-test-host" }
+ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation" }
+exposed-core = { group = "org.jetbrains.exposed", name = "exposed-core", version.ref = "exposed" }
+exposed-jdbc = { group = "org.jetbrains.exposed", name = "exposed-jdbc", version.ref = "exposed" }
+hikari = { group = "com.zaxxer", name = "HikariCP", version.ref = "hikari" }
+postgresql = { group = "org.postgresql", name = "postgresql", version.ref = "postgresql" }
+cloud-sql-socket-factory = { group = "com.google.cloud.sql", name = "postgres-socket-factory", version.ref = "cloudSqlConnector" }
+flyway-core = { group = "org.flywaydb", name = "flyway-core", version.ref = "flyway" }
+flyway-postgresql = { group = "org.flywaydb", name = "flyway-database-postgresql", version.ref = "flyway" }
+firebase-admin = { group = "com.google.firebase", name = "firebase-admin", version.ref = "firebaseAdmin" }
+google-api-client = { group = "com.google.api-client", name = "google-api-client", version.ref = "googleApiClient" }
+# Declaradas aquí para fijar la versión; las dependencias se agregan en las features que las usan.
+google-genai = { group = "com.google.genai", name = "google-genai", version.ref = "googleGenai" }
+google-cloud-tasks = { group = "com.google.cloud", name = "google-cloud-tasks", version.ref = "cloudTasks" }
+google-androidpublisher = { group = "com.google.apis", name = "google-api-services-androidpublisher", version.ref = "androidPublisher" }
+logback-classic = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
+logstash-logback-encoder = { group = "net.logstash.logback", name = "logstash-logback-encoder", version.ref = "logstashEncoder" }
+kotest-runner-junit5 = { group = "io.kotest", name = "kotest-runner-junit5", version.ref = "kotest" }
+kotest-assertions-core = { group = "io.kotest", name = "kotest-assertions-core", version.ref = "kotest" }
+kotest-property = { group = "io.kotest", name = "kotest-property", version.ref = "kotest" }
+testcontainers-postgresql = { group = "org.testcontainers", name = "testcontainers-postgresql", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { group = "org.testcontainers", name = "testcontainers-junit-jupiter", version.ref = "testcontainers" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+jib = { id = "com.google.cloud.tools.jib", version.ref = "jib" }
