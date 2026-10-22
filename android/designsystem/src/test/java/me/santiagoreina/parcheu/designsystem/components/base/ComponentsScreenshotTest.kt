@@ -68,8 +68,8 @@ class ComponentsScreenshotTest {
             filePath = "src/test/screenshots/components/${name}_$suffix.png",
             roborazziOptions =
             RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
-            )
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
+            ),
         )
     }
 }

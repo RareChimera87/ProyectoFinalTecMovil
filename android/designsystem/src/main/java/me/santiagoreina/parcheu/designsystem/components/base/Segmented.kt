@@ -37,7 +37,7 @@ fun ModeSegmentedControl(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
 ) {
     require(segments.size in 2..3) { "El control por modo admite 2 o 3 segmentos" }
     val three = segments.size == 3
@@ -50,7 +50,7 @@ fun ModeSegmentedControl(
         visualHeight = if (three) 48.dp else 44.dp,
         radius = if (three) 16.dp else 14.dp,
         modifier = modifier,
-        enabled = enabled
+        enabled = enabled,
     )
 }
 
@@ -61,7 +61,7 @@ fun SegmentedControl(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
 ) {
     require(options.size >= 2) { "Un control segmentado necesita al menos 2 opciones" }
     val colors = ParcheUTheme.colors
@@ -74,7 +74,7 @@ fun SegmentedControl(
         visualHeight = 44.dp,
         radius = 14.dp,
         modifier = modifier,
-        enabled = enabled
+        enabled = enabled,
     )
 }
 
@@ -88,7 +88,7 @@ private fun SegmentedFrame(
     visualHeight: Dp,
     radius: Dp,
     modifier: Modifier,
-    enabled: Boolean
+    enabled: Boolean,
 ) {
     val colors = ParcheUTheme.colors
     val shape = RoundedCornerShape(radius)
@@ -96,9 +96,9 @@ private fun SegmentedFrame(
     // El alto del nodo es de 48dp (área táctil); lo que se dibuja mide visualHeight y va centrado.
     Box(
         modifier = modifier.fillMaxWidth().height(
-            maxOf(visualHeight, MinTouchTarget)
+            maxOf(visualHeight, MinTouchTarget),
         ).selectableGroup(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.fillMaxWidth().height(visualHeight).clip(shape).background(colors.s2))
         Row(Modifier.fillMaxWidth().fillMaxHeight().padding(horizontal = 3.dp)) {
@@ -113,9 +113,9 @@ private fun SegmentedFrame(
                             selected = selected,
                             enabled = enabled,
                             role = Role.Tab,
-                            onClick = { onSelect(index) }
+                            onClick = { onSelect(index) },
                         ),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     val weight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                     val container = if (selected) activeContainers[index] else Color.Transparent
@@ -127,13 +127,13 @@ private fun SegmentedFrame(
                             .height(visualHeight - 6.dp)
                             .clip(innerShape)
                             .background(if (enabled) container else container.disabled()),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = label,
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = weight),
                             color = if (enabled) content else content.disabled(),
-                            maxLines = 1
+                            maxLines = 1,
                         )
                     }
                 }

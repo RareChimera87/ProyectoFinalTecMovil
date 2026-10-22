@@ -49,11 +49,7 @@ class SplashNavigationTest {
 
     private lateinit var navController: NavHostController
 
-    private fun launch(
-        repository: AuthRepository,
-        start: AppRoute = Splash,
-        uriHandler: UriHandler = NoOpUriHandler
-    ) {
+    private fun launch(repository: AuthRepository, start: AppRoute = Splash, uriHandler: UriHandler = NoOpUriHandler) {
         loadKoinModules(module { single<AuthRepository> { repository } })
         composeRule.setContent {
             navController = rememberNavController()
@@ -115,13 +111,13 @@ class SplashNavigationTest {
         launch(
             FakeAuthRepository(signedIn = false),
             start = Onboarding(page = 2),
-            uriHandler = handler
+            uriHandler = handler,
         )
 
         val links =
             composeRule.onAllNodes(
                 hasClickAction() and hasAnyAncestor(hasTestTag(OnboardingTags.LEGAL)),
-                useUnmergedTree = true
+                useUnmergedTree = true,
             )
         links[0].performClick()
         links[1].performClick()

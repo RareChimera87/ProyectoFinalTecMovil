@@ -15,10 +15,10 @@ fun sessionDto(step: OnboardingStep, version: String = TEST_LEGAL_VERSION) = Ses
         id = "u-ana",
         email = "ana@example.com",
         displayName = "Ana",
-        createdAt = Instant.fromEpochSeconds(0)
+        createdAt = Instant.fromEpochSeconds(0),
     ),
     onboarding = step,
-    legalTextVersion = version
+    legalTextVersion = version,
 )
 
 /**

@@ -41,10 +41,10 @@ enum class ModeChipSize(
     val startPadding: Dp,
     val endPadding: Dp,
     val iconSize: Dp,
-    val textSizeSp: Int
+    val textSizeSp: Int,
 ) {
     M(ParcheUSizes.ModeChipMedium, 8.dp, 11.dp, 16.dp, 13),
-    S(ParcheUSizes.ModeChipSmall, 6.dp, 9.dp, 14.dp, 11)
+    S(ParcheUSizes.ModeChipSmall, 6.dp, 9.dp, 14.dp, 11),
 }
 
 /** Píldora con el color pleno del modo y texto #14111F. No es interactiva. */
@@ -54,7 +54,7 @@ fun ModeChip(
     mode: ModeColors,
     modifier: Modifier = Modifier,
     size: ModeChipSize = ModeChipSize.M,
-    icon: Painter? = null
+    icon: Painter? = null,
 ) {
     Row(
         modifier =
@@ -63,14 +63,14 @@ fun ModeChip(
             .clip(ParcheUTheme.shapes.pill)
             .background(mode.solid)
             .padding(start = size.startPadding, end = size.endPadding),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
             Icon(
                 painter = icon,
                 contentDescription = null,
                 tint = mode.onSolid,
-                modifier = Modifier.size(size.iconSize)
+                modifier = Modifier.size(size.iconSize),
             )
             Spacer(Modifier.width(4.dp))
         }
@@ -79,11 +79,11 @@ fun ModeChip(
             style =
             MaterialTheme.typography.labelMedium.copy(
                 fontSize = size.textSizeSp.sp,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             ),
             color = mode.onSolid,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -96,7 +96,7 @@ fun ModeFilterChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    icon: Painter? = null
+    icon: Painter? = null,
 ) {
     val colors = ParcheUTheme.colors
     OutlinedChipFrame(
@@ -109,13 +109,13 @@ fun ModeFilterChip(
                 selected = selected,
                 enabled = enabled,
                 role = Role.RadioButton,
-                onClick = onClick
+                onClick = onClick,
             ),
         label = label,
         icon = icon,
         iconSize = 16.dp,
         selectedContainer = colors.prc,
-        selectedContent = colors.onprc
+        selectedContent = colors.onprc,
     )
 }
 
@@ -126,7 +126,7 @@ fun SecondaryFilterChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    icon: Painter? = null
+    icon: Painter? = null,
 ) {
     val colors = ParcheUTheme.colors
     OutlinedChipFrame(
@@ -135,13 +135,13 @@ fun SecondaryFilterChip(
         modifier = modifier.touchTarget().clickable(
             enabled = enabled,
             role = Role.Button,
-            onClick = onClick
+            onClick = onClick,
         ),
         label = label,
         icon = icon,
         iconSize = 16.dp,
         selectedContainer = colors.prc,
-        selectedContent = colors.onprc
+        selectedContent = colors.onprc,
     )
 }
 
@@ -153,7 +153,7 @@ fun InterestChip(
     onSelectedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    icon: Painter? = null
+    icon: Painter? = null,
 ) {
     val colors = ParcheUTheme.colors
     OutlinedChipFrame(
@@ -166,13 +166,13 @@ fun InterestChip(
                 value = selected,
                 enabled = enabled,
                 role = Role.Checkbox,
-                onValueChange = onSelectedChange
+                onValueChange = onSelectedChange,
             ),
         label = label,
         icon = icon,
         iconSize = 16.dp,
         selectedContainer = colors.prc,
-        selectedContent = colors.onprc
+        selectedContent = colors.onprc,
     )
 }
 
@@ -185,7 +185,7 @@ private fun OutlinedChipFrame(
     icon: Painter?,
     iconSize: Dp,
     selectedContainer: Color,
-    selectedContent: Color
+    selectedContent: Color,
 ) {
     val colors = ParcheUTheme.colors
     val shape = RoundedCornerShape(ParcheURadius.ButtonCompact)
@@ -206,19 +206,19 @@ private fun OutlinedChipFrame(
                     } else {
                         Modifier.border(
                             BorderStroke(1.dp, borderColor),
-                            shape
+                            shape,
                         )
-                    }
+                    },
                 )
                 .padding(PaddingValues(horizontal = 12.dp)),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
                 Icon(
                     painter = icon,
                     contentDescription = null,
                     tint = content,
-                    modifier = Modifier.size(iconSize)
+                    modifier = Modifier.size(iconSize),
                 )
                 Spacer(Modifier.width(6.dp))
             }
@@ -227,7 +227,7 @@ private fun OutlinedChipFrame(
                 style = MaterialTheme.typography.labelMedium,
                 color = content,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -241,7 +241,7 @@ fun PillChip(
     text: String,
     modifier: Modifier = Modifier,
     variant: PillChipVariant = PillChipVariant.Neutral,
-    icon: Painter? = null
+    icon: Painter? = null,
 ) {
     val colors = ParcheUTheme.colors
     val (container, content, size) =
@@ -255,14 +255,14 @@ fun PillChip(
             .clip(ParcheUTheme.shapes.pill)
             .background(container)
             .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
             Icon(
                 painter = icon,
                 contentDescription = null,
                 tint = content,
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(14.dp),
             )
             Spacer(Modifier.width(4.dp))
         }
@@ -270,9 +270,9 @@ fun PillChip(
             text = text,
             style = MaterialTheme.typography.labelMedium.copy(
                 fontSize = size.sp,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             ),
-            color = content
+            color = content,
         )
     }
 }

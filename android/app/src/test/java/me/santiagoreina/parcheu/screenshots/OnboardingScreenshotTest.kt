@@ -44,8 +44,8 @@ class OnboardingScreenshotTest(private val dark: Boolean) {
             // inicializaría antes y RoborazziOptions falla fuera del sandbox.
             roborazziOptions =
             RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
-            )
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
+            ),
         )
     }
 
@@ -61,7 +61,7 @@ class OnboardingScreenshotTest(private val dark: Boolean) {
             onContinueWithGoogle = {},
             onAcceptTerms = {},
             onDeclineTerms = {},
-            animateLoading = false
+            animateLoading = false,
         )
     }
 
