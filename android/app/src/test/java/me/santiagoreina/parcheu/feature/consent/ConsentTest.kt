@@ -40,12 +40,32 @@ class ConsentTest {
 
     private class FakeConsentRepository(var result: ApiResult<Unit> = ApiResult.Success(Unit)) : ConsentRepository {
         var grants = 0
+        var revocations = 0
 
         override suspend fun grantOnboardingLearning(): ApiResult<Unit> {
             grants++
             return result
         }
+
+        override suspend fun revokePartialGrants() {
+            revocations++
+        }
     }
+
+    private fun apiRepo(): ApiConsentRepository {
+        val retrofit = createRetrofit(server.url("/").toString(), OkHttpClient())
+        return ApiConsentRepository(
+            retrofit.create(ConsentApi::class.java),
+            retrofit.create(SessionApi::class.java),
+            ApiErrorMapper(),
+        )
+    }
+
+    private fun bodyOf(request: mockwebserver3.RecordedRequest) =
+        Json.parseToJsonElement(request.body!!.utf8()).jsonObject
+
+    private fun enqueueSession() =
+        server.enqueue(MockResponse(code = 200, body = ContractJson.encodeToString(sessionDto(OnboardingStep.DONE))))
 
     @Test
     fun acceptSendsAmistadAndEstudioWithTheCurrentLegalVersionAndNoPareja() = runTest {
@@ -76,6 +96,50 @@ class ConsentTest {
     }
 
     @Test
+    fun partialFailureRevokesWhatWasAlreadyGranted() = runTest {
+        val repo = apiRepo()
+        enqueueSession()
+        server.enqueue(MockResponse(code = 200, body = """{"items":[]}"""))
+        server.enqueue(MockResponse(code = 500, body = "{}"))
+        server.enqueue(MockResponse(code = 200, body = """{"items":[]}"""))
+
+        assertTrue(repo.grantOnboardingLearning() is ApiResult.Failure)
+
+        server.takeRequest(1, TimeUnit.SECONDS) // /v1/session
+        val amistad = bodyOf(server.takeRequest(1, TimeUnit.SECONDS)!!)
+        assertEquals("true", amistad.getValue("granted").jsonPrimitive.content)
+        server.takeRequest(1, TimeUnit.SECONDS) // ESTUDIO falla
+        val revoke = bodyOf(server.takeRequest(1, TimeUnit.SECONDS)!!)
+        assertEquals(ConsentKind.CHAT_LEARNING_AMISTAD.name, revoke.getValue("kind").jsonPrimitive.content)
+        assertEquals("false", revoke.getValue("granted").jsonPrimitive.content)
+        assertEquals(4, server.requestCount)
+
+        // Ya no queda nada por revocar: 'Ahora no' no envía nada más.
+        repo.revokePartialGrants()
+        assertEquals(4, server.requestCount)
+    }
+
+    @Test
+    fun notNowRevokesGrantsThatCouldNotBeUndoneAfterAPartialFailure() = runTest {
+        val repo = apiRepo()
+        enqueueSession()
+        server.enqueue(MockResponse(code = 200, body = """{"items":[]}"""))
+        server.enqueue(MockResponse(code = 500, body = "{}")) // ESTUDIO falla
+        server.enqueue(MockResponse(code = 500, body = "{}")) // la compensación también falla
+        server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) // 'Ahora no'
+
+        assertTrue(repo.grantOnboardingLearning() is ApiResult.Failure)
+        repeat(4) { server.takeRequest(1, TimeUnit.SECONDS) }
+
+        repo.revokePartialGrants()
+
+        val revoke = bodyOf(server.takeRequest(1, TimeUnit.SECONDS)!!)
+        assertEquals(ConsentKind.CHAT_LEARNING_AMISTAD.name, revoke.getValue("kind").jsonPrimitive.content)
+        assertEquals("false", revoke.getValue("granted").jsonPrimitive.content)
+        assertEquals(5, server.requestCount)
+    }
+
+    @Test
     fun acceptGrantsAndContinuesToB5() = runTest {
         val repo = FakeConsentRepository()
         val vm = ConsentViewModel(repo)
@@ -95,6 +159,7 @@ class ConsentTest {
             assertEquals(ConsentEffect.Done, awaitItem())
         }
         assertEquals(0, repo.grants)
+        assertEquals(1, repo.revocations)
     }
 
     @Test

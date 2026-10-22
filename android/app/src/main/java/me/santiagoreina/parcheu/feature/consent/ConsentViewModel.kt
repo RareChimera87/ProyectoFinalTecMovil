@@ -20,7 +20,7 @@ sealed interface ConsentEffect {
     data object Done : ConsentEffect
 }
 
-/** B4 (E2.5): 'Acepto' concede Amistad y Estudio; 'Ahora no' sigue sin escribir nada (es opcional). */
+/** B4 (E2.5): 'Acepto' concede Amistad y Estudio; 'Ahora no' sigue sin conceder nada (es opcional) y revoca lo que un 'Acepto' fallido haya dejado. */
 class ConsentViewModel(private val repository: ConsentRepository) : ViewModel() {
     private val _state = MutableStateFlow(ConsentUiState())
     val state: StateFlow<ConsentUiState> = _state.asStateFlow()
@@ -44,7 +44,11 @@ class ConsentViewModel(private val repository: ConsentRepository) : ViewModel() 
 
     fun onNotNow() {
         if (_state.value.submitting) return
-        viewModelScope.launch { _effects.send(ConsentEffect.Done) }
+        viewModelScope.launch {
+            // Si un 'Acepto' anterior falló a medias, no se conserva lo que alcanzó a concederse.
+            repository.revokePartialGrants()
+            _effects.send(ConsentEffect.Done)
+        }
     }
 }
 
