@@ -64,6 +64,20 @@ class ParcheScreenTest {
     }
 
     @Test
+    fun connectedSheetWithoutChatIdHidesChat() {
+        val node = ParcheSamples.nodes.first { it.id == "and" }
+        val withoutChat = ParcheSamples.detail(node).copy(chatId = null)
+        show(
+            ParcheUiState.Loaded(
+                ParcheSamples.content,
+                sheet = NodeSheet(node, withoutChat, loadingDetail = false)
+            )
+        )
+        composeRule.onNodeWithText("Simular de nuevo").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Chatear").assertCountEquals(0)
+    }
+
+    @Test
     fun simulatedSheetHasNoChatAndPendingOnlyShowsResult() {
         show(ParcheUiState.Loaded(ParcheSamples.content, sheet = sheet("dan")))
         composeRule.onNodeWithText("Simular de nuevo").assertIsDisplayed()

@@ -38,9 +38,10 @@ interface GraphApi {
 
 /** Último grafo guardado (DataStore) para pintar D1 al instante. */
 interface GraphCache {
-    suspend fun load(): ParcheContent?
+    /** El grafo guardado, solo si pertenece a [ownerUid]; si es de otra persona se descarta. */
+    suspend fun load(ownerUid: String): ParcheContent?
 
-    suspend fun save(content: ParcheContent)
+    suspend fun save(content: ParcheContent, ownerUid: String)
 
     /** Cerrar sesión (E8.2) borra el grafo guardado. */
     suspend fun clear()
@@ -64,9 +65,14 @@ interface GraphRepository {
 class GraphRepositoryImpl(
     private val api: GraphApi,
     private val cache: GraphCache,
-    private val mapper: ApiErrorMapper
+    private val mapper: ApiErrorMapper,
+    /** Uid de la sesión vigente; `null` si no hay. La caché es de esa persona y de nadie más. */
+    private val currentUid: () -> String?
 ) : GraphRepository {
-    override suspend fun cached(): ParcheContent? = runCatching { cache.load() }.getOrNull()
+    override suspend fun cached(): ParcheContent? {
+        val uid = currentUid() ?: return null
+        return runCatching { cache.load(uid) }.getOrNull()
+    }
 
     override suspend fun graph(community: String?): ApiResult<ParcheContent> {
         val graph =
@@ -81,7 +87,8 @@ class GraphRepositoryImpl(
                 is ApiResult.Failure -> cached()?.plus ?: false
             }
         val content = ParcheContent(graph, plus)
-        if (community == null) runCatching { cache.save(content) }
+        val uid = currentUid()
+        if (community == null && uid != null) runCatching { cache.save(content, uid) }
         return ApiResult.Success(content)
     }
 
@@ -96,19 +103,34 @@ class GraphRepositoryImpl(
 }
 
 private val GRAPH_KEY = stringPreferencesKey("parche_graph_v1")
+private val OWNER_KEY = stringPreferencesKey("parche_graph_owner")
 
 /** Guarda [ParcheContent] como JSON en DataStore Preferences. */
 class DataStoreGraphCache(private val store: DataStore<Preferences>, private val json: Json) :
     GraphCache {
-    override suspend fun load(): ParcheContent? = store.data.first()[GRAPH_KEY]?.let {
-        runCatching { json.decodeFromString<ParcheContent>(it) }.getOrNull()
+    override suspend fun load(ownerUid: String): ParcheContent? {
+        val prefs = store.data.first()
+        if (prefs[OWNER_KEY] != ownerUid) {
+            // Grafo de otra persona (o sin dueño): no se muestra y se borra.
+            if (prefs[GRAPH_KEY] != null) clear()
+            return null
+        }
+        return prefs[GRAPH_KEY]?.let {
+            runCatching { json.decodeFromString<ParcheContent>(it) }.getOrNull()
+        }
     }
 
-    override suspend fun save(content: ParcheContent) {
-        store.edit { it[GRAPH_KEY] = json.encodeToString(ParcheContent.serializer(), content) }
+    override suspend fun save(content: ParcheContent, ownerUid: String) {
+        store.edit {
+            it[GRAPH_KEY] = json.encodeToString(ParcheContent.serializer(), content)
+            it[OWNER_KEY] = ownerUid
+        }
     }
 
     override suspend fun clear() {
-        store.edit { it.remove(GRAPH_KEY) }
+        store.edit {
+            it.remove(GRAPH_KEY)
+            it.remove(OWNER_KEY)
+        }
     }
 }

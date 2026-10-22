@@ -214,8 +214,27 @@ class ParcheViewModelTest {
         vm.onNodeClick("lau")
         vm.effects.test {
             vm.onChat()
-            assertEquals(ParcheEffect.Navigate(Chat("lau")), awaitItem())
+            assertEquals(ParcheEffect.Navigate(Chat("chat-lau")), awaitItem())
             vm.onViewResult()
+            assertEquals(ParcheEffect.Navigate(Results("sim-1")), awaitItem())
+        }
+    }
+
+    @Test
+    fun chatWithoutChatIdDoesNotNavigate() = runTest {
+        val fake = repo(ApiResult.Success(ParcheSamples.content))
+        fake.detailResult = { id ->
+            ApiResult.Success(
+                ParcheSamples.detail(ParcheSamples.nodes.first { it.id == id }).copy(chatId = null)
+            )
+        }
+        val vm = ParcheViewModel(fake)
+        vm.start()
+        vm.onNodeClick("lau")
+        vm.effects.test {
+            vm.onChat()
+            vm.onViewResult()
+            // Solo llega "Ver resultado": "Chatear" sin chatId no navega.
             assertEquals(ParcheEffect.Navigate(Results("sim-1")), awaitItem())
         }
     }

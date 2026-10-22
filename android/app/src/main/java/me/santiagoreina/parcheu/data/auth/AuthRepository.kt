@@ -39,3 +39,8 @@ interface AuthRepository {
     /** Cierra la sesión de Firebase y borra el estado de Credential Manager (E8.2 agrega el resto). */
     suspend fun signOut()
 }
+
+/** Borra datos locales de la persona al cerrar sesión (caché del grafo, etc.). Cada feature aporta el suyo. */
+fun interface SessionCleaner {
+    suspend fun clear()
+}

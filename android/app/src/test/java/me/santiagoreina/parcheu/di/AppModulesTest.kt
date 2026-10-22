@@ -5,6 +5,8 @@ import me.santiagoreina.parcheu.BuildConfig
 import me.santiagoreina.parcheu.ParcheUApplication
 import me.santiagoreina.parcheu.core.error.ApiErrorMapper
 import me.santiagoreina.parcheu.core.network.TokenProvider
+import me.santiagoreina.parcheu.data.auth.AuthRepository
+import me.santiagoreina.parcheu.data.auth.SessionCleaner
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -28,6 +30,9 @@ class AppModulesTest {
         assertNotNull(koin.get<OkHttpClient>())
         assertNotNull(koin.get<TokenProvider>())
         assertNotNull(koin.get<ApiErrorMapper>())
+        // Cerrar sesión borra la caché del grafo: el repositorio de auth recibe el limpiador de Tu parche.
+        assertNotNull(koin.get<AuthRepository>())
+        assertEquals(1, koin.getAll<SessionCleaner>().size)
         assertEquals(BuildConfig.API_URL, koin.get<Retrofit>().baseUrl().toString())
     }
 }

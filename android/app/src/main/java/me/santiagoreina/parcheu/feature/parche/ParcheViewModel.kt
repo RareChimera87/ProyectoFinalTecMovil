@@ -126,13 +126,10 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
         }
     }
 
-    /**
-     * "Chatear" (F9). El contrato aún no expone el id del chat en [NodeDetail]; mientras tanto se usa el
-     * id del nodo (ver docs/pendientes-humanos.md, E3.4).
-     */
+    /** "Chatear" (F9) con el id del chat que trae [NodeDetail]; sin él no navega. */
     fun onChat() {
-        val sheet = (_state.value as? ParcheUiState.Loaded)?.sheet ?: return
-        viewModelScope.launch { _effects.send(ParcheEffect.Navigate(Chat(sheet.node.id))) }
+        val chatId = (_state.value as? ParcheUiState.Loaded)?.sheet?.detail?.chatId ?: return
+        viewModelScope.launch { _effects.send(ParcheEffect.Navigate(Chat(chatId))) }
     }
 
     /** "Ver resultado" de una simulación pendiente (F7/F8). */

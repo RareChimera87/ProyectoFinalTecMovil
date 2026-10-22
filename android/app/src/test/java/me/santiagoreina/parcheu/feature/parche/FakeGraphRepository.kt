@@ -67,7 +67,8 @@ object ParcheSamples {
     fun detail(node: NodeDto, withSimulation: Boolean = true) = NodeDetail(
         node = node,
         lastSimulation = if (withSimulation) summary(other = node) else null,
-        sharedModes = listOf(node.mode)
+        sharedModes = listOf(node.mode),
+        chatId = if (node.state == EdgeState.CONNECTED) "chat-${node.id}" else null
     )
 }
 

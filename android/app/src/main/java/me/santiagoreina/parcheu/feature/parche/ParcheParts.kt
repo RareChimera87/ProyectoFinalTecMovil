@@ -492,12 +492,15 @@ fun NodeDetailSheet(
                             enabled = !sheet.starting,
                             icon = parcheIconPainter(ParcheIcon.Replay)
                         )
-                        PrimaryButton(
-                            "Chatear",
-                            onChat,
-                            Modifier.fillMaxWidth(),
-                            icon = parcheIconPainter(ParcheIcon.Chat)
-                        )
+                        // Sin chatId (la API aún no lo manda) no hay a dónde ir: se oculta.
+                        if (sheet.detail?.chatId != null) {
+                            PrimaryButton(
+                                "Chatear",
+                                onChat,
+                                Modifier.fillMaxWidth(),
+                                icon = parcheIconPainter(ParcheIcon.Chat)
+                            )
+                        }
                     }
                     EdgeState.SIMULATED -> {
                         TonalButton(

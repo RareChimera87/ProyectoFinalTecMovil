@@ -150,7 +150,7 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
 
 No hay pasos humanos en consolas externas. Quedan decisiones de contrato para I1 y la dueña de E3.1/E6.3:
 
-- **`NodeDetail` sin id de chat.** "Chatear" (D2 → F9) abre `Chat(chatId = node.id)` porque `GET /v1/graph/nodes/{id}` no devuelve el chat. Agregar `chatId?` a `NodeDetail` y cambiar `ParcheViewModel.onChat()`.
+- **`NodeDetail.chatId` sin llenar en el servidor.** El contrato ya trae `chatId?` y D2 solo muestra "Chatear" cuando viene con valor. I1 debe devolverlo en `GET /v1/graph/nodes/{id}` para nodos `CONNECTED` (E4.6/E5.1); mientras tanto el botón permanece oculto.
 - **`GraphFof.parentId`.** D1 no pinta la capa de amigos de amigos (es de D6, ParcheU+); el hueco `viaId` de `FofCandidate` sigue abierto para E3.1/E6.3.
 - **Comunidades.** `GraphDto` no trae la lista de comunidades: el chip "Comunidad" abre D8 (ParcheU+) o el paywall (gratis) y D8 vuelve a D1 con `Parche(community)`, que pasa `?community=` a la API.
 - **Iconos.** D1-D5 usan iconos vectoriales propios (`ParcheIcons.kt`) hasta que exista la biblioteca de Material Symbols del sistema de diseño (E1.4).

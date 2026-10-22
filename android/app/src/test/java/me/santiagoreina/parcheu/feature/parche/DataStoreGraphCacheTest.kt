@@ -24,12 +24,22 @@ class DataStoreGraphCacheTest {
     @Test
     fun saveLoadAndClear() = runTest {
         val cache = cache()
-        assertNull(cache.load())
+        assertNull(cache.load("a"))
 
-        cache.save(ParcheSamples.content.copy(plus = true))
-        assertEquals(ParcheSamples.content.copy(plus = true), cache.load())
+        cache.save(ParcheSamples.content.copy(plus = true), "a")
+        assertEquals(ParcheSamples.content.copy(plus = true), cache.load("a"))
 
         cache.clear()
-        assertNull(cache.load())
+        assertNull(cache.load("a"))
+    }
+
+    @Test
+    fun graphOfAnotherUserIsNeverReturnedAndIsDiscarded() = runTest {
+        val cache = cache()
+        cache.save(ParcheSamples.content, "a")
+
+        assertNull(cache.load("b"))
+        // Ya se descartó: ni siquiera su dueña lo recupera.
+        assertNull(cache.load("a"))
     }
 }
