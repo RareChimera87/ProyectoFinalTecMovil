@@ -1,10 +1,7 @@
 package me.santiagoreina.parcheu.feature.modes
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,20 +13,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,7 +41,7 @@ import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoBanner
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
 import me.santiagoreina.parcheu.designsystem.components.compound.LoadingDots
-import me.santiagoreina.parcheu.designsystem.components.compound.ParcheUModalDialogContent
+import me.santiagoreina.parcheu.designsystem.components.compound.ParcheUModalDialog
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 /** Etiquetas de prueba de B2 y B3. */
@@ -226,70 +224,74 @@ private fun ParejaDialog(
     onCancel: () -> Unit,
 ) {
     val colors = ParcheUTheme.colors
-    BackHandler(onBack = onCancel)
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(colors.scrim)
-            // Tocar el fondo equivale a Cancelar (Pareja queda apagado).
-            .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onCancel),
-        contentAlignment = Alignment.Center,
+    // Dialog real (ventana propia): los servicios de accesibilidad no alcanzan B2 mientras B3 está abierto,
+    // y atrás o tocar el scrim equivalen a Cancelar (Pareja queda apagado).
+    ParcheUModalDialog(
+        onDismissRequest = onCancel,
+        // Con fuente grande la tarjeta puede exceder la pantalla: se desplaza en lugar de recortarse.
+        modifier = Modifier
+            .testTag(ModesTags.DIALOG)
+            .verticalScroll(rememberScrollState()),
     ) {
-        ParcheUModalDialogContent(
-            Modifier
-                .testTag(ModesTags.DIALOG)
-                .semantics { paneTitle = "Activar modo Pareja" }
-                .clickable(remember { MutableInteractionSource() }, indication = null) {},
+        ModeIconBox(Mode.PAREJA)
+        Text(
+            "Activar modo Pareja",
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+            color = colors.tx,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            if (dialog.birthDate != null) {
+                "Este modo es solo para mayores de 18 años. Esta es la fecha de nacimiento que verificamos en tu perfil."
+            } else {
+                "Este modo es solo para mayores de 18 años y aún no verificamos tu fecha de nacimiento. " +
+                    "Complétala en tu perfil para activarlo."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.mu,
+        )
+        if (dialog.birthDate != null) ReadOnlyBirthDate(dialog.birthDate, dialog.age)
+        val canCheck = dialog.birthDate != null
+        // La fila entera es la casilla (Role.Checkbox): TalkBack lee la frase una vez y tocar el texto la marca.
+        Row(
+            modifier = Modifier
+                .testTag(ModesTags.DIALOG_CHECK)
+                .toggleable(
+                    value = dialog.confirmed,
+                    enabled = canCheck,
+                    role = Role.Checkbox,
+                    onValueChange = onConfirmedChange,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ModeIconBox(Mode.PAREJA)
-            Text(
-                "Activar modo Pareja",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = colors.tx,
-                modifier = Modifier.semantics { heading() },
+            ParcheUCheckbox(
+                checked = dialog.confirmed,
+                onCheckedChange = onConfirmedChange,
+                contentDescription = "",
+                enabled = canCheck,
+                // Solo dibujo: la semántica la aporta la fila, así no se lee dos veces.
+                modifier = Modifier.clearAndSetSemantics {},
             )
             Text(
-                if (dialog.birthDate != null) {
-                    "Este modo es solo para mayores de 18 años. Esta es la fecha de nacimiento que verificamos en tu perfil."
-                } else {
-                    "Este modo es solo para mayores de 18 años y aún no verificamos tu fecha de nacimiento. " +
-                        "Complétala en tu perfil para activarlo."
-                },
+                PAREJA_CONFIRM_TEXT,
                 style = MaterialTheme.typography.bodyMedium,
-                color = colors.mu,
+                color = if (canCheck) colors.tx else colors.mu,
+                modifier = Modifier.weight(1f),
             )
-            if (dialog.birthDate != null) ReadOnlyBirthDate(dialog.birthDate, dialog.age)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ParcheUCheckbox(
-                    checked = dialog.confirmed,
-                    onCheckedChange = onConfirmedChange,
-                    contentDescription = PAREJA_CONFIRM_TEXT,
-                    enabled = dialog.birthDate != null,
-                    modifier = Modifier.testTag(ModesTags.DIALOG_CHECK),
-                )
-                Text(
-                    PAREJA_CONFIRM_TEXT,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (dialog.birthDate != null) colors.tx else colors.mu,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ParcheUTextButton(
-                    text = "Cancelar",
-                    onClick = onCancel,
-                    modifier = Modifier.weight(1f).testTag(ModesTags.DIALOG_CANCEL),
-                )
-                PrimaryButton(
-                    text = "Confirmar",
-                    onClick = onConfirm,
-                    enabled = dialog.canConfirm,
-                    modifier = Modifier.weight(1.3f).testTag(ModesTags.DIALOG_CONFIRM),
-                )
-            }
+        }
+        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ParcheUTextButton(
+                text = "Cancelar",
+                onClick = onCancel,
+                modifier = Modifier.weight(1f).testTag(ModesTags.DIALOG_CANCEL),
+            )
+            PrimaryButton(
+                text = "Confirmar",
+                onClick = onConfirm,
+                enabled = dialog.canConfirm,
+                modifier = Modifier.weight(1.3f).testTag(ModesTags.DIALOG_CONFIRM),
+            )
         }
     }
 }
