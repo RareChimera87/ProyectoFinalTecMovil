@@ -12,11 +12,15 @@ import androidx.navigation.compose.rememberNavController
 import me.santiagoreina.parcheu.ParcheUApp
 import me.santiagoreina.parcheu.core.ui.stubTag
 import org.junit.Assert.assertEquals
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
+
+/** Rutas cuya feature ya reemplazó el stub (tienen sus propias pruebas). Cada feature agrega la suya aquí. */
+private val routesWithRealScreen: Set<AppRoute> = setOf(TwinQuestions)
 
 /** Cada ruta del inventario (A1..H3, lista de chats, confirmaciones) se puede navegar y muestra su stub. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
@@ -27,6 +31,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
 
     @Test
     fun navigatesToRouteAndShowsItsStub() {
+        assumeTrue("${entry.route} ya tiene su pantalla real", entry.route !in routesWithRealScreen)
         lateinit var navController: NavHostController
         composeRule.setContent {
             navController = rememberNavController()
