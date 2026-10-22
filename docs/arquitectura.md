@@ -736,7 +736,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Jib Gradle plugin | 3.4.5 (verificar) | Imagen |
 | Gradle Play Publisher | 3.12.x (verificar compatibilidad con AGP 9) | Subida a Play |
 | Terraform / provider google, google-beta | 1.15 / 7.x (verificar) | Infra |
-| `@firebase/rules-unit-testing` | 4.x (verificar) | Tests de reglas |
+| `@firebase/rules-unit-testing` | 6.0.0 (con `firebase` 13.1.0 y Node 24; el emulador pide Java 21) | Tests de reglas |
 
 ---
 
