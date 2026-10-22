@@ -93,15 +93,15 @@ else omitir /i/ABC123 "firebase.json no tiene el rewrite /i/** -> /i/index.html 
 if [[ "$TIENE_WELLKNOWN" == "si" ]]; then verificar /.well-known/assetlinks.json '[]'
 else omitir /.well-known/assetlinks.json "firebase.json ignora **/.* y no exceptúa !**/.well-known/** (pendiente en E0.8/E6.1)"; fi
 
-# Todas las filas de la tabla de retención de arquitectura.md §10.2 deben estar en /privacidad.
+# La tabla de retención de arquitectura.md §10.2 debe estar en /privacidad: mismas filas, en el mismo
+# orden, y con los mismos plazos numéricos (columnas "Plazo o evento" y "Al borrar la cuenta"). El
+# texto se redacta distinto para el usuario, pero un "90 días" cambiado por "9 días" debe fallar.
 ARQ="$RAIZ/docs/arquitectura.md"
 if [[ -f "$ARQ" ]]; then
-  filas="$(awk '/^### 10\.2 /{f=1;next} /^### 10\.3 /{f=0} f && /^\| /' "$ARQ" | grep -vc -e '^| Dato ' -e '^|---' || true)"
-  celdas="$(grep -c '^<tr><td>' "$PUBLIC/privacidad.html" || true)"
-  if [[ "$filas" != "$celdas" ]]; then
-    echo "FALLA retención: arquitectura §10.2 tiene $filas filas y /privacidad $celdas"; fallos=$((fallos + 1))
+  if resultado="$(node "$RAIZ/scripts/test/legal-retention.js" "$ARQ" "$PUBLIC/privacidad.html")"; then
+    echo "OK    tabla de retención ($resultado filas, mismos plazos que arquitectura §10.2)"
   else
-    echo "OK    tabla de retención ($filas filas)"
+    echo "FALLA retención: $resultado"; fallos=$((fallos + 1))
   fi
 fi
 
