@@ -122,7 +122,7 @@ class ChatService(
      * `POST /v1/chats/{id}/messages`. Valida membresía, suspensión, bloqueo, estado y longitud;
      * guarda con `learnable` según el consentimiento vigente del autor para el modo del chat; escribe
      * en Firestore y avisa a los demás miembros que no lo silenciaron. Repetir el `clientId` devuelve
-     * el mismo mensaje sin duplicarlo (y vuelve a escribir el mismo documento, por si el espejo falló).
+     * el mismo mensaje sin duplicarlo (y vuelve a escribir el chat y el mensaje, por si el espejo falló).
      */
     suspend fun send(sender: UserRecord, chatId: UUID, request: SendMessage): MessageDto {
         val clientId = request.clientId.trim()
@@ -140,6 +140,7 @@ class ChatService(
 
         repo.findByClientId(sender.id, clientId)?.let { existing ->
             if (existing.chatId != chatId) throw Conflict("clientId ya se usó en otro chat")
+            mirror.upsertChat(chat.toDoc())
             mirror.upsertMessage(chatId, existing.toDoc(sender.firebaseUid))
             return toOwnDto(existing)
         }
@@ -154,6 +155,8 @@ class ChatService(
         val learnable = repo.learningConsent(sender.id, chat.mode)
         val saved = repo.saveMessage(NewMessage(chatId, sender.id, clientId, text, learnable, now))
         if (saved.message.chatId != chatId) throw Conflict("clientId ya se usó en otro chat")
+        // Repara el espejo del chat si la conexión lo dejó sin documento (las reglas de messages leen el chat padre).
+        mirror.upsertChat(chat.toDoc())
         mirror.upsertMessage(chatId, saved.message.toDoc(sender.firebaseUid))
         if (saved.inserted) notifyOthers(chat, sender, others, saved.message)
         return toOwnDto(saved.message)

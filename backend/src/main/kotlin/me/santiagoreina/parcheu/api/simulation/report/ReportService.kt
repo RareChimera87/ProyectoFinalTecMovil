@@ -87,8 +87,11 @@ class ReportService(
                 // Reintento de quien completó el par cuando la conexión falló a medias (arista/chat/avisos):
                 // si todavía no hay chat DIRECT, se repara de forma idempotente en vez de responder 409.
                 val decisions = repo.decisions(record.id)
-                val incomplete = body.connect && decisions[viewer] == true && decisions[other] == true &&
-                    chat.findDirect(viewer, other, record.mode) == null
+                val mutual = body.connect && decisions[viewer] == true && decisions[other] == true
+                val existing = if (mutual) chat.findDirect(viewer, other, record.mode) else null
+                // Par completo y chat ya creado: se reintenta el espejo de Firestore (idempotente, tolerante) antes del 409.
+                if (existing != null) chat.createDirectTolerant(viewer, other, record.mode)
+                val incomplete = mutual && existing == null
                 if (!incomplete) throw Conflict("Ya decidiste sobre esta simulación")
                 return DecisionResult(DecisionStatus.CONNECTED, connect(record, viewer, other).toString())
             }
@@ -97,16 +100,19 @@ class ReportService(
         val otherChoice = saved[other]
         return when {
             !body.connect -> {
-                // Si la otra persona ya había pedido conectar, su arista PENDING vuelve a SIMULATED. Sin aviso.
-                if (otherChoice == true) edges.apply(EdgeEvent.Declined(viewer, other, record.mode, EdgeSource.DECISION))
+                // La arista no cambia: bajar PENDING a SIMULATED revelaría el rechazo en el grafo de quien conectó (§5.2).
                 DecisionResult(DecisionStatus.DECLINED)
             }
             otherChoice == null -> {
                 edges.apply(EdgeEvent.InterestShown(viewer, other, record.mode, EdgeSource.DECISION))
                 DecisionResult(DecisionStatus.WAITING)
             }
-            // La otra persona dijo "Ahora no": no se revela. Quien conecta ve lo mismo que si nadie hubiera respondido.
-            otherChoice == false -> DecisionResult(DecisionStatus.WAITING)
+            // La otra persona dijo "Ahora no": no se revela. Quien conecta ve lo mismo que si nadie hubiera respondido
+            // (también en el grafo: arista PENDING, igual que en el caso normal).
+            otherChoice == false -> {
+                edges.apply(EdgeEvent.InterestShown(viewer, other, record.mode, EdgeSource.DECISION))
+                DecisionResult(DecisionStatus.WAITING)
+            }
             else -> {
                 // Solo la decisión que completa el par llega aquí (repo.decide las serializa): un único
                 // chat, una única arista CONNECTED y un único aviso por persona.
