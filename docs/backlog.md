@@ -625,7 +625,7 @@ API del grafo, layout radial, componente G0, pantalla D1-D5 y suite de invariant
 
 **Descripción.** D1 con grafo, chips de filtro funcionales (modo, afinidad 70 %+, comunidad), StatCards, banner bloqueado para gratis, D2 bottom sheet con variantes conectados, simularon y pendiente ('Simular de nuevo' → F4, 'Chatear' → F9), D3 vacío, D4 skeleton, D5 error con reintentar, I2 claro. Pinta al instante el último grafo guardado en DataStore.
 
-**Hueco de contrato (E3.3, ronda 2).** `GraphFof.parentId` (la conexión por la que se llega al amigo de amigo) es nulo porque `FofCandidate` y la consulta de arquitectura §6.2 no lo devuelven. Sin él, el fof conserva la posición radial y no dibuja la línea punteada. Coordinar con E3.1/E6.3 un campo `viaId` (uno de los mutuals; nunca la Pareja, que ya se excluye de 'mine') en `FofCandidate` y en la consulta SQL; mientras tanto, mapear `parentId = null`.
+**Hueco de contrato (E3.3, ronda 2).** `GraphFof.parentId` (la conexión por la que se llega al amigo de amigo) es nulo porque `FofCandidate` y la consulta de arquitectura §6.2 no lo devuelven. Sin él, el fof conserva la posición radial y no dibuja la línea punteada. Coordinar con E3.1/E6.3 un campo `viaId` (uno de los mutuals) en `FofCandidate` y en la consulta SQL; mientras tanto, mapear `parentId = null`. `viaId` debe salir de la misma fila `e.me` de la consulta §6.2, que ya filtra `e.mode <> 'PAREJA'` y `e.state = 'CONNECTED'`, y nunca de una subconsulta aparte: 'mine' solo excluye la arista Pareja entre el observador y X, no las aristas Pareja de X con el candidato, y una subconsulta sin ese filtro revelaría una arista de Pareja que no involucra al observador (regla 1 de `GraphVisibilityPolicy`).
 
 **Criterios de aceptación (verificables):**
 
@@ -651,6 +651,7 @@ API del grafo, layout radial, componente G0, pantalla D1-D5 y suite de invariant
 - [ ] `scripts/demo-mutacion-privacidad.sh` termina con código ≠ 0 con la mutación y 0 sin ella, y deja el árbol limpio.
 - [ ] El test de registro falla si se agrega una clase `ThirdPartyView` sin registrarla (probado con una clase de prueba).
 - [ ] La propiedad de memorias por modo corre ≥ 1.000 casos y falla si `TwinPromptBuilder` deja de filtrar por modo (variante de la demo de mutación).
+- [ ] Propiedad `viaId`: cuando `FofCandidate` incluya `viaId`, nunca es un usuario cuya arista con el candidato sea de Pareja (ni no CONNECTED).
 
 ### E4 · Conocer (épica mayor)
 
