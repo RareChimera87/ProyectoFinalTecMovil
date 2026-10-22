@@ -44,11 +44,17 @@ class InMemoryChatRepository : ChatRepository {
 
     fun block(blocker: UUID, blocked: UUID) = synchronized(lock) { blocks += blocker to blocked }
 
+    fun unblock(blocker: UUID, blocked: UUID) = synchronized(lock) { blocks -= blocker to blocked }
+
     fun setLearning(userId: UUID, mode: Mode, granted: Boolean) = synchronized(lock) { learning[userId to mode] = granted }
 
     override suspend fun getOrCreateDirect(a: UUID, b: UUID, mode: Mode, now: Instant): CreatedChat = synchronized(lock) {
         val existing = chats.values.firstOrNull { it.type == ChatType.DIRECT && it.mode == mode && it.members.keys == setOf(a, b) }
-        if (existing != null) CreatedChat(existing.toRecord(), created = false) else CreatedChat(insert(NewChat(ChatType.DIRECT, mode, listOf(a, b), now)), created = true)
+        if (existing != null) {
+            // Un DIRECT cerrado por un bloqueo ya levantado se reabre (el servicio ya descartó un bloqueo vigente).
+            existing.status = ChatStatus.OPEN
+            CreatedChat(existing.toRecord(), created = false)
+        } else CreatedChat(insert(NewChat(ChatType.DIRECT, mode, listOf(a, b), now)), created = true)
     }
 
     override suspend fun create(chat: NewChat): ChatRecord = synchronized(lock) { insert(chat) }

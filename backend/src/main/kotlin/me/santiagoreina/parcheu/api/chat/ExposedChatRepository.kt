@@ -52,6 +52,8 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
         exec("select pg_advisory_xact_lock(hashtextextended('chat-direct:$low:$high:${mode.name}', 0))")
         val existing = findDirect(low, high, mode)
         if (existing != null) {
+            // Un DIRECT cerrado por un bloqueo ya levantado se reabre (el servicio ya descartó un bloqueo vigente).
+            Chats.update({ (Chats.id eq existing) and (Chats.status eq ChatStatus.CLOSED) }) { it[Chats.status] = ChatStatus.OPEN }
             CreatedChat(loadChat(existing)!!, created = false)
         } else {
             CreatedChat(insertChat(NewChat(ChatType.DIRECT, mode, listOf(a, b), now)), created = true)

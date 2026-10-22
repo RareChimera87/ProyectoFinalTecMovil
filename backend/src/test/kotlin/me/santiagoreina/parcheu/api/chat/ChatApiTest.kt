@@ -278,4 +278,20 @@ class ChatApiTest : FunSpec({
         val error = runCatching { runBlocking { f.chat.service.createDirect(f.carla, f.ana, Mode.AMISTAD) } }.exceptionOrNull()
         (error as me.santiagoreina.parcheu.api.platform.errors.DomainException).code shouldBe ErrorCode.BLOCKED
     }
+
+    test("un DIRECT cerrado por bloqueo se reabre al desbloquear y createDirect permite escribir de nuevo") {
+        val f = Fixture()
+        val first = f.direct()
+        f.repo.block(f.ana, f.beto)
+        runBlocking { f.chat.service.close(first.id) }
+        f.mirror.chat(first.id)!!.status shouldBe ChatStatus.CLOSED
+        f.repo.unblock(f.ana, f.beto)
+        val reopened = f.direct()
+        reopened.id shouldBe first.id
+        reopened.status shouldBe ChatStatus.OPEN
+        f.mirror.chat(first.id)!!.status shouldBe ChatStatus.OPEN
+        testApplication {
+            f.container().let { startApp(it).send("ana", first.id, "a-1", "hola de nuevo").status shouldBe HttpStatusCode.OK }
+        }
+    }
 })

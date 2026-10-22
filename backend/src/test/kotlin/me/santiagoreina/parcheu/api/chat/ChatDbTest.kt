@@ -101,6 +101,21 @@ class ChatDbTest : FunSpec({
         }
     }
 
+    test("un DIRECT cerrado se reabre al desbloquear y vuelve a aceptar mensajes").config(enabled = TestDatabase.enabled) {
+        withDb { env ->
+            val ana = env.user("Ana")
+            val beto = env.user("Beto")
+            val chat = env.service.createDirect(ana.id, beto.id, Mode.AMISTAD)
+            env.service.close(chat.id)
+            expectCode(ErrorCode.FORBIDDEN) { env.service.send(ana, chat.id, SendMessage("a-0", "hola")) }
+            val reopened = env.service.createDirect(beto.id, ana.id, Mode.AMISTAD)
+            reopened.id shouldBe chat.id
+            reopened.status shouldBe me.santiagoreina.parcheu.contract.ChatStatus.OPEN
+            env.service.send(ana, chat.id, SendMessage("a-1", "hola otra vez"))
+            env.messageRows(chat.id) shouldHaveSize 1
+        }
+    }
+
     test("repetir clientId no duplica en Postgres ni en Firestore").config(enabled = TestDatabase.enabled) {
         withDb { env ->
             val ana = env.user("Ana")
