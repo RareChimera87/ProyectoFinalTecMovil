@@ -50,9 +50,8 @@ object AvatarSizes {
 }
 
 /** Hasta dos iniciales en mayúsculas: primera letra de las dos primeras palabras. Vacío si no hay nombre. */
-fun initialsOf(name: String): String =
-    name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
-        .joinToString("") { it.first().uppercase() }
+fun initialsOf(name: String): String = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
+    .joinToString("") { it.first().uppercase() }
 
 /**
  * Avatar de iniciales. El relleno es violeta con el alpha de [affinityAlpha] (50 o menos da .22; 95 o más
@@ -70,7 +69,7 @@ fun AvatarInitials(
     size: Dp = AvatarSizes.List,
     anonymous: Boolean = false,
     anonymousIcon: Painter? = null,
-    anonymousDescription: String = ANONYMOUS_AVATAR_DESCRIPTION
+    anonymousDescription: String = ANONYMOUS_AVATAR_DESCRIPTION,
 ) {
     val colors = ParcheUTheme.colors
     if (anonymous) {
@@ -81,14 +80,14 @@ fun AvatarInitials(
                 .background(colors.s2, CircleShape)
                 .dashedBorder(colors.prt, 1.5.dp, size / 2)
                 .clearAndSetSemantics { contentDescription = anonymousDescription },
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             if (anonymousIcon != null) {
                 Icon(
                     painter = anonymousIcon,
                     contentDescription = null,
                     tint = colors.prt,
-                    modifier = Modifier.size(size * 0.55f)
+                    modifier = Modifier.size(size * 0.55f),
                 )
             } else {
                 PersonSilhouette(colors.prt, Modifier.size(size * 0.55f))
@@ -102,17 +101,17 @@ fun AvatarInitials(
                 .clip(CircleShape)
                 .background(palette.fill, CircleShape)
                 .clearAndSetSemantics { contentDescription = name },
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = initialsOf(name),
                 style = ParcheUTheme.textStyles.initials.copy(
                     fontSize = (size.value * 0.38f).coerceAtLeast(10f).sp,
                     lineHeight = (size.value * 0.48f).coerceAtLeast(12f).sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 ),
                 color = palette.content,
-                maxLines = 1
+                maxLines = 1,
             )
         }
     }
@@ -126,8 +125,8 @@ private fun PersonSilhouette(color: Color, modifier: Modifier) {
             radius = size.width * 0.22f,
             center = Offset(
                 size.width / 2,
-                size.height * 0.3f
-            )
+                size.height * 0.3f,
+            ),
         )
         drawArc(
             color,
@@ -135,7 +134,7 @@ private fun PersonSilhouette(color: Color, modifier: Modifier) {
             sweepAngle = 180f,
             useCenter = true,
             topLeft = Offset(size.width * 0.1f, size.height * 0.58f),
-            size = Size(size.width * 0.8f, size.height * 0.8f)
+            size = Size(size.width * 0.8f, size.height * 0.8f),
         )
     }
 }
@@ -157,7 +156,7 @@ fun StackedAvatars(
     borderWidth: Dp = 2.dp,
     borderColor: Color = ParcheUTheme.colors.s1,
     maxVisible: Int = 4,
-    anonymousIcon: Painter? = null
+    anonymousIcon: Painter? = null,
 ) {
     val colors = ParcheUTheme.colors
     val visible = avatars.take(maxVisible)
@@ -166,7 +165,7 @@ fun StackedAvatars(
     Row(
         modifier = modifier.semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.spacedBy(-overlap),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         visible.forEach {
             AvatarInitials(
@@ -175,7 +174,7 @@ fun StackedAvatars(
                 anonymous = it.anonymous,
                 anonymousIcon = anonymousIcon,
                 size = size,
-                modifier = ring
+                modifier = ring,
             )
         }
         if (extra > 0) {
@@ -185,14 +184,14 @@ fun StackedAvatars(
                     .clip(CircleShape)
                     .background(colors.s2, CircleShape)
                     .then(ring),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = "+$extra",
                     style = ParcheUTheme.textStyles.initials.copy(
-                        fontSize = (size.value * 0.34f).sp
+                        fontSize = (size.value * 0.34f).sp,
                     ),
-                    color = colors.tx
+                    color = colors.tx,
                 )
             }
         }
@@ -209,7 +208,7 @@ fun AffinityRing(
     affinity: Int,
     modifier: Modifier = Modifier,
     large: Boolean = false,
-    label: String = "Afinidad $affinity por ciento"
+    label: String = "Afinidad $affinity por ciento",
 ) {
     val colors = ParcheUTheme.colors
     val diameter = if (large) 120.dp else 112.dp
@@ -219,7 +218,7 @@ fun AffinityRing(
         modifier = modifier.size(diameter).semantics(mergeDescendants = true) {
             contentDescription = label
         },
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(diameter)) {
             val strokePx = stroke.toPx()
@@ -232,7 +231,7 @@ fun AffinityRing(
                 useCenter = false,
                 topLeft = Offset(inset, inset),
                 size = arcSize,
-                style = Stroke(strokePx)
+                style = Stroke(strokePx),
             )
             if (fraction > 0f) {
                 drawArc(
@@ -242,7 +241,7 @@ fun AffinityRing(
                     useCenter = false,
                     topLeft = Offset(inset, inset),
                     size = arcSize,
-                    style = Stroke(strokePx, cap = StrokeCap.Round)
+                    style = Stroke(strokePx, cap = StrokeCap.Round),
                 )
             }
         }
@@ -251,12 +250,12 @@ fun AffinityRing(
             style = ParcheUTheme.textStyles.price.copy(
                 fontSize = (if (large) 31 else 29).sp,
                 lineHeight = 36.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             ),
             color = colors.tx,
             modifier = Modifier.width(diameter - stroke * 2),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            maxLines = 1
+            maxLines = 1,
         )
     }
 }

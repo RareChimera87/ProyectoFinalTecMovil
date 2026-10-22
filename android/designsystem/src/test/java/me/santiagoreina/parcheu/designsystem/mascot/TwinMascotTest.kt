@@ -47,7 +47,7 @@ class TwinMascotTest {
             current.value = s
             composeRule.waitForIdle()
             composeRule.onNodeWithTag(
-                "m"
+                "m",
             ).assertWidthIsEqualTo(s.width).assertHeightIsEqualTo(s.height)
         }
     }
@@ -73,7 +73,7 @@ class TwinMascotTest {
         val gray = androidx.compose.ui.graphics.Color(
             0x6D / 255f,
             0x4A / 255f,
-            0xFF / 255f
+            0xFF / 255f,
         ).toGray()
         // CSS grayscale(1) del violeta #6D4AFF da cerca de #5E5E5E (no #272727).
         assertEquals(0.37f, gray.red, 0.02f)
@@ -94,8 +94,7 @@ class TwinMascotTest {
         return first to phase()
     }
 
-    private fun phase(): Float =
-        composeRule.onNodeWithTag("m").fetchSemanticsNode().config[MascotPhaseKey]
+    private fun phase(): Float = composeRule.onNodeWithTag("m").fetchSemanticsNode().config[MascotPhaseKey]
 
     @Test
     fun animationsEnabledByDefault() {

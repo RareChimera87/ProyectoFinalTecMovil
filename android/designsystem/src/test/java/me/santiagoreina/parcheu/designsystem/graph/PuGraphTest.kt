@@ -56,7 +56,7 @@ class PuGraphTest {
     fun `la capa de amigos de amigos tambien se anuncia`() {
         setGraph(fof = PuGraphSamples.fof)
         composeRule.onNodeWithContentDescription(
-            "Felipe R., 84 % afín estimada, amigo de amigo"
+            "Felipe R., 84 % afín estimada, amigo de amigo",
         ).assertExists()
         composeRule.onAllNodesWithContentDescription("Alguien, ", substring = true)
             .assertCountEquals(4) // Nico + 3 fof anónimos.

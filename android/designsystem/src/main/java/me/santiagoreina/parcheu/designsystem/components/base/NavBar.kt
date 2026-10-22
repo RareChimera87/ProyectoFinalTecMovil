@@ -48,7 +48,7 @@ data class NavBarItem(
     val activeIcon: Painter = icon,
     val unread: Int = 0,
     /** Texto de TalkBack para el estado del badge, p. ej. "3 sin leer"; si es nulo se usa el número. */
-    val unreadDescription: String? = null
+    val unreadDescription: String? = null,
 )
 
 /** Etiqueta de prueba del badge de un ítem de la NavBar. */
@@ -64,7 +64,7 @@ fun ParcheUNavBar(
     items: List<NavBarItem>,
     activeKey: String,
     onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val colors = ParcheUTheme.colors
     Column(
@@ -77,22 +77,22 @@ fun ParcheUNavBar(
                     colors.ln,
                     Offset(0f, 0f),
                     Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx()
+                    strokeWidth = 1.dp.toPx(),
                 )
             }
-            .windowInsetsPadding(WindowInsets.navigationBars)
+            .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().height(ParcheUSizes.NavBar).selectableGroup(),
             horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             items.forEach { item ->
                 NavBarEntry(
                     item = item,
                     selected = item.key == activeKey,
                     onClick = { onSelect(item.key) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -100,12 +100,7 @@ fun ParcheUNavBar(
 }
 
 @Composable
-private fun NavBarEntry(
-    item: NavBarItem,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier
-) {
+private fun NavBarEntry(item: NavBarItem, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val colors = ParcheUTheme.colors
     val content = if (selected) colors.onprc else colors.mu
     val badgeText = item.unreadDescription ?: item.unread.toString()
@@ -118,7 +113,7 @@ private fun NavBarEntry(
                 if (item.unread > 0) stateDescription = badgeText
             },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Box(
@@ -127,23 +122,23 @@ private fun NavBarEntry(
                     .size(56.dp, 30.dp)
                     .clip(RoundedCornerShape(ParcheURadius.NavPill))
                     .background(
-                        if (selected) colors.prc else androidx.compose.ui.graphics.Color.Transparent
+                        if (selected) colors.prc else androidx.compose.ui.graphics.Color.Transparent,
                     ),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     painter = if (selected) item.activeIcon else item.icon,
                     contentDescription = null,
                     tint = content,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
                 )
             }
             if (item.unread > 0) {
                 UnreadBadge(
                     count = item.unread,
                     modifier = Modifier.align(
-                        Alignment.TopEnd
-                    ).offset(x = (-2).dp, y = (-4).dp).testTag(navBarBadgeTag(item.key))
+                        Alignment.TopEnd,
+                    ).offset(x = (-2).dp, y = (-4).dp).testTag(navBarBadgeTag(item.key)),
                 )
             }
         }
@@ -151,11 +146,11 @@ private fun NavBarEntry(
             text = item.label,
             style =
             MaterialTheme.typography.labelSmall.copy(
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             ),
             color = content,
             maxLines = 1,
-            modifier = Modifier.sizeIn(minHeight = 14.dp)
+            modifier = Modifier.sizeIn(minHeight = 14.dp),
         )
     }
 }
@@ -169,13 +164,13 @@ private fun UnreadBadge(count: Int, modifier: Modifier = Modifier) {
             .sizeIn(minWidth = 16.dp, minHeight = 16.dp)
             .clip(ParcheUTheme.shapes.pill)
             .background(colors.error),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = if (count > 99) "99+" else count.toString(),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
             color = colors.onError,
-            modifier = Modifier.padding(horizontal = 4.dp)
+            modifier = Modifier.padding(horizontal = 4.dp),
         )
     }
 }

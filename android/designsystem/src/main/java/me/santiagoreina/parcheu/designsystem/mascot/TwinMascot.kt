@@ -39,7 +39,8 @@ enum class TwinMascotSize(val width: Dp) {
     S(30.dp),
     M(56.dp),
     L(80.dp),
-    XL(116.dp);
+    XL(116.dp),
+    ;
 
     val height: Dp get() = width * MASCOT_ASPECT_RATIO
 }
@@ -60,7 +61,7 @@ fun TwinMascot(
     error: Boolean = false,
     talking: Boolean = false,
     animationsEnabled: Boolean = rememberAnimationsEnabled(),
-    contentDescription: String? = null
+    contentDescription: String? = null,
 ) {
     val colors = ParcheUTheme.colors
     val base =
@@ -82,9 +83,9 @@ fun TwinMascot(
                     animationSpec =
                     infiniteRepeatable(
                         tween(TALK_PERIOD_MS, easing = LinearEasing),
-                        RepeatMode.Reverse
+                        RepeatMode.Reverse,
                     ),
-                    label = "mascotPhase"
+                    label = "mascotPhase",
                 )
                 .value
         } else {
@@ -105,7 +106,7 @@ fun TwinMascot(
         modifier
             .size(size.width, size.height)
             .then(if (error) Modifier.alpha(ERROR_ALPHA) else Modifier)
-            .then(semanticsModifier)
+            .then(semanticsModifier),
     ) {
         drawMascot(body, features, phase)
     }
@@ -153,7 +154,7 @@ private fun DrawScope.drawMascot(body: Color, features: Color, phase: Float) {
             body,
             topLeft = Offset(baseX - stalkW / 2f, ballCy),
             size = Size(stalkW, top - ballCy + bodyH * 0.02f),
-            cornerRadius = CornerRadius(stalkW / 2f)
+            cornerRadius = CornerRadius(stalkW / 2f),
         )
         drawCircle(body, radius = ballR, center = Offset(baseX, ballCy))
     }
@@ -175,11 +176,11 @@ private fun DrawScope.drawMascot(body: Color, features: Color, phase: Float) {
                 w * 0.5f - mouthW / 2f,
                 mouthTop - openH,
                 w * 0.5f + mouthW / 2f,
-                mouthTop + openH
+                mouthTop + openH,
             ),
             0f,
             180f,
-            true
+            true,
         )
         close()
     }

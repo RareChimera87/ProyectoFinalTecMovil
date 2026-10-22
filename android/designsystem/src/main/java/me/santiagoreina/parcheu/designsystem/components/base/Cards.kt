@@ -31,7 +31,7 @@ enum class ParcheUCardVariant(val radius: Dp, val padding: PaddingValues) {
     Standard(ParcheURadius.Card, PaddingValues(16.dp)),
     Stat(ParcheURadius.FieldLarge, PaddingValues(horizontal = 14.dp, vertical = 12.dp)),
     Suggestion(ParcheURadius.Card, PaddingValues(14.dp)),
-    ActivePlan(ParcheURadius.Hero, PaddingValues(16.dp))
+    ActivePlan(ParcheURadius.Hero, PaddingValues(16.dp)),
 }
 
 /** Tarjeta de superficie s1. Con [onClick] es un botón (área táctil de al menos 48dp); sin él es estática. */
@@ -41,7 +41,7 @@ fun ParcheUCard(
     variant: ParcheUCardVariant = ParcheUCardVariant.Standard,
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
-    content: @Composable ColumnScope.() -> Unit
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = ParcheUTheme.colors
     val shape = RoundedCornerShape(variant.radius)
@@ -55,22 +55,22 @@ fun ParcheUCard(
                     Modifier.border(BorderStroke(1.5.dp, colors.plusGradient.brush()), shape)
                 } else {
                     Modifier
-                }
+                },
             )
             .then(
                 if (onClick != null) {
                     Modifier.touchTarget().clickable(
                         enabled = enabled,
                         role = Role.Button,
-                        onClick = onClick
+                        onClick = onClick,
                     )
                 } else {
                     Modifier
-                }
+                },
             )
             .padding(variant.padding),
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        content = content
+        content = content,
     )
 }
 
@@ -83,25 +83,25 @@ fun SectionHeader(
     title: String,
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
-    onActionClick: (() -> Unit)? = null
+    onActionClick: (() -> Unit)? = null,
 ) {
     val colors = ParcheUTheme.colors
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
             text = title.uppercase(),
             style = ParcheUTheme.textStyles.overline,
             color = colors.mu,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         if (actionLabel != null && onActionClick != null) {
             ParcheUTextButton(
                 text = actionLabel,
                 onClick = onActionClick,
-                size = ParcheUButtonSize.Small
+                size = ParcheUButtonSize.Small,
             )
         }
     }
@@ -116,9 +116,9 @@ fun StatCard(value: String, label: String, modifier: Modifier = Modifier) {
             text = value,
             style = MaterialTheme.typography.titleLarge.copy(
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             ),
-            color = colors.tx
+            color = colors.tx,
         )
         Text(text = label, style = MaterialTheme.typography.bodySmall, color = colors.mu)
     }

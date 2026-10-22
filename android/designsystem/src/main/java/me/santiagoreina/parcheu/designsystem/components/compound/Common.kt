@@ -17,7 +17,7 @@ internal fun Modifier.dashedBorder(
     width: Dp,
     radius: Dp,
     dash: Dp = width * 4,
-    gap: Dp = width * 3
+    gap: Dp = width * 3,
 ): Modifier = drawBehind {
     val strokeWidth = width.toPx()
     val inset = strokeWidth / 2f
@@ -27,12 +27,12 @@ internal fun Modifier.dashedBorder(
         topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
         size = androidx.compose.ui.geometry.Size(
             size.width - strokeWidth,
-            size.height - strokeWidth
+            size.height - strokeWidth,
         ),
         cornerRadius = CornerRadius(corner, corner),
         style = Stroke(
             width = strokeWidth,
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash.toPx(), gap.toPx()))
-        )
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash.toPx(), gap.toPx())),
+        ),
     )
 }

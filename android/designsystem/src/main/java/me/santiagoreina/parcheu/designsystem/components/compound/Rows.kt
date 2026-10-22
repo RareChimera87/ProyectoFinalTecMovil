@@ -47,7 +47,7 @@ fun SettingsRow(
     subtitle: String? = null,
     destructive: Boolean = false,
     enabled: Boolean = true,
-    trailing: (@Composable RowScope.() -> Unit)? = null
+    trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val colors = ParcheUTheme.colors
     val titleColor = if (destructive) colors.error else colors.tx
@@ -61,33 +61,33 @@ fun SettingsRow(
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(boxColor, RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 painter = icon,
                 contentDescription = null,
                 tint = if (enabled) iconTint else iconTint.disabled(),
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(22.dp),
             )
         }
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                color = if (enabled) titleColor else titleColor.disabled()
+                color = if (enabled) titleColor else titleColor.disabled(),
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (enabled) colors.mu else colors.mu.disabled()
+                    color = if (enabled) colors.mu else colors.mu.disabled(),
                 )
             }
         }
@@ -102,11 +102,11 @@ fun IconCircle(
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = 40.dp,
     container: Color = ParcheUTheme.colors.prc,
-    tint: Color = ParcheUTheme.colors.onprc
+    tint: Color = ParcheUTheme.colors.onprc,
 ) {
     Box(
         modifier = modifier.size(size).background(container, CircleShape),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.55f))
     }
@@ -125,7 +125,7 @@ fun NotificationRow(
     onClick: () -> Unit,
     leading: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    unreadLabel: String = "No leída"
+    unreadLabel: String = "No leída",
 ) {
     val colors = ParcheUTheme.colors
     Row(
@@ -138,25 +138,25 @@ fun NotificationRow(
             }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         leading()
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium
+                    fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium,
                 ),
                 color = colors.tx,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = body,
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.mu,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Text(text = time, style = MaterialTheme.typography.labelSmall, color = colors.mu)
         }
@@ -166,7 +166,7 @@ fun NotificationRow(
                     .padding(top = 6.dp)
                     .size(8.dp)
                     .background(colors.prt, CircleShape)
-                    .clearAndSetSemantics { }
+                    .clearAndSetSemantics { },
             )
         }
     }

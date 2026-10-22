@@ -15,7 +15,7 @@ fun SplashRoute(
     @Suppress("UNUSED_PARAMETER") route: Splash,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: SplashViewModel = koinViewModel()
+    viewModel: SplashViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) {

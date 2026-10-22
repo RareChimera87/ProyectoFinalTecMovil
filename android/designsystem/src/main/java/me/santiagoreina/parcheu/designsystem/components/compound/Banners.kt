@@ -33,7 +33,7 @@ fun InfoBanner(
     modifier: Modifier = Modifier,
     icon: Painter? = null,
     actionLabel: String? = null,
-    onActionClick: (() -> Unit)? = null
+    onActionClick: (() -> Unit)? = null,
 ) {
     val colors = ParcheUTheme.colors
     val shape = RoundedCornerShape(ParcheURadius.FieldLarge)
@@ -44,27 +44,27 @@ fun InfoBanner(
             .background(colors.prc, shape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (icon != null) {
             Icon(
                 icon,
                 contentDescription = null,
                 tint = colors.onprc,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
             )
         }
         Text(
             text = text,
             style = MaterialTheme.typography.bodySmall,
             color = colors.onprc,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         if (actionLabel != null && onActionClick != null) {
             ParcheUTextButton(
                 text = actionLabel,
                 onClick = onActionClick,
-                size = ParcheUButtonSize.Small
+                size = ParcheUButtonSize.Small,
             )
         }
     }
@@ -82,7 +82,7 @@ fun InfoNote(text: String, modifier: Modifier = Modifier, icon: Painter? = null)
             .background(colors.s2, shape)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = colors.mu, modifier = Modifier.size(18.dp))
@@ -91,7 +91,7 @@ fun InfoNote(text: String, modifier: Modifier = Modifier, icon: Painter? = null)
             text = text,
             style = MaterialTheme.typography.bodySmall,
             color = colors.mu,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -105,7 +105,7 @@ fun ConsentBanner(
     text: String,
     modifier: Modifier = Modifier,
     linkLabel: String? = null,
-    onLinkClick: (() -> Unit)? = null
+    onLinkClick: (() -> Unit)? = null,
 ) {
     val colors = ParcheUTheme.colors
     val shape = RoundedCornerShape(12.dp)
@@ -116,14 +116,14 @@ fun ConsentBanner(
             .background(colors.s1, shape)
             .border(1.dp, colors.ln, shape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(text = text, style = MaterialTheme.typography.bodySmall, color = colors.tx)
         if (linkLabel != null && onLinkClick != null) {
             ParcheUTextButton(
                 text = linkLabel,
                 onClick = onLinkClick,
-                size = ParcheUButtonSize.Small
+                size = ParcheUButtonSize.Small,
             )
         }
     }
@@ -141,26 +141,26 @@ fun InfoListCard(title: String, items: List<InfoListItem>, modifier: Modifier = 
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-            color = colors.tx
+            color = colors.tx,
         )
         items.forEach { item ->
             Row(
                 verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (item.icon != null) {
                     Icon(
                         item.icon,
                         contentDescription = null,
                         tint = colors.prt,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp),
                     )
                 }
                 Text(
                     text = item.text,
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.mu,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
