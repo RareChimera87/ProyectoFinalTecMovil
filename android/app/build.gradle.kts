@@ -160,7 +160,9 @@ googleServices {
 play {
     enabled.set(false)
     defaultToAppBundles.set(true)
-    useApplicationDefaultCredentials.set(System.getenv("ANDROID_PUBLISHER_CREDENTIALS").isNullOrBlank())
+    useApplicationDefaultCredentials.set(
+        System.getenv("ANDROID_PUBLISHER_CREDENTIALS").isNullOrBlank()
+    )
     track.set("internal")
     releaseStatus.set(ReleaseStatus.COMPLETED)
 }

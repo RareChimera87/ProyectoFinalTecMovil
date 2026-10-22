@@ -45,6 +45,14 @@ comprueba("grupo por PR", "pull_request.number" in grupo)
 comprueba("no cancela subidas en curso", wf["concurrency"]["cancel-in-progress"] is False)
 comprueba("el comentario ya no promete una cola", "las corridas se encolan" not in texto)
 
+# 3b. workflow_run corre con GITHUB_REF=refs/heads/main: play-alpha debe admitir main y la
+# documentación de pendientes debe pedirlo; la primera corrida no usa la rama feature.
+docs = open(sys.argv[1].replace(".github/workflows/android-release.yml", "docs/pendientes-humanos.md")).read()
+comprueba("el workflow documenta que play-alpha admite main", "tags v* y\n# main" in texto)
+comprueba("pendientes pide main en las políticas de play-alpha", "environments/play-alpha/deployment-branch-policies -f name=main" in docs)
+comprueba("pendientes no manda correr desde la rama feature", "--ref feature/" not in docs)
+comprueba("pendientes valida la primera corrida desde dev", "gh workflow run android-release --ref dev" in docs)
+
 # 4. Credenciales de Play: WIF por defecto, sin llaves en el repo.
 comprueba("usa WIF (google-github-actions/auth)", "google-github-actions/auth@" in texto)
 
