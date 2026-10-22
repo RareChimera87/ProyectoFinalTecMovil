@@ -26,6 +26,8 @@ class TokenAuthenticatorTest {
             current = "nuevo-$refreshes"
             return current
         }
+
+        override suspend fun currentUserId(): String? = null
     }
 
     private val tokens = CountingTokenProvider()

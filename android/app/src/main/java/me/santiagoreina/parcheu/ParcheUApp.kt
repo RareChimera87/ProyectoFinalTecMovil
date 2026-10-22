@@ -45,8 +45,8 @@ fun ParcheUApp(
     // Home está en la pila (ya pasaron Splash, login y onboarding). No importa qué pantalla esté visible:
     // un aviso de otro chat también se abre estando dentro de un chat.
     val pending by PendingDeepLink.route.collectAsState()
-    val sessionReady = backStackEntry != null && navController.currentBackStack.value.any {
-        it.destination.hasRoute(Home::class)
+    val sessionReady = remember(backStackEntry) {
+        backStackEntry != null && runCatching { navController.getBackStackEntry<Home>() }.isSuccess
     }
     LaunchedEffect(pending, sessionReady) {
         val route = pending

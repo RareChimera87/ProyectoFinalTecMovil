@@ -158,3 +158,4 @@ El código, los tests y las rutas están hechos; lo siguiente solo lo puedes hac
    4. Comprobar que llega con la app cerrada, que se ve en el canal correcto (Ajustes > Notificaciones) y que al tocarla abre la pantalla de la tabla de arquitectura §8.4.
    5. Pegar el resultado (captura) en el PR de E5.3.
 3. **Integración con otras features que aún no se mezclan:** E2.2 debe llamar `PushTokenRegistrar.sync()` justo después de iniciar sesión (ya se llama al llegar a Inicio, pero conviene también tras el login) y E8.2 debe llamar `PushTokenRegistrar.unregister()` en el cierre de sesión.
+4. **`TokenProvider.currentUserId()` (E2.2).** Es abstracto: el `FirebaseTokenProvider` de E2.2 debe implementarlo devolviendo `FirebaseAuth.currentUser?.uid`. Sin eso no compila; no se deja un valor por defecto para que el push no se apague en silencio (`PushTokenRegistrar` no llama a `POST /v1/me/fcm-token` sin UID). Sin esto la verificación manual del punto 2 no se puede hacer.
