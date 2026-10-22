@@ -27,21 +27,34 @@ else
   FIREBASE=(npx --yes firebase-tools@15)
 fi
 
-# Configuración temporal equivalente a firebase/firebase.json (E0.8) más lo que necesitan
-# /i/{codigo} (rewrite) y /.well-known (no ignorar), que completa E6.1. No toca firebase.json.
-# El emulador resuelve "public" relativo a la configuración: se enlaza la carpeta real.
+# La configuración temporal se genera a partir de firebase/firebase.json (E0.8) para probar lo que
+# realmente se despliega: solo se cambian "public" (enlace a la carpeta real, el emulador lo resuelve
+# relativo a la configuración) y los emuladores (solo hosting, en PORT). Si E0.8 aún no está
+# mezclada y el archivo no existe, se usa una base mínima y se avisa; las rutas que dependen de
+# reglas ausentes se omiten de forma explícita (ver más abajo), no se dan por buenas.
+REAL="$RAIZ/firebase/firebase.json"
 ln -s "$PUBLIC" "$TMP/site"
-cat > "$TMP/firebase.json" <<JSON
-{
-  "hosting": {
-    "public": "site",
-    "ignore": ["firebase.json", "**/node_modules/**"],
-    "cleanUrls": true,
-    "rewrites": [{ "source": "/i/**", "destination": "/i/index.html" }]
-  },
-  "emulators": { "hosting": { "port": $PORT }, "ui": { "enabled": false }, "singleProjectMode": false }
-}
-JSON
+if [[ -f "$REAL" ]]; then
+  FUENTE="firebase/firebase.json"
+else
+  FUENTE="base mínima (falta firebase/firebase.json de E0.8)"
+  echo '{"hosting":{"public":"public","ignore":["firebase.json","**/node_modules/**"],"cleanUrls":true}}' >"$TMP/base.json"
+  REAL="$TMP/base.json"
+fi
+echo "Configuración de Hosting: $FUENTE"
+node -e '
+const fs = require("fs");
+const [real, destino, puerto] = process.argv.slice(1);
+const cfg = JSON.parse(fs.readFileSync(real, "utf8"));
+if (Array.isArray(cfg.hosting)) throw new Error("hosting múltiple no soportado por la prueba");
+cfg.hosting.public = "site";
+delete cfg.firestore;
+cfg.emulators = { hosting: { port: Number(puerto) }, ui: { enabled: false }, singleProjectMode: false };
+fs.writeFileSync(destino, JSON.stringify(cfg, null, 2));
+' "$REAL" "$TMP/firebase.json" "$PORT"
+# Capacidades que la configuración real debe tener para esas rutas.
+TIENE_REWRITE_I="$(node -e 'const h=JSON.parse(require("fs").readFileSync(process.argv[1])).hosting;process.stdout.write((h.rewrites||[]).some(r=>String(r.source).startsWith("/i/")&&r.destination==="/i/index.html")?"si":"no")' "$TMP/firebase.json")"
+TIENE_WELLKNOWN="$(node -e 'const h=JSON.parse(require("fs").readFileSync(process.argv[1])).hosting;const ig=h.ignore||[];process.stdout.write(!ig.includes("**/.*")||ig.some(x=>String(x).startsWith("!")&&String(x).includes(".well-known"))?"si":"no")' "$TMP/firebase.json")"
 
 (cd "$TMP" && "${FIREBASE[@]}" emulators:start --only hosting --project demo-parcheu-legal --config "$TMP/firebase.json" >"$LOG" 2>&1) &
 PID=$!
@@ -71,8 +84,14 @@ verificar /privacidad 'Responsable del tratamiento' 'Datos que recolectamos' 'Fi
   'Consulta' 'Actualización' 'Supresión' 'Revocación' 'mailto:'
 verificar /terminos 'mayores de 18 años' 'Conducta' 'generado por inteligencia artificial' 'Suscripción'
 verificar /borrar-cuenta 'desde la app' 'Opción 2' 'correo' 'Qué se borra'
-verificar /i/ABC123 'ParcheU'
-verificar /.well-known/assetlinks.json '[]'
+# /i/{codigo} y assetlinks.json dependen de reglas de firebase.json que agregan E0.8/E6.1. Si la
+# configuración real no las tiene, se omiten de forma explícita (no se prueban contra una config inventada).
+omitir() { echo "OMITIDO $1: $2"; omitidos=$((omitidos + 1)); }
+omitidos=0
+if [[ "$TIENE_REWRITE_I" == "si" ]]; then verificar /i/ABC123 'ParcheU'
+else omitir /i/ABC123 "firebase.json no tiene el rewrite /i/** -> /i/index.html (pendiente en E0.8/E6.1)"; fi
+if [[ "$TIENE_WELLKNOWN" == "si" ]]; then verificar /.well-known/assetlinks.json '[]'
+else omitir /.well-known/assetlinks.json "firebase.json ignora **/.* y no exceptúa !**/.well-known/** (pendiente en E0.8/E6.1)"; fi
 
 # Todas las filas de la tabla de retención de arquitectura.md §10.2 deben estar en /privacidad.
 ARQ="$RAIZ/docs/arquitectura.md"
@@ -91,4 +110,4 @@ versiones="$(grep -ho 'name="legal-text-version" content="[^"]*"' "$PUBLIC"/*.ht
 if [[ "$versiones" != "1" ]]; then echo "FALLA: versiones de texto distintas entre páginas"; fallos=$((fallos + 1)); else echo "OK    versión única del texto"; fi
 
 if [[ "$fallos" -gt 0 ]]; then echo "$fallos verificación(es) fallaron"; sed -n 1,20p "$LOG"; exit 1; fi
-echo "Todas las páginas legales responden 200 con sus secciones."
+echo "Páginas legales verificadas contra $FUENTE ($omitidos ruta(s) omitida(s) de forma explícita)."
