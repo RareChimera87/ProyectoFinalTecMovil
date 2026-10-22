@@ -8,6 +8,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -38,6 +39,7 @@ import me.santiagoreina.parcheu.contract.ApiError
 import me.santiagoreina.parcheu.contract.CatalogDto
 import me.santiagoreina.parcheu.contract.ErrorCode
 import me.santiagoreina.parcheu.contract.IsoDate
+import me.santiagoreina.parcheu.contract.UpdateMe
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -82,6 +84,15 @@ class ProfileDbTest : FunSpec({
                     catalog.interests.map { it.slug } shouldContain "musica"
 
                     client.verifyAge("lucia", "2008-10-23").status.value shouldBe 200
+
+                    // universityId fuera de smallint no debe truncarse a un id válido (65537 -> 1).
+                    listOf(65537, 65635).forEach { id ->
+                        val r = client.patch("/v1/me") {
+                            auth("lucia"); contentType(ContentType.Application.Json); setBody(UpdateMe(universityId = id))
+                        }
+                        r.status.value shouldBe 400
+                        r.body<ApiError>().code shouldBe ErrorCode.VALIDATION
+                    }
                     client.verifyAge("lucia", "2001-01-01").body<ApiError>().code shouldBe ErrorCode.CONFLICT
 
                     client.verifyAge("nino", "2008-10-24").body<ApiError>().code shouldBe ErrorCode.UNDERAGE

@@ -182,6 +182,8 @@ class IdentityService(
             throw ValidationFailed("career debe tener máximo $MAX_CAREER caracteres")
         }
         request.universityId?.let { id ->
+            // El catálogo usa smallint: un id fuera de rango se truncaría a uno válido en Postgres.
+            if (id !in 1..Short.MAX_VALUE) throw ValidationFailed("universityId fuera de rango")
             if (!repo.universityExists(id)) throw ValidationFailed("universityId no existe en el catálogo")
         }
         request.interests?.let { slugs ->

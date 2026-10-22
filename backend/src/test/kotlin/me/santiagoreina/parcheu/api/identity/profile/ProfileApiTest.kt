@@ -158,6 +158,10 @@ class ProfileApiTest : FunSpec({
             six.error() shouldBe ErrorCode.VALIDATION
             client.patchMe("ana", UpdateMe(interests = listOf("musica", "astrologia"))).error() shouldBe ErrorCode.VALIDATION
             client.patchMe("ana", UpdateMe(universityId = 1234)).error() shouldBe ErrorCode.VALIDATION
+            // Fuera del rango de smallint: 65537 se truncaría a 1 en Postgres.
+            listOf(65537, 65635, 32768, 0, -1).forEach { id ->
+                client.patchMe("ana", UpdateMe(universityId = id)).error() shouldBe ErrorCode.VALIDATION
+            }
             client.patchMe("ana", UpdateMe(career = "x".repeat(61))).error() shouldBe ErrorCode.VALIDATION
 
             val ok = client.patchMe(
