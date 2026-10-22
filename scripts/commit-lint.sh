@@ -12,7 +12,8 @@
 #   4. La primera palabra está en la lista blanca scripts/verbos-imperativo.txt
 #      y va seguida de al menos una palabra más.
 # Opcionalmente puede ir un prefijo de feature ("E0.1 ") antes del verbo.
-# Los commits "Merge ..." y "fixup!/squash!" se aceptan sin validar.
+# En modo archivo, "Merge branch|pull request|remote-tracking branch ...", "fixup! " y
+# "squash! " se aceptan sin validar; en modo --titulo no hay excepciones.
 # No pretende analizar el español en general: solo formato y lista blanca.
 set -euo pipefail
 export LC_ALL=C.UTF-8
@@ -20,7 +21,9 @@ export LC_ALL=C.UTF-8
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LISTA="${VERBOS_IMPERATIVO:-$DIR/verbos-imperativo.txt}"
 
+modo="archivo"
 if [[ "${1:-}" == "--titulo" ]]; then
+  modo="titulo"
   asunto="${2-}"
 elif [[ -n "${1:-}" && -f "$1" ]]; then
   asunto="$(grep -v '^#' "$1" | sed -n '1p' || true)"
@@ -31,7 +34,8 @@ fi
 
 asunto="${asunto%$'\r'}"
 
-if [[ "$asunto" =~ ^(Merge|fixup!|squash!) ]]; then
+# La excepción solo aplica a commits de archivo, nunca a títulos de PR (--titulo).
+if [[ "$modo" == "archivo" && "$asunto" =~ ^(Merge\ (branch|pull\ request|remote-tracking\ branch)\ |fixup!\ |squash!\ ) ]]; then
   exit 0
 fi
 
