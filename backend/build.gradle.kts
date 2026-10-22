@@ -91,3 +91,8 @@ jib {
         creationTime = "USE_CURRENT_TIMESTAMP"
     }
 }
+
+// ENV es obligatorio en el backend (sin valor por defecto). `./gradlew run` es solo para desarrollo local.
+tasks.named<JavaExec>("run") {
+    if (System.getenv("ENV") == null) environment("ENV", "local")
+}

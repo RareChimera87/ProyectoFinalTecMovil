@@ -5,7 +5,7 @@ Servicio Ktor 3 (Netty, JVM 21) con Gradle independiente que consume `../contrac
 ```bash
 cd backend
 ./gradlew build -PsinContenedores   # compila y corre los tests sin Docker
-./gradlew run                       # modo serve en :8080 con autenticación Fake (ENV=local)
+./gradlew run                       # modo serve en :8080 con autenticación Fake (ENV=local, definido por la tarea run)
 ./gradlew jibBuildTar               # imagen en build/jib-image.tar, sin daemon de Docker
 ```
 
