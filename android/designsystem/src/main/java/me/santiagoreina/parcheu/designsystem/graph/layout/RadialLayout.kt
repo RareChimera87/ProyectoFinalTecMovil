@@ -72,6 +72,9 @@ object RadialLayout {
     private const val SHRINK = 0.92f
     private const val ROW_PACKING = 0.87f
     private const val ITERATIONS = 1000
+    private const val MAX_ATTEMPTS = 40
+    private const val MAX_SHRINK_STEPS = 60
+    private const val MAX_NODE_R = 18f
 
     /** Anillo (1..3) según afinidad: >=85, 70-84, <70. */
     fun ringOf(affinity: Int): Int = when {
@@ -85,39 +88,36 @@ object RadialLayout {
         size: Float,
         fof: List<FofNode> = emptyList()
     ): GraphLayout {
+        if (!size.isFinite() || size <= 0f) {
+            return GraphLayout(0f, 0f, 0f, 0f, emptyList(), emptyList(), emptyList())
+        }
         val k = size / BASE_SIZE
         val c = size / 2f
         val centerR = CENTER_R * k
         val radii = (if (fof.isEmpty()) RINGS else RINGS_WITH_FOF).map { it * k }
         val allRadii = if (fof.isEmpty()) radii else radii + FOF_RING * k
         val sorted = nodes.sortedWith(compareBy({ it.mode }, { it.id }))
+        val fofSorted = fof.sortedWith(compareBy({ it.mode }, { it.id }))
 
-        val items = ArrayList<Item>()
-        for (ring in 1..3) {
-            val group = sorted.filter { ringOf(it.affinity) == ring }
-            val ids = group.map { it.id }
-            items +=
-                placeRing(
-                    ids,
-                    NodeKind.CONNECTION,
-                    ring,
-                    NODE_R[ring - 1] * k,
-                    allRadii,
-                    centerR,
-                    c,
-                    k
-                )
+        // Si tras ubicar y relajar quedan pares solapados con el radio aun por encima del
+        // mínimo, se repite todo con radios de partida menores.
+        var scale = 1f
+        var items: List<Item>
+        var overlapping: Boolean
+        var attempt = 0
+        while (true) {
+            items = placeAll(sorted, fofSorted, scale, allRadii, centerR, c, k)
+            relax(items, c)
+            overlapping = overlaps(items)
+            val atMin = items.all { it.r <= min(it.fullR, MIN_NODE_R * k) + 1e-3f }
+            attempt++
+            if (!overlapping || attempt >= MAX_ATTEMPTS || scale * MAX_NODE_R <= MIN_NODE_R ||
+                atMin
+            ) {
+                break
+            }
+            scale *= SHRINK
         }
-        if (fof.isNotEmpty()) {
-            val group = fof.sortedWith(compareBy({ it.mode }, { it.id }))
-            items +=
-                placeRing(group.map { it.id }, NodeKind.FOF, 4, FOF_R * k, allRadii, centerR, c, k)
-        }
-        items.forEach {
-            it.x = c + (it.baseRadius * cos(it.angle)).toFloat()
-            it.y = c + (it.baseRadius * sin(it.angle)).toFloat()
-        }
-        relax(items, c)
 
         fun place(kind: NodeKind) = items.filter {
             it.kind == kind
@@ -130,8 +130,50 @@ object RadialLayout {
             radii + FOF_RING * k,
             place(NodeKind.CONNECTION),
             place(NodeKind.FOF),
-            hasOverlaps = overlaps(items)
+            hasOverlaps = overlapping
         )
+    }
+
+    private fun placeAll(
+        sorted: List<LayoutNode>,
+        fofSorted: List<FofNode>,
+        scale: Float,
+        allRadii: List<Float>,
+        centerR: Float,
+        c: Float,
+        k: Float
+    ): List<Item> {
+        val items = ArrayList<Item>()
+        for (ring in 1..3) {
+            val ids = sorted.filter { ringOf(it.affinity) == ring }.map { it.id }
+            items += placeRing(
+                ids,
+                NodeKind.CONNECTION,
+                ring,
+                NODE_R[ring - 1] * k * scale,
+                allRadii,
+                centerR,
+                c,
+                k
+            )
+        }
+        if (fofSorted.isNotEmpty()) {
+            items += placeRing(
+                fofSorted.map { it.id },
+                NodeKind.FOF,
+                4,
+                FOF_R * k * scale,
+                allRadii,
+                centerR,
+                c,
+                k
+            )
+        }
+        items.forEach {
+            it.x = c + (it.baseRadius * cos(it.angle)).toFloat()
+            it.y = c + (it.baseRadius * sin(it.angle)).toFloat()
+        }
+        return items
     }
 
     // Ángulo estable: reparto uniforme por orden (modo, id) con desfase fijo por anillo.
@@ -156,6 +198,7 @@ object RadialLayout {
         val baseRadius: Float,
         val angle: Double,
         val r: Float,
+        val fullR: Float,
         val lo: Float,
         val hi: Float
     ) {
@@ -222,11 +265,16 @@ object RadialLayout {
         val minR = min(fullR, MIN_NODE_R * k)
         var r = fullR
         var rows: List<Float>
+        var steps = 0
         while (true) {
             val (lo, hi) = band(ring, r, allRadii, centerR, c)
             rows = rowsOf(lo, hi, base, r, ids.size)
             val pitch = 2 * r + MIN_GAP
-            if (rows.sumOf { floor(2 * PI * it / pitch).toInt() } >= ids.size || r <= minR) break
+            if (rows.sumOf { floor(2 * PI * it / pitch).toInt() } >= ids.size || r <= minR ||
+                ++steps >= MAX_SHRINK_STEPS
+            ) {
+                break
+            }
             r = max(minR, r * SHRINK)
         }
         val (lo, hi) = band(ring, r, allRadii, centerR, c)
@@ -247,7 +295,7 @@ object RadialLayout {
         rows.forEachIndexed { row, rho ->
             for (i in 0 until counts[row]) {
                 val a = angle(i, counts[row], ring) + (row % 2) * PI / counts[row].coerceAtLeast(1)
-                out += Item(ids[idx++], kind, ring, rho, a, r, lo, hi)
+                out += Item(ids[idx++], kind, ring, rho, a, r, fullR, lo, hi)
             }
         }
         return out

@@ -123,4 +123,31 @@ class RadialLayoutTest {
         val l = RadialLayout.compute(sample(400) { 95 }, 328f)
         assertTrue(l.hasOverlaps)
     }
+
+    @Test(timeout = 5000)
+    fun `tamano no finito o no positivo devuelve layout vacio sin colgarse`() {
+        val one = listOf(LayoutNode("a", "A", 90))
+        for (bad in listOf(Float.NaN, 0f, -5f, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY)) {
+            val l = RadialLayout.compute(one, bad)
+            assertTrue(l.nodes.isEmpty() && l.fof.isEmpty())
+            assertEquals(false, l.hasOverlaps)
+        }
+    }
+
+    @Test(timeout = 20000)
+    fun `29 conexiones en el anillo 1 mas fof a 328 quedan separadas`() {
+        val fof = (0 until 10).map { FofNode("f$it") }
+        val l = RadialLayout.compute(sample(29) { 92 }, 328f, fof)
+        assertSeparated(l)
+        assertEquals(false, l.hasOverlaps)
+    }
+
+    @Test(timeout = 20000)
+    fun `15 y 20 nodos en la miniatura de 160 quedan separados`() {
+        for (n in listOf(15, 20)) {
+            val l = RadialLayout.compute(sample(n), 160f)
+            assertSeparated(l)
+            assertEquals(false, l.hasOverlaps)
+        }
+    }
 }
