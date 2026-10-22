@@ -15,7 +15,7 @@ spotless {
     val ktlintRules =
         mapOf(
             "ktlint_function_naming_ignore_when_annotated_with" to "Composable",
-            "ktlint_code_style" to "android_studio"
+            "ktlint_code_style" to "android_studio",
         )
     kotlin {
         target("**/*.kt")

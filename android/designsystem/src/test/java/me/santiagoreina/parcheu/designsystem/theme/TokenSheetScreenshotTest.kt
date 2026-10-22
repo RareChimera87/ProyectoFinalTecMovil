@@ -33,14 +33,14 @@ class TokenSheetScreenshotTest {
         composeRule.setContent { ParcheUTheme(darkTheme = darkTheme) { TokenSheet() } }
         composeRule.onRoot().captureRoboImage(
             filePath = "src/test/screenshots/$name.png",
-            roborazziOptions = ROBORAZZI_OPTIONS
+            roborazziOptions = ROBORAZZI_OPTIONS,
         )
     }
 
     companion object {
         private val ROBORAZZI_OPTIONS =
             RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
             )
     }
 }

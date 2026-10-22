@@ -23,7 +23,7 @@ data class ParcheUSpacing(
         PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 28.dp),
     /** Footer de celebración (B5, G3): 12 / 24 / 32. */
     val footerCelebration: PaddingValues =
-        PaddingValues(start = 24.dp, top = 12.dp, end = 24.dp, bottom = 32.dp)
+        PaddingValues(start = 24.dp, top = 12.dp, end = 24.dp, bottom = 32.dp),
 )
 
 /** Tamaños fijos de componentes del inventario §3.5. La NavBar usa insets, no un relleno fijo. */

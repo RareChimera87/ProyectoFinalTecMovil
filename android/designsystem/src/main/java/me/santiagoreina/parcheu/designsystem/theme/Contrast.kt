@@ -40,7 +40,7 @@ data class TextColorPair(
     val name: String,
     val foreground: Color,
     val background: Color,
-    val minRatio: Double = Wcag.AA_NORMAL_TEXT
+    val minRatio: Double = Wcag.AA_NORMAL_TEXT,
 )
 
 /**
@@ -59,7 +59,7 @@ fun ParcheUColors.declaredTextPairs(): List<TextColorPair> {
             "coralt" to coralt,
             "bluet" to bluet,
             "ort" to ort,
-            "error" to error
+            "error" to error,
         )
     val onSurfaces =
         texts.flatMap { (textName, text) ->
@@ -76,7 +76,7 @@ fun ParcheUColors.declaredTextPairs(): List<TextColorPair> {
             TextColorPair("onMode/couple", couple.onSolid, couple.solid),
             TextColorPair("onMode/study", study.onSolid, study.solid),
             TextColorPair("onMode/accent", accent.onSolid, accent.solid),
-            TextColorPair("wordmark/bg", wordmark, bg)
+            TextColorPair("wordmark/bg", wordmark, bg),
         )
     return onSurfaces + onFills
 }
@@ -91,32 +91,32 @@ fun ParcheUColors.declaredSchemeTextPairs(): List<TextColorPair> {
         TextColorPair(
             "inversePrimary/inverseSurface",
             scheme.inversePrimary,
-            scheme.inverseSurface
+            scheme.inverseSurface,
         ),
         TextColorPair(
             "inverseOnSurface/inverseSurface",
             scheme.inverseOnSurface,
-            scheme.inverseSurface
+            scheme.inverseSurface,
         ),
         TextColorPair(
             "onSurfaceVariant/surfaceContainerHigh",
             scheme.onSurfaceVariant,
-            scheme.surfaceContainerHigh
+            scheme.surfaceContainerHigh,
         ),
         TextColorPair(
             "secondary/surfaceContainerHigh",
             scheme.secondary,
-            scheme.surfaceContainerHigh
+            scheme.surfaceContainerHigh,
         ),
         TextColorPair(
             "tertiary/surfaceContainerHigh",
             scheme.tertiary,
-            scheme.surfaceContainerHigh
+            scheme.surfaceContainerHigh,
         ),
         TextColorPair(
             "onErrorContainer/errorContainer",
             scheme.onErrorContainer,
-            scheme.errorContainer
-        )
+            scheme.errorContainer,
+        ),
     )
 }

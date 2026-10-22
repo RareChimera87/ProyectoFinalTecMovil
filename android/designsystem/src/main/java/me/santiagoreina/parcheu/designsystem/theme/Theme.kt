@@ -23,13 +23,13 @@ fun ParcheUTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composabl
         LocalParcheUColors provides colors,
         LocalParcheUSpacing provides ParcheUSpacing(),
         LocalParcheUShapes provides ParcheUShapeTokens(),
-        LocalParcheUTextStyles provides ParcheUExtraTextStyles()
+        LocalParcheUTextStyles provides ParcheUExtraTextStyles(),
     ) {
         MaterialTheme(
             colorScheme = colors.toColorScheme(),
             typography = ParcheUTypography,
             shapes = ParcheUMaterialShapes,
-            content = content
+            content = content,
         )
     }
 }

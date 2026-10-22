@@ -84,7 +84,7 @@ val featureModules: List<Module> =
         privacySettingsModule,
         deleteAccountModule,
         exportDataModule,
-        blockedUsersModule
+        blockedUsersModule,
     )
 
 /** Todo lo que se carga al iniciar la app. */

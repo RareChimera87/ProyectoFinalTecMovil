@@ -11,10 +11,6 @@ import me.santiagoreina.parcheu.navigation.ManageSubscription
  * [manageSubscriptionModule]; AppNavHost.kt no cambia.
  */
 @Composable
-fun ManageSubscriptionRoute(
-    route: ManageSubscription,
-    navigator: AppNavigator,
-    modifier: Modifier = Modifier
-) {
+fun ManageSubscriptionRoute(route: ManageSubscription, navigator: AppNavigator, modifier: Modifier = Modifier) {
     StubScreen(route = route, navigator = navigator, modifier = modifier)
 }
