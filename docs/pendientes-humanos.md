@@ -288,6 +288,7 @@ Roborazzi en ambos temas). No se crean recursos en GCP ni en consolas.
 | 3 | **'Borrar mi cuenta' depende de E8.3.** El bloqueo por edad abre la ruta `DeleteAccount`, que sigue siendo stub, y `DELETE /v1/me` responde 501 hasta que E8.3 lo implemente. La puerta de edad ya deja pasar `DELETE /v1/me`. | I1/I3 | Al mezclar E8.3 |
 | 4 | **Prueba manual en un teléfono** (tras desplegar E2.1 y E2.6 en dev): cuenta nueva → A4 → B0 → elegir fecha de alguien de 18 años, universidad e intereses → B1. Con otra cuenta de prueba, una fecha de menor de 18 → pantalla de bloqueo; cerrar y abrir la app debe volver al bloqueo (el Splash recibe 403 `UNDERAGE`). Para repetir con la misma cuenta hay que limpiar `birth_date`, `age_verified_at` y `underage_at` en la base de dev. | I2 | Antes de cerrar la ola 7 |
 | 5 | **Texto del bloqueo.** Pedir al docente revisar el mensaje "ParcheU es solo para mayores de 18…" junto con la revisión legal de E2.1. | I3 | Antes de la prueba cerrada |
+
 ## E0.8 · Configuración de Firebase
 
 Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,
@@ -357,3 +358,15 @@ Lo automatizable ya quedó hecho: `POST/GET/DELETE /v1/match/queue`, `GET /v1/ma
 | 6 | **Migración `V20261022_1000__fila_de_match_con_estado.sql`** (columnas `status` y `match_id` de `match_queue`). Corre sola en el Cloud Run Job `migrate`. Si otra migración con fecha posterior se mezcla antes, `migration-order` pide renombrarla. | I1 | Al mezclar |
 | 7 | **Chat SCENARIO en Firestore.** Cuando ambos eligen SCENARIO (solo con `SCENARIO_MODE_ENABLED=true`) E4.2 crea la fila de `chats` y `chat_members` en Postgres, pero no escribe `chats/{id}` en Firestore: el espejo del chat es de E5.1. E4.8 debe llamar al espejo con `matches.chat_id` al encender la bandera. Hasta entonces la bandera sigue apagada. | I1 | E4.8 |
 | 8 | **Verificación en dev** (cuando haya despliegue): dos cuentas con gemelo listo y el mismo modo activo; `POST /v1/match/queue` desde ambas, comprobar que `GET /v1/match/queue` pasa a `MATCHED`, que aparece `matchTickets/{firebaseUid}` en el Firestore de `parcheu-dev` y que `POST /v1/matches/{id}/choice` con `SIMULATION` crea una simulación `origin = RANDOM`. | I1 | Con el despliegue de dev |
+
+## E5.1 · API de chat
+
+Lo automatizable ya quedó hecho: `ChatService`, las cuatro rutas de `/v1/chats`, el espejo en Firestore con el Admin SDK y las pruebas. En local pasaron las 123 pruebas del backend con Postgres 16 (binarios de `@embedded-postgres`, `PARCHEU_TEST_DB_URL`) y el emulador de Firestore, sin omitir ninguna. `sa-api` ya tiene `roles/datastore.user` en el Terraform de E0.5 (PR #5), así que no hace falta otro permiso.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar antes las dependencias.** Esta rama integra E3.1 (#31, que trae E0.2, E0.3, E0.4 y E2.1) y E0.8 (#6) con commits "Integra ... mientras su PR no se mezcla", y copia sin cambios `platform/notifier/Notifier.kt` de E5.3 (#30) para no traer su parte Android. | I1 | Antes del merge de E5.1 |
+| 2 | **Conectar FcmNotifier al mezclar E5.3.** Hoy `AppContainer.fromConfig` pasa `NoopNotifier` al chat (los avisos de mensajes nuevos no salen todavía). Al resolver el conflicto de `AppContainer.kt` con #30, el `notifier` de `FcmNotifier` debe ser el mismo que recibe `ChatModule`. | I1 / I3 | Al mezclar #30 o esta rama, la que vaya segunda |
+| 3 | **Revisar `backend-ci` en el PR.** Ahora corre los tests dentro de `firebase emulators:exec` (Node 24 + `npm ci` en `firebase/`). Confirmar que `ChatDbTest` y `ChatFirestoreEmulatorTest` aparecen como ejecutados (no omitidos) en el reporte. | I1 | Revisión del PR |
+| 4 | **Aprobación del revisor par** (feature major, check `major-gate`): según `docs/equipo.md` el par de E5.1 es I3, que además es dueño de la capa Firebase que toca el espejo. | I3 | Ventana de revisión de la ola 7 (6 nov) |
+| 5 | **Prueba en dev con la app (E5.2).** Cuando E5.2 y E4.6 estén en `dev`: enviar un mensaje desde la app y comprobar que el documento aparece en `chats/{id}/messages` de `parcheu-dev` y que las reglas desplegadas dejan leerlo solo a los miembros. | I2 | Ola 8 |

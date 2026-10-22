@@ -64,6 +64,15 @@ cd backend && PARCHEU_TEST_DB_URL=jdbc:postgresql://localhost:54329/e04test ./gr
 
 - IDs de modelo, ubicación y precios: `backend/src/main/resources/ai/modelos.properties`. Un modelo nuevo necesita su fila `price.*` o el servicio no arranca.
 
+**Emulador de Firestore (E5.1).** Las pruebas del espejo del chat (`ChatFirestoreEmulatorTest`, y `ChatDbTest` cuando también hay Postgres) solo corren si existe `FIRESTORE_EMULATOR_HOST`. El emulador no necesita Docker, pero sí Java 21:
+
+```bash
+cd firebase && npm ci
+JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
+  npx firebase emulators:exec --only firestore --project demo-parcheu "cd ../backend && ./gradlew test -PsinContenedores"
+```
+
+
 ## Migraciones (E0.4, ADR-0011)
 
 - Viven en `backend/src/main/resources/db/migration/`. `V1__esquema.sql` y `V2__semillas.sql` son fijas: **nunca edites una migración ya mezclada** (Flyway valida el checksum); agrega una nueva.

@@ -8,7 +8,12 @@ import me.santiagoreina.parcheu.api.ai.ExposedAiUsageStore
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.InMemoryAiUsageStore
 import me.santiagoreina.parcheu.api.billing.BillingRoutes
+import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.ChatRoutes
+import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
+import me.santiagoreina.parcheu.api.chat.FirestoreChatMirror
+import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
+import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
@@ -77,14 +82,16 @@ class AppContainer(
     val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
     val graph: GraphModule = inMemoryGraphModule(clock),
-    /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
-    val simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
     /** Avisos (push + bandeja). Hasta que E5.3 se mezcle es [NoopNotifier]; los tests de otros dominios pasan un `FakeNotifier`. */
     val notifier: Notifier = NoopNotifier,
+    /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
+    val chat: ChatModule = inMemoryChatModule(clock, graph.policy, notifier),
+    /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
+    val simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
     /** Fila de match (E4.2). Por defecto en memoria: solo [fromConfig] cablea Postgres y Firestore. */
     val matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, twin, quota, graph, simulation, matching),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, twin, quota, graph, simulation, matching, chat),
 ) {
     companion object {
         /**
@@ -117,14 +124,18 @@ class AppContainer(
             val twin = twinModule(config.env, database, clock, ai, tasks)
             val quota = quotaModule(config.env, database, clock)
             val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
-            val simulation = simulationModule(config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId)
+            // E5.3 (PR #30) cambia este valor por FcmNotifier; hasta entonces los avisos no salen.
             val notifier: Notifier = NoopNotifier
+            // En local no hay Firestore: el espejo del chat queda en memoria (Postgres sigue siendo la verdad).
+            val chatMirror = if (local) InMemoryChatMirror() else FirestoreChatMirror.forProject(requireNotNull(config.firebaseProjectId))
+            val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
+            val simulation = simulationModule(config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId)
             val flags = MatchingFlags.fromEnv(config.env, vars)
             val matching = matchingModule(config.env, database, clock, quota, simulation, graph, notifier, config.firebaseProjectId, flags)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile,
-                ai = ai, twin = twin, quota = quota, graph = graph, simulation = simulation,
-                notifier = notifier, matching = matching,
+                ai = ai, twin = twin, quota = quota, graph = graph, notifier = notifier, chat = chat,
+                simulation = simulation, matching = matching,
             )
         }
 
@@ -156,6 +167,7 @@ fun allDomains(
     graph: GraphModule,
     simulation: SimulationModule,
     matching: MatchingModule,
+    chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile),
     TwinRoutes(twin),
@@ -165,7 +177,7 @@ fun allDomains(
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),
-    ChatRoutes(),
+    ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     NotificationsRoutes(),
     BillingRoutes(),
     SafetyRoutes(),
