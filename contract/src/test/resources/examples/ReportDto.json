@@ -19,6 +19,9 @@
   "locked": false,
   "unlockAvailable": false,
   "myDecision": true,
-  "otherDecided": false,
-  "otherName": "Laura"
+  "otherDecided": true,
+  "otherName": "Laura",
+  "reasonsCount": 3,
+  "frictionsCount": 1,
+  "chatId": "7b0d6f6e-2f5d-4c1a-9a51-3c0f7c3d9e21"
 }
