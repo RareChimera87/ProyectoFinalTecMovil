@@ -13,6 +13,9 @@ import me.santiagoreina.parcheu.core.network.apiCall
 interface PushTokenStore {
     var lastToken: String?
     var registeredToken: String?
+
+    /** Cuenta para la que se registró [registeredToken]; si la cuenta cambia, hay que registrar de nuevo. */
+    var registeredUser: String?
 }
 
 class SharedPrefsPushTokenStore(context: Context) : PushTokenStore {
@@ -25,6 +28,10 @@ class SharedPrefsPushTokenStore(context: Context) : PushTokenStore {
     override var registeredToken: String?
         get() = prefs.getString("registered_token", null)
         set(value) = prefs.edit().putString("registered_token", value).apply()
+
+    override var registeredUser: String?
+        get() = prefs.getString("registered_user", null)
+        set(value) = prefs.edit().putString("registered_user", value).apply()
 }
 
 /**
@@ -37,18 +44,24 @@ class PushTokenRegistrar(
     private val mapper: ApiErrorMapper,
     private val store: PushTokenStore,
     private val currentToken: suspend () -> String? = ::firebaseToken,
+    private val currentUser: suspend () -> String? = { null },
 ) {
     /** Llega un token nuevo: se recuerda y se intenta registrar. */
     suspend fun onNewToken(token: String): Boolean {
         store.lastToken = token
-        store.registeredToken = null
+        forgetRegistration()
         return register(token)
     }
 
-    /** Registra el token vigente si el backend aún no lo tiene. `true` si quedó registrado. */
+    /**
+     * Registra el token vigente si el backend aún no lo tiene para la cuenta con sesión. El registro
+     * recuerda la cuenta: si otra persona inicia sesión en el mismo teléfono (la sesión anterior terminó
+     * sin [unregister]), el token se registra de nuevo y el backend lo reasigna. Sin sesión no hace nada.
+     */
     suspend fun sync(): Boolean {
+        val user = currentUser() ?: return false
         val token = store.lastToken ?: currentToken()?.also { store.lastToken = it } ?: return false
-        if (store.registeredToken == token) return true
+        if (store.registeredToken == token && store.registeredUser == user) return true
         return register(token)
     }
 
@@ -56,14 +69,23 @@ class PushTokenRegistrar(
     suspend fun unregister(): Boolean {
         val token = store.lastToken ?: return true
         val result = apiCall(mapper) { api.unregister(FcmToken(token)) }
-        store.registeredToken = null
+        forgetRegistration()
         return result is ApiResult.Success
     }
 
     private suspend fun register(token: String): Boolean {
+        val user = currentUser() ?: return false // sin sesión la llamada sería un 401; sync() reintenta tras el login
         val result = apiCall(mapper) { api.register(FcmToken(token)) }
-        if (result is ApiResult.Success) store.registeredToken = token
+        if (result is ApiResult.Success) {
+            store.registeredToken = token
+            store.registeredUser = user
+        }
         return result is ApiResult.Success
+    }
+
+    private fun forgetRegistration() {
+        store.registeredToken = null
+        store.registeredUser = null
     }
 }
 

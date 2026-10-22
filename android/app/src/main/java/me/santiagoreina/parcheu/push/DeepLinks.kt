@@ -56,18 +56,25 @@ object DeepLinks {
         }
     }
 
-    /** Destino cuando el aviso no trae ruta (o trae una que esta versión de la app no conoce). */
-    fun fromType(type: String?): AppRoute = when (type) {
-        NotificationKinds.SIMULATION_READY, NotificationKinds.SIMULATION_FAILED -> Simulations
-        NotificationKinds.MATCH_FOUND, NotificationKinds.MATCH_EXPIRED -> MatchQueue()
-        NotificationKinds.NEW_CONNECTION -> Parche()
-        NotificationKinds.INVITE_PENDING -> AddFriends()
-        NotificationKinds.CHAT_MESSAGE -> ChatList
-        NotificationKinds.TWIN_MEMORIES, NotificationKinds.TWIN_FEEDBACK -> TrainTwin
-        NotificationKinds.COMMUNITY -> Communities
+    /** Deep link de respaldo por `type` (tabla de arquitectura.md §8.4); la bandeja para tipos sin pantalla propia. */
+    fun uriFromType(type: String?): String = when (type) {
+        NotificationKinds.SIMULATION_READY, NotificationKinds.SIMULATION_FAILED -> "parcheu://simulations"
+        NotificationKinds.MATCH_FOUND, NotificationKinds.MATCH_EXPIRED -> "parcheu://match"
+        NotificationKinds.NEW_CONNECTION -> "parcheu://parche"
+        NotificationKinds.INVITE_PENDING -> "parcheu://add-friends"
+        NotificationKinds.CHAT_MESSAGE -> "parcheu://chats"
+        NotificationKinds.TWIN_MEMORIES, NotificationKinds.TWIN_FEEDBACK -> "parcheu://train-twin"
+        NotificationKinds.COMMUNITY -> "parcheu://communities"
         // CONNECT_REQUEST, INTRODUCTION_PROPOSAL, ACCOUNT y tipos nuevos: la bandeja los muestra todos.
-        else -> Notifications
+        else -> "parcheu://notifications"
     }
+
+    /** Destino cuando el aviso no trae ruta (o trae una que esta versión de la app no conoce). */
+    fun fromType(type: String?): AppRoute = fromUri(uriFromType(type)) ?: Notifications
+
+    /** Deep link final de un aviso: su `route` si es válido; si no, el de su `type`. Siempre navegable. */
+    fun resolveUri(type: String?, route: String?): String =
+        route?.trim()?.takeIf { fromUri(it) != null } ?: uriFromType(type)
 
     /** Ruta final de un aviso: primero `route`, luego `type`. Nunca devuelve `null`. */
     fun resolve(type: String?, route: String?): AppRoute = fromUri(route) ?: fromType(type)

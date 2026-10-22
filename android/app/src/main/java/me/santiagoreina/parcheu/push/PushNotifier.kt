@@ -20,18 +20,15 @@ object PushNotifier {
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
         PackageManager.PERMISSION_GRANTED
 
-    /** Intent que abre la app en la ruta del aviso. Con `route` nulo o desconocido, la bandeja decide. */
-    fun openIntent(context: Context, payload: PushPayload): Intent {
-        val route = payload.route?.takeIf { DeepLinks.fromUri(it) != null }
-        return Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse(route ?: "parcheu://notifications"),
-            context,
-            MainActivity::class.java,
-        )
-            .putExtra(EXTRA_TYPE, payload.type)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-    }
+    /** Intent que abre la app en la ruta del aviso. Con `route` nulo o inválido, decide el `type` (§8.4). */
+    fun openIntent(context: Context, payload: PushPayload): Intent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse(DeepLinks.resolveUri(payload.type, payload.route)),
+        context,
+        MainActivity::class.java,
+    )
+        .putExtra(EXTRA_TYPE, payload.type)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
     @SuppressLint("MissingPermission") // canPost() lo verifica.
     fun show(context: Context, payload: PushPayload): Boolean {

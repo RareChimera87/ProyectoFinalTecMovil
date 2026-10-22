@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.push
 
+import me.santiagoreina.parcheu.core.network.TokenProvider
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 import retrofit2.Retrofit
@@ -11,5 +12,8 @@ import retrofit2.Retrofit
 val pushModule = module {
     single<PushApi> { get<Retrofit>().create(PushApi::class.java) }
     single<PushTokenStore> { SharedPrefsPushTokenStore(androidContext()) }
-    single { PushTokenRegistrar(get(), get(), get()) }
+    single {
+        val tokens = get<TokenProvider>()
+        PushTokenRegistrar(get(), get(), get(), currentUser = { tokens.currentUserId() })
+    }
 }

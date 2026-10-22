@@ -29,10 +29,13 @@ class PushTokenRegistrarTest {
     private class MemoryStore : PushTokenStore {
         override var lastToken: String? = null
         override var registeredToken: String? = null
+        override var registeredUser: String? = null
     }
 
+    private var user: String? = "ana"
+
     private fun registrar(api: PushApi, store: PushTokenStore, current: String? = null) =
-        PushTokenRegistrar(api, ApiErrorMapper(ContractJson), store) { current }
+        PushTokenRegistrar(api, ApiErrorMapper(ContractJson), store, { current }, { user })
 
     @Test
     fun newTokenIsRegisteredAndRemembered() = runTest {
@@ -82,5 +85,35 @@ class PushTokenRegistrarTest {
         assertTrue(registrar.unregister())
         assertEquals(listOf("tok-1"), api.unregistered)
         assertNull(store.registeredToken)
+    }
+
+    @Test
+    fun anotherAccountOnTheSamePhoneRegistersTheTokenAgain() = runTest {
+        val api = FakeApi()
+        val store = MemoryStore()
+        val registrar = registrar(api, store)
+        registrar.onNewToken("tok-1")
+        // La sesión de Ana terminó sin unregister (expirada o sin red); Beto inicia sesión.
+        user = "beto"
+        assertTrue(registrar.sync())
+        assertEquals(listOf("tok-1", "tok-1"), api.registered)
+        assertEquals("beto", store.registeredUser)
+        // La misma cuenta no repite el registro.
+        assertTrue(registrar.sync())
+        assertEquals(2, api.registered.size)
+    }
+
+    @Test
+    fun withoutSessionNothingIsRegisteredUntilLogin() = runTest {
+        val api = FakeApi()
+        val store = MemoryStore()
+        val registrar = registrar(api, store)
+        user = null
+        assertFalse(registrar.onNewToken("tok-1"))
+        assertFalse(registrar.sync())
+        assertTrue(api.registered.isEmpty())
+        user = "ana"
+        assertTrue(registrar.sync())
+        assertEquals(listOf("tok-1"), api.registered)
     }
 }

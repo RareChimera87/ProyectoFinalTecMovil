@@ -7,8 +7,8 @@ import me.santiagoreina.parcheu.navigation.AppRoute
 
 /**
  * Ruta pedida por un toque en una notificación o un enlace `parcheu://`. `MainActivity` la deja aquí
- * y `ParcheUApp` la consume cuando la app ya pasó el Splash (una raíz de la NavBar está visible), de modo
- * que un toque con la app cerrada no se salta el login ni el onboarding.
+ * y `ParcheUApp` la consume cuando la sesión está lista (Home en la pila), de modo que un toque con la app
+ * cerrada no se salta el login ni el onboarding, pero sí se abre estando en cualquier pantalla.
  */
 object PendingDeepLink {
     private val state = MutableStateFlow<AppRoute?>(null)
