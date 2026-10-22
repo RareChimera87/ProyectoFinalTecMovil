@@ -11,6 +11,8 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
+import me.santiagoreina.parcheu.api.identity.profile.profileRoutes
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
@@ -26,10 +28,10 @@ import me.santiagoreina.parcheu.contract.UpdateMe
 
 /**
  * Rutas del dominio identity. E2.1 implementa sesión, términos, `GET/PATCH /me`, consentimientos y
- * tokens FCM; el resto sigue como stub 501 hasta su feature (catálogo, modos, edad y privacidad:
- * E2.5/E2.6/E8.x; `DELETE /me` y exportación: E8.x).
+ * tokens FCM; E2.6, el catálogo y la verificación de edad ([profileRoutes]); el resto sigue como stub
+ * 501 hasta su feature (modos y privacidad: E2.5/E8.x; `DELETE /me` y exportación: E8.x).
  */
-class IdentityRoutes(private val service: IdentityService) : DomainRoutes {
+class IdentityRoutes(private val service: IdentityService, private val profile: ProfileService) : DomainRoutes {
     override fun Route.v1() {
         // Puerta de términos para todas las rutas /v1 autenticadas (ver TermsGate).
         install(TermsGate) { service = this@IdentityRoutes.service }
@@ -49,11 +51,11 @@ class IdentityRoutes(private val service: IdentityService) : DomainRoutes {
             call.respond(HttpStatusCode.NoContent)
         }
 
-        stubGet("/catalog")
+        profileRoutes(profile)
+
         stubDelete("/me")
         stubGet("/me/export")
         stubPut("/me/modes")
-        stubPost("/me/age-verification")
         stubGet("/me/privacy")
         stubPatch("/me/privacy")
     }

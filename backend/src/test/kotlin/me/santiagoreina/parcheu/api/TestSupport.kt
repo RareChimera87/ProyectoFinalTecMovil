@@ -6,6 +6,8 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
+import me.santiagoreina.parcheu.api.identity.profile.InMemoryProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.allDomains
@@ -43,15 +45,18 @@ fun testContainer(
     extra: List<DomainRoutes> = emptyList(),
     repo: InMemoryIdentityRepository = InMemoryIdentityRepository().also { it.seedAcceptedUser("ana", TEST_LEGAL_VERSION) },
     legalTextVersion: String = TEST_LEGAL_VERSION,
+    clock: Clock = FIXED_CLOCK,
 ): AppContainer {
-    val identity = IdentityService(repo, FIXED_CLOCK, legalTextVersion)
+    val identity = IdentityService(repo, clock, legalTextVersion)
+    val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
     return AppContainer(
         config = testConfig(),
-        clock = FIXED_CLOCK,
+        clock = clock,
         tokenVerifier = FakeTokenVerifier(),
         oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
         identity = identity,
-        domains = allDomains(identity) + extra,
+        profile = profile,
+        domains = allDomains(identity, profile) + extra,
     )
 }
 

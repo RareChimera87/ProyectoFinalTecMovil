@@ -5,6 +5,7 @@ import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Suspended
 import me.santiagoreina.parcheu.api.platform.errors.TermsRequired
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
+import me.santiagoreina.parcheu.api.platform.errors.Underage
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.contract.AcceptTerms
 import me.santiagoreina.parcheu.contract.ConsentChange
@@ -58,12 +59,26 @@ class IdentityService(
         return user
     }
 
-    /** Puerta de todas las rutas salvo las exentas: suspensión y términos vigentes (403 TERMS_REQUIRED). */
+    /**
+     * Puerta de todas las rutas salvo las exentas: cuenta de menor de edad (403 UNDERAGE, E2.6),
+     * suspensión y términos vigentes (403 TERMS_REQUIRED).
+     */
     suspend fun requireFullAccess(firebase: FirebaseUser) {
         val user = requireUser(firebase)
+        if (user.underageAt != null) throw Underage()
         val until = user.suspendedUntil
         if (until != null && until.isAfter(clock.instant())) throw Suspended()
         if (!termsAccepted(repo.latestConsents(user.id))) throw TermsRequired()
+    }
+
+    /**
+     * Puerta de edad para las rutas exentas de términos (`session` y `terms`): una cuenta marcada como
+     * menor de edad solo puede ver (`GET /v1/me`) o borrar (`DELETE /v1/me`) su cuenta. Si el usuario aún
+     * no existe (primer `POST /v1/session`) no hay nada que bloquear.
+     */
+    suspend fun requireNotUnderage(firebase: FirebaseUser) {
+        val user = repo.findByFirebaseUid(firebase.uid) ?: return
+        if (user.deletedAt == null && user.underageAt != null) throw Underage()
     }
 
     suspend fun me(firebase: FirebaseUser): MeDto = toMe(requireUser(firebase))
@@ -128,7 +143,9 @@ class IdentityService(
 
     private suspend fun onboarding(user: UserRecord): OnboardingStep = when {
         !termsAccepted(repo.latestConsents(user.id)) -> OnboardingStep.NEEDS_TERMS
-        user.displayName.isNullOrBlank() || user.ageVerifiedAt == null -> OnboardingStep.NEEDS_PROFILE
+        // B0 (E2.6) exige fecha verificada y universidad; el nombre viene de Google y B0 lo pide si falta.
+        user.displayName.isNullOrBlank() || user.ageVerifiedAt == null || user.universityId == null ->
+            OnboardingStep.NEEDS_PROFILE
         !repo.hasTwin(user.id) -> OnboardingStep.NEEDS_TWIN
         repo.modes(user.id).none { it.value } -> OnboardingStep.NEEDS_MODES
         else -> OnboardingStep.DONE
@@ -194,7 +211,7 @@ class IdentityService(
 
     companion object {
         const val MAX_NAME = 40
-        const val MAX_CAREER = 80
+        const val MAX_CAREER = 60
         const val MAX_INTERESTS = 5
         const val MAX_FCM_TOKEN = 4096
         val LEGAL_KINDS = listOf(ConsentKind.TERMS, ConsentKind.PRIVACY)

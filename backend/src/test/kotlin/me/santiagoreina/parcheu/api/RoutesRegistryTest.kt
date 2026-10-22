@@ -19,10 +19,10 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * (o las quita de esta lista) en su propio PR.
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
-    // Identity: solo los stubs que quedan; las rutas implementadas por E2.1 las cubre IdentityApiTest.
+    // Identity: solo los stubs que quedan; las rutas de E2.1 las cubre IdentityApiTest y las de E2.6, ProfileApiTest.
     "identity" to listOf(
-        HttpMethod.Get to "/v1/catalog", HttpMethod.Delete to "/v1/me", HttpMethod.Get to "/v1/me/export",
-        HttpMethod.Put to "/v1/me/modes", HttpMethod.Post to "/v1/me/age-verification",
+        HttpMethod.Delete to "/v1/me", HttpMethod.Get to "/v1/me/export",
+        HttpMethod.Put to "/v1/me/modes",
         HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",
     ),
     "twin" to listOf(

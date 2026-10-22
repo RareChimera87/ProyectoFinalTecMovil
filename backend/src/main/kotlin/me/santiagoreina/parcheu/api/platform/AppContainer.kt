@@ -8,6 +8,8 @@ import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
+import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
 import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
@@ -39,8 +41,9 @@ class AppContainer(
     val tokenVerifier: TokenVerifier,
     val oidcVerifier: OidcVerifier,
     val identity: IdentityService,
+    val profile: ProfileService,
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity),
+    val domains: List<DomainRoutes> = allDomains(identity, profile),
 ) {
     companion object {
         /** Cableado de producción: verificadores reales (Fake solo con `ENV=local`). */
@@ -62,14 +65,15 @@ class AppContainer(
             }
             val database = connectExposed(createDataSource(dbConfig, failFast = false))
             val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity)
+            val profile = ProfileService(identity, ExposedProfileRepository(database), clock)
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, profile)
         }
     }
 }
 
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
-fun allDomains(identity: IdentityService): List<DomainRoutes> = listOf(
-    IdentityRoutes(identity),
+fun allDomains(identity: IdentityService, profile: ProfileService): List<DomainRoutes> = listOf(
+    IdentityRoutes(identity, profile),
     TwinRoutes(),
     QuotaRoutes(),
     MatchingRoutes(),
