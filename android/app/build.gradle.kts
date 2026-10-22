@@ -129,6 +129,8 @@ dependencies {
     // Login con Google (E2.2, ADR-0021): Credential Manager + googleid → Firebase Auth.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    // Chat en vivo (E5.2): listener de mensajes con caché offline (arquitectura.md §8).
+    implementation(libs.firebase.firestore)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)

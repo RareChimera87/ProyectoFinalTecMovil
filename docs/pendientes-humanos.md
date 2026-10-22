@@ -370,3 +370,9 @@ Lo automatizable ya quedó hecho: `ChatService`, las cuatro rutas de `/v1/chats`
 | 3 | **Revisar `backend-ci` en el PR.** Ahora corre los tests dentro de `firebase emulators:exec` (Node 24 + `npm ci` en `firebase/`). Confirmar que `ChatDbTest` y `ChatFirestoreEmulatorTest` aparecen como ejecutados (no omitidos) en el reporte. | I1 | Revisión del PR |
 | 4 | **Aprobación del revisor par** (feature major, check `major-gate`): según `docs/equipo.md` el par de E5.1 es I3, que además es dueño de la capa Firebase que toca el espejo. | I3 | Ventana de revisión de la ola 7 (6 nov) |
 | 5 | **Prueba en dev con la app (E5.2).** Cuando E5.2 y E4.6 estén en `dev`: enviar un mensaje desde la app y comprobar que el documento aparece en `chats/{id}/messages` de `parcheu-dev` y que las reglas desplegadas dejan leerlo solo a los miembros. | I2 | Ola 8 |
+
+
+## E5.2 · UI de chat y lista de chats
+
+- [ ] Prueba manual en dispositivo (flavor dev) cuando E5.1 (API de chat) y E0.8 (reglas de Firestore) estén desplegadas en dev: iniciar sesión con dos cuentas, crear un chat DIRECT, enviar mensajes en ambos sentidos, apagar la red y comprobar que el mensaje queda con "Reintentar", y ocultar un mensaje desde Firestore (`hidden=true`) para ver "Mensaje oculto". Requiere el `google-services.json` del entorno dev (`scripts/fetch-google-services.sh`).
+- [ ] Revisar a ojo las capturas de `android/app/src/test/screenshots/chat/` contra los mockups F9 (17) y el estilo de la lista de chats; la comparación con el diseño la hace I2.
