@@ -197,3 +197,18 @@ Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/...
 | 1 | **Mezclar primero E1.3 (PR #20).** Esta rama parte de `feature/components-base` porque los compuestos reutilizan los botones, tarjetas y `touchTarget()` de E1.3; el PR muestra también su commit hasta que #20 se mezcle en `dev`. | I2 | Antes del merge de E1.4 |
 | 2 | **Revisión visual lado a lado.** Comparar las capturas de `screenshots/compound/*.png` con los mockups B-H de Claude Design (radios, paddings, colores de burbujas, anillo de afinidad, QR). Diferencias aceptadas: el QR de las capturas es sintético (el codificador llega con E6.1) y los iconos son círculos de prueba hasta que E1.2 se mezcle. | I2 | Ventana de revisión de la ola 6 |
 | 3 | **Prueba del blur en un dispositivo real.** Robolectric no renderiza `RenderEffect`, así que el desenfoque de `LockedOverlay` solo se verifica por rama (etiqueta `locked_overlay_blur`) y no por píxeles. Abrir una pantalla que lo use (D7 o F7, cuando existan) en un dispositivo/emulador con API >= 31 y en otro con API < 31 y confirmar blur y scrim opaco respectivamente. | I2 | Cuando exista la primera pantalla con LockedOverlay |
+
+## E2.5 · Modos, +18 y consentimiento
+
+Lo automatizable ya quedó hecho: `PUT /v1/me/modes` con la regla +18, el consentimiento de aprendizaje por modo
+(`identity/modes/**`, `identity/consent/**`), las pantallas B2-B5 (`feature/modes`, `feature/consent`, `feature/twinready`),
+pruebas de servidor (memoria y Postgres), de ViewModel, de UI y capturas Roborazzi (`android/app/src/test/screenshots/modes/`).
+No crea recursos en GCP, Firebase ni consolas.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar antes E2.1 (#19), E1.4 (#26) y E1.5 (#18).** Esta rama los integra porque no están en `dev`; el PR mostrará sus commits hasta que se mezclen. | I1 / I2 | Antes del merge de E2.5 |
+| 2 | **Pruebas con Postgres (`ModesDbTest`).** En local se omiten (`-PsinContenedores`, sin Docker); corren en `backend-ci`. Revisa que pasen en el PR. | I1 | Al abrir el PR |
+| 3 | **Revisión visual lado a lado.** Comparar `screenshots/modes/*.png` con 03b-03e de 'PU Seccion B'. Diferencias intencionales: B2 arranca con todo apagado y valida 0 modos; B3 muestra la fecha verificada en B0 en solo lectura y la casilla 'Confirmo que soy mayor de 18 y quiero activar Pareja'; B4 cambia el interruptor por 'Acepto' / 'Ahora no' y aclara que Pareja queda fuera; los íconos son trazos de Material dibujados en código hasta que se mezcle E1.2. | I2 | Ventana de revisión de la ola 7 |
+| 4 | **Prueba de punta a punta en un dispositivo** cuando E2.6 (B0 y `POST /v1/me/age-verification`) esté en `dev`: sin fecha verificada B3 no deja confirmar; con fecha, activar Pareja, Continuar, B4 'Acepto' y revisar en Cloud SQL de dev que `consents` tenga CHAT_LEARNING_AMISTAD y CHAT_LEARNING_ESTUDIO y ninguna de Pareja. | I1 + I2 | Tras mezclar E2.6 |
+| 5 | **Revisión legal del texto de B4** (qué aprende y qué nunca hace) junto con la de A4 (E2.1, paso 3). | Equipo | Antes de la prueba cerrada |
