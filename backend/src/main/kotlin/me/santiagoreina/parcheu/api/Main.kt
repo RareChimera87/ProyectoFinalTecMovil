@@ -6,6 +6,7 @@ import me.santiagoreina.parcheu.api.demo.DemoJobs
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
+import me.santiagoreina.parcheu.api.platform.db.outOfOrderFor
 import me.santiagoreina.parcheu.api.platform.db.runMigrations
 import org.slf4j.LoggerFactory
 import kotlin.system.exitProcess
@@ -41,7 +42,7 @@ fun main(args: Array<String>) {
         Mode.MIGRATE -> {
             val dbConfig = requireNotNull(config.db) { "migrate requiere DB_NAME y la conexión (CLOUD_SQL_INSTANCE o DB_URL)" }
             createDataSource(dbConfig, maxPoolSize = 2).use { ds ->
-                log.info("Migraciones aplicadas: {}", runMigrations(ds))
+                log.info("Migraciones aplicadas: {}", runMigrations(ds, outOfOrder = outOfOrderFor(config.env)))
             }
         }
         Mode.SEED_DEMO -> DemoJobs.seed()

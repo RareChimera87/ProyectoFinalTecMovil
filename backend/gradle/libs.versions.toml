@@ -36,6 +36,9 @@ ktor-server-test-host = { group = "io.ktor", name = "ktor-server-test-host" }
 ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation" }
 exposed-core = { group = "org.jetbrains.exposed", name = "exposed-core", version.ref = "exposed" }
 exposed-jdbc = { group = "org.jetbrains.exposed", name = "exposed-jdbc", version.ref = "exposed" }
+# E0.4: columnas timestamptz/date (java.time) y jsonb.
+exposed-java-time = { group = "org.jetbrains.exposed", name = "exposed-java-time", version.ref = "exposed" }
+exposed-json = { group = "org.jetbrains.exposed", name = "exposed-json", version.ref = "exposed" }
 hikari = { group = "com.zaxxer", name = "HikariCP", version.ref = "hikari" }
 postgresql = { group = "org.postgresql", name = "postgresql", version.ref = "postgresql" }
 cloud-sql-socket-factory = { group = "com.google.cloud.sql", name = "postgres-socket-factory", version.ref = "cloudSqlConnector" }
