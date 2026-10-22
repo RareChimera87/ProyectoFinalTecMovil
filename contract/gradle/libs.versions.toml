@@ -1,0 +1,16 @@
+# Versiones del build independiente contract/. Kotlin y el plugin de serialización
+# van alineados con android/gradle/libs.versions.toml (Kotlin 2.2.10).
+[versions]
+kotlin = "2.2.10"
+kotlinxSerialization = "1.9.0"
+junitJupiter = "5.13.4"
+
+[libraries]
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+junit-bom = { group = "org.junit", name = "junit-bom", version.ref = "junitJupiter" }
+junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter" }
+junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

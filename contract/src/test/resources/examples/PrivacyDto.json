@@ -1,0 +1,13 @@
+{
+  "visibility": "NAME",
+  "modes": {
+    "AMISTAD": true,
+    "PAREJA": false,
+    "ESTUDIO": true
+  },
+  "learning": {
+    "AMISTAD": true,
+    "PAREJA": false,
+    "ESTUDIO": false
+  }
+}
