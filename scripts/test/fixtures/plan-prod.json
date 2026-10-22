@@ -1,0 +1,1858 @@
+{
+  "planned_values": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "module.platform.google_artifact_registry_repository.images",
+          "name": "images",
+          "type": "google_artifact_registry_repository",
+          "values": {
+            "cleanup_policies": [
+              {
+                "action": "DELETE",
+                "condition": [
+                  {
+                    "newer_than": "",
+                    "older_than": "2592000s",
+                    "package_name_prefixes": [],
+                    "tag_prefixes": [],
+                    "tag_state": "ANY",
+                    "version_name_prefixes": []
+                  }
+                ],
+                "id": "borrar-viejas",
+                "most_recent_versions": []
+              },
+              {
+                "action": "KEEP",
+                "condition": [],
+                "id": "conservar-recientes",
+                "most_recent_versions": [
+                  {
+                    "keep_count": 10,
+                    "package_name_prefixes": []
+                  }
+                ]
+              }
+            ],
+            "cleanup_policy_dry_run": false,
+            "deletion_policy": "DELETE",
+            "description": "Imágenes de la API (Jib).",
+            "docker_config": [],
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "format": "DOCKER",
+            "kms_key_name": null,
+            "labels": {
+              "app": "parcheu",
+              "env": "prod"
+            },
+            "location": "us-central1",
+            "maven_config": [],
+            "mode": "STANDARD_REPOSITORY",
+            "project": "parcheu-prod",
+            "remote_repository_config": [],
+            "repository_id": "parcheu",
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null,
+            "virtual_repository_config": []
+          }
+        },
+        {
+          "address": "module.platform.google_billing_budget.project",
+          "name": "project",
+          "type": "google_billing_budget",
+          "values": {
+            "all_updates_rule": [],
+            "amount": [
+              {
+                "last_period_amount": null,
+                "specified_amount": [
+                  {
+                    "currency_code": "USD",
+                    "nanos": null,
+                    "units": "60"
+                  }
+                ]
+              }
+            ],
+            "budget_filter": [
+              {
+                "calendar_period": null,
+                "credit_types": null,
+                "credit_types_treatment": "INCLUDE_ALL_CREDITS",
+                "custom_period": [],
+                "projects": [
+                  "projects/000000000000"
+                ],
+                "resource_ancestors": null,
+                "subaccounts": null
+              }
+            ],
+            "display_name": "parcheu-prod",
+            "ownership_scope": null,
+            "threshold_rules": [
+              {
+                "spend_basis": "CURRENT_SPEND",
+                "threshold_percent": 0.5
+              },
+              {
+                "spend_basis": "CURRENT_SPEND",
+                "threshold_percent": 0.9
+              }
+            ],
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_run_v2_job.this[\"migrate\"]",
+          "name": "this",
+          "type": "google_cloud_run_v2_job",
+          "values": {
+            "annotations": null,
+            "binary_authorization": [],
+            "client": null,
+            "client_version": null,
+            "deletion_policy": "DELETE",
+            "deletion_protection": true,
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "labels": {
+              "app": "parcheu",
+              "env": "prod"
+            },
+            "location": "us-central1",
+            "name": "migrate",
+            "project": "parcheu-prod",
+            "run_execution_token": null,
+            "start_execution_token": null,
+            "tags": null,
+            "template": [
+              {
+                "annotations": null,
+                "labels": null,
+                "parallelism": 1,
+                "task_count": 1,
+                "template": [
+                  {
+                    "containers": [
+                      {
+                        "args": [
+                          "migrate"
+                        ],
+                        "command": null,
+                        "depends_on": null,
+                        "env": [
+                          {
+                            "name": "CLOUD_SQL_INSTANCE",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_IAM_AUTH",
+                            "value": "true",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_NAME",
+                            "value": "parcheu",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_USER",
+                            "value": "sa-api@parcheu-prod.iam",
+                            "value_source": []
+                          },
+                          {
+                            "name": "ENV",
+                            "value": "prod",
+                            "value_source": []
+                          },
+                          {
+                            "name": "GCP_PROJECT",
+                            "value": "parcheu-prod",
+                            "value_source": []
+                          },
+                          {
+                            "name": "GCP_REGION",
+                            "value": "us-central1",
+                            "value_source": []
+                          },
+                          {
+                            "name": "INTERNAL_OIDC_AUDIENCE",
+                            "value": "https://api.parcheu-prod.internal",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_HMAC_ANON_KEY",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_PLAY_SA",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_AI_LIGHT",
+                            "value": "ai-light",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_MAINT",
+                            "value": "maintenance",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_SIM",
+                            "value": "simulations",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_SERVICE_ACCOUNT",
+                            "value": "sa-tasks@parcheu-prod.iam.gserviceaccount.com",
+                            "value_source": []
+                          }
+                        ],
+                        "image": "us-docker.pkg.dev/cloudrun/container/job",
+                        "name": null,
+                        "ports": [],
+                        "resources": [
+                          {
+                            "limits": {
+                              "cpu": "1",
+                              "memory": "1Gi"
+                            }
+                          }
+                        ],
+                        "volume_mounts": [],
+                        "working_dir": null
+                      }
+                    ],
+                    "encryption_key": null,
+                    "gpu_zonal_redundancy_disabled": null,
+                    "max_retries": 0,
+                    "node_selector": [],
+                    "service_account": "sa-api@parcheu-prod.iam.gserviceaccount.com",
+                    "timeout": "600s",
+                    "volumes": [],
+                    "vpc_access": []
+                  }
+                ]
+              }
+            ],
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_run_v2_job.this[\"purge-demo\"]",
+          "name": "this",
+          "type": "google_cloud_run_v2_job",
+          "values": {
+            "annotations": null,
+            "binary_authorization": [],
+            "client": null,
+            "client_version": null,
+            "deletion_policy": "DELETE",
+            "deletion_protection": true,
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "labels": {
+              "app": "parcheu",
+              "env": "prod"
+            },
+            "location": "us-central1",
+            "name": "purge-demo",
+            "project": "parcheu-prod",
+            "run_execution_token": null,
+            "start_execution_token": null,
+            "tags": null,
+            "template": [
+              {
+                "annotations": null,
+                "labels": null,
+                "parallelism": 1,
+                "task_count": 1,
+                "template": [
+                  {
+                    "containers": [
+                      {
+                        "args": [
+                          "purge-demo"
+                        ],
+                        "command": null,
+                        "depends_on": null,
+                        "env": [
+                          {
+                            "name": "CLOUD_SQL_INSTANCE",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_IAM_AUTH",
+                            "value": "true",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_NAME",
+                            "value": "parcheu",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_USER",
+                            "value": "sa-api@parcheu-prod.iam",
+                            "value_source": []
+                          },
+                          {
+                            "name": "ENV",
+                            "value": "prod",
+                            "value_source": []
+                          },
+                          {
+                            "name": "GCP_PROJECT",
+                            "value": "parcheu-prod",
+                            "value_source": []
+                          },
+                          {
+                            "name": "GCP_REGION",
+                            "value": "us-central1",
+                            "value_source": []
+                          },
+                          {
+                            "name": "INTERNAL_OIDC_AUDIENCE",
+                            "value": "https://api.parcheu-prod.internal",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_HMAC_ANON_KEY",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_PLAY_SA",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_AI_LIGHT",
+                            "value": "ai-light",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_MAINT",
+                            "value": "maintenance",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_SIM",
+                            "value": "simulations",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_SERVICE_ACCOUNT",
+                            "value": "sa-tasks@parcheu-prod.iam.gserviceaccount.com",
+                            "value_source": []
+                          }
+                        ],
+                        "image": "us-docker.pkg.dev/cloudrun/container/job",
+                        "name": null,
+                        "ports": [],
+                        "resources": [
+                          {
+                            "limits": {
+                              "cpu": "1",
+                              "memory": "1Gi"
+                            }
+                          }
+                        ],
+                        "volume_mounts": [],
+                        "working_dir": null
+                      }
+                    ],
+                    "encryption_key": null,
+                    "gpu_zonal_redundancy_disabled": null,
+                    "max_retries": 0,
+                    "node_selector": [],
+                    "service_account": "sa-api@parcheu-prod.iam.gserviceaccount.com",
+                    "timeout": "900s",
+                    "volumes": [],
+                    "vpc_access": []
+                  }
+                ]
+              }
+            ],
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_run_v2_job.this[\"seed-demo\"]",
+          "name": "this",
+          "type": "google_cloud_run_v2_job",
+          "values": {
+            "annotations": null,
+            "binary_authorization": [],
+            "client": null,
+            "client_version": null,
+            "deletion_policy": "DELETE",
+            "deletion_protection": true,
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "labels": {
+              "app": "parcheu",
+              "env": "prod"
+            },
+            "location": "us-central1",
+            "name": "seed-demo",
+            "project": "parcheu-prod",
+            "run_execution_token": null,
+            "start_execution_token": null,
+            "tags": null,
+            "template": [
+              {
+                "annotations": null,
+                "labels": null,
+                "parallelism": 1,
+                "task_count": 1,
+                "template": [
+                  {
+                    "containers": [
+                      {
+                        "args": [
+                          "seed-demo"
+                        ],
+                        "command": null,
+                        "depends_on": null,
+                        "env": [
+                          {
+                            "name": "CLOUD_SQL_INSTANCE",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_IAM_AUTH",
+                            "value": "true",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_NAME",
+                            "value": "parcheu",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_USER",
+                            "value": "sa-api@parcheu-prod.iam",
+                            "value_source": []
+                          },
+                          {
+                            "name": "ENV",
+                            "value": "prod",
+                            "value_source": []
+                          },
+                          {
+                            "name": "GCP_PROJECT",
+                            "value": "parcheu-prod",
+                            "value_source": []
+                          },
+                          {
+                            "name": "GCP_REGION",
+                            "value": "us-central1",
+                            "value_source": []
+                          },
+                          {
+                            "name": "INTERNAL_OIDC_AUDIENCE",
+                            "value": "https://api.parcheu-prod.internal",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_HMAC_ANON_KEY",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_PLAY_SA",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_AI_LIGHT",
+                            "value": "ai-light",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_MAINT",
+                            "value": "maintenance",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_SIM",
+                            "value": "simulations",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_SERVICE_ACCOUNT",
+                            "value": "sa-tasks@parcheu-prod.iam.gserviceaccount.com",
+                            "value_source": []
+                          }
+                        ],
+                        "image": "us-docker.pkg.dev/cloudrun/container/job",
+                        "name": null,
+                        "ports": [],
+                        "resources": [
+                          {
+                            "limits": {
+                              "cpu": "1",
+                              "memory": "1Gi"
+                            }
+                          }
+                        ],
+                        "volume_mounts": [],
+                        "working_dir": null
+                      }
+                    ],
+                    "encryption_key": null,
+                    "gpu_zonal_redundancy_disabled": null,
+                    "max_retries": 0,
+                    "node_selector": [],
+                    "service_account": "sa-api@parcheu-prod.iam.gserviceaccount.com",
+                    "timeout": "900s",
+                    "volumes": [],
+                    "vpc_access": []
+                  }
+                ]
+              }
+            ],
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_run_v2_service.api",
+          "name": "api",
+          "type": "google_cloud_run_v2_service",
+          "values": {
+            "annotations": null,
+            "binary_authorization": [],
+            "build_config": [],
+            "client": null,
+            "client_version": null,
+            "custom_audiences": [
+              "https://api.parcheu-prod.internal"
+            ],
+            "default_uri_disabled": null,
+            "deletion_policy": "DELETE",
+            "deletion_protection": true,
+            "description": null,
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "iap_enabled": null,
+            "ingress": "INGRESS_TRAFFIC_ALL",
+            "invoker_iam_disabled": null,
+            "labels": {
+              "app": "parcheu",
+              "env": "prod"
+            },
+            "location": "us-central1",
+            "multi_region_settings": [],
+            "name": "api",
+            "project": "parcheu-prod",
+            "tags": null,
+            "template": [
+              {
+                "annotations": null,
+                "containers": [
+                  {
+                    "args": [
+                      "serve"
+                    ],
+                    "base_image_uri": null,
+                    "command": null,
+                    "depends_on": null,
+                    "env": [
+                      {
+                        "name": "CLOUD_SQL_INSTANCE",
+                        "value_source": []
+                      },
+                      {
+                        "name": "DB_IAM_AUTH",
+                        "value": "true",
+                        "value_source": []
+                      },
+                      {
+                        "name": "DB_NAME",
+                        "value": "parcheu",
+                        "value_source": []
+                      },
+                      {
+                        "name": "DB_USER",
+                        "value": "sa-api@parcheu-prod.iam",
+                        "value_source": []
+                      },
+                      {
+                        "name": "ENV",
+                        "value": "prod",
+                        "value_source": []
+                      },
+                      {
+                        "name": "GCP_PROJECT",
+                        "value": "parcheu-prod",
+                        "value_source": []
+                      },
+                      {
+                        "name": "GCP_REGION",
+                        "value": "us-central1",
+                        "value_source": []
+                      },
+                      {
+                        "name": "INTERNAL_OIDC_AUDIENCE",
+                        "value": "https://api.parcheu-prod.internal",
+                        "value_source": []
+                      },
+                      {
+                        "name": "SECRET_HMAC_ANON_KEY",
+                        "value_source": []
+                      },
+                      {
+                        "name": "SECRET_PLAY_SA",
+                        "value_source": []
+                      },
+                      {
+                        "name": "TASKS_QUEUE_AI_LIGHT",
+                        "value": "ai-light",
+                        "value_source": []
+                      },
+                      {
+                        "name": "TASKS_QUEUE_MAINT",
+                        "value": "maintenance",
+                        "value_source": []
+                      },
+                      {
+                        "name": "TASKS_QUEUE_SIM",
+                        "value": "simulations",
+                        "value_source": []
+                      },
+                      {
+                        "name": "TASKS_SERVICE_ACCOUNT",
+                        "value": "sa-tasks@parcheu-prod.iam.gserviceaccount.com",
+                        "value_source": []
+                      }
+                    ],
+                    "image": "us-docker.pkg.dev/cloudrun/container/hello",
+                    "liveness_probe": [],
+                    "name": null,
+                    "readiness_probe": [],
+                    "resources": [
+                      {
+                        "cpu_idle": true,
+                        "limits": {
+                          "cpu": "1",
+                          "memory": "1Gi"
+                        },
+                        "startup_cpu_boost": true
+                      }
+                    ],
+                    "sandbox_launcher": null,
+                    "volume_mounts": [],
+                    "working_dir": null
+                  }
+                ],
+                "encryption_key": null,
+                "execution_environment": null,
+                "gpu_zonal_redundancy_disabled": null,
+                "health_check_disabled": null,
+                "labels": null,
+                "max_instance_request_concurrency": 40,
+                "node_selector": [],
+                "revision": null,
+                "sandboxes": [],
+                "scaling": [
+                  {
+                    "max_instance_count": 5,
+                    "min_instance_count": 1
+                  }
+                ],
+                "service_account": "sa-api@parcheu-prod.iam.gserviceaccount.com",
+                "session_affinity": null,
+                "timeout": "300s",
+                "volumes": [],
+                "vpc_access": []
+              }
+            ],
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_run_v2_service_iam_member.public",
+          "name": "public",
+          "type": "google_cloud_run_v2_service_iam_member",
+          "values": {
+            "condition": [],
+            "location": "us-central1",
+            "member": "allUsers",
+            "name": "api",
+            "project": "parcheu-prod",
+            "role": "roles/run.invoker"
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_run_v2_service_iam_member.tasks_invoker",
+          "name": "tasks_invoker",
+          "type": "google_cloud_run_v2_service_iam_member",
+          "values": {
+            "condition": [],
+            "location": "us-central1",
+            "member": "serviceAccount:sa-tasks@parcheu-prod.iam.gserviceaccount.com",
+            "name": "api",
+            "project": "parcheu-prod",
+            "role": "roles/run.invoker"
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_scheduler_job.this[\"communities\"]",
+          "name": "this",
+          "type": "google_cloud_scheduler_job",
+          "values": {
+            "app_engine_http_target": [],
+            "attempt_deadline": "320s",
+            "deletion_policy": "DELETE",
+            "description": "Recalcula comunidades (lunes 03:00)",
+            "http_target": [
+              {
+                "body": null,
+                "headers": null,
+                "http_method": "POST",
+                "oauth_token": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ]
+              }
+            ],
+            "name": "communities",
+            "project": "parcheu-prod",
+            "pubsub_target": [],
+            "region": "us-central1",
+            "retry_config": [
+              {
+                "retry_count": 1
+              }
+            ],
+            "schedule": "0 3 * * 1",
+            "time_zone": "America/Bogota",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_scheduler_job.this[\"memories\"]",
+          "name": "this",
+          "type": "google_cloud_scheduler_job",
+          "values": {
+            "app_engine_http_target": [],
+            "attempt_deadline": "320s",
+            "deletion_policy": "DELETE",
+            "description": "Extrae memorias pendientes (diario 02:00)",
+            "http_target": [
+              {
+                "body": null,
+                "headers": null,
+                "http_method": "POST",
+                "oauth_token": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ]
+              }
+            ],
+            "name": "memories",
+            "project": "parcheu-prod",
+            "pubsub_target": [],
+            "region": "us-central1",
+            "retry_config": [
+              {
+                "retry_count": 1
+              }
+            ],
+            "schedule": "0 2 * * *",
+            "time_zone": "America/Bogota",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_scheduler_job.this[\"retention\"]",
+          "name": "this",
+          "type": "google_cloud_scheduler_job",
+          "values": {
+            "app_engine_http_target": [],
+            "attempt_deadline": "320s",
+            "deletion_policy": "DELETE",
+            "description": "Aplica la retención de datos (diario 03:30)",
+            "http_target": [
+              {
+                "body": null,
+                "headers": null,
+                "http_method": "POST",
+                "oauth_token": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ]
+              }
+            ],
+            "name": "retention",
+            "project": "parcheu-prod",
+            "pubsub_target": [],
+            "region": "us-central1",
+            "retry_config": [
+              {
+                "retry_count": 1
+              }
+            ],
+            "schedule": "30 3 * * *",
+            "time_zone": "America/Bogota",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_scheduler_job.this[\"twin-accuracy\"]",
+          "name": "this",
+          "type": "google_cloud_scheduler_job",
+          "values": {
+            "app_engine_http_target": [],
+            "attempt_deadline": "320s",
+            "deletion_policy": "DELETE",
+            "description": "Precisión del gemelo (domingos 23:00)",
+            "http_target": [
+              {
+                "body": null,
+                "headers": null,
+                "http_method": "POST",
+                "oauth_token": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ]
+              }
+            ],
+            "name": "twin-accuracy",
+            "project": "parcheu-prod",
+            "pubsub_target": [],
+            "region": "us-central1",
+            "retry_config": [
+              {
+                "retry_count": 1
+              }
+            ],
+            "schedule": "0 23 * * 0",
+            "time_zone": "America/Bogota",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_tasks_queue.this[\"ai-light\"]",
+          "name": "this",
+          "type": "google_cloud_tasks_queue",
+          "values": {
+            "app_engine_routing_override": [],
+            "deletion_policy": "DELETE",
+            "desired_state": "RUNNING",
+            "http_target": [],
+            "location": "us-central1",
+            "name": "ai-light",
+            "project": "parcheu-prod",
+            "rate_limits": [
+              {
+                "max_concurrent_dispatches": 10,
+                "max_dispatches_per_second": 5
+              }
+            ],
+            "retry_config": [
+              {
+                "max_attempts": 5,
+                "max_backoff": "300s",
+                "max_doublings": 4,
+                "min_backoff": "10s"
+              }
+            ],
+            "stackdriver_logging_config": [
+              {
+                "sampling_ratio": 1
+              }
+            ],
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_tasks_queue.this[\"maintenance\"]",
+          "name": "this",
+          "type": "google_cloud_tasks_queue",
+          "values": {
+            "app_engine_routing_override": [],
+            "deletion_policy": "DELETE",
+            "desired_state": "RUNNING",
+            "http_target": [],
+            "location": "us-central1",
+            "name": "maintenance",
+            "project": "parcheu-prod",
+            "rate_limits": [
+              {
+                "max_concurrent_dispatches": 2,
+                "max_dispatches_per_second": 1
+              }
+            ],
+            "retry_config": [
+              {
+                "max_attempts": 5,
+                "max_backoff": "300s",
+                "max_doublings": 4,
+                "min_backoff": "10s"
+              }
+            ],
+            "stackdriver_logging_config": [
+              {
+                "sampling_ratio": 1
+              }
+            ],
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_tasks_queue.this[\"simulations\"]",
+          "name": "this",
+          "type": "google_cloud_tasks_queue",
+          "values": {
+            "app_engine_routing_override": [],
+            "deletion_policy": "DELETE",
+            "desired_state": "RUNNING",
+            "http_target": [],
+            "location": "us-central1",
+            "name": "simulations",
+            "project": "parcheu-prod",
+            "rate_limits": [
+              {
+                "max_concurrent_dispatches": 10,
+                "max_dispatches_per_second": 2
+              }
+            ],
+            "retry_config": [
+              {
+                "max_attempts": 5,
+                "max_backoff": "300s",
+                "max_doublings": 4,
+                "min_backoff": "10s"
+              }
+            ],
+            "stackdriver_logging_config": [
+              {
+                "sampling_ratio": 1
+              }
+            ],
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_firebase_project.this",
+          "name": "this",
+          "type": "google_firebase_project",
+          "values": {
+            "project": "parcheu-prod",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_firestore_database.default",
+          "name": "default",
+          "type": "google_firestore_database",
+          "values": {
+            "cmek_config": [],
+            "concurrency_mode": "OPTIMISTIC",
+            "delete_protection_state": "DELETE_PROTECTION_ENABLED",
+            "deletion_policy": "ABANDON",
+            "location_id": "nam5",
+            "name": "(default)",
+            "point_in_time_recovery_enablement": "POINT_IN_TIME_RECOVERY_DISABLED",
+            "project": "parcheu-prod",
+            "tags": null,
+            "timeouts": null,
+            "type": "FIRESTORE_NATIVE"
+          }
+        },
+        {
+          "address": "module.platform.google_monitoring_uptime_check_config.api_health",
+          "name": "api_health",
+          "type": "google_monitoring_uptime_check_config",
+          "values": {
+            "content_matchers": [],
+            "deletion_policy": "DELETE",
+            "display_name": "api-health-prod",
+            "http_check": [
+              {
+                "accepted_response_status_codes": [],
+                "auth_info": [],
+                "body": null,
+                "content_type": null,
+                "custom_content_type": null,
+                "mask_headers": null,
+                "path": "/v1/health",
+                "ping_config": [],
+                "port": 443,
+                "request_method": "GET",
+                "service_agent_authentication": [],
+                "use_ssl": true,
+                "validate_ssl": true
+              }
+            ],
+            "log_check_failures": null,
+            "monitored_resource": [
+              {
+                "type": "uptime_url"
+              }
+            ],
+            "period": "300s",
+            "project": "parcheu-prod",
+            "resource_group": [],
+            "selected_regions": null,
+            "synthetic_monitor": [],
+            "tcp_check": [],
+            "timeout": "10s",
+            "timeouts": null,
+            "user_labels": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/aiplatform.user\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/aiplatform.user"
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/cloudsql.client\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/cloudsql.client"
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/cloudsql.instanceUser\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/cloudsql.instanceUser"
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/cloudtasks.enqueuer\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/cloudtasks.enqueuer"
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/cloudtrace.agent\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/cloudtrace.agent"
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/datastore.user\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/datastore.user"
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/firebaseauth.admin\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/firebaseauth.admin"
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/firebasecloudmessaging.admin\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/firebasecloudmessaging.admin"
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/logging.logWriter\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/logging.logWriter"
+          }
+        },
+        {
+          "address": "module.platform.google_project_iam_member.api[\"roles/monitoring.metricWriter\"]",
+          "name": "api",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/monitoring.metricWriter"
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"aiplatform.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "aiplatform.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"artifactregistry.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "artifactregistry.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"billingbudgets.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "billingbudgets.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"cloudscheduler.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "cloudscheduler.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"cloudtasks.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "cloudtasks.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"cloudtrace.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "cloudtrace.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"fcm.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "fcm.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"firebase.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "firebase.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"firebasehosting.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "firebasehosting.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"firebaseinstallations.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "firebaseinstallations.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"firebaserules.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "firebaserules.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"firestore.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "firestore.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"iam.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "iam.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"iamcredentials.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "iamcredentials.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"identitytoolkit.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "identitytoolkit.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"logging.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "logging.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"monitoring.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "monitoring.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"pubsub.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "pubsub.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"run.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "run.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"secretmanager.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "secretmanager.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"securetoken.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "securetoken.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_project_service.apis[\"sqladmin.googleapis.com\"]",
+          "name": "apis",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-prod",
+            "service": "sqladmin.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_pubsub_subscription.play_rtdn_push[0]",
+          "name": "play_rtdn_push",
+          "type": "google_pubsub_subscription",
+          "values": {
+            "ack_deadline_seconds": 60,
+            "bigquery_config": [],
+            "cloud_storage_config": [],
+            "dead_letter_policy": [],
+            "deletion_policy": "DELETE",
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "enable_exactly_once_delivery": null,
+            "enable_message_ordering": null,
+            "expiration_policy": [
+              {
+                "ttl": ""
+              }
+            ],
+            "filter": null,
+            "labels": {
+              "app": "parcheu",
+              "env": "prod"
+            },
+            "message_retention_duration": "604800s",
+            "message_transforms": [],
+            "name": "play-rtdn-push",
+            "project": "parcheu-prod",
+            "push_config": [
+              {
+                "attributes": null,
+                "no_wrapper": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ]
+              }
+            ],
+            "retain_acked_messages": null,
+            "retry_policy": [
+              {
+                "maximum_backoff": "600s",
+                "minimum_backoff": "10s"
+              }
+            ],
+            "tags": null,
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_pubsub_topic.play_rtdn",
+          "name": "play_rtdn",
+          "type": "google_pubsub_topic",
+          "values": {
+            "deletion_policy": "DELETE",
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "ingestion_data_source_settings": [],
+            "kms_key_name": null,
+            "labels": {
+              "app": "parcheu",
+              "env": "prod"
+            },
+            "message_retention_duration": "604800s",
+            "message_transforms": [],
+            "name": "play-rtdn",
+            "project": "parcheu-prod",
+            "schema_settings": [],
+            "tags": null,
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_pubsub_topic_iam_member.play_publisher",
+          "name": "play_publisher",
+          "type": "google_pubsub_topic_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:google-play-developer-notifications@system.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/pubsub.publisher",
+            "topic": "play-rtdn"
+          }
+        },
+        {
+          "address": "module.platform.google_secret_manager_secret.this[\"hmac-anon-key\"]",
+          "name": "this",
+          "type": "google_secret_manager_secret",
+          "values": {
+            "annotations": null,
+            "deletion_policy": "DELETE",
+            "deletion_protection": false,
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "labels": {
+              "app": "parcheu",
+              "env": "prod"
+            },
+            "project": "parcheu-prod",
+            "replication": [
+              {
+                "auto": [
+                  {
+                    "customer_managed_encryption": []
+                  }
+                ],
+                "user_managed": []
+              }
+            ],
+            "rotation": [],
+            "secret_id": "hmac-anon-key",
+            "tags": null,
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null,
+            "topics": [],
+            "ttl": null,
+            "version_aliases": null,
+            "version_destroy_ttl": null
+          }
+        },
+        {
+          "address": "module.platform.google_secret_manager_secret.this[\"play-sa\"]",
+          "name": "this",
+          "type": "google_secret_manager_secret",
+          "values": {
+            "annotations": null,
+            "deletion_policy": "DELETE",
+            "deletion_protection": false,
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "labels": {
+              "app": "parcheu",
+              "env": "prod"
+            },
+            "project": "parcheu-prod",
+            "replication": [
+              {
+                "auto": [
+                  {
+                    "customer_managed_encryption": []
+                  }
+                ],
+                "user_managed": []
+              }
+            ],
+            "rotation": [],
+            "secret_id": "play-sa",
+            "tags": null,
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "prod",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null,
+            "topics": [],
+            "ttl": null,
+            "version_aliases": null,
+            "version_destroy_ttl": null
+          }
+        },
+        {
+          "address": "module.platform.google_secret_manager_secret_iam_member.api_accessor[\"hmac-anon-key\"]",
+          "name": "api_accessor",
+          "type": "google_secret_manager_secret_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/secretmanager.secretAccessor",
+            "secret_id": "hmac-anon-key"
+          }
+        },
+        {
+          "address": "module.platform.google_secret_manager_secret_iam_member.api_accessor[\"play-sa\"]",
+          "name": "api_accessor",
+          "type": "google_secret_manager_secret_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "role": "roles/secretmanager.secretAccessor",
+            "secret_id": "play-sa"
+          }
+        },
+        {
+          "address": "module.platform.google_service_account.api",
+          "name": "api",
+          "type": "google_service_account",
+          "values": {
+            "account_id": "sa-api",
+            "create_ignore_already_exists": null,
+            "deletion_policy": "DELETE",
+            "description": "Identidad de Cloud Run api y de los Cloud Run Jobs (migrate, seed-demo, purge-demo).",
+            "disabled": false,
+            "display_name": "ParcheU API",
+            "email": "sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_service_account.tasks",
+          "name": "tasks",
+          "type": "google_service_account",
+          "values": {
+            "account_id": "sa-tasks",
+            "create_ignore_already_exists": null,
+            "deletion_policy": "DELETE",
+            "description": "Identidad OIDC de Cloud Tasks, Cloud Scheduler y Pub/Sub hacia /internal/*.",
+            "disabled": false,
+            "display_name": "ParcheU tasks",
+            "email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com",
+            "member": "serviceAccount:sa-tasks@parcheu-prod.iam.gserviceaccount.com",
+            "project": "parcheu-prod",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_service_account_iam_member.api_acts_as_tasks",
+          "name": "api_acts_as_tasks",
+          "type": "google_service_account_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
+            "role": "roles/iam.serviceAccountUser"
+          }
+        },
+        {
+          "address": "module.platform.google_service_account_iam_member.deployer_acts_as_api",
+          "name": "deployer_acts_as_api",
+          "type": "google_service_account_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-deployer@parcheu-prod.iam.gserviceaccount.com",
+            "role": "roles/iam.serviceAccountUser"
+          }
+        },
+        {
+          "address": "module.platform.google_sql_database.main",
+          "name": "main",
+          "type": "google_sql_database",
+          "values": {
+            "deletion_policy": "DELETE",
+            "instance": "parcheu-prod",
+            "name": "parcheu",
+            "project": "parcheu-prod",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_sql_database_instance.main",
+          "name": "main",
+          "type": "google_sql_database_instance",
+          "values": {
+            "backupdr_backup": null,
+            "clone": [],
+            "database_version": "POSTGRES_16",
+            "deletion_policy": "DELETE",
+            "deletion_protection": true,
+            "final_backup_description": null,
+            "include_replicas_for_major_version_upgrade": null,
+            "name": "parcheu-prod",
+            "point_in_time_restore_context": [],
+            "project": "parcheu-prod",
+            "region": "us-central1",
+            "restore_backup_context": [],
+            "root_password": null,
+            "root_password_wo": null,
+            "root_password_wo_version": null,
+            "settings": [
+              {
+                "activation_policy": "ALWAYS",
+                "active_directory_config": [],
+                "advanced_machine_features": [],
+                "auto_upgrade_enabled": null,
+                "availability_type": "ZONAL",
+                "backup_configuration": [
+                  {
+                    "backup_retention_settings": [
+                      {
+                        "retained_backups": 7,
+                        "retention_unit": "COUNT"
+                      }
+                    ],
+                    "binary_log_enabled": null,
+                    "enabled": true,
+                    "location": null,
+                    "point_in_time_recovery_enabled": true,
+                    "start_time": "08:00",
+                    "transaction_log_retention_days": 7
+                  }
+                ],
+                "collation": null,
+                "database_flags": [
+                  {
+                    "name": "cloudsql.iam_authentication",
+                    "value": "on"
+                  }
+                ],
+                "deletion_protection_enabled": true,
+                "deny_maintenance_period": [],
+                "disk_autoresize": true,
+                "disk_autoresize_limit": 0,
+                "disk_size": 10,
+                "disk_type": "PD_SSD",
+                "edition": "ENTERPRISE",
+                "enable_dataplex_integration": null,
+                "enable_google_ml_integration": null,
+                "entraid_config": [],
+                "final_backup_config": [],
+                "insights_config": [
+                  {
+                    "enhanced_query_insights_enabled": null,
+                    "query_insights_enabled": true,
+                    "record_application_tags": null,
+                    "record_client_address": null
+                  }
+                ],
+                "ip_configuration": [
+                  {
+                    "allocated_ip_range": null,
+                    "authorized_networks": [],
+                    "custom_subject_alternative_names": null,
+                    "enable_private_path_for_google_cloud_services": null,
+                    "ipv4_enabled": true,
+                    "private_network": null,
+                    "psc_config": [],
+                    "server_ca_pool": null,
+                    "server_certificate_rotation_mode": null,
+                    "ssl_mode": "ENCRYPTED_ONLY"
+                  }
+                ],
+                "maintenance_window": [
+                  {
+                    "day": 7,
+                    "hour": 9,
+                    "update_track": "stable"
+                  }
+                ],
+                "password_validation_policy": [],
+                "pricing_plan": "PER_USE",
+                "retain_backups_on_delete": null,
+                "sql_server_audit_config": [],
+                "tier": "db-g1-small",
+                "time_zone": null,
+                "user_labels": {
+                  "app": "parcheu",
+                  "env": "prod"
+                }
+              }
+            ],
+            "switch_transaction_logs_to_cloud_storage_enabled": null,
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_sql_user.api",
+          "name": "api",
+          "type": "google_sql_user",
+          "values": {
+            "database_roles": null,
+            "deletion_policy": "DELETE",
+            "instance": "parcheu-prod",
+            "name": "sa-api@parcheu-prod.iam",
+            "password": null,
+            "password_policy": [],
+            "password_wo": null,
+            "password_wo_version": null,
+            "project": "parcheu-prod",
+            "timeouts": null,
+            "type": "CLOUD_IAM_SERVICE_ACCOUNT"
+          }
+        }
+      ]
+    }
+  }
+}

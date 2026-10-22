@@ -1,0 +1,544 @@
+{
+  "planned_values": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "google_billing_account_iam_member.terraform_budget",
+          "name": "terraform_budget",
+          "type": "google_billing_account_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "role": "roles/billing.costsManager"
+          }
+        },
+        {
+          "address": "google_iam_workload_identity_pool.github",
+          "name": "github",
+          "type": "google_iam_workload_identity_pool",
+          "values": {
+            "attestation_rules": [],
+            "deletion_policy": "DELETE",
+            "description": "Identidades de GitHub Actions del repo RareChimera87/ProyectoFinalTecMovil",
+            "disabled": null,
+            "display_name": "GitHub Actions",
+            "inline_certificate_issuance_config": [],
+            "inline_trust_config": [],
+            "project": "parcheu-dev",
+            "timeouts": null,
+            "workload_identity_pool_id": "github"
+          }
+        },
+        {
+          "address": "google_iam_workload_identity_pool_provider.github",
+          "name": "github",
+          "type": "google_iam_workload_identity_pool_provider",
+          "values": {
+            "attribute_condition": "assertion.repository == 'RareChimera87/ProyectoFinalTecMovil'",
+            "attribute_mapping": {
+              "attribute.actor": "assertion.actor",
+              "attribute.environment": "assertion.environment",
+              "attribute.event_name": "assertion.event_name",
+              "attribute.owner": "assertion.repository_owner",
+              "attribute.ref": "assertion.ref",
+              "attribute.repository": "assertion.repository",
+              "attribute.repository_id": "assertion.repository_id",
+              "attribute.workflow": "assertion.workflow",
+              "google.subject": "assertion.sub"
+            },
+            "aws": [],
+            "deletion_policy": "DELETE",
+            "description": null,
+            "disabled": null,
+            "display_name": "GitHub OIDC",
+            "oidc": [
+              {
+                "allowed_audiences": null,
+                "issuer_uri": "https://token.actions.githubusercontent.com",
+                "jwks_json": null
+              }
+            ],
+            "project": "parcheu-dev",
+            "saml": [],
+            "timeouts": null,
+            "workload_identity_pool_id": "github",
+            "workload_identity_pool_provider_id": "github-oidc",
+            "x509": []
+          }
+        },
+        {
+          "address": "google_project_iam_member.deployer[\"roles/artifactregistry.writer\"]",
+          "name": "deployer",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/artifactregistry.writer"
+          }
+        },
+        {
+          "address": "google_project_iam_member.deployer[\"roles/datastore.indexAdmin\"]",
+          "name": "deployer",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/datastore.indexAdmin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.deployer[\"roles/firebasehosting.admin\"]",
+          "name": "deployer",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/firebasehosting.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.deployer[\"roles/firebaserules.admin\"]",
+          "name": "deployer",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/firebaserules.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.deployer[\"roles/run.admin\"]",
+          "name": "deployer",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/run.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.deployer[\"roles/serviceusage.serviceUsageConsumer\"]",
+          "name": "deployer",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/serviceusage.serviceUsageConsumer"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/artifactregistry.admin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/artifactregistry.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/cloudscheduler.admin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/cloudscheduler.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/cloudsql.admin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/cloudsql.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/cloudtasks.admin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/cloudtasks.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/datastore.owner\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/datastore.owner"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/firebase.admin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/firebase.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/iam.serviceAccountAdmin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/iam.serviceAccountAdmin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/iam.serviceAccountUser\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/iam.serviceAccountUser"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/monitoring.admin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/monitoring.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/pubsub.admin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/pubsub.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/resourcemanager.projectIamAdmin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/resourcemanager.projectIamAdmin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/run.admin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/run.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/secretmanager.admin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/secretmanager.admin"
+          }
+        },
+        {
+          "address": "google_project_iam_member.terraform[\"roles/serviceusage.serviceUsageAdmin\"]",
+          "name": "terraform",
+          "type": "google_project_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/serviceusage.serviceUsageAdmin"
+          }
+        },
+        {
+          "address": "google_project_service.bootstrap[\"billingbudgets.googleapis.com\"]",
+          "name": "bootstrap",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-dev",
+            "service": "billingbudgets.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_project_service.bootstrap[\"cloudbilling.googleapis.com\"]",
+          "name": "bootstrap",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-dev",
+            "service": "cloudbilling.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_project_service.bootstrap[\"cloudresourcemanager.googleapis.com\"]",
+          "name": "bootstrap",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-dev",
+            "service": "cloudresourcemanager.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_project_service.bootstrap[\"iam.googleapis.com\"]",
+          "name": "bootstrap",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-dev",
+            "service": "iam.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_project_service.bootstrap[\"iamcredentials.googleapis.com\"]",
+          "name": "bootstrap",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-dev",
+            "service": "iamcredentials.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_project_service.bootstrap[\"serviceusage.googleapis.com\"]",
+          "name": "bootstrap",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-dev",
+            "service": "serviceusage.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_project_service.bootstrap[\"storage.googleapis.com\"]",
+          "name": "bootstrap",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-dev",
+            "service": "storage.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_project_service.bootstrap[\"sts.googleapis.com\"]",
+          "name": "bootstrap",
+          "type": "google_project_service",
+          "values": {
+            "deletion_policy": "DELETE",
+            "disable_dependent_services": null,
+            "disable_on_destroy": false,
+            "project": "parcheu-dev",
+            "service": "sts.googleapis.com",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_service_account.deployer",
+          "name": "deployer",
+          "type": "google_service_account",
+          "values": {
+            "account_id": "sa-deployer",
+            "create_ignore_already_exists": null,
+            "deletion_policy": "DELETE",
+            "description": "Despliega la API, los jobs y Firebase (reglas, índices, Hosting) desde CI.",
+            "disabled": false,
+            "display_name": "ParcheU deployer (GitHub Actions)",
+            "email": "sa-deployer@parcheu-dev.iam.gserviceaccount.com",
+            "member": "serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_service_account.terraform",
+          "name": "terraform",
+          "type": "google_service_account",
+          "values": {
+            "account_id": "sa-terraform",
+            "create_ignore_already_exists": null,
+            "deletion_policy": "DELETE",
+            "description": "Plan y apply de Terraform en CI.",
+            "disabled": false,
+            "display_name": "ParcheU Terraform (GitHub Actions)",
+            "email": "sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "google_service_account_iam_member.deployer_wif",
+          "name": "deployer_wif",
+          "type": "google_service_account_iam_member",
+          "values": {
+            "condition": [],
+            "role": "roles/iam.workloadIdentityUser"
+          }
+        },
+        {
+          "address": "google_service_account_iam_member.terraform_wif",
+          "name": "terraform_wif",
+          "type": "google_service_account_iam_member",
+          "values": {
+            "condition": [],
+            "role": "roles/iam.workloadIdentityUser"
+          }
+        },
+        {
+          "address": "google_storage_bucket.state",
+          "name": "state",
+          "type": "google_storage_bucket",
+          "values": {
+            "autoclass": [],
+            "cors": [],
+            "custom_placement_config": [],
+            "default_event_based_hold": false,
+            "deletion_policy": "DELETE",
+            "effective_labels": {},
+            "enable_object_retention": false,
+            "encryption": [],
+            "force_destroy": false,
+            "hierarchical_namespace": [
+              {
+                "enabled": false
+              }
+            ],
+            "id": "parcheu-dev-tfstate",
+            "ip_filter": [],
+            "labels": {},
+            "lifecycle_rule": [
+              {
+                "action": [
+                  {
+                    "storage_class": "",
+                    "type": "Delete"
+                  }
+                ],
+                "condition": [
+                  {
+                    "age": null,
+                    "created_before": "",
+                    "custom_time_before": "",
+                    "days_since_custom_time": null,
+                    "days_since_noncurrent_time": null,
+                    "matches_prefix": [],
+                    "matches_storage_class": [],
+                    "matches_suffix": [],
+                    "noncurrent_time_before": "",
+                    "num_newer_versions": 20,
+                    "send_age_if_zero": null,
+                    "send_days_since_custom_time_if_zero": null,
+                    "send_days_since_noncurrent_time_if_zero": null,
+                    "send_num_newer_versions_if_zero": null,
+                    "size_above_bytes": null,
+                    "size_below_bytes": null,
+                    "with_state": "ARCHIVED"
+                  }
+                ]
+              }
+            ],
+            "location": "US-CENTRAL1",
+            "logging": [],
+            "name": "parcheu-dev-tfstate",
+            "project": "parcheu-dev",
+            "project_number": 388770932007,
+            "public_access_prevention": "enforced",
+            "requester_pays": false,
+            "retention_policy": [],
+            "rpo": null,
+            "self_link": "https://www.googleapis.com/storage/v1/b/parcheu-dev-tfstate",
+            "soft_delete_policy": [
+              {
+                "effective_time": "2026-10-22T07:13:46.203Z",
+                "retention_duration_seconds": 604800
+              }
+            ],
+            "storage_class": "STANDARD",
+            "terraform_labels": {},
+            "time_created": "2026-10-22T07:13:46.203Z",
+            "timeouts": null,
+            "uniform_bucket_level_access": true,
+            "updated": "2026-10-22T07:13:47.914Z",
+            "url": "gs://parcheu-dev-tfstate",
+            "versioning": [
+              {
+                "enabled": true
+              }
+            ],
+            "website": []
+          }
+        },
+        {
+          "address": "google_storage_bucket_iam_member.terraform_state",
+          "name": "terraform_state",
+          "type": "google_storage_bucket_iam_member",
+          "values": {
+            "bucket": "parcheu-dev-tfstate",
+            "condition": [],
+            "member": "serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com",
+            "role": "roles/storage.objectAdmin",
+            "timeouts": null
+          }
+        }
+      ]
+    }
+  }
+}
