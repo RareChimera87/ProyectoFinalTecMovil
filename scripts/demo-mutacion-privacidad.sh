@@ -94,7 +94,7 @@ log="$(mktemp)"
 # shellcheck disable=SC2086
 (cd backend && ./gradlew test -PsinContenedores --tests 'me.santiagoreina.parcheu.api.privacy.*' --console=plain ${GRADLE_ARGS:-}) >"$log" 2>&1
 rc=$?
-grep -E "FAILED|expuest|que no involucra|recuerdo-|tests completed|BUILD" "$log" | head -40
+grep -E "FAILED|tests completed|BUILD|^    [^ -]" "$log" | head -15
 rm -f "$log"
 
 echo "== Semillas (repite con PRIVACY_SEED=<semilla>):"

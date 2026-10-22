@@ -101,3 +101,21 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
 - **Puerta de términos (E2.1).** `identity/TermsGate.kt` es un plugin de ruta que `IdentityRoutes` instala sobre la ruta autenticada de `/v1`: toda ruta de cualquier dominio responde 403 `TERMS_REQUIRED` (o `SUSPENDED`) salvo `POST /v1/session`, `POST /v1/me/terms`, `GET /v1/me` y `DELETE /v1/me`. Las pruebas de otros dominios usan `testContainer()`, que ya trae al usuario `ana` con términos aceptados.
 - **Agregar un dominio o ruta.** Rellena el `XRoutes.kt` de tu dominio (reemplaza los `stubXxx`) y cablea sus dependencias en `platform/AppContainer.kt`; `Application.kt` no se toca.
 - **Logs.** JSON a stdout con `severity`, `traceId` (de `X-Cloud-Trace-Context`) y `route`.
+
+## Suite de invariantes de privacidad (E3.5)
+
+```bash
+# Solo la suite (≥ 1.000 casos por propiedad; la semilla queda en build/test-results)
+cd backend && ./gradlew test -PsinContenedores --tests 'me.santiagoreina.parcheu.api.privacy.*'
+# Reproducir una corrida concreta
+PRIVACY_SEED=-6985993149784619260 ./gradlew test -PsinContenedores --tests 'me.santiagoreina.parcheu.api.privacy.*'
+# Demo de mutación para la sustentación (sale ≠ 0 con mutación, 0 sin ella; deja el árbol limpio)
+scripts/demo-mutacion-privacidad.sh            # quita el filtro de Pareja de GraphVisibilityPolicy
+scripts/demo-mutacion-privacidad.sh memorias   # TwinPromptBuilder deja de filtrar memorias por modo
+scripts/demo-mutacion-privacidad.sh ninguna    # control: suite en verde
+scripts/test/demo-mutacion-privacidad.test.sh  # comprobación rápida de las anclas, sin Gradle
+```
+
+La demo exige que el archivo a mutar no tenga cambios sin commit (lo restaura con `git checkout`).
+Una vista de terceros nueva se agrega en `ThirdPartyViews.registered` y con su sonda en
+`ThirdPartyViewProbes.byView`; sin ambas, `ThirdPartyViewRegistryTest` falla.
