@@ -133,3 +133,16 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
   ```
 
 - `SimulationDbTest` usa Postgres real: en local, `PARCHEU_TEST_DB_URL` apuntando a un Postgres 16 desechable (ver `TestDatabase`).
+
+## Fila de match (E4.2)
+
+- Banderas del servicio `api`: `DEMO_USERS_ENABLED` (por defecto `true` en local y dev, `false` en prod) y `SCENARIO_MODE_ENABLED` (por defecto `false` hasta E4.8). El espejo `matchTickets/{uid}` escribe en Firestore solo si hay `FIREBASE_PROJECT_ID` y `ENV` no es `local`.
+- `MatchingDbTest` usa Postgres real (incluye la prueba de concurrencia y la de `SKIP LOCKED`): en local, `PARCHEU_TEST_DB_URL` apuntando a un Postgres 16 desechable (ver `TestDatabase`).
+- `MatchTicketFirestoreEmulatorTest` necesita el emulador de Firestore; sin `FIRESTORE_EMULATOR_HOST` se omite. En local, con Java 21 en el `PATH`:
+
+  ```bash
+  cd backend && firebase --config ../firebase/firebase.json emulators:exec --only firestore --project demo-parcheu \
+    "./gradlew test -PsinContenedores --tests '*FirestoreEmulatorTest*'"
+  ```
+
+  (`firebase` global o `npx firebase` tras `npm ci` en `firebase/`; CI lo hace en `backend-ci`.)

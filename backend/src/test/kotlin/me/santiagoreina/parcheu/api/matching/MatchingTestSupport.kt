@@ -31,6 +31,8 @@ val MATCH_START: Instant = Instant.parse("2026-10-26T15:00:00Z")
 class MatchFixture(
     val flags: MatchingFlags = MatchingFlags(demoUsersEnabled = true, scenarioModeEnabled = false),
     val clock: MovableClock = MovableClock(MATCH_START),
+    /** Espejo real (emulador de Firestore); por defecto se usa [mirror], que solo registra. */
+    mirrorOverride: MatchTicketMirror? = null,
     limits: QuotaLimits = QuotaLimits(),
     val idFor: (String) -> UUID = { UUID.nameUUIDFromBytes("match:$it".toByteArray()) },
 ) {
@@ -45,7 +47,7 @@ class MatchFixture(
     val matchRepo = InMemoryMatchingRepository()
     val mirror = RecordingMatchTicketMirror()
     val notifier = FakeNotifier()
-    val module = inMemoryMatchingModule(clock, quota, simulation, graph, notifier, matchRepo, mirror, flags)
+    val module = inMemoryMatchingModule(clock, quota, simulation, graph, notifier, matchRepo, mirrorOverride ?: mirror, flags)
     val service get() = module.service
 
     /** Persona con gemelo listo, modos activos y datos de B0; devuelve su `users.id`. */
