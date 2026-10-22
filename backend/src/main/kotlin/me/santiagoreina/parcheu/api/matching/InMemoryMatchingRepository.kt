@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.TicketStatus
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 
 /** Chat SCENARIO que crea el repositorio en memoria (las pruebas lo inspeccionan). */
 data class InMemoryScenarioChat(val id: UUID, val matchId: UUID, val mode: Mode, val scenarioId: Int, val endsAt: Instant, val members: List<UUID>)
@@ -32,6 +33,10 @@ class InMemoryMatchingRepository(
     private val tickets = LinkedHashMap<UUID, QueueEntry>()
     private val matches = LinkedHashMap<UUID, MatchRecord>()
     private val chats = ArrayList<InMemoryScenarioChat>()
+    private val versions = AtomicLong()
+
+    /** Guarda el ticket con una versión nueva, como el trigger de Postgres. */
+    private fun put(entry: QueueEntry): QueueEntry = entry.copy(version = versions.incrementAndGet()).also { tickets[it.userId] = it }
 
     fun addPerson(person: MatchPerson) = synchronized(people) { people[person.id] = person }
 
@@ -61,8 +66,7 @@ class InMemoryMatchingRepository(
         val existing = tickets[entry.userId]
         val waiting = existing != null && existing.status == TicketStatus.WAITING && existing.expiresAt.isAfter(now)
         if (waiting && !allowExisting) return@withLock PairOutcome.AlreadyQueued
-        val own = if (waiting) existing!! else entry
-        if (!waiting) tickets[entry.userId] = entry
+        val own = if (waiting) existing!! else put(entry)
 
         val partner = tickets.values
             .filter { it.status == TicketStatus.WAITING && it.mode == own.mode && it.userId != own.userId && it.expiresAt.isAfter(now) }
@@ -75,10 +79,8 @@ class InMemoryMatchingRepository(
             createdAt = now, decideBy = now.plus(MatchingRules.DECIDE_WINDOW),
         )
         synchronized(matches) { matches[match.id] = match }
-        val ownMatched = own.copy(status = TicketStatus.MATCHED, matchId = match.id)
-        val partnerMatched = partner.copy(status = TicketStatus.MATCHED, matchId = match.id)
-        tickets[own.userId] = ownMatched
-        tickets[partner.userId] = partnerMatched
+        val ownMatched = put(own.copy(status = TicketStatus.MATCHED, matchId = match.id))
+        val partnerMatched = put(partner.copy(status = TicketStatus.MATCHED, matchId = match.id))
         PairOutcome.Paired(match, ownMatched, partnerMatched)
     }
 
@@ -96,8 +98,8 @@ class InMemoryMatchingRepository(
             synchronized(matches) {
                 matches[matchId]?.takeIf { it.status == MatchStatus.PENDING_CHOICE }?.let { matches[matchId] = it.copy(status = MatchStatus.EXPIRED) }
             }
-            if (requeue != null) tickets[requeue.userId] = requeue.copy(status = TicketStatus.WAITING, matchId = null)
-            if (dropped != null) tickets[dropped]?.let { tickets[dropped] = it.copy(status = TicketStatus.EXPIRED, matchId = null) }
+            if (requeue != null) put(requeue.copy(status = TicketStatus.WAITING, matchId = null))
+            if (dropped != null) tickets[dropped]?.let { put(it.copy(status = TicketStatus.EXPIRED, matchId = null)) }
         }
     }
 
@@ -116,7 +118,7 @@ class InMemoryMatchingRepository(
             .filter { it.status == TicketStatus.WAITING && !it.expiresAt.isAfter(now) }
             .sortedBy { it.expiresAt }
             .take(limit)
-        due.map { entry -> entry.copy(status = TicketStatus.EXPIRED).also { tickets[entry.userId] = it } }
+        due.map { entry -> put(entry.copy(status = TicketStatus.EXPIRED)) }
     }
 
     override suspend fun match(id: UUID): MatchRecord? = synchronized(matches) { matches[id] }
@@ -142,15 +144,29 @@ class InMemoryMatchingRepository(
         }
     }
 
-    override suspend fun createScenarioChat(matchId: UUID, now: Instant, allowPremium: Boolean): UUID? = lock.withLock {
-        val match = synchronized(matches) { matches[matchId] } ?: return@withLock null
-        match.chatId?.let { return@withLock it }
+    override suspend fun canInteract(a: UUID, b: UUID, now: Instant): Boolean = lock.withLock { usable(a, b, now) }
+
+    private fun usable(a: UUID, b: UUID, now: Instant): Boolean {
+        if (isBlocked(a, b)) return false
+        return listOf(a, b).all { id ->
+            val person = synchronized(people) { people[id] }
+            person != null && !person.deleted && person.suspendedUntil.let { it == null || !it.isAfter(now) }
+        }
+    }
+
+    override suspend fun createScenarioChat(matchId: UUID, now: Instant, allowPremium: Boolean): ScenarioChatOutcome = lock.withLock {
+        val match = synchronized(matches) { matches[matchId] } ?: return@withLock ScenarioChatOutcome.NoScenarios
+        match.chatId?.let { return@withLock ScenarioChatOutcome.Created(it) }
+        if (!usable(match.userA, match.userB, now)) {
+            synchronized(matches) { matches[matchId] = match.copy(status = MatchStatus.EXPIRED) }
+            return@withLock ScenarioChatOutcome.Unavailable
+        }
         val options = scenarios.filter { it.mode == match.mode && (allowPremium || it.isBasic) }.sortedBy { it.id }
-        if (options.isEmpty()) return@withLock null
+        if (options.isEmpty()) return@withLock ScenarioChatOutcome.NoScenarios
         val scenario = options[Math.floorMod(match.id.hashCode(), options.size)]
         val chat = InMemoryScenarioChat(UUID.randomUUID(), matchId, match.mode, scenario.id, now.plusSeconds(scenario.timerSec.toLong()), listOf(match.userA, match.userB))
         synchronized(chats) { chats += chat }
         synchronized(matches) { matches[matchId] = match.copy(chatId = chat.id) }
-        chat.id
+        ScenarioChatOutcome.Created(chat.id)
     }
 }

@@ -523,6 +523,8 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 - `MatchDto.scenarioAvailable = SCENARIO_MODE_ENABLED` (false hasta E4.8); con la bandera apagada, F2 solo ofrece Simulación y `POST .../choice` con SCENARIO responde 400.
 - Al emparejar: se cobra `RANDOM_MATCH` a ambos (`ref_id = matchId:userId`, idempotente), se crea `matches` (`user_a` = quien esperaba, `decide_by` = ahora + 10 min), se actualiza `matchTickets/{uid}` de ambos (WAITING -> MATCHED con `matchId`) y se avisa con `Notifier` (`MATCH_FOUND`, `parcheu://match/{id}`). Si a quien esperaba ya no le queda cupo, su ticket pasa a EXPIRED y quien llegó sigue buscando; si no le queda a quien llegó, se deshace el match, la otra persona vuelve a esperar con su turno y se responde 402. Cancelar o vencer antes no cobra nada.
 - Prioridad 1 para Plus, 0 para gratis. El ticket vence a las 24 h (`EXPIRED`, `MATCH_EXPIRED` por push y `matchTickets/{uid}` en EXPIRED; cancelar borra el documento).
+- El espejo publica siempre el estado actual: relee el ticket de Postgres justo antes de escribir y lo manda con su `version`; una transacción de Firestore solo escribe si la versión es mayor o igual a la guardada, así un WAITING atrasado no pisa a MATCHED.
+- Elegir SCENARIO vuelve a comprobar bloqueos (ambos sentidos), borrados y suspensión en la misma transacción que crea el chat; si falla, el match pasa a EXPIRED, se devuelve el cupo y se avisa. `GET` y `choice` de un match pendiente con bloqueo responden 404 y lo cierran del mismo modo.
 - **Vencimientos:** el job `POST /internal/jobs/match-sweep` (Cloud Scheduler, cada minuto) vence tickets, resuelve matches cuyo `decide_by` pasó y reintenta las simulaciones que quedaron sin crear. Cada consulta de la API también resuelve lo vencido que toca, así que la API es correcta aunque el job tarde.
 - `AnonProfile` del match: `anonId` (HMAC del observador), `label` ("Alguien de la UIS"), rango de edad, universidad (nombre corto), intereses e `isDemo`; nunca nombre, foto, carrera ni id interno.
 
@@ -558,7 +560,7 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 | `chats/{chatId}` | backend | miembros | `members: [firebaseUid]`, `type`, `mode`, `status`, `endsAt` |
 | `chats/{chatId}/messages/{msgId}` | backend | miembros | `senderUid` (uid de Firebase; `null` si `system`), `system`, `text`, `createdAt`, `hidden` (nombre canónico; E0.8, E5.1 y E5.2 lo usan igual) |
 | `simulations/{simId}` | backend | participantes | `participants: [firebaseUid]`, `status`, `progress{scenarioIndex, turn, of}`, `score`, `updatedAt` |
-| `matchTickets/{firebaseUid}` | backend | dueño | `status: WAITING\|MATCHED\|EXPIRED`, `mode`, `matchId`, `expiresAt` |
+| `matchTickets/{firebaseUid}` | backend | dueño | `status: WAITING\|MATCHED\|EXPIRED`, `mode`, `matchId`, `expiresAt`, `version` (monótona, la asigna un trigger de Postgres; el espejo ignora escrituras más viejas) |
 
 ```
 rules_version = '2';

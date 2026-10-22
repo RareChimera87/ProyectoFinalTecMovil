@@ -57,6 +57,8 @@ data class QueueEntry(
     val expiresAt: Instant,
     val status: TicketStatus = TicketStatus.WAITING,
     val matchId: UUID? = null,
+    /** Versión monótona por ticket (trigger de Postgres): ordena las publicaciones al espejo. 0 = sin guardar. */
+    val version: Long = 0,
 )
 
 /** Fila de `matches`. `userA` es quien esperaba en la fila y `userB` quien llegó y lo emparejó. */
@@ -99,6 +101,8 @@ data class MatchPerson(
     val birthDate: LocalDate?,
     val universityShort: String?,
     val interests: List<String>,
+    /** Fin de la suspensión vigente (null si no está suspendida). */
+    val suspendedUntil: Instant? = null,
 )
 
 /** Resultado de entrar a la fila e intentar emparejar en la misma transacción. */
@@ -124,4 +128,17 @@ data class TicketMirrorDoc(
     val mode: Mode,
     val matchId: UUID?,
     val expiresAt: Instant,
+    /** Versión del ticket en Postgres: el espejo solo escribe si es mayor o igual a la que ya tiene. */
+    val version: Long = 0,
 )
+
+/** Resultado de crear el chat SCENARIO de un match. */
+sealed interface ScenarioChatOutcome {
+    data class Created(val chatId: UUID) : ScenarioChatOutcome
+
+    /** El modo no tiene escenarios disponibles. */
+    data object NoScenarios : ScenarioChatOutcome
+
+    /** Hay bloqueo, borrado o suspensión entre las dos personas: el match se cerró como EXPIRED. */
+    data object Unavailable : ScenarioChatOutcome
+}

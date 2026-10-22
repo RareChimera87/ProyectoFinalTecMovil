@@ -288,6 +288,84 @@ class MatchingServiceTest : FunSpec({
         f.matchRepo.match(UUID.fromString(id))!!.chatId shouldBe chat.id
     }
 
+    test("un bloqueo posterior al match impide el chat SCENARIO: el match vence, se devuelve el cupo y se avisa") {
+        val f = MatchFixture(flags = MatchingFlags(demoUsersEnabled = true, scenarioModeEnabled = true))
+        val (ana, beto, id) = f.pair()
+        f.service.choose(ana, id, MatchChoice.SCENARIO)
+        f.matchRepo.block(ana, beto)
+        // Beto ya no puede ni ver ni elegir el match bloqueado: se cierra sin crear chat.
+        shouldThrow<NotFound> { f.service.choose(beto, id, MatchChoice.SCENARIO) }
+        f.matchRepo.scenarioChats().shouldBeEmpty()
+        f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
+        f.usage.refunded("$id:$ana") shouldBe true
+        f.usage.refunded("$id:$beto") shouldBe true
+        f.notifier.sent.count { it.notification.kind == NotificationKinds.MATCH_EXPIRED } shouldBe 2
+    }
+
+    test("el bloqueo justo antes de crear el chat SCENARIO (carrera con la elección) deja EXPIRED y sin chat") {
+        val f = MatchFixture(flags = MatchingFlags(demoUsersEnabled = true, scenarioModeEnabled = true))
+        val (ana, beto, id) = f.pair()
+        f.service.choose(ana, id, MatchChoice.SCENARIO)
+        // El bloqueo ocurre entre la lectura del match y la resolución: no pasa por `visible`.
+        val record = f.matchRepo.match(UUID.fromString(id))!!
+        f.matchRepo.block(beto, ana)
+        f.matchRepo.updateMatch(record.id) { it.copy(choiceB = MatchChoice.SCENARIO, status = MatchStatus.SCENARIO) }
+        f.matchRepo.createScenarioChat(record.id, f.clock.instant(), allowPremium = false) shouldBe ScenarioChatOutcome.Unavailable
+        f.matchRepo.scenarioChats().shouldBeEmpty()
+        f.matchRepo.match(record.id)!!.status shouldBe MatchStatus.EXPIRED
+    }
+
+    test("GET de un match pendiente con bloqueo posterior responde 404, lo cierra y devuelve el cupo") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.matchRepo.block(ana, beto)
+        shouldThrow<NotFound> { f.service.match(beto, id) }
+        f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
+        f.usage.refunded("$id:$ana") shouldBe true
+        f.usage.refunded("$id:$beto") shouldBe true
+        // Una segunda lectura ve el match ya cerrado y no vuelve a avisar ni a devolver cupo.
+        f.service.match(ana, id).status shouldBe MatchStatus.EXPIRED
+        f.notifier.sent.count { it.notification.kind == NotificationKinds.MATCH_EXPIRED } shouldBe 2
+    }
+
+    test("una publicación WAITING atrasada no pisa a MATCHED en matchTickets (versión monótona)") {
+        val f = MatchFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        f.service.enqueue(ana, Mode.AMISTAD)
+        val staleWaiting = f.mirror.last("uid-ana")!!
+        staleWaiting.status shouldBe TicketStatus.WAITING
+        f.service.enqueue(beto, Mode.AMISTAD).status shouldBe TicketStatus.MATCHED
+        f.mirror.last("uid-ana")!!.status shouldBe TicketStatus.MATCHED
+        // La escritura WAITING de Ana llega tarde: el espejo la descarta.
+        f.mirror.publish(staleWaiting)
+        f.mirror.last("uid-ana")!!.status shouldBe TicketStatus.MATCHED
+    }
+
+    test("publicar relee el ticket: si el emparejamiento ocurre mientras se escribe WAITING, lo último que queda es MATCHED") {
+        lateinit var f: MatchFixture
+        var anaId: UUID? = null
+        var betoId: UUID? = null
+        var racing = false
+        val inner = RecordingMatchTicketMirror()
+        // Al publicar WAITING de Ana, Beto entra y se empareja antes de que la escritura de Ana termine.
+        val racy = object : MatchTicketMirror by inner {
+            override suspend fun publish(doc: TicketMirrorDoc) {
+                if (doc.firebaseUid == "uid-ana" && doc.status == TicketStatus.WAITING && !racing) {
+                    racing = true
+                    f.service.enqueue(betoId!!, Mode.AMISTAD)
+                }
+                inner.publish(doc)
+            }
+        }
+        f = MatchFixture(mirrorOverride = racy)
+        anaId = f.person("ana")
+        betoId = f.person("beto")
+        f.service.enqueue(anaId, Mode.AMISTAD)
+        inner.last("uid-ana")!!.status shouldBe TicketStatus.MATCHED
+        inner.last("uid-beto")!!.status shouldBe TicketStatus.MATCHED
+    }
+
     test("con la bandera apagada elegir SCENARIO es 400 VALIDATION y la tarjeta no está disponible") {
         val f = MatchFixture()
         val (ana, _, id) = f.pair()

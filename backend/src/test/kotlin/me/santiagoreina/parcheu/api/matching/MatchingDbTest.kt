@@ -1,6 +1,8 @@
 package me.santiagoreina.parcheu.api.matching
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -29,6 +31,7 @@ import me.santiagoreina.parcheu.api.platform.db.tables.Twins
 import me.santiagoreina.parcheu.api.platform.db.tables.UsageEvents
 import me.santiagoreina.parcheu.api.platform.db.tables.UserModes
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
+import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.quota.MovableClock
@@ -47,6 +50,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Duration
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -334,6 +338,36 @@ class MatchingDbTest : FunSpec({
                 Matches.selectAll().where { Matches.id eq UUID.fromString(second) }.single()[Matches.simulationId] shouldBe sim[Simulations.id]
                 UsageEvents.selectAll().count { it[UsageEvents.kind] == me.santiagoreina.parcheu.contract.QuotaKind.SIMULATION } shouldBe 0
             }
+        }
+    }
+
+    test("Postgres: un bloqueo posterior al match impide el chat SCENARIO y cierra el match; la versión del ticket crece").config(enabled = TestDatabase.enabled) {
+        withDb { db ->
+            val w = World(db, flags = MatchingFlags(demoUsersEnabled = true, scenarioModeEnabled = true))
+            val ana = db.user("ana")
+            val beto = db.user("beto")
+            w.service.enqueue(ana, Mode.AMISTAD)
+            val waitingVersion = transaction(db) { MatchQueue.selectAll().where { MatchQueue.userId eq ana }.single()[MatchQueue.version] }
+            val matchId = w.service.enqueue(beto, Mode.AMISTAD).matchId!!
+            transaction(db) { MatchQueue.selectAll().where { MatchQueue.userId eq ana }.single()[MatchQueue.version] } shouldBeGreaterThan waitingVersion
+            w.service.choose(ana, matchId, MatchChoice.SCENARIO)
+            transaction(db) {
+                Blocks.insert {
+                    it[blockerId] = ana
+                    it[blockedId] = beto
+                    it[createdAt] = OffsetDateTime.now()
+                }
+            }
+            shouldThrow<NotFound> { w.service.choose(beto, matchId, MatchChoice.SCENARIO) }
+            transaction(db) {
+                Chats.selectAll().count() shouldBe 0L
+                Matches.selectAll().single()[Matches.status] shouldBe MatchStatus.EXPIRED
+            }
+            // Y el repositorio, dentro de su transacción, tampoco crea el chat si el bloqueo llega tarde.
+            val repo = ExposedMatchingRepository(db)
+            transaction(db) { Matches.update({ Matches.id eq UUID.fromString(matchId) }) { it[status] = MatchStatus.SCENARIO } }
+            repo.createScenarioChat(UUID.fromString(matchId), java.time.Instant.now(), allowPremium = false) shouldBe ScenarioChatOutcome.Unavailable
+            transaction(db) { Chats.selectAll().count() shouldBe 0L }
         }
     }
 

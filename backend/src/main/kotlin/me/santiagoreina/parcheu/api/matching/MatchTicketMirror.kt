@@ -15,6 +15,9 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Espejo de solo lectura de los tickets en Firestore (`matchTickets/{firebaseUid}`, ADR-0004).
  * Postgres es la fuente de verdad: si publicar falla, el servicio lo registra y sigue; la app tiene
  * `GET /v1/match/queue` de respaldo.
+ *
+ * Las publicaciones llevan la versión del ticket en Postgres y el espejo ignora las más viejas que la
+ * que ya guarda, así una escritura atrasada (WAITING) no pisa a una más nueva (MATCHED).
  */
 interface MatchTicketMirror {
     suspend fun publish(doc: TicketMirrorDoc)
@@ -35,17 +38,23 @@ class RecordingMatchTicketMirror : MatchTicketMirror {
     private val published = CopyOnWriteArrayList<TicketMirrorDoc>()
     val docs: List<TicketMirrorDoc> get() = published.toList()
 
-    fun last(firebaseUid: String): TicketMirrorDoc? = published.lastOrNull { it.firebaseUid == firebaseUid }
+    /** Estado actual de cada documento, con la misma regla de versiones que Firestore. */
+    private val current = java.util.concurrent.ConcurrentHashMap<String, TicketMirrorDoc>()
+
+    /** Último documento vigente de [firebaseUid]: una publicación más vieja que la guardada no lo reemplaza. */
+    fun last(firebaseUid: String): TicketMirrorDoc? = current[firebaseUid]
 
     private val removedUids = CopyOnWriteArrayList<String>()
     val removed: List<String> get() = removedUids.toList()
 
     override suspend fun publish(doc: TicketMirrorDoc) {
         published += doc
+        current.merge(doc.firebaseUid, doc) { old, new -> if (new.version >= old.version) new else old }
     }
 
     override suspend fun remove(firebaseUid: String) {
         removedUids += firebaseUid
+        current.remove(firebaseUid)
     }
 }
 
@@ -58,7 +67,14 @@ class FirestoreMatchTicketMirror(firestore: () -> Firestore) : MatchTicketMirror
     private val firestore: Firestore by lazy(firestore)
 
     override suspend fun publish(doc: TicketMirrorDoc) {
-        withContext(Dispatchers.IO) { firestore.collection(COLLECTION).document(doc.firebaseUid).set(fields(doc)).get() }
+        withContext(Dispatchers.IO) {
+            val ref = firestore.collection(COLLECTION).document(doc.firebaseUid)
+            firestore.runTransaction { tx ->
+                val stored = tx.get(ref).get().getLong("version") ?: -1L
+                if (doc.version >= stored) tx.set(ref, fields(doc))
+                null
+            }.get()
+        }
     }
 
     override suspend fun remove(firebaseUid: String) {
@@ -74,6 +90,7 @@ class FirestoreMatchTicketMirror(firestore: () -> Firestore) : MatchTicketMirror
             "mode" to doc.mode.name,
             "matchId" to doc.matchId?.toString(),
             "expiresAt" to doc.expiresAt.timestamp(),
+            "version" to doc.version,
         )
 
         /** Espejo del proyecto [projectId] con la app por defecto de Firebase Admin. */

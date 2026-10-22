@@ -81,6 +81,7 @@ class ExposedMatchingRepository(private val db: Database) : MatchingRepository {
             birthDate = row[Users.birthDate],
             universityShort = row.getOrNull(Universities.shortName),
             interests = row[Users.interests],
+            suspendedUntil = row[Users.suspendedUntil]?.toInstant(),
         )
     }
 
@@ -256,14 +257,33 @@ class ExposedMatchingRepository(private val db: Database) : MatchingRepository {
         }
     }
 
-    override suspend fun createScenarioChat(matchId: UUID, now: Instant, allowPremium: Boolean): UUID? = tx {
-        val match = Matches.selectAll().where { Matches.id eq matchId }.forUpdate().singleOrNull()?.toMatch() ?: return@tx null
-        match.chatId?.let { return@tx it }
+    override suspend fun canInteract(a: UUID, b: UUID, now: Instant): Boolean = tx { usable(a, b, now) }
+
+    /** Sin bloqueo en ningún sentido, y ninguna de las dos personas borrada ni suspendida a [now]. */
+    private fun usable(a: UUID, b: UUID, now: Instant): Boolean {
+        val blocked = Blocks.select(Blocks.blockerId).where {
+            ((Blocks.blockerId eq a) and (Blocks.blockedId eq b)) or ((Blocks.blockerId eq b) and (Blocks.blockedId eq a))
+        }.limit(1).any()
+        if (blocked) return false
+        val rows = Users.select(Users.id, Users.deletedAt, Users.suspendedUntil).where { Users.id inList listOf(a, b) }.toList()
+        return rows.size == 2 && rows.all { row ->
+            row[Users.deletedAt] == null && row[Users.suspendedUntil].let { it == null || !it.toInstant().isAfter(now) }
+        }
+    }
+
+    override suspend fun createScenarioChat(matchId: UUID, now: Instant, allowPremium: Boolean): ScenarioChatOutcome = tx {
+        val match = Matches.selectAll().where { Matches.id eq matchId }.forUpdate().singleOrNull()?.toMatch()
+            ?: return@tx ScenarioChatOutcome.NoScenarios
+        match.chatId?.let { return@tx ScenarioChatOutcome.Created(it) }
+        if (!usable(match.userA, match.userB, now)) {
+            Matches.update({ Matches.id eq matchId }) { it[status] = MatchStatus.EXPIRED }
+            return@tx ScenarioChatOutcome.Unavailable
+        }
         val options = Scenarios.selectAll()
             .where { (Scenarios.mode eq match.mode) and (if (allowPremium) Op.TRUE else (Scenarios.isBasic eq true)) }
             .orderBy(Scenarios.id, SortOrder.ASC)
             .toList()
-        if (options.isEmpty()) return@tx null
+        if (options.isEmpty()) return@tx ScenarioChatOutcome.NoScenarios
         val scenario = options[Math.floorMod(match.id.hashCode(), options.size)]
         val chatId = UUID.randomUUID()
         Chats.insert {
@@ -281,7 +301,7 @@ class ExposedMatchingRepository(private val db: Database) : MatchingRepository {
             }
         }
         Matches.update({ Matches.id eq matchId }) { it[Matches.chatId] = chatId }
-        chatId
+        ScenarioChatOutcome.Created(chatId)
     }
 }
 
@@ -310,6 +330,7 @@ private fun ResultRow.toEntry() = QueueEntry(
     expiresAt = this[MatchQueue.expiresAt].toInstant(),
     status = this[MatchQueue.status],
     matchId = this[MatchQueue.matchId],
+    version = this[MatchQueue.version],
 )
 
 private fun ResultRow.toMatch() = MatchRecord(

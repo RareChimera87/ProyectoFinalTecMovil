@@ -83,7 +83,7 @@ class MatchingService(
             when (val current = outcome) {
                 PairOutcome.AlreadyQueued -> throw Conflict("Ya estás en la fila")
                 is PairOutcome.Waiting -> {
-                    publish(person.firebaseUid, current.entry)
+                    publish(person.firebaseUid, userId)
                     return ticketDto(current.entry)
                 }
                 is PairOutcome.Paired -> {
@@ -94,7 +94,7 @@ class MatchingService(
                     // El cobro del otro falló y su ticket se descartó: se vuelve a buscar con el propio.
                     if (attempts++ >= MatchingRules.MAX_PAIRING_ATTEMPTS) {
                         val waiting = repo.ticket(userId) ?: entry
-                        publish(person.firebaseUid, waiting)
+                        publish(person.firebaseUid, userId)
                         return ticketDto(waiting)
                     }
                     outcome = repo.enqueueAndPair(entry, flags.demoUsersEnabled, clock.instant(), allowExisting = true)
@@ -126,7 +126,7 @@ class MatchingService(
             quota.consume(partnerId, QuotaKind.RANDOM_MATCH, "$matchId:$partnerId")
         } catch (e: QuotaExceeded) {
             repo.undoPairing(matchId, requeue = requeueOf(paired.own), dropped = partnerId)
-            repo.person(partnerId)?.let { publish(it.firebaseUid, paired.partner.copy(status = TicketStatus.EXPIRED, matchId = null)) }
+            repo.person(partnerId)?.let { publish(it.firebaseUid, partnerId) }
             return false
         }
         try {
@@ -134,7 +134,7 @@ class MatchingService(
         } catch (e: QuotaExceeded) {
             quota.refund(QuotaKind.RANDOM_MATCH, "$matchId:$partnerId")
             repo.undoPairing(matchId, requeue = requeueOf(paired.partner), dropped = ownId)
-            repo.person(partnerId)?.let { publish(it.firebaseUid, requeueOf(paired.partner)) }
+            repo.person(partnerId)?.let { publish(it.firebaseUid, partnerId) }
             throw e
         }
         return true
@@ -145,7 +145,7 @@ class MatchingService(
     private suspend fun onPaired(paired: PairOutcome.Paired) {
         for (entry in listOf(paired.own, paired.partner)) {
             val person = repo.person(entry.userId) ?: continue
-            publish(person.firebaseUid, entry)
+            publish(person.firebaseUid, entry.userId)
             safely("avisar el match ${paired.match.id}") {
                 notifier.notify(
                     entry.userId,
@@ -186,7 +186,7 @@ class MatchingService(
         val expired = repo.expireTickets(clock.instant(), MatchingRules.SWEEP_BATCH)
         for (entry in expired) {
             val person = repo.person(entry.userId) ?: continue
-            publish(person.firebaseUid, entry)
+            publish(person.firebaseUid, entry.userId)
             safely("avisar el vencimiento del ticket de ${entry.userId}") {
                 notifier.notify(
                     entry.userId,
@@ -240,6 +240,12 @@ class MatchingService(
         val id = runCatching { UUID.fromString(rawId) }.getOrNull() ?: throw NotFound()
         val found = repo.match(id) ?: throw NotFound()
         if (!found.involves(viewer)) throw NotFound()
+        if (found.status == MatchStatus.PENDING_CHOICE && !repo.canInteract(found.userA, found.userB, clock.instant())) {
+            // Bloqueo, borrado o suspensión posterior al match: se cierra, se devuelve el cupo y se oculta.
+            val closed = repo.updateMatch(found.id) { current -> current.copy(status = MatchStatus.EXPIRED).takeIf { current.status == MatchStatus.PENDING_CHOICE } }
+            if (closed != null && closed.before.status == MatchStatus.PENDING_CHOICE) refundAndNotifyUnavailable(found)
+            throw NotFound()
+        }
         return found
     }
 
@@ -270,23 +276,47 @@ class MatchingService(
         if (before.status != MatchStatus.PENDING_CHOICE || after.status == MatchStatus.PENDING_CHOICE) return
         when (after.status) {
             MatchStatus.SIMULATION -> startSimulation(after)
-            MatchStatus.SCENARIO -> safely("crear el chat del match ${after.id}") {
-                repo.createScenarioChat(after.id, clock.instant(), allowPremium = quota.isPlus(after.userA) && quota.isPlus(after.userB))
-            }
-            MatchStatus.EXPIRED -> listOf(after.userA, after.userB).forEach { user ->
-                safely("avisar el vencimiento del match ${after.id}") {
-                    notifier.notify(
-                        user,
-                        Notification(
-                            kind = NotificationKinds.MATCH_EXPIRED,
-                            title = "Se acabó el tiempo",
-                            body = "Nadie eligió cómo conocerse. Puedes buscar otro parche cuando quieras.",
-                            route = "parcheu://match",
-                        ),
-                    )
-                }
-            }
+            MatchStatus.SCENARIO -> createScenarioChat(after)
+            MatchStatus.EXPIRED -> notifyMatchExpired(
+                after,
+                title = "Se acabó el tiempo",
+                body = "Nadie eligió cómo conocerse. Puedes buscar otro parche cuando quieras.",
+            )
             MatchStatus.PENDING_CHOICE -> Unit
+        }
+    }
+
+    /**
+     * Crea el chat SCENARIO. El repositorio vuelve a comprobar bloqueos, borrados y suspensión en la
+     * misma transacción: si alguno falla el match queda EXPIRED, se devuelve el cupo a las dos personas
+     * (siguen disponibles para buscar otro parche) y se les avisa.
+     */
+    private suspend fun createScenarioChat(match: MatchRecord) {
+        val outcome = try {
+            repo.createScenarioChat(match.id, clock.instant(), allowPremium = quota.isPlus(match.userA) && quota.isPlus(match.userB))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn("No se pudo crear el chat del match {}: {}", match.id, e.message)
+            return
+        }
+        if (outcome == ScenarioChatOutcome.Unavailable) {
+            log.info("El match {} ya no es posible (bloqueo, borrado o suspensión): se cierra sin chat", match.id)
+            refundAndNotifyUnavailable(match)
+        }
+    }
+
+    /** Devuelve el cupo `RANDOM_MATCH` de las dos personas y les avisa que el match ya no está disponible. */
+    private suspend fun refundAndNotifyUnavailable(match: MatchRecord) {
+        listOf(match.userA, match.userB).forEach { safely("devolver el cupo del match ${match.id}") { quota.refund(QuotaKind.RANDOM_MATCH, "${match.id}:$it") } }
+        notifyMatchExpired(match, title = "Este parche ya no está disponible", body = "El match se canceló. Puedes buscar otro parche cuando quieras.")
+    }
+
+    private suspend fun notifyMatchExpired(match: MatchRecord, title: String, body: String) {
+        listOf(match.userA, match.userB).forEach { user ->
+            safely("avisar el vencimiento del match ${match.id}") {
+                notifier.notify(user, Notification(kind = NotificationKinds.MATCH_EXPIRED, title = title, body = body, route = "parcheu://match"))
+            }
         }
     }
 
@@ -379,9 +409,16 @@ class MatchingService(
 
     // ---- Utilidades -------------------------------------------------------------------------
 
-    private suspend fun publish(firebaseUid: String, entry: QueueEntry) {
+    /**
+     * Publica en `matchTickets/{uid}` el estado **actual** del ticket: lo relee de Postgres justo antes
+     * de escribir y lo manda con su versión, y el espejo descarta lo más viejo que lo ya guardado. Así
+     * una publicación atrasada (WAITING) nunca pisa a una más nueva (MATCHED). Si el ticket ya no
+     * existe (se canceló) no escribe: `cancel` ya borró el documento.
+     */
+    private suspend fun publish(firebaseUid: String, userId: UUID) {
         safely("publicar matchTickets/$firebaseUid") {
-            mirror.publish(TicketMirrorDoc(firebaseUid, entry.status, entry.mode, entry.matchId, entry.expiresAt))
+            val entry = repo.ticket(userId) ?: return@safely
+            mirror.publish(TicketMirrorDoc(firebaseUid, entry.status, entry.mode, entry.matchId, entry.expiresAt, entry.version))
         }
     }
 

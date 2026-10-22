@@ -52,8 +52,13 @@ interface MatchingRepository {
 
     /**
      * Crea el chat SCENARIO del match con un escenario básico del modo (o cualquiera si [allowPremium])
-     * y lo asocia al match. Idempotente: si el match ya tiene chat devuelve ese. Null si el modo no
-     * tiene escenarios.
+     * y lo asocia al match. Idempotente: si el match ya tiene chat devuelve ese. Si el modo no
+     * tiene escenarios devuelve [ScenarioChatOutcome.NoScenarios]. En la misma transacción vuelve a comprobar
+     * bloqueos (en ambos sentidos), borrados y suspensión: si alguno falla no crea el chat, deja el
+     * match en EXPIRED y devuelve [ScenarioChatOutcome.Unavailable].
      */
-    suspend fun createScenarioChat(matchId: UUID, now: Instant, allowPremium: Boolean): UUID?
+    suspend fun createScenarioChat(matchId: UUID, now: Instant, allowPremium: Boolean): ScenarioChatOutcome
+
+    /** False si hay bloqueo (en cualquier sentido), borrado o suspensión entre las dos personas. */
+    suspend fun canInteract(a: UUID, b: UUID, now: Instant): Boolean
 }
