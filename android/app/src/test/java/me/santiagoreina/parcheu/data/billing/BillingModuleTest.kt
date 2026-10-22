@@ -26,4 +26,19 @@ class BillingModuleTest {
         assertTrue(koin.get<PlayBillingClient>() is AndroidPlayBillingClient)
         assertEquals(BillingConnectionState.Disconnected, provider.connectionState.value)
     }
+
+    @Test
+    fun resolvesASingleRepositoryWithoutConnecting() {
+        ApplicationProvider.getApplicationContext<ParcheUApplication>()
+        val koin = GlobalContext.get()
+
+        val repository = koin.get<BillingRepository>()
+
+        assertSame(repository, koin.get<BillingRepository>())
+        assertTrue(repository is BillingRepositoryImpl)
+        assertEquals(
+            BillingConnectionState.Disconnected,
+            koin.get<BillingClientProvider>().connectionState.value
+        )
+    }
 }
