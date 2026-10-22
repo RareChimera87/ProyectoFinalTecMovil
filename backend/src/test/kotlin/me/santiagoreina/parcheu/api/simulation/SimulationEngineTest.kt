@@ -318,4 +318,76 @@ class SimulationEngineTest : FunSpec({
         shouldThrow<QuotaExceeded> { f.module.service.start(ana, StartSimulation(others[5].toString(), Mode.AMISTAD)) }
         f.repo.all() shouldHaveSize 5
     }
+
+    // M1 (revisión ronda 1): la tarea repite las validaciones del POST antes de gastar tokens.
+    suspend fun SimFixture.queued(a: UUID, b: UUID, mode: Mode = Mode.AMISTAD): Pair<SimulationModule, UUID> {
+        val module = inMemorySimulationModule(
+            me.santiagoreina.parcheu.api.FIXED_CLOCK, ai, quota, graph, repo, mirror = mirror, notifier = notifier, runInline = false,
+        )
+        return module to UUID.fromString(module.service.start(a, StartSimulation(b.toString(), mode)).id)
+    }
+
+    suspend fun SimFixture.shouldHaveFailedSilently(id: UUID, a: UUID, b: UUID, mode: Mode) {
+        val sim = repo.find(id)!!
+        sim.status shouldBe SimulationStatus.FAILED
+        sim.transcript.steps shouldBe 0
+        sim.report shouldBe null
+        fake.calls shouldBe 0
+        usage.refunded(id.toString()) shouldBe true
+        graphRepo.edge(a, b, mode) shouldBe null
+        notifier.sent.shouldBeEmpty()
+    }
+
+    test("si B bloquea a A mientras la simulación está en QUEUED, la tarea falla sin LLM, sin arista ni avisos y devuelve el cupo") {
+        val f = SimFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        val (module, id) = f.queued(ana, beto)
+        f.repo.find(id)!!.status shouldBe SimulationStatus.QUEUED
+        f.repo.block(beto, ana)
+        module.engine.run(id)
+        f.shouldHaveFailedSilently(id, ana, beto, Mode.AMISTAD)
+        f.mirror.docs.none { it.status != SimulationStatus.QUEUED } shouldBe true
+    }
+
+    test("si una cuenta se borra mientras está en QUEUED, la tarea no corre ni escribe en Firestore") {
+        val f = SimFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        val (module, id) = f.queued(ana, beto)
+        f.repo.putParticipant(f.repo.participant(beto)!!.copy(deleted = true))
+        module.engine.run(id)
+        f.shouldHaveFailedSilently(id, ana, beto, Mode.AMISTAD)
+        f.mirror.docs.none { it.status != SimulationStatus.QUEUED } shouldBe true
+    }
+
+    test("si B apaga el modo o revoca Pareja, la tarea falla sin mandar su persona a Vertex") {
+        val f = SimFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        val (module, id) = f.queued(ana, beto, Mode.PAREJA)
+        f.repo.putParticipant(f.repo.participant(beto)!!.copy(parejaConfirmed = false))
+        module.engine.run(id)
+        f.shouldHaveFailedSilently(id, ana, beto, Mode.PAREJA)
+        f.mirror.last(id)!!.status shouldBe SimulationStatus.FAILED
+
+        val (module2, id2) = f.queued(ana, f.person("carla"))
+        f.repo.putParticipant(f.repo.participant(UUID.nameUUIDFromBytes("sim:carla".toByteArray()))!!.copy(activeModes = setOf(Mode.ESTUDIO)))
+        module2.engine.run(id2)
+        f.repo.find(id2)!!.status shouldBe SimulationStatus.FAILED
+        f.fake.calls shouldBe 0
+    }
+
+    test("si el bloqueo llega a mitad de camino, la simulación se detiene antes de la arista y del aviso") {
+        val f = SimFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        var turns = 0
+        f.textReply = { turns++; if (turns == 3) f.repo.block(beto, ana); "Va, me sirve." }
+        val sim = f.start(ana, beto)
+        sim.status shouldBe SimulationStatus.FAILED
+        f.usage.refunded(sim.id.toString()) shouldBe true
+        f.graphRepo.edge(ana, beto, Mode.AMISTAD) shouldBe null
+        f.notifier.sent.shouldBeEmpty()
+    }
 })

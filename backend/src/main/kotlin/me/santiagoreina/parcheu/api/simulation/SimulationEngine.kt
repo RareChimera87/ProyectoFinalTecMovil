@@ -6,6 +6,7 @@ import me.santiagoreina.parcheu.api.graph.EdgeEvent
 import me.santiagoreina.parcheu.api.graph.EdgeService
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
 import me.santiagoreina.parcheu.api.quota.QuotaService
+import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Progress
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.SimulationStatus
@@ -39,6 +40,9 @@ class SimulationEngine(
     /** Un paso del LLM agotó sus intentos. */
     private class StepFailed(message: String) : RuntimeException(message)
 
+    /** La pareja dejó de ser elegible entre el POST y la tarea (bloqueo, borrado, modo apagado, Pareja sin edad). */
+    private class Ineligible(val reason: String, val silent: Boolean) : RuntimeException(reason)
+
     /** Otra entrega de la misma tarea ya guardó este paso. */
     private class AlreadyAdvanced : RuntimeException()
 
@@ -55,11 +59,13 @@ class SimulationEngine(
                 return
             }
             SimulationStatus.QUEUED -> {
+                // M1: las validaciones del POST se repiten antes de gastar un solo token.
+                if (!stillEligible(record)) return
                 repo.markRunning(id)
                 record = repo.find(id) ?: return
                 if (record.status != SimulationStatus.RUNNING) return
             }
-            SimulationStatus.RUNNING -> Unit
+            SimulationStatus.RUNNING -> if (!stillEligible(record)) return
         }
         val participants = participantsOf(record)
         publish(record, participants, SimulationStatus.RUNNING, record.progress, null)
@@ -67,10 +73,52 @@ class SimulationEngine(
             execute(record, participants)
         } catch (e: AlreadyAdvanced) {
             log.info("simulate: otra entrega avanzó la simulación {}; esta se detiene", id)
+        } catch (e: Ineligible) {
+            failIneligible(record, e)
         } catch (e: StepFailed) {
             fail(record, participants, e.message ?: "Fallo del LLM")
         } catch (e: AiBudgetExceeded) {
             fail(record, participants, "Presupuesto diario de IA agotado")
+        }
+    }
+
+    /** Comprueba la elegibilidad; si falla, deja la simulación FAILED con cupo devuelto y retorna false. */
+    private suspend fun stillEligible(record: SimulationRecord): Boolean {
+        val e = ineligibility(record) ?: return true
+        failIneligible(record, e)
+        return false
+    }
+
+    /**
+     * Mismas reglas que `SimulationService.create`: cuenta no borrada, sin bloqueo en ningún sentido,
+     * modo activo en ambos y, en Pareja, edad verificada y confirmación (y sin usuarios demo).
+     * Las causas que no deben revelarse a la otra parte (bloqueo, borrado) son [Ineligible.silent].
+     */
+    private suspend fun ineligibility(record: SimulationRecord): Ineligible? {
+        val a = repo.participant(record.userA)
+        val b = repo.participant(record.userB)
+        if (a == null || b == null || a.deleted || b.deleted) return Ineligible("Una de las cuentas ya no existe", silent = true)
+        if (repo.blockedEitherWay(record.userA, record.userB)) return Ineligible("Hay un bloqueo entre las dos personas", silent = true)
+        if (record.mode !in a.activeModes || record.mode !in b.activeModes) {
+            return Ineligible("El modo ${record.mode.name} ya no está activo para los dos", silent = false)
+        }
+        if (record.mode == Mode.PAREJA) {
+            if (a.isDemo || b.isDemo) return Ineligible("Los usuarios demo no participan en Pareja", silent = false)
+            if (!a.ageVerified || !a.parejaConfirmed || !b.ageVerified || !b.parejaConfirmed) {
+                return Ineligible("Pareja exige edad verificada y confirmación en los dos", silent = false)
+            }
+        }
+        return null
+    }
+
+    private suspend fun failIneligible(record: SimulationRecord, why: Ineligible) {
+        log.warn("simulate: {} FAILED por elegibilidad: {}", record.id, why.reason)
+        repo.markFailed(record.id, why.reason, clock.instant())
+        quota.refund(QuotaKind.SIMULATION, record.id.toString())
+        // Sin aristas ni avisos. Con borrado o bloqueo tampoco se toca Firestore (no recrear el documento
+        // de una cuenta purgada ni delatar al bloqueador).
+        if (!why.silent) {
+            publish(record, participantsOf(record), SimulationStatus.FAILED, repo.find(record.id)?.progress ?: record.progress, null)
         }
     }
 
@@ -91,6 +139,7 @@ class SimulationEngine(
         var transcript = start.transcript
         var progress = start.progress
         for (i in transcript.scenarios.indices) {
+            ineligibility(start)?.let { throw it }
             var scenario = transcript.scenarios[i]
             val def = defs[scenario.scenarioId] ?: throw StepFailed("El escenario ${scenario.scenarioId} ya no existe")
             while (!scenario.finished && scenario.turns.size < MAX_TURNS_PER_SCENARIO) {
@@ -135,6 +184,7 @@ class SimulationEngine(
         cachedFrom: UUID?,
         provider: String?,
     ) {
+        ineligibility(record)?.let { throw it }
         // La arista va antes de DONE: si algo falla después, el reintento la vuelve a aplicar (idempotente).
         edges.apply(EdgeEvent.Simulated(record.userA, record.userB, record.mode, record.id, report.score))
         val done = repo.markDone(record.id, report.score, report, transcript, progress, cachedFrom, provider, UsageTotals(), clock.instant())
