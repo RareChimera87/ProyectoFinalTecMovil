@@ -124,7 +124,16 @@ class BillingRepositoryImpl(
                     _purchaseState.value = PurchaseState.Completed(latest)
                 }
             } else if (unrecognized.isEmpty()) {
-                refreshEntitlement()
+                val fresh = refreshEntitlement()
+                // El servidor pudo verificarla y reconocerla sin que el cliente recibiera la respuesta
+                // (timeout): si el derecho ya es Plus, la compra pendiente está resuelta.
+                if (
+                    fresh is ApiResult.Success &&
+                    fresh.value.plus &&
+                    _purchaseState.value == PurchaseState.VerificationPending
+                ) {
+                    _purchaseState.value = PurchaseState.Completed(fresh.value)
+                }
             }
         }
     }
@@ -157,7 +166,19 @@ class BillingRepositoryImpl(
                 when (val restored = restorePurchases()) {
                     is RestoreResult.Restored ->
                         _purchaseState.value = PurchaseState.Completed(restored.entitlement)
-                    is RestoreResult.Failed -> fail(restored.failure)
+                    is RestoreResult.Failed -> {
+                        val failure = restored.failure
+                        // Ya pagada: red o 5xx al verificar no es un error definitivo, queda pendiente
+                        // y lo reintenta syncPurchases (igual que en verifyAndPublish).
+                        if (
+                            failure is PurchaseFailure.Verification &&
+                            !failure.error.isDefinitiveRejection()
+                        ) {
+                            _purchaseState.value = PurchaseState.VerificationPending
+                        } else {
+                            fail(failure)
+                        }
+                    }
                 }
 
             else -> fail(PurchaseFailure.Play(code))

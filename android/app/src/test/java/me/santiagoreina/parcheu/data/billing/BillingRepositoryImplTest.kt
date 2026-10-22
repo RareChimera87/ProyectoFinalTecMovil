@@ -363,6 +363,38 @@ class BillingRepositoryImplTest {
     }
 
     @Test
+    fun alreadyOwnedWithServerErrorKeepsThePurchasePending() = runTest {
+        val api =
+            FakeBillingApi().apply {
+                verifyFailure = HttpException(Response.error<Any>(503, "".toResponseBody()))
+            }
+        val h = harness(api = api)
+        h.client.activePurchases = listOf(purchase("tok-own"))
+
+        h.client.emitPurchasesUpdate(BillingResponseCode.ITEM_ALREADY_OWNED)
+        runCurrent()
+
+        assertEquals(PurchaseState.VerificationPending, h.repository.purchaseState.value)
+    }
+
+    @Test
+    fun syncCompletesAPendingPurchaseTheServerAlreadyVerified() = runTest {
+        val api = FakeBillingApi.offline()
+        val h = harness(api = api)
+        h.client.emitPurchasesUpdate(BillingResponseCode.OK, listOf(purchase("tok-lost")))
+        runCurrent()
+        assertEquals(PurchaseState.VerificationPending, h.repository.purchaseState.value)
+        // El servidor sí la reconoció; Play ya la reporta reconocida.
+        h.client.activePurchases = listOf(purchase("tok-lost", acknowledged = true))
+        api.verifyFailure = null
+        api.entitlementResponse = PLUS_ACTIVE
+
+        h.repository.syncPurchases()
+
+        assertEquals(PurchaseState.Completed(PLUS_ACTIVE), h.repository.purchaseState.value)
+    }
+
+    @Test
     fun syncSkipsAcknowledgedPendingAndOtherProductPurchases() = runTest {
         val h = harness()
         h.client.activePurchases =
