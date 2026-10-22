@@ -37,12 +37,15 @@ jobs:
           GH_TOKEN: ${{ secrets.AUTO_MERGE_TOKEN || secrets.GITHUB_TOKEN }}
           CON_PAT: ${{ secrets.AUTO_MERGE_TOKEN != '' }}
           PR: ${{ github.event.pull_request.number }}
+        shell: bash   # -eo pipefail: un fallo de gh dentro de una tubería no se oculta
         run: |
           requeridos="$(gh api "repos/$GITHUB_REPOSITORY/branches/dev" \
             --jq '[.protection.required_status_checks.contexts[]?] | join(",")' 2>/dev/null || true)"
           for check in revision-agente major-gate; do
             if [[ ",$requeridos," != *",$check,"* ]]; then
               echo "::warning::La protección de dev no exige '$check' (exige: '${requeridos:-nada}'): no se activa el auto-merge. Ver docs/pendientes-humanos.md (E0.6, paso 5)."
+              # Si un push anterior ya lo había activado, se desactiva: nada se mezcla sin esos checks.
+              gh pr merge "$PR" -R "$GITHUB_REPOSITORY" --disable-auto || true
               exit 0
             fi
           done
@@ -50,8 +53,13 @@ jobs:
           # sus checks. Esos PR no se mezclan solos: se marcan `major` (major-gate pide la aprobación de
           # otro revisor) y los mezcla una persona. Lista espejo: scripts/test/workflows.test.py.
           sensibles='^(\.github/workflows/|\.github/CODEOWNERS$|scripts/revision-agente/|scripts/review-counter\.py$|scripts/proteger-ramas\.sh$)'
-          if gh pr diff "$PR" -R "$GITHUB_REPOSITORY" --name-only | grep -Eq "$sensibles"; then
+          # La lista se guarda antes de filtrarla: si gh falla, el paso falla y no se llega al merge
+          # (fallar cerrado). `gh api` pagina sin el límite de diff de `gh pr diff` (error 406).
+          archivos="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename')" || exit 1
+          if grep -Eq "$sensibles" <<<"$archivos"; then
             echo "::warning::El PR toca la CI o la revisión automática: no se activa el auto-merge; requiere aprobación humana."
+            # Desactiva un auto-merge activado por un push anterior; la etiqueta se pone después.
+            gh pr merge "$PR" -R "$GITHUB_REPOSITORY" --disable-auto || true
             gh pr edit "$PR" -R "$GITHUB_REPOSITORY" --add-label major || true
             exit 0
           fi

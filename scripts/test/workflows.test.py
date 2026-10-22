@@ -94,7 +94,7 @@ class AutoMerge(unittest.TestCase):
 
     def test_exige_la_proteccion_de_dev_antes_de_activar(self):
         self.assertIn("revision-agente major-gate", self.texto)
-        self.assertLess(self.texto.index("required_status_checks"), self.texto.index('gh pr merge "$PR"'))
+        self.assertLess(self.texto.index("required_status_checks"), self.texto.index("--auto --squash"))
 
     def test_pr_que_tocan_la_ci_no_se_mezclan_solos(self):
         patron = re.search(r"sensibles='([^']+)'", self.texto).group(1)
@@ -104,7 +104,35 @@ class AutoMerge(unittest.TestCase):
             self.assertTrue(rx.search(ruta), ruta)
         for ruta in ["android/app/build.gradle.kts", "docs/backlog.md", "scripts/check-plan.sh"]:
             self.assertFalse(rx.search(ruta), ruta)
-        self.assertLess(self.texto.index("sensibles="), self.texto.index('gh pr merge "$PR"'))
+        self.assertLess(self.texto.index("sensibles="), self.texto.index("--auto --squash"))
+
+
+    def test_falla_cerrado_si_gh_falla(self):
+        paso = self.wf["jobs"]["auto-merge"]["steps"][0]
+        self.assertTrue(paso.get("shell", "").startswith("bash"), "necesita shell: bash (pipefail)")
+        self.assertNotRegex(self.texto, r"gh pr diff[^\n]*\|\s*grep")
+        self.assertRegex(self.texto, r'archivos="\$\(gh api --paginate[^\n]*\)" \|\| exit 1')
+
+    def test_desactiva_el_auto_merge_previo_al_salir_sin_activarlo(self):
+        run = self.wf["jobs"]["auto-merge"]["steps"][0]["run"]
+        desactivar = 'gh pr merge "$PR" -R "$GITHUB_REPOSITORY" --disable-auto'
+        self.assertEqual(run.count(desactivar), 2, "protección ausente y archivos sensibles")
+        self.assertLess(run.index(desactivar), run.index("--add-label major"))
+        self.assertLess(run.rindex(desactivar), run.rindex("--auto --squash"))
+
+    def test_falla_cerrado_se_comporta_asi_en_bash(self):
+        cmd = 'a="$(false)" || exit 1; echo siguio'
+        r = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", cmd], capture_output=True, text=True)
+        self.assertEqual((r.returncode, r.stdout), (1, ""))
+
+
+class PendientesHumanos(unittest.TestCase):
+    def test_no_recomienda_code_owners_con_una_sola_cuenta(self):
+        doc = (RAIZ / "docs" / "pendientes-humanos.md").read_text(encoding="utf-8")
+        paso0 = doc[doc.index("0. **Correcciones"):doc.index("1. **Mezclar antes")]
+        self.assertNotRegex(paso0, r"activa en la protecci[oó]n de dev\s+\*Require review from Code Owners\*")
+        self.assertIn("--admin", paso0)
+        self.assertIn("enforce_admins", paso0)
 
 
 class SecretosWif(unittest.TestCase):

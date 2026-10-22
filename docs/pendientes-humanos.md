@@ -27,9 +27,14 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
    (el auto-merge no actúa si dev no exige `revision-agente` y `major-gate`) y el PR de la ronda 1
    (`fix/ci-cd-ronda-1`: `--base-ref` en migration-order, `pipefail` en infra-ci, concurrencia de
    review-counter, `revision-agente` con `pull_request_target`, PR que tocan la CI no se mezclan solos). Se
-   conserva el commit 6d8b966 (revisión post-merge, sin revertir). Para los PR que tocan `.github/workflows/**`,
-   `scripts/revision-agente/**` o `scripts/review-counter.py`, activa en la protección de dev
-   *Require review from Code Owners* (CODEOWNERS de E0.1 ya asigna `/.github/` a I1). Nota de E0.5: `sa-deployer`
+   conserva el commit 6d8b966 (revisión post-merge, sin revertir). Los PR que tocan `.github/workflows/**`,
+   `scripts/revision-agente/**` o `scripts/review-counter.py` los marca `major` el workflow `auto-merge` (y desactiva
+   cualquier auto-merge previo). **No actives *Require review from Code Owners* en dev mientras haya una sola cuenta
+   colaboradora:** CODEOWNERS asigna `*` a RareChimera87, autor de todos los PR, que no puede aprobarse a sí mismo, y con
+   `enforce_admins:true` ni el admin podría mezclar. Con una sola cuenta, los PR `major` y los de CI se mezclan con
+   `gh pr merge --admin --squash` (requiere `enforce_admins:false` en dev; `major-gate` no pasa sin una segunda cuenta).
+   Solo cuando exista un segundo colaborador que apruebe (y CODEOWNERS deje de asignar `*`) tiene sentido exigir Code
+   Owners. Los PR #13 y #14 deben mezclarse antes de exigir los checks. Nota de E0.5: `sa-deployer`
    de dev acepta cualquier workflow del repo (`attribute.repository`), incluidos los `pull_request`; conviene
    restringirlo a `ref:refs/heads/dev` en una feature de infra.
 
