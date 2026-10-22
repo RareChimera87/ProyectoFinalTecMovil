@@ -204,16 +204,17 @@ backend/src/main/kotlin/me/santiagoreina/parcheu/api/
 - **Autenticación:** plugin `firebase` (verifica ID token con Firebase Admin y carga el usuario; `suspended_until` y `deleted_at` se comprueban aquí) y plugin `oidc-internal` (verifica tokens de Google emitidos para la cuenta `sa-tasks` con audiencia = URL del servicio).
 - **Errores:** `StatusPages` traduce excepciones de dominio a `ApiError` (sección 5.1).
 - **Reloj inyectable** (`Clock`) con zona `America/Bogota` para cuotas, edad y agrupaciones.
+- **Entorno (`ENV`):** variable obligatoria (`local|dev|prod`) sin valor por defecto; si falta, el proceso no arranca. Solo `local` cablea `FakeTokenVerifier`/`FakeOidcVerifier` y se rechaza si Cloud Run define `K_SERVICE` o `CLOUD_RUN_JOB`. E0.5 (Terraform) y E0.6 (CD) deben fijar `ENV=dev|prod` en servicios y jobs.
 - **Modos de arranque:** `serve` (API), `migrate` (Flyway y salir), `seed-demo` y `purge-demo`. El mismo contenedor sirve para los tres Cloud Run Jobs.
 - **JDK:** el backend compila con toolchain 21 y el contrato con 17. Gradle resuelve los toolchains con el plugin foojay y, en la máquina del equipo, con `org.gradle.java.installations.paths=/opt/android-studio/jbr` (JBR 21). Detalle en `docs/desarrollo-local.md` (E0.1, E0.3).
-- **Migraciones:** `V1__esquema.sql`, `V2__semillas.sql`, luego `V<yyyyMMdd>_<HHmm>__<descripcion>.sql`. `outOfOrder=true` en dev/CI; check de orden en PR (E0.4). En prod se aplican en lote al desplegar el tag.
+- **Migraciones:** `V1__esquema.sql`, `V2__semillas.sql`, luego `V<yyyyMMdd>_<HHmm>__<descripcion>.sql`. `outOfOrder=true` en todos los entornos (también prod, ADR-0011); check de orden en PR (E0.4). En prod se aplican en lote al desplegar el tag.
 - **Pruebas:** `testApplication`, Testcontainers Postgres 16 (solo en CI; `-PsinContenedores` en local), emulador de Firestore, `FakeLlmClient`, `FakeTokenVerifier`, `FakeNotifier`, Kotest property testing para privacidad.
 
 ---
 
 ## 4. Modelo de datos
 
-Postgres 16 es la única fuente de verdad. Convenciones: `uuid` con `gen_random_uuid()`, `timestamptz`, enums como `text` con `CHECK`. La cuenta de servicio de la API tiene solo `INSERT, SELECT` sobre `consents` (la tabla solo agrega filas).
+Postgres 16 es la única fuente de verdad. Convenciones: `uuid` con `gen_random_uuid()`, `timestamptz`, enums como `text` con `CHECK`. `consents` solo agrega filas: como la API y el job `migrate` usan el mismo usuario IAM (`sa-api`, dueño de las tablas) un `GRANT` no basta, así que un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE`; la única excepción es la purga por retención (E8.8), que activa `set local parcheu.consents_purge = 'on'` (E0.4). Las tablas que solo contienen datos de un usuario usan `ON DELETE CASCADE`; las que deben sobrevivirle (`consents`, `simulations`, `reports`, `entitlements`, `purchase_events`) no. Las tablas Exposed viven en `platform/db/tables/` (un archivo por dominio) y los enums sin equivalente en el contrato en `DbEnums.kt`.
 
 ```sql
 -- Identidad
@@ -480,7 +481,7 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 3. **`PersonaBuilder` (LLM lite):** resumen de unas 120 palabras en español colombiano coloquial construido **solo con las 12 respuestas**, sin nombre, correo, teléfono, universidad exacta ni fecha de nacimiento. Se ejecuta por Cloud Tasks (`build-persona`, cola `ai-light`) y deja `persona_ready = true`. La persona no depende del modo.
 4. **Entrenamiento continuo (solo con consentimiento):** job nocturno → por usuario y **por modo**, mensajes **propios** con `learnable = true` y consentimiento vigente de ese modo → hasta 5 memorias candidatas saneadas (PENDING) con `mode` = modo del chat → el usuario acepta o rechaza en C4 → las aceptadas quedan disponibles **solo para simulaciones de su mismo modo** y `version + 1` (invalida la caché de simulaciones). Las memorias **nunca** se mezclan en `persona_summary` (ADR-0032).
 5. **'Qué tanto te conoce':** 50 % proporción de calificaciones positivas de respuestas simuladas + 50 % aciertos del gemelo al predecir la pregunta de control semanal (la predicción se guarda antes de mostrar la pregunta). El job semanal `twin-accuracy` (domingos 23:00 Bogotá) guarda un punto en `twin_accuracy` si hubo datos esa semana. Con el lanzamiento el 30 nov habrá 0-1 puntos por usuario: C3 muestra un estado vacío (0), un valor único (1) o la línea (≥ 2); el historial de '4 meses' del mockup solo existe con datos demo.
-6. **Nivel y XP:** respuestas, memorias aceptadas, calificaciones y simulaciones suman XP; niveles cada 500 XP.
+6. **Nivel y XP:** respuestas, memorias aceptadas, calificaciones y simulaciones suman XP; niveles cada 500 XP (`xpNext` es el XP acumulado del siguiente nivel). Las 12 respuestas dan 120 XP la primera vez (10 por pregunta); reenviarlas no vuelve a sumar y sube `version`.
 
 ### 7.2 Motor de simulación
 1. `POST /v1/simulations` valida modo activo en ambos, edad si es Pareja, bloqueos y cupo; cobra el cupo (`usage_events` con `ref_id = simulationId`) y encola la tarea. Responde 202.
@@ -500,7 +501,8 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 10. **Costo:** unas 25 llamadas cortas (24 turnos + juez por escenario); del orden de 1-3 centavos de USD por simulación con Flash (verificar con los precios vigentes en E0.9).
 
 ### 7.3 Presupuesto y modelos
-- Configuración: `AI_PROVIDER` (gemini | claude), `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`, `AI_DAILY_BUDGET_USD`. Los IDs de modelo se fijan el día del spike (E0.9) con los GA vigentes en Model Garden; no se escriben en el código.
+- Configuración: `AI_PROVIDER` (gemini | claude; `fake` solo con `ENV=local`), `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`, `AI_DAILY_BUDGET_USD`, `AI_VERTEX_PROJECT` (o `GCP_PROJECT`), `AI_VERTEX_LOCATION` (`us`). Los IDs y la tabla de precios viven en `backend/src/main/resources/ai/modelos.properties` (fijados en el spike de E0.9, ADR-0008: `gemini-3.8-flash` para chat y juez, `gemini-3.5-flash-lite` para lite, multirregión `us`); las variables los sobrescriben. Un `AI_PROVIDER` inválido, un modelo sin precio o un presupuesto ≤ 0 hacen fallar el arranque.
+- **`AiGateway`** (paquete `ai/`) es el único punto de entrada para las features: recibe un `AiPurpose` (que define el nivel CHAT, JUDGE o LITE), consulta el guard, llama al `LlmClient` (`GeminiVertexClient`, `ClaudeVertexClient` o `FakeLlmClient`) y registra la llamada en `ai_usage` y `ai_usage_daily` (misma transacción) con `cost_micros` calculado de la tabla de precios vigente ese día. Una salida JSON que no cumple el esquema se registra igual y lanza `LlmInvalidOutput`.
 - `DailyBudgetGuard` (sobre `ai_usage_daily` del día en Bogotá): < 70 % normal; 70-100 % todos los propósitos usan `AI_MODEL_LITE`; ≥ 100 % `AiBudgetExceeded` → 503 `AI_BUDGET` con `retryAt` y **sin cobrar cupo**.
 - Colas Cloud Tasks con `max_dispatches_per_second` y `max_concurrent_dispatches` como techo de gasto.
 
@@ -640,7 +642,7 @@ Mensajes de datos con `type` y `route`; canales Android `chat`, `resultados`, `s
 
 ### 10.3 Ubicación de los datos y transferencia internacional
 
-Todo se procesa en **us-central1** (Cloud Run, Cloud SQL, Vertex AI) y Firestore en **nam5** (EE. UU.). Desde Bucaramanga la latencia de red adicional es de unos 80-120 ms por petición (verificar con el uptime check), aceptable para una app sin tiempo real duro. La Ley 1581 permite transferir datos a países con nivel adecuado de protección; la SIC incluye a EE. UU. en su lista (Circular Externa 005 de 2017, verificar vigencia). Aun así, A4 y `/privacidad` lo informan de forma expresa (ADR-0020).
+Todo se procesa en **us-central1** (Cloud Run, Cloud SQL), Vertex AI en la multirregión **us** (los Gemini 3.x no están en us-central1; E0.9, ADR-0008) y Firestore en **nam5**, todo en EE. UU. Desde Bucaramanga la latencia de red adicional es de unos 80-120 ms por petición (verificar con el uptime check), aceptable para una app sin tiempo real duro. La Ley 1581 permite transferir datos a países con nivel adecuado de protección; la SIC incluye a EE. UU. en su lista (Circular Externa 005 de 2017, verificar vigencia). Aun así, A4 y `/privacidad` lo informan de forma expresa (ADR-0020).
 
 ### 10.4 Amenazas
 
@@ -691,7 +693,7 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 
 ## 13. Versiones de librerías
 
-Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Avisos para los agentes:
+Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Avisos para los agentes: Las del backend las fijó E0.3 (22-oct-2026, contra Maven Central y el portal de plugins de Gradle); las que siguen marcadas '(verificar)' son de Android u otras partes y las fija su feature. Avisos para los agentes:
 - **Testcontainers:** la serie 2.x cambió los nombres de artefacto (`org.testcontainers:testcontainers-postgresql`, `testcontainers-junit-jupiter`); no mezclar con los nombres 1.x.
 - **Exposed:** 1.0 cambió paquetes y API respecto de 0.x; E0.3 elige **una** serie y los agentes no copian ejemplos de la otra.
 - **Kotest:** existe la serie 6.x; E0.3 decide entre 5.9.x y 6.x según compatibilidad con Kotlin 2.2.
@@ -700,7 +702,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Librería | Versión de referencia | Uso |
 |---|---|---|
 | kotlinx-serialization (plugin y json) | plugin 2.2.10; json 1.9.0 (fijada en E0.7; el plugin funciona con el Kotlin integrado de AGP 9.4.1, ADR-0005) | DTOs |
-| kotlinx-coroutines | 1.10.2 (fijada en E0.7; core, android y test) | Concurrencia |
+| kotlinx-coroutines | Android 1.10.2 (fijada en E0.7; core, android y test); backend 1.11.0 (fijada en E0.3) | Concurrencia |
 | Koin (`koin-bom`, `koin-android`, `koin-androidx-compose`, `koin-test`) | 4.1.1 (fijada en E0.7; 4.2.x se compila con Kotlin 2.3.20 y se deja para cuando suba Kotlin) | DI Android |
 | Navigation Compose (+ `navigation-testing`) | 2.9.8 (fijada en E0.7; última 2.9.x, ADR-0006) | Navegación |
 | Retrofit + converter kotlinx-serialization | 3.0.0 (fijada en E0.7) | Red |
@@ -718,22 +720,22 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Roborazzi (plugin, `roborazzi`, `roborazzi-compose`, `roborazzi-junit-rule`) | 1.77.0 (fijada en E0.7; `changeThreshold` 0,01) | Capturas |
 | Turbine | 1.2.1 (fijada en E0.7) | Tests de Flow |
 | Spotless + ktlint | 8.10.4 / 1.7.1 (fijadas en E0.7; estilo `android_studio`, máx. 100 columnas) | Estilo |
-| Ktor (server, client para tests) | 3.3.0 (verificar) | Backend |
-| Exposed | 1.0.0 (verificar; si no es estable, 0.61.0) | SQL |
-| HikariCP | 6.3.0 (verificar) | Pool |
-| PostgreSQL JDBC | 42.7.7 (verificar) | Driver |
-| Cloud SQL Java Connector (`postgres-socket-factory`) | 1.25.x (verificar) | Conexión IAM |
-| Flyway (`flyway-core`, `flyway-database-postgresql`) | 11.x (verificar) | Migraciones |
-| Firebase Admin Java | 9.5.0 (verificar) | Auth, FCM, Firestore |
-| Google Gen AI Java (`com.google.genai:google-genai`) | 1.x (verificar) | Gemini en Vertex |
-| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
-| google-cloud-tasks | 2.x (verificar) | Tareas |
-| Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev2025xxxx (verificar) | Billing |
-| logback + logstash-logback-encoder | 1.5.x / 8.x (verificar) | Logs JSON |
-| Kotest (runner, assertions, property) | 5.9.1 o 6.x (verificar compatibilidad con Kotlin 2.2) | Tests y propiedades |
-| Testcontainers (`testcontainers-postgresql`, `testcontainers-junit-jupiter`) | 2.x (verificar nombres y versión) | Tests de BD |
-| foojay-resolver-convention (plugin de settings) | 1.0.0 (verificar) | Toolchains JDK |
-| Jib Gradle plugin | 3.4.5 (verificar) | Imagen |
+| Ktor (server, client para tests) | 3.5.2 (fijada en E0.3, vía `ktor-bom`) | Backend |
+| Exposed (`exposed-core`, `exposed-jdbc`, `exposed-java-time`, `exposed-json`) | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`; java-time y json desde E0.4) | SQL |
+| HikariCP | 7.1.0 (fijada en E0.3) | Pool |
+| PostgreSQL JDBC | 42.7.14 (fijada en E0.3) | Driver |
+| Cloud SQL Java Connector (`postgres-socket-factory`) | 1.30.1 (fijada en E0.3) | Conexión IAM |
+| Flyway (`flyway-core`, `flyway-database-postgresql`) | 13.11.1 (fijada en E0.3) | Migraciones |
+| Firebase Admin Java | 9.11.0 (fijada en E0.3) | Auth, FCM, Firestore |
+| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
+| Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
+| google-cloud-tasks | 2.99.0 (fijada en E0.3; la dependencia la agrega la primera feature que encola) | Tareas |
+| Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev20260924-2.0.0 (fijada en E0.3; la dependencia la agrega E7.2) | Billing |
+| logback + logstash-logback-encoder | 1.6.5 / 9.0 (fijadas en E0.3) | Logs JSON |
+| Kotest (runner, assertions, property) | 6.2.6 (fijada en E0.3; compila y corre con Kotlin 2.2.10) | Tests y propiedades |
+| Testcontainers (`testcontainers-postgresql`, `testcontainers-junit-jupiter`) | 2.0.5 (fijada en E0.3; clase `org.testcontainers.postgresql.PostgreSQLContainer`) | Tests de BD |
+| foojay-resolver-convention (plugin de settings) | 1.0.0 (fijada en contract/ y backend/) | Toolchains JDK |
+| Jib Gradle plugin | 3.5.4 (fijada en E0.3; compatible con Gradle 9.6; base `eclipse-temurin:21-jre`) | Imagen |
 | Gradle Play Publisher | 3.12.x (verificar compatibilidad con AGP 9) | Subida a Play |
 | Terraform / provider google, google-beta | 1.15 / 7.x (verificar) | Infra |
 | `@firebase/rules-unit-testing` | 4.x (verificar) | Tests de reglas |
