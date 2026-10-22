@@ -249,3 +249,70 @@ El código y las pruebas están completos: 31 pruebas nuevas con FakeLlm y la AP
 | 4 | **Avisos al terminar.** El puerto general `Notifier` llega con E5.3 (PR #30). Mientras no se mezcle, el contenedor cablea `NoopSimulationNotifier`. Al mezclar E5.3, agregar en `simulation/` un adaptador `SimulationNotifier` → `Notifier.notify(userId, Notification(kind = "simulation_done"/"simulation_failed", ...))` con la ruta al resultado, y cablearlo en `simulationModule(...)`. | I1 | Al mezclar E5.3 |
 | 5 | **`refunded` para F5 (E4.5).** El criterio de E4.5 pide mostrar "No se descontó de tu cupo" solo si el resumen trae `refunded = true`, pero `SimulationSummary` del contrato no tiene ese campo. El servidor ya devuelve el cupo; falta agregar `refunded: Boolean = false` al contrato (cambio compatible) y llenarlo desde `usage_events`. Decidir si lo hace E4.5 o un PR corto del contrato. | I1 + I2 | Antes de E4.5 |
 | 6 | **Aprobación del revisor par** del PR (feature major, check `major-gate`): según `docs/equipo.md` el par de E4.3 es I2. | I2 | Ventana de revisión de la ola 7 (6 nov) |
+
+## E0.8 · Configuración de Firebase
+
+Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,
+APIs `firestore`, `firebaserules`, `firebasehosting` e `identitytoolkit` habilitadas, base Firestore `(default)` en
+`nam5`, app Android `me.santiagoreina.parcheu.dev` (`1:388770932007:android:d6f5452d14d98bf1d43502`) con SHA-1 y
+SHA-256 de debug, reglas, índices y Hosting desplegados (`https://parcheu-dev.web.app` responde 200),
+environment `production` de GitHub con el usuario como revisor y secreto `GOOGLE_SERVICES_JSON_DEV`.
+
+1. **Importar al estado de Terraform lo que se creó por CLI en dev** (E0.5 declara estos recursos; sin importarlos el
+   `apply` fallará con "already exists"):
+
+   ```bash
+   cd infra/terraform/envs/dev && terraform init
+   terraform import module.platform.google_firebase_project.this projects/parcheu-dev
+   terraform import module.platform.google_firestore_database.default projects/parcheu-dev/databases/'(default)'
+   ```
+
+2. **Activar el acceso con Google en dev** (la consola es la única vía sin crear un cliente OAuth a mano): consola
+   Firebase → `parcheu-dev` → Authentication → Comenzar → Método de acceso → Google → Habilitar, con
+   `sanctireinadiaz@gmail.com` como correo de asistencia. Al guardarlo se crean los clientes OAuth (Android y web).
+   Luego regenera y recarga el archivo (hoy `oauth_client` viene vacío):
+
+   ```bash
+   firebase apps:sdkconfig ANDROID 1:388770932007:android:d6f5452d14d98bf1d43502 --project parcheu-dev > ~/.parcheu/google-services.dev.json
+   base64 -w0 ~/.parcheu/google-services.dev.json | gh secret set GOOGLE_SERVICES_JSON_DEV -R RareChimera87/ProyectoFinalTecMovil
+   ```
+
+3. **Verificación manual del criterio de inicio de sesión** (cuando E2.2 exista): instala la variante `devDebug`
+   firmada con el keystore de debug cuyo SHA-1 está registrado, en un emulador con Google Play, e inicia sesión con
+   Google; debe aparecer el usuario en Authentication → Usuarios. Anótalo en el PR de E2.2.
+
+4. **Secretos de WIF** (dependen del `apply` del bootstrap de E0.5, ver su sección): `WIF_PROVIDER`,
+   `WIF_SERVICE_ACCOUNT_DEV`, `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_PROD`. Hasta entonces `firebase-deploy`
+   no puede autenticarse en CI. Verifica que `sa-deployer` ya tiene `firebasehosting.admin`, `firebaserules.admin` y
+   `datastore.indexAdmin` (los declara E0.5) y que puede usar el proyecto (`serviceusage.serviceUsageConsumer`).
+
+5. **Prod, cuando exista `parcheu-prod`** (necesita el cupo de facturación de E0.5, punto 4, y su `apply`):
+
+   ```bash
+   firebase projects:addfirebase parcheu-prod            # solo si google_firebase_project no lo creó
+   firebase apps:create ANDROID "ParcheU" --package-name me.santiagoreina.parcheu --project parcheu-prod
+   firebase apps:android:sha:create <APP_ID_PROD> <SHA-1 de la llave de subida> --project parcheu-prod
+   firebase apps:android:sha:create <APP_ID_PROD> <SHA-256 de la llave de subida> --project parcheu-prod
+   firebase deploy --only firestore:rules,firestore:indexes,hosting --project parcheu-prod   # o el tag v*
+   base64 -w0 google-services.json | gh secret set GOOGLE_SERVICES_JSON_PROD -R RareChimera87/ProyectoFinalTecMovil
+   ```
+
+   Después de la primera subida a Play registra también el SHA-1/SHA-256 de la **firma de la app de Play**
+   (Play Console → Integridad de la app) o el login con Google fallará en producción. Si el ID real de prod lleva
+   sufijo, cámbialo en `firebase/.firebaserc` y en `.github/workflows/firebase-deploy.yml`.
+
+6. **Probar la aprobación de producción** (criterio de la ficha): en una rama descartable crea y sube el tag
+   `v0.0.0-rc` (`git tag v0.0.0-rc && git push origin v0.0.0-rc`); el job `deploy-prod` debe quedar en espera de tu
+   aprobación del environment `production`. Recházalo y borra el tag. No se probó aquí porque solo el usuario aprueba.
+
+## E5.1 · API de chat
+
+Lo automatizable ya quedó hecho: `ChatService`, las cuatro rutas de `/v1/chats`, el espejo en Firestore con el Admin SDK y las pruebas. En local pasaron las 123 pruebas del backend con Postgres 16 (binarios de `@embedded-postgres`, `PARCHEU_TEST_DB_URL`) y el emulador de Firestore, sin omitir ninguna. `sa-api` ya tiene `roles/datastore.user` en el Terraform de E0.5 (PR #5), así que no hace falta otro permiso.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar antes las dependencias.** Esta rama integra E3.1 (#31, que trae E0.2, E0.3, E0.4 y E2.1) y E0.8 (#6) con commits "Integra ... mientras su PR no se mezcla", y copia sin cambios `platform/notifier/Notifier.kt` de E5.3 (#30) para no traer su parte Android. | I1 | Antes del merge de E5.1 |
+| 2 | **Conectar FcmNotifier al mezclar E5.3.** Hoy `AppContainer.fromConfig` pasa `NoopNotifier` al chat (los avisos de mensajes nuevos no salen todavía). Al resolver el conflicto de `AppContainer.kt` con #30, el `notifier` de `FcmNotifier` debe ser el mismo que recibe `ChatModule`. | I1 / I3 | Al mezclar #30 o esta rama, la que vaya segunda |
+| 3 | **Revisar `backend-ci` en el PR.** Ahora corre los tests dentro de `firebase emulators:exec` (Node 24 + `npm ci` en `firebase/`). Confirmar que `ChatDbTest` y `ChatFirestoreEmulatorTest` aparecen como ejecutados (no omitidos) en el reporte. | I1 | Revisión del PR |
+| 4 | **Aprobación del revisor par** (feature major, check `major-gate`): según `docs/equipo.md` el par de E5.1 es I3, que además es dueño de la capa Firebase que toca el espejo. | I3 | Ventana de revisión de la ola 7 (6 nov) |
+| 5 | **Prueba en dev con la app (E5.2).** Cuando E5.2 y E4.6 estén en `dev`: enviar un mensaje desde la app y comprobar que el documento aparece en `chats/{id}/messages` de `parcheu-dev` y que las reglas desplegadas dejan leerlo solo a los miembros. | I2 | Ola 8 |

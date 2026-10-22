@@ -52,10 +52,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
         HttpMethod.Post to "/v1/introductions/i1/response", HttpMethod.Post to "/v1/introductions/request",
         HttpMethod.Get to "/v1/invites/me", HttpMethod.Post to "/v1/invites/redeem", HttpMethod.Post to "/v1/invites/u1/accept",
     ),
-    "chat" to listOf(
-        HttpMethod.Get to "/v1/chats", HttpMethod.Post to "/v1/chats/c1/messages",
-        HttpMethod.Post to "/v1/chats/c1/read", HttpMethod.Post to "/v1/chats/c1/mute",
-    ),
+    // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
     "notifications" to listOf(HttpMethod.Get to "/v1/notifications", HttpMethod.Post to "/v1/notifications/read"),
     "billing" to listOf(HttpMethod.Get to "/v1/billing/entitlement", HttpMethod.Post to "/v1/billing/verify"),
     "safety" to listOf(

@@ -8,7 +8,12 @@ import me.santiagoreina.parcheu.api.ai.ExposedAiUsageStore
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.InMemoryAiUsageStore
 import me.santiagoreina.parcheu.api.billing.BillingRoutes
+import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.ChatRoutes
+import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
+import me.santiagoreina.parcheu.api.chat.FirestoreChatMirror
+import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
+import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
@@ -30,6 +35,8 @@ import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
@@ -68,10 +75,14 @@ class AppContainer(
     val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
     val graph: GraphModule = inMemoryGraphModule(clock),
+    /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
+    val chat: ChatModule = inMemoryChatModule(clock, graph.policy),
     /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
     val simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, twin, quota, graph, simulation),
+    val domains: List<DomainRoutes> = allDomains(identity, twin, quota, graph, simulation, chat),
+    /** Avisos (push + bandeja). Los tests de otros dominios pasan un `FakeNotifier`. */
+    val notifier: Notifier = NoopNotifier,
 ) {
     companion object {
         /**
@@ -104,9 +115,15 @@ class AppContainer(
             val quota = quotaModule(config.env, database, clock)
             val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
             val simulation = simulationModule(config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId)
+            // E5.3 (PR #30) cambia este valor por FcmNotifier; hasta entonces los avisos del chat no salen.
+            val notifier: Notifier = NoopNotifier
+            // En local no hay Firestore: el espejo del chat queda en memoria (Postgres sigue siendo la verdad).
+            val chatMirror = if (local) InMemoryChatMirror() else FirestoreChatMirror.forProject(requireNotNull(config.firebaseProjectId))
+            val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity,
-                ai = ai, twin = twin, quota = quota, graph = graph, simulation = simulation,
+                ai = ai, twin = twin, quota = quota, graph = graph, chat = chat, simulation = simulation,
+                notifier = notifier,
             )
         }
 
@@ -136,6 +153,7 @@ fun allDomains(
     quota: QuotaModule,
     graph: GraphModule,
     simulation: SimulationModule,
+    chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity),
     TwinRoutes(twin),
@@ -145,7 +163,7 @@ fun allDomains(
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),
-    ChatRoutes(),
+    ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     NotificationsRoutes(),
     BillingRoutes(),
     SafetyRoutes(),
