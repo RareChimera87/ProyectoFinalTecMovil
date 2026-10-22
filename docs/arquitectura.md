@@ -681,11 +681,12 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 **Cuentas de servicio:**
 - `sa-api`: `cloudsql.client`, `cloudsql.instanceUser`, `aiplatform.user`, `cloudtasks.enqueuer`, `iam.serviceAccountUser` sobre `sa-tasks`, `secretmanager.secretAccessor` (secretos concretos), `datastore.user`, `firebaseauth.admin`, `firebasecloudmessaging.admin` (verificar nombres de rol).
 - `sa-tasks`: `run.invoker` sobre `api` (identidad OIDC de Tasks, Scheduler y Pub/Sub).
+- `sa-play` (solo en `parcheu-prod`; la crea E7.1 y la comparte E10.2): sin roles de IAM de GCP, invitada en Play Console con permisos mínimos. GitHub la suplanta por WIF (`roles/iam.workloadIdentityUser` para los environments `play` y `play-alpha`); el backend la usa en E7.1. No existe en `parcheu-dev`.
 - `sa-deployer` (GitHub vía WIF): `run.admin`, `artifactregistry.writer`, `iam.serviceAccountUser` sobre `sa-api`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin` (verificar nombres; los usa `firebase-deploy` de E0.8).
 
 **Terraform:** `infra/terraform/bootstrap` (una vez, con el ADC del usuario), `modules/platform`, `envs/dev`, `envs/prod`; estado en GCS versionado. CI hace `plan` en PR y `apply` de dev al mezclar; el `apply` de prod lo ejecuta solo el usuario.
 
-**Secretos de GitHub:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (llave de `play-publisher@parcheu-dev`, cuenta sin roles de GCP invitada en Play Console; E10.2). Variable opcional `UPLOAD_CERT_SHA256` (huella esperada del certificado de subida).
+**Secretos de GitHub:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `WIF_PROVIDER_PROD` para la publicación en Play (WIF suplantando a `sa-play` de parcheu-prod; la variable `PLAY_SERVICE_ACCOUNT` guarda su correo). `PLAY_SERVICE_ACCOUNT_JSON` (llave de `sa-play`) es una **excepción temporal** documentada en la enmienda de ADR-0014, solo hasta que exista el WIF de prod. Los secretos de firma y de Play viven **solo en los environments** `play` (pista interna; ramas `dev` y `main` y tags `v*`) y `play-alpha` (pista cerrada; solo tags `v*` y aprobación del usuario), no en el repo (E10.2). Variable opcional `UPLOAD_CERT_SHA256` (huella esperada del certificado de subida).
 
 ---
 

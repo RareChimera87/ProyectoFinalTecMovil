@@ -151,13 +151,16 @@ googleServices {
 }
 
 // Gradle Play Publisher (E10.2). Solo el flavor prod (me.santiagoreina.parcheu) se publica; dev nunca
-// va a Play. Las credenciales llegan por ANDROID_PUBLISHER_CREDENTIALS (JSON de la cuenta de servicio
-// invitada en Play Console, secreto PLAY_SERVICE_ACCOUNT_JSON). La pista y el estado se pasan por línea
+// va a Play. Credenciales (ADR-0014, sin llaves por defecto): credenciales por defecto de Google (ADC)
+// que deja el WIF de GitHub suplantando a `sa-play` de parcheu-prod; solo si existe
+// ANDROID_PUBLISHER_CREDENTIALS (llave JSON de `sa-play`, excepción temporal de la enmienda de
+// ADR-0014) se usa esa llave. La pista y el estado se pasan por línea
 // de comandos (--track, --release-status); aquí quedan los valores de la subida manual: interna, completa.
 // Notas de versión: src/prod/play/release-notes/es-419/default.txt.
 play {
     enabled.set(false)
     defaultToAppBundles.set(true)
+    useApplicationDefaultCredentials.set(System.getenv("ANDROID_PUBLISHER_CREDENTIALS").isNullOrBlank())
     track.set("internal")
     releaseStatus.set(ReleaseStatus.COMPLETED)
 }
