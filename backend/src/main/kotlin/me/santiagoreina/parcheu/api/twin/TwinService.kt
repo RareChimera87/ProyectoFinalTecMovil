@@ -32,7 +32,7 @@ class TwinService(
     /**
      * Valida exactamente 12 respuestas (una por pregunta), calcula los rasgos, guarda y encola la
      * construcción de la persona. Si el encolado falla las respuestas igual quedan guardadas
-     * (`personaReady = false`) y reenviarlas reintenta la tarea.
+     * (`personaReady = false`) y [twin] reintenta el encolado en la siguiente lectura.
      */
     suspend fun submitAnswers(userId: UUID, body: Answers): TwinDto {
         val questions = repo.questions()
@@ -48,16 +48,21 @@ class TwinService(
         val answers = body.items.associate { it.questionId to it.answer }
         val traits = TraitEngine.compute(questions, answers)
         val saved = repo.saveAnswers(userId, answers, traits, clock.instant())
-        try {
-            tasks.enqueue(buildPersonaTask(userId, saved.version))
-        } catch (e: Exception) {
-            log.error("No se pudo encolar build-persona para el usuario {} (versión {})", userId, saved.version, e)
-        }
+        enqueuePersona(userId, saved.version)
         return saved.state.toDto()
     }
 
-    /** Estado del gemelo; sin respuestas devuelve rasgos vacíos, nivel 1 y `personaReady = false`. */
-    fun twin(userId: UUID): TwinDto = (repo.state(userId) ?: EMPTY_STATE).toDto()
+    /**
+     * Estado del gemelo; sin respuestas devuelve rasgos vacíos, nivel 1 y `personaReady = false`.
+     * Si hay respuestas pero la persona no está lista se vuelve a encolar `build-persona` para la
+     * versión actual (idempotente por nombre), de modo que un fallo previo de Cloud Tasks se
+     * recupera solo cuando el cliente consulta el gemelo.
+     */
+    suspend fun twin(userId: UUID): TwinDto {
+        val state = repo.state(userId) ?: return EMPTY_STATE.toDto()
+        if (state.traits != null && !state.personaReady) enqueuePersona(userId, state.version)
+        return state.toDto()
+    }
 
     /**
      * Un punto por cada semana con datos en `twin_accuracy`, por semana ascendente. `month` es el mes
@@ -86,6 +91,17 @@ class TwinService(
         val summary = persona.build(input, userId)
         if (!repo.savePersona(userId, input.version, summary, clock.instant())) {
             log.info("build-persona de {} v{} ya estaba lista o quedó obsoleta: se descarta el resultado", userId, input.version)
+            // Si la versión cambió durante la llamada al modelo, nadie más garantiza la persona nueva: se encola.
+            repo.state(userId)?.takeIf { !it.personaReady && it.version != input.version }?.let { enqueuePersona(userId, it.version) }
+        }
+    }
+
+    /** Encola `build-persona` sin propagar el error: la respuesta HTTP no depende de la cola y [twin] reintenta. */
+    private suspend fun enqueuePersona(userId: UUID, version: Int) {
+        try {
+            tasks.enqueue(buildPersonaTask(userId, version))
+        } catch (e: Exception) {
+            log.error("No se pudo encolar build-persona para el usuario {} (versión {})", userId, version, e)
         }
     }
 

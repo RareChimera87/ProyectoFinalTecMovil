@@ -151,7 +151,7 @@ class TwinDbTest : FunSpec({
             val points = service.evolution(ana)
             points.map { it.accuracy } shouldBe listOf(40, 58, 71)
             points.map { it.month } shouldBe listOf("2026-11", "2026-11", "2026-12")
-            service.twin(ana).accuracy shouldBe 71
+            runBlocking { service.twin(ana) }.accuracy shouldBe 71
         }
     }
 })

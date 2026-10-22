@@ -35,7 +35,11 @@ class FakeTaskQueue(var inline: (suspend (TaskRequest) -> Unit)? = null) : TaskQ
     private val recorded = CopyOnWriteArrayList<TaskRequest>()
     val tasks: List<TaskRequest> get() = recorded.toList()
 
+    /** Si no es null, [enqueue] lanza este error sin registrar la tarea (simula un fallo de Cloud Tasks). */
+    @Volatile var failWith: Throwable? = null
+
     override suspend fun enqueue(task: TaskRequest) {
+        failWith?.let { throw it }
         if (recorded.any { it.name == task.name && it.queue == task.queue }) return
         recorded += task
         inline?.invoke(task)

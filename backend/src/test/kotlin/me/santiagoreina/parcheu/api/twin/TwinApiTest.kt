@@ -19,6 +19,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
@@ -152,6 +154,61 @@ class TwinApiTest : FunSpec({
             fixture.queue.tasks shouldHaveSize 2
             client.buildPersonaTask(userId("ana").toString())
             fixture.repo.versions.getValue(userId("ana")).keys shouldBe setOf(1, 2)
+        }
+    }
+
+    test("si el encolado falla responde 200 y GET /v1/twin reintenta el encolado hasta quedar la persona lista") {
+        testApplication {
+            val fixture = TwinFixture()
+            val client = app(fixture)
+            fixture.queue.failWith = IllegalStateException("Cloud Tasks caído")
+            val response = client.answer("ana", answersOf())
+            response.status shouldBe HttpStatusCode.OK
+            response.body<TwinDto>().personaReady shouldBe false
+            fixture.queue.tasks.shouldBeEmpty()
+
+            // Sigue caída: la lectura no falla y no inventa nada.
+            client.getAs("ana", "/v1/twin").status shouldBe HttpStatusCode.OK
+            fixture.queue.tasks.shouldBeEmpty()
+
+            // Se recupera: la siguiente lectura encola una sola vez (idempotente por nombre).
+            fixture.queue.failWith = null
+            client.getAs("ana", "/v1/twin").body<TwinDto>().personaReady shouldBe false
+            client.getAs("ana", "/v1/twin")
+            fixture.queue.tasks shouldHaveSize 1
+            fixture.queue.tasks.single().name shouldBe "build-persona-${userId("ana")}-v1"
+
+            client.buildPersonaTask(userId("ana").toString()).status shouldBe HttpStatusCode.NoContent
+            client.getAs("ana", "/v1/twin").body<TwinDto>().personaReady shouldBe true
+        }
+    }
+
+    test("GET /v1/twin sin respuestas no encola nada") {
+        testApplication {
+            val fixture = TwinFixture()
+            app(fixture).getAs("ana", "/v1/twin").status shouldBe HttpStatusCode.OK
+            fixture.queue.tasks.shouldBeEmpty()
+        }
+    }
+
+    test("si la versión cambia mientras se construye la persona se encola la versión vigente en vez de perderla") {
+        testApplication {
+            val repo = InMemoryTwinRepository()
+            val id = userId("ana")
+            val fixture = TwinFixture(
+                fake = FakeLlmClient(textResponder = {
+                    // Otra vía (p. ej. E9 al aceptar memorias) sube la versión durante la llamada al modelo.
+                    repo.saveAnswers(id, answersOf("BBBBBBBBBBBB").items.associate { it.questionId to it.answer }, List(6) { 0.5 }, FIXED_CLOCK.instant())
+                    PERSONA_TEXT
+                }),
+                repo = repo,
+            )
+            val client = app(fixture)
+            client.answer("ana", answersOf())
+            client.buildPersonaTask(id.toString()).status shouldBe HttpStatusCode.NoContent
+
+            fixture.queue.tasks.map { it.name } shouldBe listOf("build-persona-$id-v1", "build-persona-$id-v2")
+            client.getAs("ana", "/v1/twin").body<TwinDto>().personaReady shouldBe false
         }
     }
 
