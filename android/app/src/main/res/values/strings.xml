@@ -1,3 +1,13 @@
 <resources>
     <!-- app_name lo define cada flavor con resValue en app/build.gradle.kts ("ParcheU dev" / "ParcheU"). -->
+
+    <!-- Canales de notificación (E5.3); los IDs chat, resultados, social y cuenta los fija el backend. -->
+    <string name="push_channel_chat">Chats</string>
+    <string name="push_channel_chat_desc">Mensajes nuevos de tus conversaciones</string>
+    <string name="push_channel_resultados">Resultados</string>
+    <string name="push_channel_resultados_desc">Simulaciones listas y matches encontrados</string>
+    <string name="push_channel_social">Tu parche</string>
+    <string name="push_channel_social_desc">Conexiones, presentaciones e invitaciones</string>
+    <string name="push_channel_cuenta">Cuenta</string>
+    <string name="push_channel_cuenta_desc">Avisos sobre tu gemelo y tu cuenta</string>
 </resources>

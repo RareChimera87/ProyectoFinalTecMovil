@@ -2,6 +2,8 @@ package me.santiagoreina.parcheu
 
 import android.app.Application
 import me.santiagoreina.parcheu.di.appModules
+import me.santiagoreina.parcheu.push.PushChannels
+import me.santiagoreina.parcheu.push.pushModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
@@ -14,7 +16,8 @@ class ParcheUApplication : Application() {
         stopKoin()
         startKoin {
             androidContext(this@ParcheUApplication)
-            modules(appModules)
+            modules(appModules + pushModule)
         }
+        PushChannels.ensureCreated(this)
     }
 }
