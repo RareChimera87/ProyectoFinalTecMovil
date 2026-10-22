@@ -40,7 +40,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         val tag = stubTag(entry.route)
         composeRule.onNodeWithTag(tag).assertIsDisplayed()
         composeRule.onAllNodes(
-            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag))
+            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag)),
         ).onFirst().assertIsDisplayed()
         // Los argumentos llegan intactos a la pantalla (round-trip de la ruta tipada).
         composeRule
@@ -51,7 +51,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         assertEquals(
             "NavBar solo en las raíces",
             TopLevelDestination.entries.any { it.routeClass == entry.route::class },
-            shown.isTopLevel()
+            shown.isTopLevel(),
         )
     }
 

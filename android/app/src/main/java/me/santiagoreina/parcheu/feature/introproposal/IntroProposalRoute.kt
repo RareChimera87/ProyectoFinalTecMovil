@@ -11,10 +11,6 @@ import me.santiagoreina.parcheu.navigation.IntroProposal
  * [introProposalModule]; AppNavHost.kt no cambia.
  */
 @Composable
-fun IntroProposalRoute(
-    route: IntroProposal,
-    navigator: AppNavigator,
-    modifier: Modifier = Modifier
-) {
+fun IntroProposalRoute(route: IntroProposal, navigator: AppNavigator, modifier: Modifier = Modifier) {
     StubScreen(route = route, navigator = navigator, modifier = modifier)
 }

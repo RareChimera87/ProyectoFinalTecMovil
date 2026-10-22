@@ -35,7 +35,7 @@ class OnboardingStubScreenshotTest {
         composeRule.onNodeWithTag("legal:privacy").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage(
             filePath = "src/test/screenshots/onboarding_stub_a4.png",
-            roborazziOptions = ROBORAZZI_OPTIONS
+            roborazziOptions = ROBORAZZI_OPTIONS,
         )
     }
 
@@ -46,8 +46,8 @@ class OnboardingStubScreenshotTest {
         val ROBORAZZI_OPTIONS =
             RoborazziOptions(
                 compareOptions = RoborazziOptions.CompareOptions(
-                    changeThreshold = CHANGE_THRESHOLD
-                )
+                    changeThreshold = CHANGE_THRESHOLD,
+                ),
             )
     }
 }
