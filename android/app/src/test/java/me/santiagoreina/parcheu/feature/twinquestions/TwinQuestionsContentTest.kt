@@ -5,11 +5,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.test.core.app.ApplicationProvider
+import me.santiagoreina.parcheu.R
 import me.santiagoreina.parcheu.contract.TwinAnswer
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import org.junit.Assert.assertEquals
@@ -99,5 +102,38 @@ class TwinQuestionsContentTest {
         show(answering.copy(phase = TwinQuestionsPhase.Error), mutableListOf(), retries)
         rule.onNodeWithTag("twinQuestions:retry").performClick()
         assertEquals(1, retries[0])
+    }
+
+    private fun showWithClose(showClose: Boolean, closes: IntArray) {
+        rule.setContent {
+            ParcheUTheme(darkTheme = true) {
+                TwinQuestionsContent(
+                    state = answering,
+                    onAnswer = {},
+                    onClose = { closes[0]++ },
+                    onRetry = {},
+                    showClose = showClose
+                )
+            }
+        }
+    }
+
+    private val closeLabel: String
+        get() = ApplicationProvider.getApplicationContext<android.content.Context>()
+            .getString(R.string.twin_questions_close)
+
+    @Test
+    fun closeButtonInvokesOnCloseWhenVisible() {
+        val closes = IntArray(1)
+        showWithClose(showClose = true, closes = closes)
+        rule.onNodeWithContentDescription(closeLabel).performClick()
+        assertEquals(1, closes[0])
+    }
+
+    @Test
+    fun closeButtonIsHiddenWhenThereIsNothingToGoBackTo() {
+        showWithClose(showClose = false, closes = IntArray(1))
+        rule.onNodeWithContentDescription(closeLabel).assertDoesNotExist()
+        rule.onNodeWithTag("twinQuestions:progressText").assertIsDisplayed()
     }
 }

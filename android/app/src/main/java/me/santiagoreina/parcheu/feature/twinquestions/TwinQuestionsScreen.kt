@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -81,35 +82,49 @@ fun TwinQuestionsContent(
     onAnswer: (TwinAnswer) -> Unit,
     onClose: () -> Unit,
     onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showClose: Boolean = true
 ) {
     val colors = ParcheUTheme.colors
     Column(
         modifier = modifier.fillMaxSize().background(colors.bg).testTag("twinQuestions:screen")
     ) {
         val showProgress = state.total > 0
-        ParcheUChildTopBar(
-            title = "",
-            navigationIcon = rememberVectorPainter(CloseIcon),
-            navigationContentDescription = stringResource(R.string.twin_questions_close),
-            onNavigationClick = onClose,
-            action = {
-                if (showProgress) {
-                    Text(
-                        text = stringResource(
-                            R.string.twin_questions_progress,
-                            state.currentNumber,
-                            state.total
-                        ),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colors.mu,
-                        modifier = Modifier.padding(
-                            end = 8.dp
-                        ).testTag("twinQuestions:progressText")
-                    )
-                }
+        val progressText: @Composable () -> Unit = {
+            if (showProgress) {
+                Text(
+                    text = stringResource(
+                        R.string.twin_questions_progress,
+                        state.currentNumber,
+                        state.total
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.mu,
+                    modifier = Modifier.padding(
+                        end = 8.dp
+                    ).testTag("twinQuestions:progressText")
+                )
             }
-        )
+        }
+        if (showClose) {
+            ParcheUChildTopBar(
+                title = "",
+                navigationIcon = rememberVectorPainter(CloseIcon),
+                navigationContentDescription = stringResource(R.string.twin_questions_close),
+                onNavigationClick = onClose,
+                action = { progressText() }
+            )
+        } else {
+            // B1 es la raíz de la pila: no hay a dónde cerrar, así que no se muestra la X.
+            Row(
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                progressText()
+                Spacer(Modifier.width(8.dp))
+            }
+        }
         if (showProgress) {
             ParcheULinearProgress(
                 progress = state.answeredCount.toFloat() / state.total,

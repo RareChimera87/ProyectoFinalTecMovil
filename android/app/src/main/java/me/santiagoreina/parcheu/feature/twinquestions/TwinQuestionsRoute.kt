@@ -31,7 +31,8 @@ fun TwinQuestionsRoute(
         onAnswer = viewModel::answer,
         onClose = { navigator.back() },
         onRetry = viewModel::retry,
-        modifier = modifier
+        modifier = modifier,
+        showClose = navigator.canGoBack()
     )
 }
 
