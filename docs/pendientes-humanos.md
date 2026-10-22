@@ -110,3 +110,16 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
 
 9. **Después de mezclar E0.8:** quitar el disparador `pull_request` de `firebase-deploy.yml` (su job
    `rules-ci` queda duplicado con el workflow `rules-ci` de E0.6).
+
+## E2.1 · API de sesión y usuarios
+
+No hay pasos bloqueantes: la feature no crea recursos en GCP, Firebase ni consolas.
+
+1. **Texto legal vigente (`LEGAL_TEXT_VERSION`).** Por defecto es `2026-10-29` (constante en `AppConfig`). Cuando E8.4 publique
+   las páginas `/privacidad` y `/terminos`, confirma que su versión sea exactamente esa o cambia el valor: o bien se actualiza
+   `DEFAULT_LEGAL_TEXT_VERSION`, o bien se define la variable `LEGAL_TEXT_VERSION` en el servicio de Cloud Run (Terraform de E0.5).
+   Cada cambio de versión devuelve a todos los usuarios a `NEEDS_TERMS` (es lo que exige la Ley 1581).
+2. **Variables de la base en el servicio.** Desde E2.1 el modo `serve` exige `DB_NAME` y `CLOUD_SQL_INSTANCE`. Antes del primer
+   `deploy-dev` verifica que el servicio de Cloud Run las recibe (hoy solo las usa el job `migrate`).
+3. **Revisión legal.** Pide al docente o a un abogado revisar el texto de aceptación de A4 y el plazo de conservación de
+   `consents` (5 años, arquitectura.md §10.2) antes de la prueba cerrada.
