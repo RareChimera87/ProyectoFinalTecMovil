@@ -675,17 +675,18 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 | Pub/Sub | `play-rtdn` (sin uso) | `play-rtdn` + push OIDC |
 | Firebase Hosting | sí | sí (`/privacidad`, `/terminos`, `/borrar-cuenta`, `/i/*`, assetlinks, `admin.html`) |
 | Secret Manager | contenedores `hmac-anon-key`, `play-sa` (si aplica) creados por Terraform **sin valor**; el valor lo carga `scripts/cargar-secretos.sh` (I1 en dev, el usuario en prod) | igual |
-| Proyecto y Firebase | creados por el usuario el 22-23 oct (`scripts/crear-proyectos.sh`); Firebase con `google_firebase_project` o, si pide aceptar términos, desde la consola e importado | igual |
+| Proyecto y Firebase | `parcheu-dev` (creado el 22 oct con `scripts/crear-proyectos.sh`, ID sin sufijo); Firebase con `google_firebase_project` o, si pide aceptar términos, desde la consola e importado | `parcheu-prod` (lo crea el usuario con el mismo script; si el ID está ocupado, el script usa un sufijo y hay que registrarlo aquí, en `infra/terraform/bootstrap/main.tf` y en `envs/prod/main.tf`) |
 | Android flavor | `dev` (`me.santiagoreina.parcheu.dev`) | `prod` (`me.santiagoreina.parcheu`, el de Play) |
 
 **Cuentas de servicio:**
 - `sa-api`: `cloudsql.client`, `cloudsql.instanceUser`, `aiplatform.user`, `cloudtasks.enqueuer`, `iam.serviceAccountUser` sobre `sa-tasks`, `secretmanager.secretAccessor` (secretos concretos), `datastore.user`, `firebaseauth.admin`, `firebasecloudmessaging.admin` (verificar nombres de rol).
 - `sa-tasks`: `run.invoker` sobre `api` (identidad OIDC de Tasks, Scheduler y Pub/Sub).
-- `sa-deployer` (GitHub vía WIF): `run.admin`, `artifactregistry.writer`, `iam.serviceAccountUser` sobre `sa-api`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin` (verificar nombres; los usa `firebase-deploy` de E0.8).
+- `sa-deployer` (GitHub vía WIF): `run.admin`, `artifactregistry.writer`, `iam.serviceAccountUser` sobre `sa-api`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin`, `serviceusage.serviceUsageConsumer` (nombres verificados en E0.5; los usa `firebase-deploy` de E0.8). En prod solo la puede usar un job del environment `production`.
+- `sa-terraform` (GitHub vía WIF, E0.5): en dev, administrador de cada servicio que usa `modules/platform` (sin owner ni editor) y `billing.costsManager` para el presupuesto, porque CI hace `apply`; en prod, solo lectura (`viewer`, `iam.securityReviewer`, `billing.viewer`) para el `plan`.
 
-**Terraform:** `infra/terraform/bootstrap` (una vez, con el ADC del usuario), `modules/platform`, `envs/dev`, `envs/prod`; estado en GCS versionado. CI hace `plan` en PR y `apply` de dev al mezclar; el `apply` de prod lo ejecuta solo el usuario.
+**Terraform:** `infra/terraform/bootstrap` (una vez por proyecto, con el ADC del usuario; cada proyecto tiene su bucket, su pool WIF y sus cuentas de CI), `modules/platform`, `envs/dev`, `envs/prod`; estado en GCS versionado (`gs://<proyecto>-tfstate`). Detalle y comandos en `infra/terraform/README.md`. CI hace `plan` en PR y `apply` de dev al mezclar; el `apply` de prod lo ejecuta solo el usuario.
 
-**Secretos de GitHub:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
+**Secretos de GitHub:** `WIF_PROVIDER` (dev), `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `TF_SERVICE_ACCOUNT_{DEV,PROD}`, `BILLING_ACCOUNT_ID`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
 
 ---
 
@@ -735,7 +736,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | foojay-resolver-convention (plugin de settings) | 1.0.0 (verificar) | Toolchains JDK |
 | Jib Gradle plugin | 3.4.5 (verificar) | Imagen |
 | Gradle Play Publisher | 3.12.x (verificar compatibilidad con AGP 9) | Subida a Play |
-| Terraform / provider google, google-beta | 1.15 / 7.x (verificar) | Infra |
+| Terraform / provider google, google-beta | 1.15.9 / 7.46.1 (fijado en E0.5, `.terraform.lock.hcl`) | Infra |
 | `@firebase/rules-unit-testing` | 4.x (verificar) | Tests de reglas |
 
 ---
