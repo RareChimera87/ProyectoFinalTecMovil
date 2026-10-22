@@ -257,27 +257,32 @@ class ExposedMatchingRepository(private val db: Database) : MatchingRepository {
         }
     }
 
-    override suspend fun canInteract(a: UUID, b: UUID, now: Instant): Boolean = tx { usable(a, b, now) }
+    override suspend fun closedBy(a: UUID, b: UUID, now: Instant): Set<UUID>? = tx { culprits(a, b, now) }
 
-    /** Sin bloqueo en ningún sentido, y ninguna de las dos personas borrada ni suspendida a [now]. */
-    private fun usable(a: UUID, b: UUID, now: Instant): Boolean {
-        val blocked = Blocks.select(Blocks.blockerId).where {
+    /**
+     * Null si no hay bloqueo en ningún sentido y ninguna de las dos personas está borrada ni suspendida
+     * a [now]; si no, quienes provocaron el cierre: quien bloqueó, quien se borró o fue suspendida.
+     */
+    private fun culprits(a: UUID, b: UUID, now: Instant): Set<UUID>? {
+        val result = mutableSetOf<UUID>()
+        Blocks.select(Blocks.blockerId).where {
             ((Blocks.blockerId eq a) and (Blocks.blockedId eq b)) or ((Blocks.blockerId eq b) and (Blocks.blockedId eq a))
-        }.limit(1).any()
-        if (blocked) return false
+        }.forEach { result += it[Blocks.blockerId] }
         val rows = Users.select(Users.id, Users.deletedAt, Users.suspendedUntil).where { Users.id inList listOf(a, b) }.toList()
-        return rows.size == 2 && rows.all { row ->
-            row[Users.deletedAt] == null && row[Users.suspendedUntil].let { it == null || !it.toInstant().isAfter(now) }
-        }
+        listOf(a, b).filter { id -> rows.none { it[Users.id] == id } }.forEach { result += it }
+        rows.filter { row ->
+            row[Users.deletedAt] != null || row[Users.suspendedUntil].let { it != null && it.toInstant().isAfter(now) }
+        }.forEach { result += it[Users.id] }
+        return result.takeIf { it.isNotEmpty() }
     }
 
     override suspend fun createScenarioChat(matchId: UUID, now: Instant, allowPremium: Boolean): ScenarioChatOutcome = tx {
         val match = Matches.selectAll().where { Matches.id eq matchId }.forUpdate().singleOrNull()?.toMatch()
             ?: return@tx ScenarioChatOutcome.NoScenarios
         match.chatId?.let { return@tx ScenarioChatOutcome.Created(it) }
-        if (!usable(match.userA, match.userB, now)) {
+        culprits(match.userA, match.userB, now)?.let { causedBy ->
             Matches.update({ Matches.id eq matchId }) { it[status] = MatchStatus.EXPIRED }
-            return@tx ScenarioChatOutcome.Unavailable
+            return@tx ScenarioChatOutcome.Unavailable(causedBy)
         }
         val options = Scenarios.selectAll()
             .where { (Scenarios.mode eq match.mode) and (if (allowPremium) Op.TRUE else (Scenarios.isBasic eq true)) }

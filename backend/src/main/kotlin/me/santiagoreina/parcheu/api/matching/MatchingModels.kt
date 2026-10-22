@@ -139,6 +139,10 @@ sealed interface ScenarioChatOutcome {
     /** El modo no tiene escenarios disponibles. */
     data object NoScenarios : ScenarioChatOutcome
 
-    /** Hay bloqueo, borrado o suspensión entre las dos personas: el match se cerró como EXPIRED. */
-    data object Unavailable : ScenarioChatOutcome
+    /**
+     * Hay bloqueo, borrado o suspensión entre las dos personas: el match se cerró como EXPIRED.
+     * [causedBy] son quienes provocaron el cierre (quien bloqueó, quien se borró o fue suspendido):
+     * a ellas no se les devuelve el cupo.
+     */
+    data class Unavailable(val causedBy: Set<UUID>) : ScenarioChatOutcome
 }

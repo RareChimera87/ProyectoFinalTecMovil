@@ -55,10 +55,14 @@ interface MatchingRepository {
      * y lo asocia al match. Idempotente: si el match ya tiene chat devuelve ese. Si el modo no
      * tiene escenarios devuelve [ScenarioChatOutcome.NoScenarios]. En la misma transacción vuelve a comprobar
      * bloqueos (en ambos sentidos), borrados y suspensión: si alguno falla no crea el chat, deja el
-     * match en EXPIRED y devuelve [ScenarioChatOutcome.Unavailable].
+     * match en EXPIRED y devuelve [ScenarioChatOutcome.Unavailable] con quienes lo provocaron.
      */
     suspend fun createScenarioChat(matchId: UUID, now: Instant, allowPremium: Boolean): ScenarioChatOutcome
 
-    /** False si hay bloqueo (en cualquier sentido), borrado o suspensión entre las dos personas. */
-    suspend fun canInteract(a: UUID, b: UUID, now: Instant): Boolean
+    /**
+     * Null si las dos personas pueden interactuar. Si hay bloqueo (en cualquier sentido), borrado o
+     * suspensión devuelve quienes provocaron el cierre: quien bloqueó (las dos si se bloquearon entre
+     * sí), quien se borró o quien está suspendido. A ellas no se les devuelve el cupo del match.
+     */
+    suspend fun closedBy(a: UUID, b: UUID, now: Instant): Set<UUID>?
 }

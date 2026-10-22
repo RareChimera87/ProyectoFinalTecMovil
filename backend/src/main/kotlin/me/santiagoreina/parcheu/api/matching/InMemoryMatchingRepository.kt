@@ -144,22 +144,28 @@ class InMemoryMatchingRepository(
         }
     }
 
-    override suspend fun canInteract(a: UUID, b: UUID, now: Instant): Boolean = lock.withLock { usable(a, b, now) }
+    override suspend fun closedBy(a: UUID, b: UUID, now: Instant): Set<UUID>? = lock.withLock { culprits(a, b, now) }
 
-    private fun usable(a: UUID, b: UUID, now: Instant): Boolean {
-        if (isBlocked(a, b)) return false
-        return listOf(a, b).all { id ->
-            val person = synchronized(people) { people[id] }
-            person != null && !person.deleted && person.suspendedUntil.let { it == null || !it.isAfter(now) }
+    /** Null si pueden interactuar; si no, quienes provocaron el cierre (bloqueó, borrada o suspendida). */
+    private fun culprits(a: UUID, b: UUID, now: Instant): Set<UUID>? {
+        val result = mutableSetOf<UUID>()
+        synchronized(blocks) {
+            if ((a to b) in blocks) result += a
+            if ((b to a) in blocks) result += b
         }
+        listOf(a, b).forEach { id ->
+            val person = synchronized(people) { people[id] }
+            if (person == null || person.deleted || person.suspendedUntil.let { it != null && it.isAfter(now) }) result += id
+        }
+        return result.takeIf { it.isNotEmpty() }
     }
 
     override suspend fun createScenarioChat(matchId: UUID, now: Instant, allowPremium: Boolean): ScenarioChatOutcome = lock.withLock {
         val match = synchronized(matches) { matches[matchId] } ?: return@withLock ScenarioChatOutcome.NoScenarios
         match.chatId?.let { return@withLock ScenarioChatOutcome.Created(it) }
-        if (!usable(match.userA, match.userB, now)) {
+        culprits(match.userA, match.userB, now)?.let { causedBy ->
             synchronized(matches) { matches[matchId] = match.copy(status = MatchStatus.EXPIRED) }
-            return@withLock ScenarioChatOutcome.Unavailable
+            return@withLock ScenarioChatOutcome.Unavailable(causedBy)
         }
         val options = scenarios.filter { it.mode == match.mode && (allowPremium || it.isBasic) }.sortedBy { it.id }
         if (options.isEmpty()) return@withLock ScenarioChatOutcome.NoScenarios

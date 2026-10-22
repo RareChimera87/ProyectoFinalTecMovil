@@ -366,7 +366,7 @@ class MatchingDbTest : FunSpec({
             // Y el repositorio, dentro de su transacción, tampoco crea el chat si el bloqueo llega tarde.
             val repo = ExposedMatchingRepository(db)
             transaction(db) { Matches.update({ Matches.id eq UUID.fromString(matchId) }) { it[status] = MatchStatus.SCENARIO } }
-            repo.createScenarioChat(UUID.fromString(matchId), java.time.Instant.now(), allowPremium = false) shouldBe ScenarioChatOutcome.Unavailable
+            repo.createScenarioChat(UUID.fromString(matchId), java.time.Instant.now(), allowPremium = false) shouldBe ScenarioChatOutcome.Unavailable(setOf(ana))
             transaction(db) { Chats.selectAll().count() shouldBe 0L }
         }
     }

@@ -297,7 +297,8 @@ class MatchingServiceTest : FunSpec({
         shouldThrow<NotFound> { f.service.choose(beto, id, MatchChoice.SCENARIO) }
         f.matchRepo.scenarioChats().shouldBeEmpty()
         f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
-        f.usage.refunded("$id:$ana") shouldBe true
+        // Ana bloqueó: no recupera el cupo; Beto, que no causó el cierre, sí.
+        f.usage.refunded("$id:$ana") shouldBe false
         f.usage.refunded("$id:$beto") shouldBe true
         f.notifier.sent.count { it.notification.kind == NotificationKinds.MATCH_EXPIRED } shouldBe 2
     }
@@ -310,22 +311,52 @@ class MatchingServiceTest : FunSpec({
         val record = f.matchRepo.match(UUID.fromString(id))!!
         f.matchRepo.block(beto, ana)
         f.matchRepo.updateMatch(record.id) { it.copy(choiceB = MatchChoice.SCENARIO, status = MatchStatus.SCENARIO) }
-        f.matchRepo.createScenarioChat(record.id, f.clock.instant(), allowPremium = false) shouldBe ScenarioChatOutcome.Unavailable
+        f.matchRepo.createScenarioChat(record.id, f.clock.instant(), allowPremium = false) shouldBe ScenarioChatOutcome.Unavailable(setOf(beto))
         f.matchRepo.scenarioChats().shouldBeEmpty()
         f.matchRepo.match(record.id)!!.status shouldBe MatchStatus.EXPIRED
     }
 
-    test("GET de un match pendiente con bloqueo posterior responde 404, lo cierra y devuelve el cupo") {
+    test("GET de un match pendiente con bloqueo posterior responde 404, lo cierra y devuelve el cupo solo a quien fue bloqueado") {
         val f = MatchFixture()
         val (ana, beto, id) = f.pair()
         f.matchRepo.block(ana, beto)
         shouldThrow<NotFound> { f.service.match(beto, id) }
         f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
-        f.usage.refunded("$id:$ana") shouldBe true
+        f.usage.refunded("$id:$ana") shouldBe false
         f.usage.refunded("$id:$beto") shouldBe true
         // Una segunda lectura ve el match ya cerrado y no vuelve a avisar ni a devolver cupo.
         f.service.match(ana, id).status shouldBe MatchStatus.EXPIRED
         f.notifier.sent.count { it.notification.kind == NotificationKinds.MATCH_EXPIRED } shouldBe 2
+    }
+
+    test("quien bloquea y abre el match no recupera el cupo: no se puede saltar el límite diario") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.matchRepo.block(ana, beto)
+        // Quien bloqueó es quien abre el match: 404, se cierra y su cupo sigue gastado.
+        shouldThrow<NotFound> { f.service.match(ana, id) }
+        f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe true
+    }
+
+    test("si se bloquean entre sí nadie recupera el cupo") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.matchRepo.block(ana, beto)
+        f.matchRepo.block(beto, ana)
+        shouldThrow<NotFound> { f.service.match(ana, id) }
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe false
+    }
+
+    test("si una persona se borra o la suspenden el cupo vuelve solo a la otra") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.matchRepo.addPerson(f.matchRepo.person(beto)!!.copy(suspendedUntil = f.clock.instant().plusSeconds(3600)))
+        shouldThrow<NotFound> { f.service.match(ana, id) }
+        f.usage.refunded("$id:$ana") shouldBe true
+        f.usage.refunded("$id:$beto") shouldBe false
     }
 
     test("una publicación WAITING atrasada no pisa a MATCHED en matchTickets (versión monótona)") {
@@ -462,6 +493,7 @@ class MatchingServiceTest : FunSpec({
         f.simRepo.block(ana, beto)
         f.service.choose(ana, id, MatchChoice.SIMULATION)
         f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
+        // El repositorio de matches no conoce al culpable (el bloqueo vive en otro repositorio): vuelve a las dos.
         f.usage.refunded("$id:$ana") shouldBe true
         f.usage.refunded("$id:$beto") shouldBe true
     }

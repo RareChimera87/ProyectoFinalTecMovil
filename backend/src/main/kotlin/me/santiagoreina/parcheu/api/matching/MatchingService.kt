@@ -240,10 +240,12 @@ class MatchingService(
         val id = runCatching { UUID.fromString(rawId) }.getOrNull() ?: throw NotFound()
         val found = repo.match(id) ?: throw NotFound()
         if (!found.involves(viewer)) throw NotFound()
-        if (found.status == MatchStatus.PENDING_CHOICE && !repo.canInteract(found.userA, found.userB, clock.instant())) {
-            // Bloqueo, borrado o suspensión posterior al match: se cierra, se devuelve el cupo y se oculta.
+        val causedBy = if (found.status == MatchStatus.PENDING_CHOICE) repo.closedBy(found.userA, found.userB, clock.instant()) else null
+        if (causedBy != null) {
+            // Bloqueo, borrado o suspensión posterior al match: se cierra, se devuelve el cupo solo a quien
+            // no lo provocó (si no, bloquear permitiría saltar el límite diario) y se oculta.
             val closed = repo.updateMatch(found.id) { current -> current.copy(status = MatchStatus.EXPIRED).takeIf { current.status == MatchStatus.PENDING_CHOICE } }
-            if (closed != null && closed.before.status == MatchStatus.PENDING_CHOICE) refundAndNotifyUnavailable(found)
+            if (closed != null && closed.before.status == MatchStatus.PENDING_CHOICE) refundAndNotifyUnavailable(found, causedBy)
             throw NotFound()
         }
         return found
@@ -300,15 +302,19 @@ class MatchingService(
             log.warn("No se pudo crear el chat del match {}: {}", match.id, e.message)
             return
         }
-        if (outcome == ScenarioChatOutcome.Unavailable) {
+        if (outcome is ScenarioChatOutcome.Unavailable) {
             log.info("El match {} ya no es posible (bloqueo, borrado o suspensión): se cierra sin chat", match.id)
-            refundAndNotifyUnavailable(match)
+            refundAndNotifyUnavailable(match, outcome.causedBy)
         }
     }
 
-    /** Devuelve el cupo `RANDOM_MATCH` de las dos personas y les avisa que el match ya no está disponible. */
-    private suspend fun refundAndNotifyUnavailable(match: MatchRecord) {
-        listOf(match.userA, match.userB).forEach { safely("devolver el cupo del match ${match.id}") { quota.refund(QuotaKind.RANDOM_MATCH, "${match.id}:$it") } }
+    /**
+     * Devuelve el cupo `RANDOM_MATCH` a quien no provocó el cierre y avisa a las dos personas que el match
+     * ya no está disponible. Quien bloqueó, se borró o fue suspendida ([causedBy]) no recibe el cupo:
+     * bloquear tras emparejar no puede servir para saltar el límite diario.
+     */
+    private suspend fun refundAndNotifyUnavailable(match: MatchRecord, causedBy: Set<UUID>) {
+        listOf(match.userA, match.userB).filterNot { it in causedBy }.forEach { safely("devolver el cupo del match ${match.id}") { quota.refund(QuotaKind.RANDOM_MATCH, "${match.id}:$it") } }
         notifyMatchExpired(match, title = "Este parche ya no está disponible", body = "El match se canceló. Puedes buscar otro parche cuando quieras.")
     }
 
@@ -351,7 +357,9 @@ class MatchingService(
         } catch (e: DomainException) {
             log.warn("No se pudo crear la simulación del match {}: {}", match.id, e.message)
             repo.updateMatch(match.id) { current -> current.copy(status = MatchStatus.EXPIRED).takeIf { current.simulationId == null } }
-            listOf(match.userA, match.userB).forEach { quota.refund(QuotaKind.RANDOM_MATCH, "${match.id}:$it") }
+            // Un bloqueo posterior no devuelve el cupo a quien bloqueó; un fallo sin culpable (gemelo no listo) lo devuelve a ambas.
+            val causedBy = runCatching { repo.closedBy(match.userA, match.userB, clock.instant()) }.getOrNull().orEmpty()
+            listOf(match.userA, match.userB).filterNot { it in causedBy }.forEach { quota.refund(QuotaKind.RANDOM_MATCH, "${match.id}:$it") }
         } catch (e: Exception) {
             log.error("Falló la creación de la simulación del match {}: el barrido lo reintentará", match.id, e)
         }
