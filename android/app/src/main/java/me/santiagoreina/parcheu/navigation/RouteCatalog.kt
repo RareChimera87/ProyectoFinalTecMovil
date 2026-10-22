@@ -46,7 +46,7 @@ val routeCatalog: List<RouteEntry> =
         RouteEntry(PrivacySettings, "H3", "Ajustes de privacidad"),
         RouteEntry(DeleteAccount, "Borrado", "Borrar cuenta"),
         RouteEntry(ExportData, "Exportar", "Descargar mis datos"),
-        RouteEntry(BlockedUsers, "Bloqueados", "Personas bloqueadas")
+        RouteEntry(BlockedUsers, "Bloqueados", "Personas bloqueadas"),
     )
 
 /** Entrada del catálogo para una ruta (por clase), para títulos e IDs de pantalla en los stubs. */

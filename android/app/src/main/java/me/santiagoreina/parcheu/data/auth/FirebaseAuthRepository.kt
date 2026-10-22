@@ -49,7 +49,7 @@ class FirebaseAuthSource(private val appContext: Context) {
         val id = appContext.resources.getIdentifier(
             "default_web_client_id",
             "string",
-            appContext.packageName
+            appContext.packageName,
         )
         return if (id == 0) null else appContext.getString(id).takeIf { it.isNotBlank() }
     }
@@ -59,7 +59,7 @@ class FirebaseAuthSource(private val appContext: Context) {
 class FirebaseAuthRepository(
     private val source: FirebaseAuthSource,
     private val api: SessionApi,
-    private val errorMapper: ApiErrorMapper
+    private val errorMapper: ApiErrorMapper,
 ) : AuthRepository {
     override fun hasSession(): Boolean = source.authOrNull()?.currentUser != null
 
@@ -103,7 +103,7 @@ class FirebaseAuthRepository(
         // clearCredentialState necesita un Context; el de la aplicación basta para borrar la selección.
         try {
             CredentialManager.create(
-                source.applicationContext()
+                source.applicationContext(),
             ).clearCredentialState(ClearCredentialStateRequest())
         } catch (_: ClearCredentialException) {
             // Sin proveedor de credenciales (emulador sin Play Services): no hay estado que borrar.
@@ -138,14 +138,14 @@ class FirebaseAuthRepository(
             credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
         ) {
             return TokenResult.Done(
-                SignInResult.Failure(AppError.Unknown(message = "credencial inesperada"))
+                SignInResult.Failure(AppError.Unknown(message = "credencial inesperada")),
             )
         }
         return try {
             TokenResult.Token(GoogleIdTokenCredential.createFrom(credential.data).idToken)
         } catch (_: GoogleIdTokenParsingException) {
             TokenResult.Done(
-                SignInResult.Failure(AppError.Unknown(message = "token de Google ilegible"))
+                SignInResult.Failure(AppError.Unknown(message = "token de Google ilegible")),
             )
         }
     }
