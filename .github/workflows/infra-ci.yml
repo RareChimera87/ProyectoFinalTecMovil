@@ -10,6 +10,7 @@ on:
       - "scripts/check-iam.sh"
       - "scripts/test/check-plan.test.sh"
       - "scripts/test/cargar-secretos.test.sh"
+      - "scripts/test/plan-iam-permisos.test.sh"
       - "scripts/cargar-secretos.sh"
       - "scripts/test/fixtures/**"
       - ".github/workflows/infra-ci.yml"
@@ -48,6 +49,7 @@ jobs:
         run: |
           scripts/test/check-plan.test.sh
           scripts/test/cargar-secretos.test.sh
+          scripts/test/plan-iam-permisos.test.sh
 
   plan-dev:
     name: infra-plan-dev

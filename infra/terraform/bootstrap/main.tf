@@ -264,6 +264,7 @@ resource "google_project_iam_custom_role" "terraform_plan" {
     "firebase.projects.get",
     "resourcemanager.projects.get",
     "resourcemanager.projects.getIamPolicy",
+    "pubsub.topics.getIamPolicy",
   ]
   depends_on = [google_project_service.bootstrap]
 }
