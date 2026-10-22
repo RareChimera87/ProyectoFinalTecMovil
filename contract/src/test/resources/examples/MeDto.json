@@ -1,0 +1,26 @@
+{
+  "id": "6f1c2a9e-3b7d-4c55-9a10-2f8e4d6b1c01",
+  "email": "santi@example.com",
+  "displayName": "Santiago Reina",
+  "photoUrl": "https://lh3.googleusercontent.com/a/santi",
+  "career": "Ingeniería de Sistemas",
+  "universityId": 1,
+  "interests": [
+    "musica",
+    "cafe",
+    "senderismo"
+  ],
+  "birthDate": "2004-05-17",
+  "ageVerified": true,
+  "underage": false,
+  "parejaConfirmed": true,
+  "visibility": "ANONYMOUS",
+  "modes": {
+    "AMISTAD": true,
+    "PAREJA": false,
+    "ESTUDIO": true
+  },
+  "plus": false,
+  "isDemo": false,
+  "createdAt": "2026-10-20T14:00:00Z"
+}
