@@ -23,6 +23,8 @@ class InMemoryGraphRepository : GraphRepository {
 
     fun block(blocker: UUID, blocked: UUID) = synchronized(lock) { blocks += blocker to blocked }
 
+    fun unblock(blocker: UUID, blocked: UUID) = synchronized(lock) { blocks -= blocker to blocked }
+
     /** Inserta o reemplaza una arista directamente (fixtures de pruebas). */
     fun putEdge(a: UUID, b: UUID, mode: Mode, state: EdgeState, affinity: Int?, at: Instant = Instant.EPOCH) = synchronized(lock) {
         val (low, high) = ordered(a, b)
