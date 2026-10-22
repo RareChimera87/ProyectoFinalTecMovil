@@ -32,3 +32,9 @@ contract/build/
 # SO
 .DS_Store
 Thumbs.db
+# Firebase
+firebase/node_modules/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+firebase/.firebase/
