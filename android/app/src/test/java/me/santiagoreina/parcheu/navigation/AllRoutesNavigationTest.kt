@@ -71,8 +71,13 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * ModesScreenshotTest), B0 y el bloqueo por edad (E2.6, BasicProfileScreenTest y BasicProfileViewModelTest).
          */
         val implementedRoutes = setOf(
-            Splash::class, Onboarding::class, Modes::class, Consent::class, TwinReady::class,
-            BasicProfile::class, Underage::class,
+            Splash::class,
+            Onboarding::class,
+            Modes::class,
+            Consent::class,
+            TwinReady::class,
+            BasicProfile::class,
+            Underage::class,
         )
     }
 }
