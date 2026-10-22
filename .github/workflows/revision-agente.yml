@@ -1,0 +1,65 @@
+name: revision-agente
+
+# E0.6 + PLAN.md §5. Revisión automática en busca de errores sobre el diff del PR, con Claude
+# (scripts/revision-agente/revisar.py). El check `revision-agente` queda en rojo si hay algún
+# hallazgo bloqueante; el informe se publica como comentario del PR y en el resumen del job.
+# Requiere el secreto ANTHROPIC_API_KEY; sin él el check falla (no se mezcla sin revisión).
+# Modelo y esfuerzo: variables de repo REVISION_MODELO (claude-opus-5-5) y REVISION_ESFUERZO (high).
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: revision-agente-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  revision-agente:
+    name: revision-agente
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Requiere ANTHROPIC_API_KEY
+        if: env.ANTHROPIC_API_KEY == ''
+        run: |
+          echo "::error::Falta el secreto ANTHROPIC_API_KEY (docs/pendientes-humanos.md, E0.6)."
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet -r scripts/revision-agente/requirements.txt
+      - name: Revisión del diff
+        id: revision
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          REVISION_MODELO: ${{ vars.REVISION_MODELO }}
+          REVISION_ESFUERZO: ${{ vars.REVISION_ESFUERZO }}
+          SALIDA_MD: ${{ runner.temp }}/revision.md
+        run: python3 scripts/revision-agente/revisar.py
+      - name: Publica el informe
+        if: always() && steps.revision.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          INFORME: ${{ runner.temp }}/revision.md
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          [[ -s "$INFORME" ]] || exit 0
+          cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
+          { cat "$INFORME"; echo; echo "_Commit revisado: ${SHA:0:7}_"; } > comentario.md
+          gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file comentario.md

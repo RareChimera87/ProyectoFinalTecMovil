@@ -1,0 +1,37 @@
+name: auto-merge
+
+# E0.6 + ADR-0001. Activa el auto-merge (squash) en los PR feature/* y fix/* hacia dev: GitHub
+# los mezcla solo cuando pasan los checks obligatorios de la protección de dev (la CI aplicable,
+# `revision-agente` y `major-gate`; ver scripts/proteger-ramas.sh). Nunca toca PR hacia main.
+#
+# Token: AUTO_MERGE_TOKEN (PAT fine-grained del dueño del repo, contents + pull requests: write).
+# Con el GITHUB_TOKEN el auto-merge funciona, pero el push a dev que produce NO dispara
+# deploy-dev, infra-ci (apply) ni review-counter (regla de GitHub para eventos del GITHUB_TOKEN).
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+    branches: [dev]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: auto-merge
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.head_ref, 'feature/') || startsWith(github.head_ref, 'fix/'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Activa el auto-merge (squash)
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_MERGE_TOKEN || secrets.GITHUB_TOKEN }}
+          CON_PAT: ${{ secrets.AUTO_MERGE_TOKEN != '' }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ "$CON_PAT" != true ]]; then
+            echo "::warning::Sin AUTO_MERGE_TOKEN: el merge no disparará deploy-dev ni review-counter (correrlos con workflow_dispatch)."
+          fi
+          gh pr merge "$PR" -R "$GITHUB_REPOSITORY" --auto --squash
