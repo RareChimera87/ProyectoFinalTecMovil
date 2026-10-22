@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -135,7 +136,8 @@ fun LineChart(
     startLabel: String? = null,
     endLabel: String? = null
 ) {
-    require(points.size >= 2) { "La gráfica necesita al menos dos puntos" }
+    // Valores no finitos (NaN, infinito) se descartan: dejarían el Path inválido.
+    val valid = points.filter { it.isFinite() }
     val colors = ParcheUTheme.colors
     val line = if (colors.isDark) colors.prt else colors.primary
     Column(
@@ -145,6 +147,7 @@ fun LineChart(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Canvas(Modifier.fillMaxWidth().height(96.dp).clearAndSetSemantics { }) {
+            // Dibuja con 0 puntos (solo cuadrícula), 1 punto (punto aislado) o 2 o más (curva).
             val padX = 6.dp.toPx()
             val padY = 8.dp.toPx()
             val w = size.width - padX * 2
@@ -158,40 +161,14 @@ fun LineChart(
                     strokeWidth = 1.dp.toPx()
                 )
             }
-            val coords = points.mapIndexed { i, v ->
+            if (valid.isEmpty()) return@Canvas
+            val coords = valid.mapIndexed { i, v ->
                 Offset(
-                    padX + w * i / (points.size - 1),
+                    if (valid.size == 1) padX + w / 2f else padX + w * i / (valid.size - 1),
                     padY + h * (1f - v.coerceIn(0f, 100f) / 100f)
                 )
             }
-            val curve = Path().apply {
-                moveTo(coords.first().x, coords.first().y)
-                for (i in 1 until coords.size) {
-                    val a = coords[i - 1]
-                    val b = coords[i]
-                    val midX = (a.x + b.x) / 2f
-                    cubicTo(midX, a.y, midX, b.y, b.x, b.y)
-                }
-            }
-            val area = Path().apply {
-                addPath(curve)
-                lineTo(coords.last().x, size.height - padY)
-                lineTo(coords.first().x, size.height - padY)
-                close()
-            }
-            drawPath(
-                area,
-                Brush.verticalGradient(
-                    listOf(line.copy(alpha = 0.28f), line.copy(alpha = 0f)),
-                    startY = padY,
-                    endY = size.height - padY
-                )
-            )
-            drawPath(
-                curve,
-                line,
-                style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
+            if (coords.size >= 2) drawCurve(coords, line, padX, padY)
             coords.forEach {
                 drawCircle(colors.bg, radius = 4.5.dp.toPx(), center = it)
                 drawCircle(line, radius = 3.dp.toPx(), center = it)
@@ -212,4 +189,36 @@ fun LineChart(
             }
         }
     }
+}
+
+/** Dibuja el área degradada y la curva suave que pasa por [coords] (requiere al menos dos puntos). */
+private fun DrawScope.drawCurve(coords: List<Offset>, line: Color, padX: Float, padY: Float) {
+    val curve = Path().apply {
+        moveTo(coords.first().x, coords.first().y)
+        for (i in 1 until coords.size) {
+            val a = coords[i - 1]
+            val b = coords[i]
+            val midX = (a.x + b.x) / 2f
+            cubicTo(midX, a.y, midX, b.y, b.x, b.y)
+        }
+    }
+    val area = Path().apply {
+        addPath(curve)
+        lineTo(coords.last().x, size.height - padY)
+        lineTo(coords.first().x, size.height - padY)
+        close()
+    }
+    drawPath(
+        area,
+        Brush.verticalGradient(
+            listOf(line.copy(alpha = 0.28f), line.copy(alpha = 0f)),
+            startY = padY,
+            endY = size.height - padY
+        )
+    )
+    drawPath(
+        curve,
+        line,
+        style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+    )
 }
