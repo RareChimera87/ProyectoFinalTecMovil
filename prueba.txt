@@ -1,0 +1,2 @@
+github_token = "ghp_R4nd0mT0kenAbCdEf1234567890QwErTyUi"
+aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYzK3Qm9vT2a"
