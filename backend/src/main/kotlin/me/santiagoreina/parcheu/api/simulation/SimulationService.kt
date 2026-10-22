@@ -11,6 +11,7 @@ import me.santiagoreina.parcheu.api.platform.tasks.QueueKind
 import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.TaskRequest
 import me.santiagoreina.parcheu.api.quota.QuotaService
+import me.santiagoreina.parcheu.api.simulation.report.ReportAccess
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Page
 import me.santiagoreina.parcheu.contract.QuotaKind
@@ -41,6 +42,8 @@ class SimulationService(
     private val people: PersonPresenter,
     private val mirror: SimulationMirror,
     private val clock: Clock,
+    /** Quién ve el contenido completo (Plus o informe desbloqueado, E4.6). */
+    private val fullAccess: ReportAccess = ReportAccess { viewer, _ -> quota.isPlus(viewer) },
 ) {
     private val log = LoggerFactory.getLogger(SimulationService::class.java)
 
@@ -155,10 +158,13 @@ class SimulationService(
         return SimulationDto(summaryOf(viewer, record), record.progress, record.score.takeIf { record.status == SimulationStatus.DONE })
     }
 
-    /** `GET /v1/simulations/{id}/transcript` (ParcheU+): turnos como ME/OTHER desde quien consulta. */
+    /**
+     * `GET /v1/simulations/{id}/transcript`: turnos como ME/OTHER desde quien consulta. Solo con
+     * ParcheU+ o con el informe de esta simulación desbloqueado (E4.6); si no, 402 PLUS_REQUIRED.
+     */
     suspend fun transcript(viewer: UUID, id: String): TranscriptDto {
         val record = visible(viewer, id)
-        if (!quota.isPlus(viewer)) throw PlusRequired("La transcripción completa es de ParcheU+")
+        if (!fullAccess.hasFullAccess(viewer, record.id)) throw PlusRequired("La transcripción completa es de ParcheU+ o del informe desbloqueado")
         val me = checkNotNull(record.sideOf(viewer))
         return TranscriptDto(
             record.transcript.scenarios.map { s ->

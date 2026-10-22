@@ -1,6 +1,14 @@
 package me.santiagoreina.parcheu.api.simulation
 
 import me.santiagoreina.parcheu.api.ai.AiGateway
+import me.santiagoreina.parcheu.api.chat.ChatModule
+import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
+import me.santiagoreina.parcheu.api.simulation.report.ExposedReportRepository
+import me.santiagoreina.parcheu.api.simulation.report.InMemoryReportRepository
+import me.santiagoreina.parcheu.api.simulation.report.ReportRepository
+import me.santiagoreina.parcheu.api.simulation.report.ReportService
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.ViewContext
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
@@ -19,6 +27,8 @@ class SimulationModule(
     val service: SimulationService,
     val engine: SimulationEngine,
     val repository: SimulationRepository,
+    /** Informe, desbloqueo y decisión mutua (E4.6). */
+    val report: ReportService,
 )
 
 /**
@@ -43,7 +53,10 @@ fun graphPersonPresenter(graph: GraphModule): PersonPresenter = PersonPresenter 
     }
 }
 
-/** Cableado con Postgres, la cola real y Firestore (si hay proyecto de Firebase). */
+/**
+ * Cableado con Postgres, la cola real y Firestore (si hay proyecto de Firebase). [chat] y [push] los
+ * usa la decisión mutua (E4.6): chat DIRECT y aviso de conexión.
+ */
 fun simulationModule(
     env: Env,
     db: Database,
@@ -53,9 +66,14 @@ fun simulationModule(
     graph: GraphModule,
     tasks: TaskQueue,
     firebaseProjectId: String?,
+    chat: ChatModule,
+    push: Notifier,
 ): SimulationModule {
     val mirror = if (env == Env.LOCAL || firebaseProjectId == null) NoopSimulationMirror else FirestoreSimulationMirror(firebaseProjectId)
-    return assemble(ExposedSimulationRepository(db), clock, ai, quota, graph, tasks, mirror, NoopSimulationNotifier)
+    return assemble(
+        ExposedSimulationRepository(db), clock, ai, quota, graph, tasks, mirror, NoopSimulationNotifier,
+        ExposedReportRepository(db), chat, push,
+    )
 }
 
 /**
@@ -72,8 +90,11 @@ fun inMemorySimulationModule(
     mirror: SimulationMirror = NoopSimulationMirror,
     notifier: SimulationNotifier = NoopSimulationNotifier,
     runInline: Boolean = true,
+    reportRepo: ReportRepository = InMemoryReportRepository(),
+    chat: ChatModule = inMemoryChatModule(clock, graph.policy),
+    push: Notifier = NoopNotifier,
 ): SimulationModule {
-    val module = assemble(repo, clock, ai, quota, graph, queue, mirror, notifier)
+    val module = assemble(repo, clock, ai, quota, graph, queue, mirror, notifier, reportRepo, chat, push)
     if (runInline) queue.inline = { task -> module.engine.run(ContractJson.decodeFromString<TaskPayload>(task.body).uuid()) }
     return module
 }
@@ -87,8 +108,13 @@ private fun assemble(
     tasks: TaskQueue,
     mirror: SimulationMirror,
     notifier: SimulationNotifier,
+    reportRepo: ReportRepository,
+    chat: ChatModule,
+    push: Notifier,
 ): SimulationModule {
+    val people = graphPersonPresenter(graph)
     val engine = SimulationEngine(repo, ai, quota.service, graph.edges, mirror, notifier, clock)
-    val service = SimulationService(repo, quota.service, ai, tasks, graphPersonPresenter(graph), mirror, clock)
-    return SimulationModule(service, engine, repo)
+    val report = ReportService(repo, reportRepo, quota.service, graph.edges, chat.service, push, people, clock)
+    val service = SimulationService(repo, quota.service, ai, tasks, people, mirror, clock, report)
+    return SimulationModule(service, engine, repo, report)
 }

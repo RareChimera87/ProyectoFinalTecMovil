@@ -13,15 +13,15 @@ import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
-import me.santiagoreina.parcheu.api.platform.stubGet
 import me.santiagoreina.parcheu.api.platform.stubPost
 import me.santiagoreina.parcheu.api.twin.TaskPayload
+import me.santiagoreina.parcheu.contract.Decision
 import me.santiagoreina.parcheu.contract.StartSimulation
 import java.util.UUID
 
 /**
  * Rutas del dominio simulation. E4.3 implementa crear, listar, consultar, transcripción y la tarea
- * `simulate`; el informe, su desbloqueo y la decisión son de E4.6 y `judge-scenario` de E4.8.
+ * `simulate`; E4.6 el informe, su desbloqueo y la decisión; `judge-scenario` es de E4.8.
  *
  * [viewerId] traduce el usuario de Firebase a `users.id` (lo resuelve identity).
  */
@@ -45,9 +45,16 @@ class SimulationRoutes(
         get("/simulations/{id}/transcript") {
             call.respond(simulation.service.transcript(viewerId(call.firebaseUser()), call.parameters["id"] ?: throw NotFound()))
         }
-        stubGet("/simulations/{id}/report")
-        stubPost("/simulations/{id}/report:unlock")
-        stubPost("/simulations/{id}/decision")
+        get("/simulations/{id}/report") {
+            call.respond(simulation.report.report(viewerId(call.firebaseUser()), call.parameters["id"] ?: throw NotFound()))
+        }
+        post("/simulations/{id}/report:unlock") {
+            call.respond(simulation.report.unlock(viewerId(call.firebaseUser()), call.parameters["id"] ?: throw NotFound()))
+        }
+        post("/simulations/{id}/decision") {
+            val body = call.receive<Decision>()
+            call.respond(simulation.report.decide(viewerId(call.firebaseUser()), call.parameters["id"] ?: throw NotFound(), body))
+        }
     }
 
     override fun Route.internal() {

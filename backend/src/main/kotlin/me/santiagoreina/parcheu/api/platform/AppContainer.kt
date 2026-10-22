@@ -75,14 +75,14 @@ class AppContainer(
     val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
     val graph: GraphModule = inMemoryGraphModule(clock),
-    /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
-    val chat: ChatModule = inMemoryChatModule(clock, graph.policy),
-    /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
-    val simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
-    /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, twin, quota, graph, simulation, chat),
     /** Avisos (push + bandeja). Los tests de otros dominios pasan un `FakeNotifier`. */
     val notifier: Notifier = NoopNotifier,
+    /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
+    val chat: ChatModule = inMemoryChatModule(clock, graph.policy, notifier),
+    /** Simulación (E4.3) e informe y decisión (E4.6). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
+    val simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph, chat = chat, push = notifier),
+    /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
+    val domains: List<DomainRoutes> = allDomains(identity, twin, quota, graph, simulation, chat),
 ) {
     companion object {
         /**
@@ -114,12 +114,14 @@ class AppContainer(
             val twin = twinModule(config.env, database, clock, ai, tasks)
             val quota = quotaModule(config.env, database, clock)
             val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
-            val simulation = simulationModule(config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId)
             // E5.3 (PR #30) cambia este valor por FcmNotifier; hasta entonces los avisos del chat no salen.
             val notifier: Notifier = NoopNotifier
             // En local no hay Firestore: el espejo del chat queda en memoria (Postgres sigue siendo la verdad).
             val chatMirror = if (local) InMemoryChatMirror() else FirestoreChatMirror.forProject(requireNotNull(config.firebaseProjectId))
             val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
+            val simulation = simulationModule(
+                config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId, chat = chat, push = notifier,
+            )
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity,
                 ai = ai, twin = twin, quota = quota, graph = graph, chat = chat, simulation = simulation,
