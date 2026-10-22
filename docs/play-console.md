@@ -31,7 +31,7 @@ la subida. Aprobación estimada: 30-31 oct.
 | 3 | Esqueleto, billing, Firebase y páginas legales mezclados en `dev` | E0.7 (#8), E7.0 (#17), E0.8 (#6), E8.4 (#16) | `gh pr list --state merged` |
 | 4 | `parcheu-prod` creado y Terraform de prod aplicado por el usuario | E0.5 | `gcloud projects describe parcheu-prod` |
 | 5 | App Android `me.santiagoreina.parcheu` registrada en Firebase prod | E0.8 | `firebase apps:list ANDROID --project parcheu-prod` |
-| 6 | Pipeline `android-release` que sube a la pista cerrada (si no está, plan B de §12.3 paso 6) | E10.2 | `gh workflow list` |
+| 6 | Pipeline `android-release` que sube a la pista cerrada (si no está, plan B de §12.3 paso 8) | E10.2 | `gh workflow list` |
 
 ### 12.3 Proceso de release 0.1 (PLAN §5)
 
@@ -45,9 +45,18 @@ la subida. Aprobación estimada: 30-31 oct.
    E7.0). La 0.1 necesita `versionName = "0.1.0"` y un `versionCode` **mayor que 1** (Play rechaza un `versionCode`
    repetido). Si E10.2 ya deriva el `versionCode` del número de ejecución, solo cambia `versionName`; si no, sube
    ambos a mano (`versionCode = 2`). El cambio entra como `fix/version-0.1.0` contra `release/0.1.0`.
-3. **PR `release/0.1.0` → `main`** con el título `Release 0.1.0`. **Lo aprueba el usuario** (nadie más mezcla a `main`).
-4. **Tag** tras el merge: `git tag -a v0.1.0 -m "ParcheU 0.1.0" origin/main && git push origin v0.1.0`.
-5. **`deploy-prod`** (environment `production`, aprobación del usuario): en la 0.1 solo corre `firebase-deploy` prod
+3. **Declaraciones y ficha antes del tag.** El tag dispara `deploy-prod` y, encadenado con `workflow_run`,
+   `android-release` (E10.2), que **sube el AAB a la pista cerrada** y hace commit de la versión. Play rechaza o envía
+   a revisión de inmediato una versión cuando faltan las declaraciones. Por eso, **antes de crear el tag**, completa
+   en Play Console: Contenido de la app (§12.5, con §12.6 y §12.7) y la ficha mínima (§12.8). Y escribe las notas de
+   §12.8 en `android/app/src/prod/play/release-notes/es-419/default.txt` dentro de `release/0.1.0` (así la subida
+   automática no usa las notas por defecto del repo).
+4. **Publicación administrada.** En *Descripción general de la publicación* activa la **publicación administrada**
+   (o configura la subida de E10.2 en estado `draft`), para que la versión subida por el tag **no** se envíe a
+   revisión sola. El envío a revisión es manual (§12.9), el 29 oct.
+5. **PR `release/0.1.0` → `main`** con el título `Release 0.1.0`. **Lo aprueba el usuario** (nadie más mezcla a `main`).
+6. **Tag** tras el merge: `git tag -a v0.1.0 -m "ParcheU 0.1.0" origin/main && git push origin v0.1.0`.
+7. **`deploy-prod`** (environment `production`, aprobación del usuario): en la 0.1 solo corre `firebase-deploy` prod
    (reglas, índices y Hosting; la 0.1 no usa backend). Verifica que las páginas legales respondan:
 
    ```bash
@@ -56,10 +65,11 @@ la subida. Aprobación estimada: 30-31 oct.
    done   # las tres deben dar 200
    ```
 
-6. **AAB a la pista cerrada.** Camino normal: `android-release` (E10.2) construye el AAB `prod` firmado y lo sube a la
-   pista **cerrada** con las notas de §12.8. Plan B si E10.2 no está mezclado el 29 oct: construir a mano como en
-   §11.1 (llave de subida de `~/.parcheu/`, con el `versionCode` > 1 del paso 2) y subirlo en *Pruebas > Prueba
-   cerrada > Crear versión*. Comprueba antes de subir:
+8. **AAB a la pista cerrada.** Camino normal: el tag encadena `android-release` (E10.2), que construye el AAB `prod`
+   firmado y lo sube a la pista **cerrada** (con la publicación administrada del paso 4, queda pendiente de envío).
+   Si E10.2 está mezclado, `versionName` sale del tag y `fix/version-0.1.0` **no** debe tocar `defaultConfig`.
+   Plan B si E10.2 no está mezclado el 29 oct: construir a mano como en §11.1 (llave de subida de `~/.parcheu/`, con
+   el `versionCode` > 1 del paso 2) y subirlo en *Pruebas > Prueba cerrada > Crear versión*. Comprueba antes de subir:
 
    ```bash
    jarsigner -verify -certs app/build/outputs/bundle/prodRelease/app-prod-release.aab | grep 'CN=ParcheU Upload'
@@ -68,7 +78,7 @@ la subida. Aprobación estimada: 30-31 oct.
    Al subirlo, Play muestra el `versionCode` y el `versionName` del AAB: deben ser > 1 y `0.1.0` (si tienes
    `bundletool`, también: `bundletool dump manifest --bundle <aab> | grep -oE 'android:version(Code|Name)="[^"]*"'`).
 
-7. **`release/0.1.0` → `dev`** (PR de vuelta) para que el cambio de versión no se pierda.
+9. **`release/0.1.0` → `dev`** (PR de vuelta) para que el cambio de versión no se pierda.
 
 ### 12.4 Huellas de Play App Signing en Firebase prod
 
@@ -95,7 +105,7 @@ prod con las huellas visibles. Registra las huellas (son públicas) en §12.11.
 
 | Declaración | Respuesta para la 0.1 | Nota |
 |---|---|---|
-| Política de privacidad | `https://parcheu-prod.web.app/privacidad` | Debe responder 200 antes de enviar (§12.3 paso 5) |
+| Política de privacidad | `https://parcheu-prod.web.app/privacidad` | Debe responder 200 antes de enviar (§12.3 paso 7) |
 | Anuncios | **No**, la app no contiene anuncios | |
 | Acceso a la app | **Todas las funciones están disponibles sin restricciones de acceso** | Desde la 0.2 (login) cambia a 'Algunas funciones están restringidas' con instrucciones y una cuenta de demostración (E10.8) |
 | Clasificación de contenido | Cuestionario IARC (§12.7) | |
@@ -239,6 +249,8 @@ para que Play pueda instalar):
 ### 12.13 Lista de verificación de E10.3
 
 - [ ] Requisitos de §12.2 cumplidos el 28 oct.
+- [ ] Declaraciones (§12.5-§12.8), ficha mínima y notas en `release-notes/es-419/default.txt` listas **antes** del tag.
+- [ ] Publicación administrada activada (o subida en `draft`).
 - [ ] `v0.1.0` en `main` (aprobado por el usuario) y Hosting prod con las páginas legales en 200.
 - [ ] Contenido de la app completo: privacidad, sin anuncios, acceso, IARC, 18+, Data safety (borrador 0.1).
 - [ ] Ficha mínima e instrucciones para testers publicadas.
