@@ -164,7 +164,7 @@ Requisitos: app creada (§4), perfil de pagos verificado (§5) y verificación d
      --format='value(bindings.members)' | grep google-play-developer-notifications
    ```
 
-   Si el `apply` de prod aún no está, crea el tema a mano con esos mismos dos comandos de Terraform (o espera al apply) y luego importa en Terraform; no dejes el tema fuera del estado.
+   Si el `apply` de prod aún no está el 28 oct, crea igual la suscripción y los license testers y deja RTDN para cuando exista el tema. No crees el tema a mano: quedaría fuera del estado de Terraform (si no hay otra salida, créalo con `gcloud pubsub topics create play-rtdn`, da el rol de publicador a la cuenta de Play y luego `terraform import` del tema y del binding).
 6. **Captura para el PR de E7.0** (sin correos ni datos personales): la lista de planes base de `parcheu_plus` mostrando `mensual` y `anual` *Activos*, y la pantalla de RTDN con el tema configurado. Recorta o tapa correos de license testers.
 
 ### 11.3 Registro de E7.0
