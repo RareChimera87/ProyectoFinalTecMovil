@@ -63,10 +63,12 @@ class SchemaContainerTest : FunSpec({
     test("V1 y V2 se aplican sobre Postgres 16 limpio y el esquema coincide con las tablas Exposed")
         .config(enabled = TestDatabase.enabled) {
             TestDatabase.withCleanDatabase { ds ->
-                runMigrations(ds) shouldBe 2
+                // V1, V2 y las migraciones fechadas que agregan las features (p. ej. E2.6).
+                val first = runMigrations(ds)
                 runMigrations(ds) shouldBe 0
                 val applied = Flyway.configure().dataSource(ds).locations(MIGRATIONS_LOCATION).load().info().applied()
-                applied.map { it.version.version } shouldContainExactly listOf("1", "2")
+                applied.size shouldBe first
+                applied.take(2).map { it.version.version } shouldContainExactly listOf("1", "2")
                 ds.connection.use { c ->
                     c.metaData.databaseProductVersion.substringBefore('.') shouldBe "16"
                 }
