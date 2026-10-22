@@ -33,7 +33,7 @@ class ChatListViewModel(private val repository: ChatRepository) : ViewModel() {
                             UiState.Empty
                         } else {
                             UiState.Loaded(
-                                sorted(result.value)
+                                sorted(result.value),
                             )
                         }
                 is ApiResult.Failure ->

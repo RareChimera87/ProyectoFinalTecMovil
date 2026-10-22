@@ -26,7 +26,7 @@ class ChatListViewModelTest {
         other = PersonRef(id = "u-$id", label = "Persona $id", initials = "P"),
         lastMessage = at?.let {
             MessageDto("m-$id", null, "hola", Instant.fromEpochSeconds(it))
-        }
+        },
     )
 
     @Test
@@ -40,8 +40,8 @@ class ChatListViewModelTest {
         val vm =
             ChatListViewModel(
                 FakeChatRepository(
-                    chats = ApiResult.Success(listOf(chat("a", null), chat("b", 10), chat("c", 20)))
-                )
+                    chats = ApiResult.Success(listOf(chat("a", null), chat("b", 10), chat("c", 20))),
+                ),
             )
         val loaded = vm.state.value as UiState.Loaded
         assertEquals(listOf("c", "b", "a"), loaded.data.map { it.id })

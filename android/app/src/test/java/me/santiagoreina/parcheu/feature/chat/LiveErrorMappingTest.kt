@@ -22,7 +22,7 @@ class LiveErrorMappingTest {
     fun otherFailuresMapToNetwork() {
         assertEquals(
             AppError.Network,
-            liveErrorOf(FirebaseFirestoreException("off", Code.UNAVAILABLE))
+            liveErrorOf(FirebaseFirestoreException("off", Code.UNAVAILABLE)),
         )
         assertEquals(AppError.Network, liveErrorOf(java.io.IOException()))
     }

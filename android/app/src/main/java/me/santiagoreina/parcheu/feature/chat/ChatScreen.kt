@@ -45,7 +45,7 @@ data class ChatActions(
     val onRetryLive: () -> Unit = {},
     val onPrivacy: () -> Unit = {},
     val onDismissConsent: () -> Unit = {},
-    val onRetryLoad: () -> Unit = {}
+    val onRetryLoad: () -> Unit = {},
 )
 
 /** F9 · Chat en vivo. Sin estado propio salvo el menú: todo llega en [state]. */
@@ -73,7 +73,7 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
                         contentDescription = "Más opciones",
                         onClick = { menuOpen = true },
                         modifier = Modifier.testTag(ChatTags.MENU),
-                        enabled = header != null
+                        enabled = header != null,
                     )
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
@@ -84,7 +84,7 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
                                 menuOpen = false
                                 actions.onToggleMute()
                             },
-                            modifier = Modifier.testTag(ChatTags.MENU_MUTE)
+                            modifier = Modifier.testTag(ChatTags.MENU_MUTE),
                         )
                         DropdownMenuItem(
                             text = { Text("Reportar o bloquear") },
@@ -93,11 +93,11 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
                                 menuOpen = false
                                 actions.onReport()
                             },
-                            modifier = Modifier.testTag(ChatTags.MENU_REPORT)
+                            modifier = Modifier.testTag(ChatTags.MENU_REPORT),
                         )
                     }
                 }
-            }
+            },
         )
         if (state.consentBannerVisible && header != null) {
             ConsentBanner(onSettings = actions.onPrivacy, onDismiss = actions.onDismissConsent)
@@ -111,7 +111,7 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.mu,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
             )
         } else {
             ChatInputBar(
@@ -120,7 +120,7 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
                 onSend = actions.onSend,
                 canSend = state.canSend,
                 enabled = true,
-                placeholder = "Escribe un mensaje"
+                placeholder = "Escribe un mensaje",
             )
         }
     }
@@ -140,7 +140,7 @@ private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modi
                 text = "Aún no hay mensajes. Rompe el hielo.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = ParcheUTheme.colors.mu,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
         return
@@ -149,7 +149,7 @@ private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modi
         state = listState,
         modifier = modifier.fillMaxWidth().testTag(ChatTags.MESSAGES),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(state.messages, key = { it.key }) { message ->
             if (message.system) {
@@ -167,12 +167,12 @@ private fun InlineError(error: AppError, onRetry: () -> Unit) {
         Text(
             text = errorMessage(error),
             style = MaterialTheme.typography.bodySmall,
-            color = ParcheUTheme.colors.coralt
+            color = ParcheUTheme.colors.coralt,
         )
         ParcheUTextButton(
             text = "Reintentar",
             onClick = onRetry,
-            size = me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize.Small
+            size = me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize.Small,
         )
     }
 }

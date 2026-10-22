@@ -49,8 +49,8 @@ class ChatScreenshotTest(private val dark: Boolean) {
             filePath = "src/test/screenshots/chat/${name}_$theme.png",
             roborazziOptions =
             RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
-            )
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
+            ),
         )
     }
 
@@ -63,26 +63,20 @@ class ChatScreenshotTest(private val dark: Boolean) {
             "u2",
             Mode.ESTUDIO,
             muted = false,
-            closed = false
+            closed = false,
         )
 
     private val at = Instant.fromEpochSeconds(1_761_130_000)
 
-    private fun chat(
-        id: String,
-        name: String,
-        initials: String,
-        text: String,
-        unread: Int,
-        hidden: Boolean = false
-    ) = ChatSummary(
-        id = id,
-        type = ChatType.DIRECT,
-        mode = Mode.AMISTAD,
-        other = PersonRef(id = "u-$id", label = name, initials = initials),
-        lastMessage = MessageDto("m-$id", null, text, at, hidden),
-        unread = unread
-    )
+    private fun chat(id: String, name: String, initials: String, text: String, unread: Int, hidden: Boolean = false) =
+        ChatSummary(
+            id = id,
+            type = ChatType.DIRECT,
+            mode = Mode.AMISTAD,
+            other = PersonRef(id = "u-$id", label = name, initials = initials),
+            lastMessage = MessageDto("m-$id", null, text, at, hidden),
+            unread = unread,
+        )
 
     @Test
     fun f9Chat() = capture("f9_chat") {
@@ -96,38 +90,38 @@ class ChatScreenshotTest(private val dark: Boolean) {
                         "1",
                         "Hola Laura, vi que también estudias Cálculo II",
                         mine = true,
-                        createdAt = at
+                        createdAt = at,
                     ),
                     ChatMessageUi(
                         "2",
                         "¡Hola! Sí, ¿armamos grupo para el parcial?",
                         mine = false,
-                        createdAt = at
+                        createdAt = at,
                     ),
                     ChatMessageUi(
                         "3",
                         "mensaje moderado",
                         mine = false,
                         hidden = true,
-                        createdAt = at
+                        createdAt = at,
                     ),
                     ChatMessageUi(
                         "4",
                         "Dale, el jueves en la biblioteca",
                         mine = true,
-                        createdAt = at
+                        createdAt = at,
                     ),
                     ChatMessageUi(
                         "5",
                         "No llegó",
                         mine = true,
-                        status = MessageStatus.Failed(AppError.Network)
+                        status = MessageStatus.Failed(AppError.Network),
                     ),
-                    ChatMessageUi("6", "Enviándose", mine = true, status = MessageStatus.Pending)
+                    ChatMessageUi("6", "Enviándose", mine = true, status = MessageStatus.Pending),
                 ),
-                draft = "Perfecto"
+                draft = "Perfecto",
             ),
-            ChatActions()
+            ChatActions(),
         )
     }
 
@@ -138,11 +132,11 @@ class ChatScreenshotTest(private val dark: Boolean) {
                 listOf(
                     chat("1", "Laura Pinzón", "LP", "¿Armamos grupo para el parcial?", unread = 2),
                     chat("2", "Camilo Rojas", "CR", "texto moderado", unread = 0, hidden = true),
-                    chat("3", "Valentina Gómez", "VG", "Nos vemos mañana", unread = 0)
-                )
+                    chat("3", "Valentina Gómez", "VG", "Nos vemos mañana", unread = 0),
+                ),
             ),
             onOpenChat = {},
-            onRetry = {}
+            onRetry = {},
         )
     }
 

@@ -47,7 +47,7 @@ fun ChatListScreen(
     state: UiState<List<ChatSummary>>,
     onOpenChat: (String) -> Unit,
     onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val colors = ParcheUTheme.colors
     Column(modifier = modifier.fillMaxSize().background(colors.bg).testTag(ChatTags.LIST_ROOT)) {
@@ -61,13 +61,13 @@ fun ChatListScreen(
                 CenteredMessage(
                     title = "Aún no tienes chats",
                     body = "Cuando conectes con alguien, el chat aparece aquí.",
-                    modifier = Modifier.testTag(ChatTags.LIST_EMPTY)
+                    modifier = Modifier.testTag(ChatTags.LIST_EMPTY),
                 )
             is UiState.Error ->
                 CenteredMessage(
                     title = "No pudimos cargar tus chats",
                     body = errorMessage(state.error),
-                    modifier = Modifier.testTag(ChatTags.LIST_ERROR)
+                    modifier = Modifier.testTag(ChatTags.LIST_ERROR),
                 ) {
                     PrimaryButton(text = "Reintentar", onClick = onRetry)
                 }
@@ -86,24 +86,24 @@ private fun CenteredMessage(
     title: String,
     body: String,
     modifier: Modifier = Modifier,
-    action: @Composable () -> Unit = {}
+    action: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             color = ParcheUTheme.colors.tx,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         Text(
             text = body,
             style = MaterialTheme.typography.bodyMedium,
             color = ParcheUTheme.colors.mu,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         action()
     }
@@ -131,7 +131,7 @@ private fun ChatRow(chat: ChatSummary, onClick: () -> Unit) {
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ChatAvatar(chat.other.initials, chat.other.label, anonymous, size = 48.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -142,13 +142,13 @@ private fun ChatRow(chat: ChatSummary, onClick: () -> Unit) {
                     color = colors.tx,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 if (time.isNotEmpty()) {
                     Text(
                         text = time,
                         style = MaterialTheme.typography.labelSmall,
-                        color = colors.mu
+                        color = colors.mu,
                     )
                 }
             }
@@ -161,14 +161,14 @@ private fun ChatRow(chat: ChatSummary, onClick: () -> Unit) {
                     color = if (unread) colors.tx else colors.mu,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 if (chat.muted) {
                     Text(
                         text = "Silenciado",
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.mu,
-                        modifier = Modifier.padding(start = 8.dp)
+                        modifier = Modifier.padding(start = 8.dp),
                     )
                 }
                 if (unread) {
@@ -180,13 +180,13 @@ private fun ChatRow(chat: ChatSummary, onClick: () -> Unit) {
                             .clip(CircleShape)
                             .background(colors.primary, CircleShape)
                             .semantics { contentDescription = "${chat.unread} sin leer" },
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = if (chat.unread > 99) "99+" else chat.unread.toString(),
                             style = MaterialTheme.typography.labelSmall,
                             color = colors.onPrimary,
-                            modifier = Modifier.padding(horizontal = 6.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp),
                         )
                     }
                 }
@@ -194,7 +194,7 @@ private fun ChatRow(chat: ChatSummary, onClick: () -> Unit) {
             Text(
                 text = modeLabel(chat.mode),
                 style = MaterialTheme.typography.labelSmall,
-                color = modeColor(chat.mode)
+                color = modeColor(chat.mode),
             )
         }
     }
