@@ -44,6 +44,10 @@ class FakeBillingRepository(
         return restoreResult
     }
 
+    override suspend fun syncPurchases() {
+        calls += "sync"
+    }
+
     override suspend fun refreshEntitlement(): ApiResult<EntitlementDto> {
         calls += "entitlement"
         (entitlementResult as? ApiResult.Success)?.let { entitlementFlow.value = it.value }

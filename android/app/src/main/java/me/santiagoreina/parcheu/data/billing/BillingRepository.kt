@@ -87,6 +87,15 @@ interface BillingRepository {
     /** `queryPurchasesAsync` y `verify` por cada compra activa; luego refresca [entitlement]. */
     suspend fun restorePurchases(): RestoreResult
 
+    /**
+     * Concilia compras pagadas que la API aún no reconoció (PENDING resuelta con la app cerrada, o
+     * `verify` caído por red o 5xx): `queryPurchasesAsync` y `verify` de cada `parcheu_plus` PURCHASED sin
+     * reconocer; si no hay ninguna, refresca [entitlement]. No toca [purchaseState] salvo para pasar de
+     * [PurchaseState.VerificationPending] a [PurchaseState.Completed]. Nunca lanza; sin sesión o sin Play
+     * no hace nada. Se llama al volver la app a primer plano con sesión (`BillingReconciler`).
+     */
+    suspend fun syncPurchases()
+
     /** `GET /v1/billing/entitlement`. */
     suspend fun refreshEntitlement(): ApiResult<EntitlementDto>
 

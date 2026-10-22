@@ -38,6 +38,9 @@ class BillingRepositoryImpl(
     /** Serializa las verificaciones (el listener y "restaurar" pueden coincidir). */
     private val verifyMutex = Mutex()
 
+    /** Evita dos conciliaciones solapadas (p. ej. dos ON_START seguidos). */
+    private val syncMutex = Mutex()
+
     init {
         scope.launch { client.purchaseUpdates.collect { onPurchasesUpdated(it) } }
     }
@@ -98,6 +101,34 @@ class BillingRepositoryImpl(
         return RestoreResult.Restored(entitlement, verified)
     }
 
+    override suspend fun syncPurchases() {
+        syncMutex.withLock {
+            if (!provider.connect()) return
+            val result = client.querySubscriptionPurchases()
+            if (result.billingResult.responseCode != BillingResponseCode.OK) return
+            // Solo las pagadas y sin reconocer: las reconocidas ya pasaron por el servidor (ADR-0013).
+            val unrecognized =
+                result.purchasesList.filter {
+                    PlusProduct.PRODUCT_ID in it.products &&
+                        it.purchaseState == Purchase.PurchaseState.PURCHASED &&
+                        !it.isAcknowledged
+                }
+            var latest: EntitlementDto? = null
+            for (purchase in unrecognized) {
+                val outcome = verify(purchase)
+                if (outcome is ApiResult.Success) latest = outcome.value
+            }
+            if (latest != null) {
+                // Una compra que esperaba confirmación (efectivo o red caída) ya quedó reconocida.
+                if (_purchaseState.value == PurchaseState.VerificationPending) {
+                    _purchaseState.value = PurchaseState.Completed(latest)
+                }
+            } else if (unrecognized.isEmpty()) {
+                refreshEntitlement()
+            }
+        }
+    }
+
     override suspend fun refreshEntitlement(): ApiResult<EntitlementDto> =
         apiCall(errorMapper) { api.entitlement() }.also {
             if (it is ApiResult.Success) _entitlement.value = it.value
@@ -154,13 +185,14 @@ class BillingRepositoryImpl(
         _purchaseState.value =
             when (val outcome = verify(purchase)) {
                 is ApiResult.Success -> PurchaseState.Completed(outcome.value)
-                // Pagada pero sin verificar por red: no es un error para la persona; se reintenta al
-                // restaurar (Play la reembolsa a los 3 días si nadie la reconoce, ADR-0013).
+                // Pagada pero sin verificar: solo el rechazo definitivo de la API es un error para la
+                // persona. Red, 5xx y demás quedan pendientes y los reintenta syncPurchases (Play la
+                // reembolsa a los 3 días si nadie la reconoce, ADR-0013).
                 is ApiResult.Failure ->
-                    if (outcome.error == AppError.Network) {
-                        PurchaseState.VerificationPending
-                    } else {
+                    if (outcome.error.isDefinitiveRejection()) {
                         PurchaseState.Failed(PurchaseFailure.Verification(outcome.error))
+                    } else {
+                        PurchaseState.VerificationPending
                     }
             }
     }
@@ -172,6 +204,10 @@ class BillingRepositoryImpl(
                 api.verify(VerifyPurchase(purchase.purchaseToken, PlusProduct.PRODUCT_ID))
             }.also { if (it is ApiResult.Success) _entitlement.value = it.value }
         }
+
+    /** FORBIDDEN (compra de otra cuenta) y VALIDATION no mejoran al reintentar. */
+    private fun AppError.isDefinitiveRejection() =
+        this is AppError.Forbidden || this is AppError.Validation
 
     private fun fail(failure: PurchaseFailure) {
         _purchaseState.value = PurchaseState.Failed(failure)

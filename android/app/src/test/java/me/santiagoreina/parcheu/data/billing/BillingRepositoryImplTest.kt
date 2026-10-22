@@ -290,4 +290,111 @@ class BillingRepositoryImplTest {
         h.repository.clear()
         assertEquals(null, h.repository.entitlement.value)
     }
+
+    @Test
+    fun serverErrorOnVerifyKeepsAPaidPurchasePending() = runTest {
+        val api =
+            FakeBillingApi().apply {
+                verifyFailure =
+                    HttpException(Response.error<Any>(503, "".toResponseBody()))
+            }
+        val h = harness(api = api)
+
+        h.client.emitPurchasesUpdate(BillingResponseCode.OK, listOf(purchase("tok-503")))
+        runCurrent()
+
+        assertEquals(PurchaseState.VerificationPending, h.repository.purchaseState.value)
+    }
+
+    @Test
+    fun validationRejectionIsDefinitive() = runTest {
+        val api =
+            FakeBillingApi().apply {
+                verifyFailure =
+                    HttpException(
+                        Response.error<Any>(
+                            400,
+                            """{"code":"VALIDATION","message":"token inválido"}""".toResponseBody()
+                        )
+                    )
+            }
+        val h = harness(api = api)
+
+        h.client.emitPurchasesUpdate(BillingResponseCode.OK, listOf(purchase("tok-1")))
+        runCurrent()
+
+        assertEquals(
+            PurchaseState.Failed(
+                PurchaseFailure.Verification(AppError.Validation("token inválido"))
+            ),
+            h.repository.purchaseState.value
+        )
+    }
+
+    @Test
+    fun syncVerifiesAPendingPurchaseResolvedWhileTheAppWasClosed() = runTest {
+        val h = harness()
+        // La compra era PENDING; Play la confirmó sin app abierta y ahora llega como PURCHASED.
+        h.client.activePurchases = listOf(purchase("tok-cash"))
+
+        h.repository.syncPurchases()
+
+        assertEquals(listOf("tok-cash"), h.api.verifyCalls.map { it.purchaseToken })
+        assertEquals(PLUS_ACTIVE, h.repository.entitlement.value)
+        // Sin compra en curso, el estado de compra no se toca.
+        assertEquals(PurchaseState.Idle, h.repository.purchaseState.value)
+    }
+
+    @Test
+    fun syncRetriesAVerificationThatFailedOnTheNetwork() = runTest {
+        val api = FakeBillingApi.offline()
+        val h = harness(api = api)
+        h.client.emitPurchasesUpdate(BillingResponseCode.OK, listOf(purchase("tok-net")))
+        runCurrent()
+        assertEquals(PurchaseState.VerificationPending, h.repository.purchaseState.value)
+        h.client.activePurchases = listOf(purchase("tok-net"))
+        api.verifyFailure = null
+
+        h.repository.syncPurchases()
+
+        assertEquals(listOf("tok-net", "tok-net"), h.api.verifyCalls.map { it.purchaseToken })
+        assertEquals(PurchaseState.Completed(PLUS_ACTIVE), h.repository.purchaseState.value)
+        assertEquals(PLUS_ACTIVE, h.repository.entitlement.value)
+    }
+
+    @Test
+    fun syncSkipsAcknowledgedPendingAndOtherProductPurchases() = runTest {
+        val h = harness()
+        h.client.activePurchases =
+            listOf(
+                purchase("tok-ack", acknowledged = true),
+                purchase("tok-pending", pending = true),
+                purchase("tok-otro", productId = "otro_producto")
+            )
+
+        h.repository.syncPurchases()
+
+        assertTrue(h.api.verifyCalls.isEmpty())
+        // Nada por reconocer: solo se refresca el derecho desde el servidor.
+        assertEquals(1, h.api.entitlementCalls)
+        assertEquals(PurchaseState.Idle, h.repository.purchaseState.value)
+    }
+
+    @Test
+    fun syncIsSilentWhenPlayIsUnavailableOrFailsAndWhenVerifyFails() = runTest {
+        val unavailable =
+            harness(client = FakeBillingClient(listOf(BillingResponseCode.BILLING_UNAVAILABLE)))
+        unavailable.repository.syncPurchases()
+        assertEquals(0, unavailable.client.purchasesQueryCalls)
+
+        val queryFails = harness()
+        queryFails.client.purchasesQueryResponse = BillingResponseCode.ERROR
+        queryFails.repository.syncPurchases()
+        assertTrue(queryFails.api.verifyCalls.isEmpty())
+
+        val offline = harness(api = FakeBillingApi.offline())
+        offline.client.activePurchases = listOf(purchase("tok-1"))
+        offline.repository.syncPurchases()
+        assertEquals(PurchaseState.Idle, offline.repository.purchaseState.value)
+    }
 }
