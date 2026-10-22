@@ -66,7 +66,10 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
             .filterNot { it.route::class in implementedRoutes }
             .map { arrayOf<Any>(it) }
 
-        /** Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest). */
-        val implementedRoutes = setOf(Splash::class, Onboarding::class)
+        /**
+         * Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest), B0 y el bloqueo por edad
+         * (E2.6, BasicProfileScreenTest y BasicProfileViewModelTest).
+         */
+        val implementedRoutes = setOf(Splash::class, Onboarding::class, BasicProfile::class, Underage::class)
     }
 }
