@@ -50,7 +50,7 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
         // Serializa la búsqueda y el alta del mismo par y modo hasta el fin de la transacción.
         // La clave solo contiene UUIDs y el nombre del enum: no hay entrada del usuario en el SQL.
         exec("select pg_advisory_xact_lock(hashtextextended('chat-direct:$low:$high:${mode.name}', 0))")
-        val existing = findDirect(low, high, mode)
+        val existing = findDirectId(low, high, mode)
         if (existing != null) {
             // Un DIRECT cerrado por un bloqueo ya levantado se reabre (el servicio ya descartó un bloqueo vigente).
             Chats.update({ (Chats.id eq existing) and (Chats.status eq ChatStatus.CLOSED) }) { it[Chats.status] = ChatStatus.OPEN }
@@ -58,6 +58,11 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
         } else {
             CreatedChat(insertChat(NewChat(ChatType.DIRECT, mode, listOf(a, b), now)), created = true)
         }
+    }
+
+    override suspend fun findDirect(a: UUID, b: UUID, mode: Mode): ChatRecord? = tx {
+        val (low, high) = if (a.toString() < b.toString()) a to b else b to a
+        findDirectId(low, high, mode)?.let { loadChat(it) }
     }
 
     override suspend fun create(chat: NewChat): ChatRecord = tx { insertChat(chat) }
@@ -172,7 +177,7 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
 
     // --- internos (dentro de una transacción) ------------------------------------------------
 
-    private fun findDirect(low: UUID, high: UUID, mode: Mode): UUID? {
+    private fun findDirectId(low: UUID, high: UUID, mode: Mode): UUID? {
         val candidates = Chats.join(ChatMembers, JoinType.INNER, Chats.id, ChatMembers.chatId)
             .selectAll()
             .where { (Chats.type eq ChatType.DIRECT) and (Chats.mode eq mode) and (ChatMembers.userId eq low) }

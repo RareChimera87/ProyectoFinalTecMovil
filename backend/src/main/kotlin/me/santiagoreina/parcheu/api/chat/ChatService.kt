@@ -56,6 +56,27 @@ class ChatService(
         return result.chat
     }
 
+    /** Chat DIRECT existente de [a] y [b] en [mode], solo lectura: no lo crea, no lo reabre y no toca Firestore. */
+    suspend fun findDirect(a: UUID, b: UUID, mode: Mode): ChatRecord? = repo.findDirect(a, b, mode)
+
+    /**
+     * Como [createDirect], pero un fallo del espejo de Firestore no se propaga: el chat ya existe en Postgres
+     * (fuente de verdad) y aparece en `GET /v1/chats`. Lo usa la decisión mutua para no perder los avisos.
+     */
+    suspend fun createDirectTolerant(a: UUID, b: UUID, mode: Mode): ChatRecord {
+        if (a == b) throw ValidationFailed("Un chat necesita dos personas distintas")
+        if (repo.blockedBetween(a, b)) throw Blocked()
+        val result = repo.getOrCreateDirect(a, b, mode, clock.instant())
+        try {
+            mirror.upsertChat(result.chat.toDoc())
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn("No se pudo replicar el chat {} en Firestore: {}", result.chat.id, e.message)
+        }
+        return result.chat
+    }
+
     /** Chat SCENARIO (F3) del escenario [scenarioId] que termina en [endsAt]. */
     suspend fun createScenario(a: UUID, b: UUID, mode: Mode, scenarioId: Int, endsAt: Instant): ChatRecord {
         if (a == b) throw ValidationFailed("Un chat necesita dos personas distintas")

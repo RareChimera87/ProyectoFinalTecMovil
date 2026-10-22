@@ -286,7 +286,6 @@ class ResultsViewModel(private val simulationId: String, private val repository:
             false -> DecisionState.DECLINED
             true -> when {
                 report.chatId != null || report.otherName != null -> DecisionState.CONNECTED
-                report.otherDecided -> DecisionState.DECLINED
                 else -> DecisionState.WAITING
             }
         }

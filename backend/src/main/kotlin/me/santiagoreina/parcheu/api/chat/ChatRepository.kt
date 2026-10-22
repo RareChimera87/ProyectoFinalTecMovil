@@ -18,6 +18,9 @@ interface ChatRepository {
      */
     suspend fun getOrCreateDirect(a: UUID, b: UUID, mode: Mode, now: Instant): CreatedChat
 
+    /** Chat DIRECT existente de [a] y [b] en [mode]; solo lectura (no crea ni reabre). */
+    suspend fun findDirect(a: UUID, b: UUID, mode: Mode): ChatRecord?
+
     /** Crea un chat (SCENARIO, o DIRECT sin la búsqueda previa) con sus miembros. */
     suspend fun create(chat: NewChat): ChatRecord
 

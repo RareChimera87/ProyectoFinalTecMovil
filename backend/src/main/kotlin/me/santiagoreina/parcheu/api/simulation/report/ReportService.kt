@@ -35,7 +35,7 @@ import java.util.UUID
  * - **Desbloqueo:** gasta el informe completo del mes (`usage_events` FULL_REPORT con
  *   `ref_id = report:<simulación>:<usuario>`) y queda en `report_unlocks`. Plus no gasta nada.
  * - **Decisión:** se guarda una vez por persona. Si las dos conectan: arista CONNECTED, chat DIRECT con
- *   [ChatService] y aviso a ambas; el nombre se revela solo entonces. "Ahora no" no avisa a nadie.
+ *   [ChatService] y aviso a ambas; el nombre se revela solo entonces. "Ahora no" no avisa a nadie ni se revela: quien conecta después ve WAITING.
  */
 class ReportService(
     private val simulations: SimulationRepository,
@@ -83,7 +83,15 @@ class ReportService(
         val other = record.otherThan(viewer)
         if (simulations.blockedEitherWay(viewer, other)) throw Blocked()
         val saved = when (val outcome = repo.decide(record.id, viewer, body.connect, clock.instant())) {
-            DecideOutcome.AlreadyDecided -> throw Conflict("Ya decidiste sobre esta simulación")
+            DecideOutcome.AlreadyDecided -> {
+                // Reintento de quien completó el par cuando la conexión falló a medias (arista/chat/avisos):
+                // si todavía no hay chat DIRECT, se repara de forma idempotente en vez de responder 409.
+                val decisions = repo.decisions(record.id)
+                val incomplete = body.connect && decisions[viewer] == true && decisions[other] == true &&
+                    chat.findDirect(viewer, other, record.mode) == null
+                if (!incomplete) throw Conflict("Ya decidiste sobre esta simulación")
+                return DecisionResult(DecisionStatus.CONNECTED, connect(record, viewer, other).toString())
+            }
             is DecideOutcome.Saved -> outcome.all
         }
         val otherChoice = saved[other]
@@ -97,7 +105,8 @@ class ReportService(
                 edges.apply(EdgeEvent.InterestShown(viewer, other, record.mode, EdgeSource.DECISION))
                 DecisionResult(DecisionStatus.WAITING)
             }
-            otherChoice == false -> DecisionResult(DecisionStatus.DECLINED)
+            // La otra persona dijo "Ahora no": no se revela. Quien conecta ve lo mismo que si nadie hubiera respondido.
+            otherChoice == false -> DecisionResult(DecisionStatus.WAITING)
             else -> {
                 // Solo la decisión que completa el par llega aquí (repo.decide las serializa): un único
                 // chat, una única arista CONNECTED y un único aviso por persona.
@@ -113,7 +122,7 @@ class ReportService(
 
     private suspend fun connect(record: SimulationRecord, viewer: UUID, other: UUID): UUID {
         edges.apply(EdgeEvent.Connected(viewer, other, record.mode, EdgeSource.DECISION))
-        val chat = chat.createDirect(viewer, other, record.mode)
+        val direct = chat.createDirectTolerant(viewer, other, record.mode)
         listOf(viewer, other).forEach { user ->
             try {
                 val name = people.present(user, record.otherThan(user)).takeIf { it.id != null }?.label
@@ -123,7 +132,7 @@ class ReportService(
                         kind = NotificationKinds.NEW_CONNECTION,
                         title = "¡Conectaron!",
                         body = name?.let { "Tú y $it quieren conectar. Ya pueden hablar." } ?: "Las dos personas quieren conectar. Ya pueden hablar.",
-                        route = "parcheu://chat/${chat.id}",
+                        route = "parcheu://chat/${direct.id}",
                         actorId = record.otherThan(user),
                     ),
                 )
@@ -134,7 +143,7 @@ class ReportService(
                 log.warn("No se pudo avisar la conexión de la simulación {} a {}: {}", record.id, user, e.message)
             }
         }
-        return chat.id
+        return direct.id
     }
 
     private suspend fun build(viewer: UUID, record: SimulationRecord, stored: StoredReport): ReportDto {
@@ -145,8 +154,8 @@ class ReportService(
         val mutual = mine == true && decisions[other] == true
         val otherName = if (mutual) people.present(viewer, other).takeIf { it.id != null }?.label else null
         val chatId = if (mutual && !simulations.blockedEitherWay(viewer, other)) {
-            // Idempotente: devuelve el chat que creó la decisión (o lo repara si faltara).
-            chat.createDirect(viewer, other, record.mode).id.toString()
+            // Solo lectura: GET no escribe en Postgres ni en Firestore. El chat lo crea la decisión.
+            chat.findDirect(viewer, other, record.mode)?.id?.toString()
         } else {
             null
         }
@@ -159,7 +168,8 @@ class ReportService(
             locked = !full,
             unlockAvailable = !full && canUnlock(viewer),
             myDecision = mine,
-            otherDecided = other in decisions,
+            // Solo con conexión mutua: un "Ahora no" ajeno nunca se revela (y saber que decidió es de Plus, E6.6).
+            otherDecided = mutual,
             otherName = otherName,
             reasonsCount = stored.reasons.size,
             frictionsCount = stored.frictions.size,

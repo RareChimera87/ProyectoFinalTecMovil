@@ -31,7 +31,12 @@ import kotlinx.serialization.json.jsonObject
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TASKS_ACCOUNT
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.chat.ChatDoc
+import me.santiagoreina.parcheu.api.chat.ChatMirror
+import me.santiagoreina.parcheu.api.chat.ChatRepository
+import me.santiagoreina.parcheu.api.chat.CreatedChat
 import me.santiagoreina.parcheu.api.chat.InMemoryChatRepository
+import me.santiagoreina.parcheu.api.chat.MessageDoc
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.identity.IdentityService
@@ -66,7 +71,14 @@ import java.util.UUID
 class ReportApiTest : FunSpec({
     val uids = listOf("ana", "beto", "caro")
 
+    class FlakyMirror(var failing: Boolean = false) : ChatMirror {
+        override suspend fun upsertChat(doc: ChatDoc) { if (failing) error("Firestore no disponible") }
+        override suspend fun upsertMessage(chatId: UUID, doc: MessageDoc) { if (failing) error("Firestore no disponible") }
+    }
+
     class World {
+        val mirror = FlakyMirror()
+        var failCreate = false
         val identity = InMemoryIdentityRepository().also { repo -> uids.forEach { repo.seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val sim = SimFixture()
         val ids = uids.associateWith { uid -> sim.person(uid, id = identity.user(uid).id) }
@@ -74,7 +86,13 @@ class ReportApiTest : FunSpec({
             ids.forEach { (uid, id) -> repo.addUser(PersonRow(id, uid, null, "UIS", Visibility.ANONYMOUS, false, null), uid) }
         }
         val push = FakeNotifier()
-        val chat = inMemoryChatModule(FIXED_CLOCK, sim.graph.policy, push, chatRepo)
+        private val flakyRepo = object : ChatRepository by chatRepo {
+            override suspend fun getOrCreateDirect(a: UUID, b: UUID, mode: Mode, now: java.time.Instant): CreatedChat {
+                if (failCreate) error("Postgres no disponible")
+                return chatRepo.getOrCreateDirect(a, b, mode, now)
+            }
+        }
+        val chat = inMemoryChatModule(FIXED_CLOCK, sim.graph.policy, push, flakyRepo, mirror)
         val module = inMemorySimulationModule(
             FIXED_CLOCK, sim.ai, sim.quota, sim.graph, sim.repo, sim.queue, sim.mirror, sim.notifier,
             chat = chat, push = push,
@@ -193,7 +211,7 @@ class ReportApiTest : FunSpec({
             waiting.myDecision shouldBe true
             waiting.otherName shouldBe null
             waiting.chatId shouldBe null
-            client.report("beto", id).body<ReportDto>().otherDecided shouldBe true
+            client.report("beto", id).body<ReportDto>().otherDecided shouldBe false
             w.push.sent.shouldBeEmpty()
 
             val result = client.decide("beto", id, connect = true).body<DecisionResult>()
@@ -221,16 +239,78 @@ class ReportApiTest : FunSpec({
         testApplication {
             val client = app(w)
             client.decide("ana", first, connect = false).body<DecisionResult>().status shouldBe DecisionStatus.DECLINED
-            client.decide("beto", first, connect = true).body<DecisionResult>().status shouldBe DecisionStatus.DECLINED
+            // Quien conecta después de un "Ahora no" no se entera: ve WAITING, en la decisión y en el informe.
+            client.decide("beto", first, connect = true).body<DecisionResult>().status shouldBe DecisionStatus.WAITING
+            val afterDecline = client.report("beto", first).body<ReportDto>()
+            afterDecline.otherDecided shouldBe false
+            afterDecline.myDecision shouldBe true
+            afterDecline.chatId shouldBe null
 
             client.decide("caro", second, connect = true).body<DecisionResult>().status shouldBe DecisionStatus.WAITING
             client.decide("ana", second, connect = false).body<DecisionResult>().status shouldBe DecisionStatus.DECLINED
+            // Caro conectó primero y Ana rechazó después: al reabrir sigue sin saberlo.
+            val reopened = client.report("caro", second).body<ReportDto>()
+            reopened.otherDecided shouldBe false
+            reopened.chatId shouldBe null
             // La arista PENDING vuelve a SIMULATED.
             w.sim.graphRepo.edge(w.id("ana"), w.id("caro"), Mode.AMISTAD)!!.state shouldBe EdgeState.SIMULATED
 
             w.push.sent.shouldBeEmpty()
             w.chatRepo.chatsOf(w.id("ana")).shouldBeEmpty()
             client.report("caro", second).body<ReportDto>().otherName shouldBe null
+        }
+    }
+
+    test("GET /report no escribe: con conexión mutua solo lee el chat y sobrevive a un Firestore caído") {
+        val w = World()
+        val id = w.done("ana", "beto")
+        testApplication {
+            val client = app(w)
+            client.decide("ana", id, connect = true)
+            val chatId = client.decide("beto", id, connect = true).body<DecisionResult>().chatId
+            w.mirror.failing = true
+            val dto = client.report("ana", id)
+            dto.status shouldBe HttpStatusCode.OK
+            dto.body<ReportDto>().chatId shouldBe chatId
+            // Si el chat no existiera, leer no lo crea.
+            w.failCreate = true
+            client.report("beto", id).status shouldBe HttpStatusCode.OK
+        }
+    }
+
+    test("si Firestore falla al conectar, la conexión se completa igual y los avisos salen") {
+        val w = World()
+        val id = w.done("ana", "beto")
+        w.mirror.failing = true
+        testApplication {
+            val client = app(w)
+            client.decide("ana", id, connect = true)
+            val result = client.decide("beto", id, connect = true)
+            result.status shouldBe HttpStatusCode.OK
+            result.body<DecisionResult>().status shouldBe DecisionStatus.CONNECTED
+            w.push.sent shouldHaveSize 2
+        }
+    }
+
+    test("si la conexión falla antes de crear el chat, repetir la decisión la repara en vez de dar 409") {
+        val w = World()
+        val id = w.done("ana", "beto")
+        testApplication {
+            val client = app(w)
+            client.decide("ana", id, connect = true)
+            w.failCreate = true
+            client.decide("beto", id, connect = true).status shouldBe HttpStatusCode.InternalServerError
+            w.push.sent.shouldBeEmpty()
+            w.failCreate = false
+            val retry = client.decide("beto", id, connect = true)
+            retry.status shouldBe HttpStatusCode.OK
+            val result = retry.body<DecisionResult>()
+            result.status shouldBe DecisionStatus.CONNECTED
+            w.push.sent shouldHaveSize 2
+            // Ya reparado, una tercera vez sí es 409 y no reenvía avisos.
+            client.decide("beto", id, connect = true).status shouldBe HttpStatusCode.Conflict
+            w.push.sent shouldHaveSize 2
+            w.sim.graphRepo.edge(w.id("ana"), w.id("beto"), Mode.AMISTAD)!!.state shouldBe EdgeState.CONNECTED
         }
     }
 

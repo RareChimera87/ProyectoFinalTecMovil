@@ -141,6 +141,12 @@ class ResultsViewModelTest {
     }
 
     @Test
+    fun otherDecidedAloneNeverShowsDeclined() = runTest {
+        repository.reportResult = ApiResult.Success(lockedReport().copy(myDecision = true, otherDecided = true))
+        assertEquals(DecisionState.WAITING, viewModel().content().decision)
+    }
+
+    @Test
     fun conflictReloadsTheRealDecision() = runTest {
         repository.decideResult = ApiResult.Failure(AppError.Conflict)
         val viewModel = viewModel()
