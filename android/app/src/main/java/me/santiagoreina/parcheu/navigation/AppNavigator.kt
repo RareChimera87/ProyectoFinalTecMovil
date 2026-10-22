@@ -1,6 +1,5 @@
 package me.santiagoreina.parcheu.navigation
 
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 
 /**
@@ -20,7 +19,7 @@ interface AppNavigator {
     /** Vuelve atrás; `false` si no había adónde volver. */
     fun back(): Boolean
 
-    /** `true` si hay una pantalla debajo de la actual. */
+    /** `true` si hay una pantalla debajo y la actual no es una raíz de la NavBar. */
     fun canGoBack(): Boolean
 }
 
@@ -31,7 +30,8 @@ class NavControllerNavigator(private val navController: NavHostController) : App
 
     override fun navigateToTopLevel(route: AppRoute) {
         navController.navigate(route) {
-            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            // Home es la raíz real tras replaceAll; Splash ya no está en la pila y Navigation ignoraría el popUpTo.
+            popUpTo<Home> { saveState = true }
             launchSingleTop = true
             restoreState = true
         }
@@ -46,5 +46,7 @@ class NavControllerNavigator(private val navController: NavHostController) : App
 
     override fun back(): Boolean = navController.popBackStack()
 
-    override fun canGoBack(): Boolean = navController.previousBackStackEntry != null
+    // Las raíces de la NavBar nunca muestran "Volver", aunque Home quede debajo de ellas.
+    override fun canGoBack(): Boolean = navController.previousBackStackEntry != null &&
+        !navController.currentDestination.isTopLevel()
 }

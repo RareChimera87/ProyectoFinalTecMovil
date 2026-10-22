@@ -17,11 +17,14 @@ class TokenAuthenticatorTest {
     private class CountingTokenProvider : TokenProvider {
         var refreshes = 0
 
-        override suspend fun currentToken(): String = "viejo"
+        @Volatile private var current = "viejo"
+
+        override suspend fun currentToken(): String = current
 
         override suspend fun refreshToken(): String {
             refreshes++
-            return "nuevo-$refreshes"
+            current = "nuevo-$refreshes"
+            return current
         }
     }
 
@@ -31,7 +34,7 @@ class TokenAuthenticatorTest {
     @Before
     fun setUp() {
         server.start()
-        client = createOkHttpClient(tokens)
+        client = createOkHttpClient(tokens, server.hostName)
     }
 
     @After
@@ -77,11 +80,53 @@ class TokenAuthenticatorTest {
 
     @Test
     fun withoutSessionNoAuthorizationHeaderIsSent() {
-        val anonymous = createOkHttpClient(NoSessionTokenProvider)
+        val anonymous = createOkHttpClient(NoSessionTokenProvider, server.hostName)
         server.enqueue(MockResponse(code = 200))
 
         anonymous.newCall(Request.Builder().url(server.url("/v1/health")).build()).execute().close()
 
         assertNull(server.takeRequest(1, TimeUnit.SECONDS)?.headers?.get("Authorization"))
+    }
+
+    @Test
+    fun foreignHostNeverGetsTokenNorRefresh() {
+        val other = MockWebServer()
+        other.start()
+        try {
+            // El host de la API es otro: este servidor es un tercero (p. ej. fotos de Google).
+            val apiOnly = createOkHttpClient(tokens, "api.parcheu.test")
+            other.enqueue(MockResponse(code = 401))
+
+            val response =
+                apiOnly.newCall(Request.Builder().url(other.url("/foto.jpg")).build()).execute()
+
+            assertEquals(401, response.code)
+            assertEquals(0, tokens.refreshes)
+            assertEquals(1, other.requestCount)
+            assertNull(other.takeRequest(1, TimeUnit.SECONDS)?.headers?.get("Authorization"))
+        } finally {
+            other.close()
+        }
+    }
+
+    @Test
+    fun concurrent401sShareASingleRefresh() {
+        server.dispatcher =
+            object : mockwebserver3.Dispatcher() {
+                override fun dispatch(request: mockwebserver3.RecordedRequest) =
+                    if (request.headers["Authorization"] == "Bearer viejo") {
+                        MockResponse(code = 401)
+                    } else {
+                        MockResponse(code = 200)
+                    }
+            }
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
+        try {
+            val codes = (1..8).map { pool.submit<Int> { get().use { it.code } } }.map { it.get() }
+            assertEquals(List(8) { 200 }, codes)
+            assertEquals(1, tokens.refreshes)
+        } finally {
+            pool.shutdownNow()
+        }
     }
 }
