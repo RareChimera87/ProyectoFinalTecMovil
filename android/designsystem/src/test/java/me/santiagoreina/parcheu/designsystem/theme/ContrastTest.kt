@@ -31,7 +31,7 @@ class ContrastTest {
                 "oscuro" to DarkParcheUColors,
                 "claro" to LightParcheUColors
             ).flatMap { (theme, colors) ->
-                colors.declaredTextPairs()
+                (colors.declaredTextPairs() + colors.declaredSchemeTextPairs())
                     .map { pair ->
                         Triple(theme, pair, contrastRatio(pair.foreground, pair.background))
                     }
@@ -69,5 +69,40 @@ class ContrastTest {
         assertEquals(DarkParcheUColors.coralt, DarkParcheUColors.error)
         assertEquals(LightParcheUColors.coralt, LightParcheUColors.error)
         assertEquals(LightParcheUColors.error, LightParcheUColors.toColorScheme().error)
+    }
+
+    @Test
+    fun snackbarActionPassesAaInBothThemes() {
+        for (colors in listOf(DarkParcheUColors, LightParcheUColors)) {
+            val scheme = colors.toColorScheme()
+            val action = contrastRatio(scheme.inversePrimary, scheme.inverseSurface)
+            assertTrue("acción de Snackbar = $action", action >= Wcag.AA_NORMAL_TEXT)
+        }
+        assertEquals(Color(0xFF5533E8), DarkParcheUColors.toColorScheme().inversePrimary)
+        assertEquals(Color(0xFFB6A6FF), LightParcheUColors.toColorScheme().inversePrimary)
+    }
+
+    /** primary es solo relleno: como texto falla AA, lo que justifica que :designsystem use prt. */
+    @Test
+    fun primaryFailsAsTextOnDarkContainerSoItIsFillOnly() {
+        val onS2 = contrastRatio(DarkParcheUColors.primary, DarkParcheUColors.s2)
+        assertTrue("primary/s2 oscuro = $onS2", onS2 < Wcag.AA_NORMAL_TEXT)
+        assertTrue(
+            contrastRatio(DarkParcheUColors.onPrimary, DarkParcheUColors.primary) >=
+                Wcag.AA_NORMAL_TEXT
+        )
+    }
+
+    @Test
+    fun designsystemSourcesNeverUsePrimaryAsTextColor() {
+        val root = java.io.File("src/main/java")
+        val forbidden =
+            Regex("""(contentColor|color|textColor)\s*=\s*[\w.]*colorScheme\.primary\b""")
+        val offenders =
+            root.walkTopDown().filter { it.extension == "kt" }.flatMap { f ->
+                f.readLines().withIndex().filter { forbidden.containsMatchIn(it.value) }
+                    .map { "${f.name}:${it.index + 1}" }
+            }.toList()
+        assertTrue("primary como texto en: $offenders", offenders.isEmpty())
     }
 }

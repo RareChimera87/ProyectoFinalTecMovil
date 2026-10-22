@@ -226,7 +226,16 @@ val LightParcheUColors =
         celebrationGradient = CelebrationGradient
     )
 
-/** Esquema M3 a partir de los tokens. Sin color dinámico: la marca no cambia con el fondo de pantalla. */
+/**
+ * Esquema M3 a partir de los tokens. Sin color dinámico: la marca no cambia con el fondo de pantalla.
+ *
+ * Advertencia sobre `primary`: es el violeta #6D4AFF y solo sirve como RELLENO (blanco encima = 5,15:1).
+ * Como TEXTO no llega a AA (2,80:1 sobre s2 en oscuro). Los componentes M3 por defecto lo usan como
+ * contentColor (TextButton, OutlinedButton, etiqueta enfocada de TextField, botones de AlertDialog,
+ * tabs), así que en :designsystem esos componentes deben fijar `ParcheUTheme.colors.prt` como color de
+ * contenido (E1.3). `ParcheUTheme.colors.prt` es el color de texto de marca; un test bloquea el uso de
+ * `colorScheme.primary` como color de texto en :designsystem.
+ */
 fun ParcheUColors.toColorScheme(): ColorScheme {
     val base = if (isDark) darkColorScheme() else lightColorScheme()
     return base.copy(
@@ -234,7 +243,10 @@ fun ParcheUColors.toColorScheme(): ColorScheme {
         onPrimary = onPrimary,
         primaryContainer = prc,
         onPrimaryContainer = onprc,
-        inversePrimary = prt,
+        // Snackbar pinta su acción con inversePrimary sobre inverseSurface (tx): debe ser el prt del tema
+        // opuesto (#5533E8 en oscuro, #B6A6FF en claro) para llegar a AA.
+        inversePrimary =
+        if (isDark) ParcheUPalette.LightPrimaryTint else ParcheUPalette.DarkPrimaryTint,
         secondary = prt,
         onSecondary = if (isDark) bg else white,
         secondaryContainer = prc,

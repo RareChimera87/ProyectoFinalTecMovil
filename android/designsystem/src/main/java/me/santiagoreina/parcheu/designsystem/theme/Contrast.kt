@@ -80,3 +80,43 @@ fun ParcheUColors.declaredTextPairs(): List<TextColorPair> {
         )
     return onSurfaces + onFills
 }
+
+/**
+ * Pares texto/fondo que el esquema M3 de [toColorScheme] declara para componentes por defecto
+ * (Snackbar, texto secundario). `primary` como texto queda fuera a propósito: ver KDoc de [toColorScheme].
+ */
+fun ParcheUColors.declaredSchemeTextPairs(): List<TextColorPair> {
+    val scheme = toColorScheme()
+    return listOf(
+        TextColorPair(
+            "inversePrimary/inverseSurface",
+            scheme.inversePrimary,
+            scheme.inverseSurface
+        ),
+        TextColorPair(
+            "inverseOnSurface/inverseSurface",
+            scheme.inverseOnSurface,
+            scheme.inverseSurface
+        ),
+        TextColorPair(
+            "onSurfaceVariant/surfaceContainerHigh",
+            scheme.onSurfaceVariant,
+            scheme.surfaceContainerHigh
+        ),
+        TextColorPair(
+            "secondary/surfaceContainerHigh",
+            scheme.secondary,
+            scheme.surfaceContainerHigh
+        ),
+        TextColorPair(
+            "tertiary/surfaceContainerHigh",
+            scheme.tertiary,
+            scheme.surfaceContainerHigh
+        ),
+        TextColorPair(
+            "onErrorContainer/errorContainer",
+            scheme.onErrorContainer,
+            scheme.errorContainer
+        )
+    )
+}
