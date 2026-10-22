@@ -390,9 +390,9 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | POST `/v1/matches/{id}/choice` | `Choice{choice: SCENARIO\|SIMULATION}` | `MatchDto` | CONFLICT |
 | GET `/v1/scenarios` | `?mode=` | `List<ScenarioDto{id, title, isBasic, locked}>` | - |
 | POST `/v1/scenario-sessions/{chatId}/agreement` | - | `ScenarioSessionDto{status: OPEN\|WAITING_OTHER\|JUDGING\|DONE, simulationId?}` | SCENARIO_ENDED |
-| POST `/v1/simulations` | `StartSimulation{otherUserId, mode}` | 202 `SimulationSummary{id, status, mode, other, createdAt}` | QUOTA_EXCEEDED, BLOCKED, VALIDATION, AI_BUDGET |
+| POST `/v1/simulations` | `StartSimulation{otherUserId, mode}` | 202 `SimulationSummary{id, status, mode, other, createdAt, origin?, score?, refunded}` | QUOTA_EXCEEDED, BLOCKED, VALIDATION, AI_BUDGET |
 | GET `/v1/simulations` | `?cursor=` | `Page<SimulationSummary>` | - |
-| GET `/v1/simulations/{id}` | - | `SimulationDto{summary, progress: Progress{scenarioIndex, turn, of}, score?}` | NOT_FOUND |
+| GET `/v1/simulations/{id}` (`summary.refunded` = true si falló y el cupo se devolvió; F5) | - | `SimulationDto{summary, progress: Progress{scenarioIndex, turn, of}, score?}` | NOT_FOUND |
 | GET `/v1/simulations/{id}/report` | - | `ReportDto{score, summary, reasons?: List<String>, frictions?: List<String>, dimensions?: List<Dimension>, locked: Boolean, unlockAvailable: Boolean, myDecision?, otherDecided: Boolean, otherName?}` | NOT_FOUND |
 | POST `/v1/simulations/{id}/report:unlock` | - | `ReportDto` | QUOTA_EXCEEDED |
 | GET `/v1/simulations/{id}/transcript` | - | `TranscriptDto{scenarios: List<ScenarioTranscript{title, turns: List<Turn{speaker: ME\|OTHER, text}>}>}` | PLUS_REQUIRED |
