@@ -10,19 +10,25 @@ import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 
 /** Implementación real: Firebase Admin con las credenciales por defecto de la cuenta `sa-api`. */
-class FirebaseTokenVerifier(projectId: String) : TokenVerifier {
+class FirebaseTokenVerifier(
+    private val projectId: String,
+    private val credentials: () -> GoogleCredentials = { GoogleCredentials.getApplicationDefault() },
+) : TokenVerifier {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val auth: FirebaseAuth
 
-    init {
+    /**
+     * Diferido: las credenciales (ADC) se resuelven en la primera verificación, no al construir,
+     * para que el arranque y los tests no dependan de ellas.
+     */
+    private val auth: FirebaseAuth by lazy {
         val app = FirebaseApp.getApps().firstOrNull { it.name == FirebaseApp.DEFAULT_APP_NAME }
             ?: FirebaseApp.initializeApp(
                 FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.getApplicationDefault())
+                    .setCredentials(credentials())
                     .setProjectId(projectId)
                     .build(),
             )
-        auth = FirebaseAuth.getInstance(app)
+        FirebaseAuth.getInstance(app)
     }
 
     override suspend fun verify(token: String): FirebaseUser? = withContext(Dispatchers.IO) {
