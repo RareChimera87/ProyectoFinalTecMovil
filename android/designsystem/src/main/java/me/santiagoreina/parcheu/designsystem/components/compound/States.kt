@@ -43,7 +43,7 @@ fun EmptyState(
     ctaLabel: String? = null,
     onCtaClick: (() -> Unit)? = null,
     secondaryLabel: String? = null,
-    onSecondaryClick: (() -> Unit)? = null
+    onSecondaryClick: (() -> Unit)? = null,
 ) {
     StateLayout(
         title = title,
@@ -53,7 +53,7 @@ fun EmptyState(
         ctaLabel = ctaLabel,
         onCtaClick = onCtaClick,
         secondaryLabel = secondaryLabel,
-        onSecondaryClick = onSecondaryClick
+        onSecondaryClick = onSecondaryClick,
     )
 }
 
@@ -70,7 +70,7 @@ fun ErrorState(
     modifier: Modifier = Modifier,
     illustration: (@Composable () -> Unit)? = null,
     secondaryLabel: String? = null,
-    onSecondaryClick: (() -> Unit)? = null
+    onSecondaryClick: (() -> Unit)? = null,
 ) {
     StateLayout(
         title = title,
@@ -80,7 +80,7 @@ fun ErrorState(
         ctaLabel = retryLabel,
         onCtaClick = onRetryClick,
         secondaryLabel = secondaryLabel,
-        onSecondaryClick = onSecondaryClick
+        onSecondaryClick = onSecondaryClick,
     )
 }
 
@@ -93,26 +93,26 @@ private fun StateLayout(
     ctaLabel: String?,
     onCtaClick: (() -> Unit)?,
     secondaryLabel: String?,
-    onSecondaryClick: (() -> Unit)?
+    onSecondaryClick: (() -> Unit)?,
 ) {
     val colors = ParcheUTheme.colors
     Column(
         modifier = modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)
+        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
     ) {
         illustration?.invoke()
         Text(
             text = title,
             style = MaterialTheme.typography.headlineSmall,
             color = colors.tx,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = colors.mu,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         if (ctaLabel != null && onCtaClick != null) {
             PrimaryButton(text = ctaLabel, onClick = onCtaClick, modifier = Modifier.fillMaxWidth())
@@ -131,7 +131,7 @@ private fun StateLayout(
 fun GraphSkeleton(
     modifier: Modifier = Modifier,
     animated: Boolean = true,
-    contentDescription: String = "Cargando tu parche"
+    contentDescription: String = "Cargando tu parche",
 ) {
     val colors = ParcheUTheme.colors
     val alpha by if (animated) {
@@ -139,13 +139,13 @@ fun GraphSkeleton(
             initialValue = 0.5f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-            label = "alpha"
+            label = "alpha",
         )
     } else {
         androidx.compose.runtime.rememberUpdatedState(0.75f)
     }
     Box(
-        modifier = modifier.fillMaxSize().semantics { this.contentDescription = contentDescription }
+        modifier = modifier.fillMaxSize().semantics { this.contentDescription = contentDescription },
     ) {
         Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
             val center = Offset(size.width / 2, size.height / 2)
@@ -156,7 +156,7 @@ fun GraphSkeleton(
                     radius = base * it,
                     center = center,
                     style = Stroke(1.5.dp.toPx()),
-                    alpha = alpha
+                    alpha = alpha,
                 )
             }
             drawCircle(colors.s2, radius = 26.dp.toPx(), center = center, alpha = alpha)
@@ -171,12 +171,12 @@ fun GraphSkeleton(
                 0.94f to 20f,
                 0.94f to 100f,
                 0.94f to 190f,
-                0.94f to 330f
+                0.94f to 330f,
             ).forEach { (ring, degrees) ->
                 val radians = Math.toRadians(degrees.toDouble())
                 val p = Offset(
                     center.x + (base * ring * kotlin.math.cos(radians)).toFloat(),
-                    center.y + (base * ring * kotlin.math.sin(radians)).toFloat()
+                    center.y + (base * ring * kotlin.math.sin(radians)).toFloat(),
                 )
                 drawCircle(colors.s2, radius = 15.dp.toPx(), center = p, alpha = alpha)
             }

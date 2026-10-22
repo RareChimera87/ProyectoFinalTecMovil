@@ -71,7 +71,7 @@ fun QRCard(
     name: String,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    logo: Painter? = null
+    logo: Painter? = null,
 ) {
     val shape = RoundedCornerShape(ParcheURadius.Hero)
     Column(
@@ -81,7 +81,7 @@ fun QRCard(
             .padding(20.dp)
             .semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(Modifier.size(200.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.size(200.dp).clearAndSetSemantics { }) {
@@ -92,7 +92,7 @@ fun QRCard(
                             drawRect(
                                 color = QrInk,
                                 topLeft = Offset(column * cell, row * cell),
-                                size = Size(cell + 0.5f, cell + 0.5f)
+                                size = Size(cell + 0.5f, cell + 0.5f),
                             )
                         }
                     }
@@ -104,13 +104,13 @@ fun QRCard(
                         .size(44.dp)
                         .background(Color.White, RoundedCornerShape(10.dp))
                         .padding(4.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         painter = logo,
                         contentDescription = null,
                         tint = Color.Unspecified,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(36.dp),
                     )
                 }
             }
@@ -118,7 +118,7 @@ fun QRCard(
         Text(
             text = name,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = QrInk
+            color = QrInk,
         )
     }
 }
@@ -134,7 +134,7 @@ fun LineChart(
     contentDescription: String,
     modifier: Modifier = Modifier,
     startLabel: String? = null,
-    endLabel: String? = null
+    endLabel: String? = null,
 ) {
     // Valores no finitos (NaN, infinito) se descartan: dejarían el Path inválido.
     val valid = points.filter { it.isFinite() }
@@ -144,7 +144,7 @@ fun LineChart(
         modifier = modifier.semantics(mergeDescendants = true) {
             this.contentDescription = contentDescription
         },
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Canvas(Modifier.fillMaxWidth().height(96.dp).clearAndSetSemantics { }) {
             // Dibuja con 0 puntos (solo cuadrícula), 1 punto (punto aislado) o 2 o más (curva).
@@ -158,14 +158,14 @@ fun LineChart(
                     colors.ln,
                     Offset(padX, y),
                     Offset(size.width - padX, y),
-                    strokeWidth = 1.dp.toPx()
+                    strokeWidth = 1.dp.toPx(),
                 )
             }
             if (valid.isEmpty()) return@Canvas
             val coords = valid.mapIndexed { i, v ->
                 Offset(
                     if (valid.size == 1) padX + w / 2f else padX + w * i / (valid.size - 1),
-                    padY + h * (1f - v.coerceIn(0f, 100f) / 100f)
+                    padY + h * (1f - v.coerceIn(0f, 100f) / 100f),
                 )
             }
             if (coords.size >= 2) drawCurve(coords, line, padX, padY)
@@ -179,12 +179,12 @@ fun LineChart(
                 Text(
                     startLabel.orEmpty(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = colors.mu
+                    color = colors.mu,
                 )
                 Text(
                     endLabel.orEmpty(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = colors.mu
+                    color = colors.mu,
                 )
             }
         }
@@ -213,12 +213,12 @@ private fun DrawScope.drawCurve(coords: List<Offset>, line: Color, padX: Float, 
         Brush.verticalGradient(
             listOf(line.copy(alpha = 0.28f), line.copy(alpha = 0f)),
             startY = padY,
-            endY = size.height - padY
-        )
+            endY = size.height - padY,
+        ),
     )
     drawPath(
         curve,
         line,
-        style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
     )
 }

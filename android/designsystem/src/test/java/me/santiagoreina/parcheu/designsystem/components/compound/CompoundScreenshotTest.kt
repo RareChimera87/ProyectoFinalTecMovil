@@ -67,8 +67,8 @@ class CompoundScreenshotTest {
         composeRule.onRoot().captureRoboImage(
             filePath = "src/test/screenshots/compound/${name}_$suffix.png",
             roborazziOptions = RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
-            )
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
+            ),
         )
     }
 }

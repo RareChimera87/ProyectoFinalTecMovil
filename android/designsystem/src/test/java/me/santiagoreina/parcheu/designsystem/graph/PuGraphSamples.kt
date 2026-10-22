@@ -18,7 +18,7 @@ object PuGraphSamples {
         GraphNode("juli", "Juli", "J", 62, AMISTAD, CONNECTED),
         GraphNode("mat", "Mateo", "M", 58, AMISTAD, PENDING),
         GraphNode("dan", "Daniela", "D", 54, ESTUDIO, SIMULATED),
-        GraphNode("nico", "Nico", "N", 50, AMISTAD, PENDING, anonymous = true)
+        GraphNode("nico", "Nico", "N", 50, AMISTAD, PENDING, anonymous = true),
     )
 
     val fof = listOf(
@@ -26,6 +26,6 @@ object PuGraphSamples {
         GraphFof("f2", "val", "", "", 82),
         GraphFof("f3", "and", "Felipe R.", "F", 84, anonymous = false),
         GraphFof("f4", "seb", "", "", 79),
-        GraphFof("f5", "lau", "Sara M.", "S", 76, anonymous = false)
+        GraphFof("f5", "lau", "Sara M.", "S", 76, anonymous = false),
     )
 }

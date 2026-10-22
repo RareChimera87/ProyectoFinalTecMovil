@@ -49,21 +49,21 @@ class CompoundSemanticsTest {
             val id = "$name#${node.id}"
             assertTrue(
                 "$id mide $widthDp x $heightDp dp (< 48)",
-                widthDp >= 47.99f && heightDp >= 47.99f
+                widthDp >= 47.99f && heightDp >= 47.99f,
             )
             val editable = node.config.getOrNull(SemanticsProperties.EditableText) != null
             assertTrue(
                 "$id no declara rol",
-                node.config.getOrNull(SemanticsProperties.Role) != null || editable
+                node.config.getOrNull(SemanticsProperties.Role) != null || editable,
             )
             val texts = node.config.getOrNull(SemanticsProperties.Text).orEmpty()
             val description = node.config.getOrNull(
-                SemanticsProperties.ContentDescription
+                SemanticsProperties.ContentDescription,
             ).orEmpty()
             assertTrue(
                 "$id no tiene texto ni contentDescription",
                 texts.any { it.text.isNotBlank() } || description.any { it.isNotBlank() } ||
-                    editable
+                    editable,
             )
         }
     }

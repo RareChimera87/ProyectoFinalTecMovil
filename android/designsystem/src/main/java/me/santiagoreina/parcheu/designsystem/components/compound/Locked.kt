@@ -73,7 +73,7 @@ fun LockedOverlay(
     onActionClick: () -> Unit,
     lockIcon: Painter,
     modifier: Modifier = Modifier,
-    placeholder: LockedPlaceholder = LockedPlaceholder.List
+    placeholder: LockedPlaceholder = LockedPlaceholder.List,
 ) {
     val colors = ParcheUTheme.colors
     val shape = ParcheUTheme.shapes.card
@@ -83,7 +83,7 @@ fun LockedOverlay(
             .fillMaxWidth()
             .defaultMinSize(minHeight = 220.dp)
             .clip(shape)
-            .background(colors.s1, shape)
+            .background(colors.s1, shape),
     ) {
         if (blurSupported) {
             Box(
@@ -92,41 +92,41 @@ fun LockedOverlay(
                     .alpha(0.55f)
                     .blur(6.dp)
                     // Decorativo: ni el lector de pantalla ni las pruebas deben ver "contenido".
-                    .clearAndSetSemantics { testTag = LOCKED_OVERLAY_BLUR_TAG }
+                    .clearAndSetSemantics { testTag = LOCKED_OVERLAY_BLUR_TAG },
             ) { PlaceholderArt(placeholder) }
         } else {
             Box(
                 Modifier
                     .matchParentSize()
                     .background(colors.s1)
-                    .clearAndSetSemantics { testTag = LOCKED_OVERLAY_SCRIM_TAG }
+                    .clearAndSetSemantics { testTag = LOCKED_OVERLAY_SCRIM_TAG },
             )
         }
         Column(
             modifier = Modifier.align(Alignment.Center).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
                 modifier = Modifier.size(44.dp).background(colors.prc, CircleShape),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     painter = lockIcon,
                     contentDescription = null,
                     tint = colors.onprc,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(22.dp),
                 )
             }
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = colors.tx
+                color = colors.tx,
             )
             TonalButton(
                 text = actionLabel,
                 onClick = onActionClick,
-                size = ParcheUButtonSize.Medium
+                size = ParcheUButtonSize.Medium,
             )
         }
     }
@@ -157,13 +157,13 @@ private fun DrawScope.drawListArt(fill: Color, accent: Color) {
             fill,
             topLeft = Offset(pad + 48.dp.toPx(), y + 10.dp.toPx()),
             size = Size(size.width * 0.5f, 10.dp.toPx()),
-            cornerRadius = CornerRadius(5.dp.toPx())
+            cornerRadius = CornerRadius(5.dp.toPx()),
         )
         drawRoundRect(
             fill,
             topLeft = Offset(pad + 48.dp.toPx(), y + 28.dp.toPx()),
             size = Size(size.width * 0.32f, 8.dp.toPx()),
-            cornerRadius = CornerRadius(4.dp.toPx())
+            cornerRadius = CornerRadius(4.dp.toPx()),
         )
         y += row
     }
@@ -181,7 +181,7 @@ private fun DrawScope.drawGraphArt(fill: Color, accent: Color, line: Color) {
         val radians = Math.toRadians(degrees.toDouble())
         val p = Offset(
             center.x + (r * kotlin.math.cos(radians)).toFloat(),
-            center.y + (r * kotlin.math.sin(radians)).toFloat()
+            center.y + (r * kotlin.math.sin(radians)).toFloat(),
         )
         drawLine(line, center, p, strokeWidth = 1.5.dp.toPx())
         drawCircle(fill, radius = 10.dp.toPx(), center = p)
@@ -198,7 +198,7 @@ private fun DrawScope.drawRingArt(fill: Color, accent: Color) {
         useCenter = false,
         topLeft = topLeft,
         size = Size(diameter, diameter),
-        style = Stroke(11.dp.toPx())
+        style = Stroke(11.dp.toPx()),
     )
     drawArc(
         accent,
@@ -207,7 +207,7 @@ private fun DrawScope.drawRingArt(fill: Color, accent: Color) {
         useCenter = false,
         topLeft = topLeft,
         size = Size(diameter, diameter),
-        style = Stroke(11.dp.toPx(), cap = StrokeCap.Round)
+        style = Stroke(11.dp.toPx(), cap = StrokeCap.Round),
     )
 }
 
@@ -226,7 +226,7 @@ private fun DrawScope.drawChartArt(fill: Color, accent: Color) {
         fill,
         Offset(pad, pad),
         Size(w, h),
-        CornerRadius(12.dp.toPx())
+        CornerRadius(12.dp.toPx()),
     )
     drawPath(path, accent, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
 }
@@ -236,12 +236,7 @@ private fun DrawScope.drawChartArt(fill: Color, accent: Color) {
  * texto y la insignia ParcheU+. Con [onClick] es un botón.
  */
 @Composable
-fun LockedFeatureBanner(
-    text: String,
-    lockIcon: Painter,
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null
-) {
+fun LockedFeatureBanner(text: String, lockIcon: Painter, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
     val colors = ParcheUTheme.colors
     val shape = RoundedCornerShape(ParcheURadius.FieldLarge)
     Row(
@@ -254,23 +249,23 @@ fun LockedFeatureBanner(
                     Modifier.touchTarget().clickable(role = Role.Button, onClick = onClick)
                 } else {
                     Modifier
-                }
+                },
             )
             .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             painter = lockIcon,
             contentDescription = null,
             tint = colors.mu,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.width(10.dp))
         Text(
             text = text,
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
             color = colors.tx,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(10.dp))
         ParcheUPlusBadge()

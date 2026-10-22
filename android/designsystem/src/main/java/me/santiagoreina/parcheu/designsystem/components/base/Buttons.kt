@@ -35,13 +35,10 @@ import me.santiagoreina.parcheu.designsystem.theme.ParcheUSizes
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 /** Tamaños de botón del inventario §3.5: 52 (radio 16), 40 y 36 compactos (radio 12). */
-enum class ParcheUButtonSize(
-    val height: androidx.compose.ui.unit.Dp,
-    val radius: androidx.compose.ui.unit.Dp
-) {
+enum class ParcheUButtonSize(val height: androidx.compose.ui.unit.Dp, val radius: androidx.compose.ui.unit.Dp) {
     Large(ParcheUSizes.Button, ParcheURadius.Button),
     Medium(ParcheUSizes.ButtonCompact, ParcheURadius.ButtonCompact),
-    Small(ParcheUSizes.ButtonSmall, ParcheURadius.ButtonCompact)
+    Small(ParcheUSizes.ButtonSmall, ParcheURadius.ButtonCompact),
 }
 
 /** Botón primario: violeta #6D4AFF con texto blanco 15/600 (5,15:1). */
@@ -52,7 +49,7 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     size: ParcheUButtonSize = ParcheUButtonSize.Large,
     enabled: Boolean = true,
-    icon: Painter? = null
+    icon: Painter? = null,
 ) {
     val colors = ParcheUTheme.colors
     ButtonBase(
@@ -64,7 +61,7 @@ fun PrimaryButton(
         icon = icon,
         container = colors.primary,
         content = colors.onPrimary,
-        border = null
+        border = null,
     )
 }
 
@@ -76,7 +73,7 @@ fun TonalButton(
     modifier: Modifier = Modifier,
     size: ParcheUButtonSize = ParcheUButtonSize.Large,
     enabled: Boolean = true,
-    icon: Painter? = null
+    icon: Painter? = null,
 ) {
     val colors = ParcheUTheme.colors
     ButtonBase(
@@ -88,7 +85,7 @@ fun TonalButton(
         icon = icon,
         container = colors.prc,
         content = colors.onprc,
-        border = null
+        border = null,
     )
 }
 
@@ -100,7 +97,7 @@ fun OutlineButton(
     modifier: Modifier = Modifier,
     size: ParcheUButtonSize = ParcheUButtonSize.Large,
     enabled: Boolean = true,
-    icon: Painter? = null
+    icon: Painter? = null,
 ) {
     val colors = ParcheUTheme.colors
     ButtonBase(
@@ -112,7 +109,7 @@ fun OutlineButton(
         icon = icon,
         container = Color.Transparent,
         content = colors.tx,
-        border = colors.ln
+        border = colors.ln,
     )
 }
 
@@ -127,7 +124,7 @@ fun ParcheUTextButton(
     modifier: Modifier = Modifier,
     size: ParcheUButtonSize = ParcheUButtonSize.Large,
     enabled: Boolean = true,
-    icon: Painter? = null
+    icon: Painter? = null,
 ) {
     ButtonBase(
         text = text,
@@ -138,7 +135,7 @@ fun ParcheUTextButton(
         icon = icon,
         container = Color.Transparent,
         content = ParcheUTheme.colors.prt,
-        border = null
+        border = null,
     )
 }
 
@@ -152,7 +149,7 @@ fun GoogleSignInButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    logo: Painter? = null
+    logo: Painter? = null,
 ) {
     val colors = ParcheUTheme.colors
     val content = if (enabled) GoogleButtonText else GoogleButtonText.disabled()
@@ -163,14 +160,14 @@ fun GoogleSignInButton(
         size = ParcheUButtonSize.Large,
         enabled = enabled,
         container = container,
-        border = if (colors.isDark) null else colors.ln
+        border = if (colors.isDark) null else colors.ln,
     ) {
         if (logo != null) {
             Icon(
                 painter = logo,
                 contentDescription = null,
                 tint = Color.Unspecified,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(20.dp),
             )
         } else {
             Text(
@@ -178,7 +175,7 @@ fun GoogleSignInButton(
                 style = MaterialTheme.typography.titleSmall,
                 color = GoogleBlue,
                 modifier = Modifier.width(20.dp),
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
         Spacer(Modifier.width(10.dp))
@@ -187,7 +184,7 @@ fun GoogleSignInButton(
             style = MaterialTheme.typography.labelLarge,
             color = content,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -205,7 +202,7 @@ private fun ButtonBase(
     icon: Painter?,
     container: Color,
     content: Color,
-    border: Color?
+    border: Color?,
 ) {
     val colors = ParcheUTheme.colors
     val filled = container != Color.Transparent
@@ -228,14 +225,14 @@ private fun ButtonBase(
         size = size,
         enabled = enabled,
         container = resolvedContainer,
-        border = border?.let { if (enabled) it else it.copy(alpha = 0.5f) }
+        border = border?.let { if (enabled) it else it.copy(alpha = 0.5f) },
     ) {
         if (icon != null) {
             Icon(
                 painter = icon,
                 contentDescription = null,
                 tint = resolvedContent,
-                modifier = Modifier.size(if (size == ParcheUButtonSize.Large) 20.dp else 18.dp)
+                modifier = Modifier.size(if (size == ParcheUButtonSize.Large) 20.dp else 18.dp),
             )
             Spacer(Modifier.width(8.dp))
         }
@@ -244,7 +241,7 @@ private fun ButtonBase(
             style = textStyle,
             color = resolvedContent,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -261,7 +258,7 @@ private fun ButtonFrame(
     enabled: Boolean,
     container: Color,
     border: Color?,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(size.radius)
     Box(
@@ -271,7 +268,7 @@ private fun ButtonFrame(
             .clip(shape)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
-        propagateMinConstraints = true
+        propagateMinConstraints = true,
     ) {
         Row(
             modifier =
@@ -286,7 +283,7 @@ private fun ButtonFrame(
                         Modifier.border(BorderStroke(1.5.dp, border), shape)
                     } else {
                         Modifier
-                    }
+                    },
                 )
                 .padding(
                     PaddingValues(
@@ -296,11 +293,11 @@ private fun ButtonFrame(
                             20.dp
                         } else {
                             14.dp
-                        }
-                    )
+                        },
+                    ),
                 ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Center,
         ) {
             CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.labelLarge) {
                 content()
