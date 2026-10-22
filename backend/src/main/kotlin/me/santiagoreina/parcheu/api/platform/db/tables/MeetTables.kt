@@ -3,6 +3,8 @@ package me.santiagoreina.parcheu.api.platform.db.tables
 import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.contract.MatchStatus
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.SimulationOrigin
+import me.santiagoreina.parcheu.contract.SimulationStatus
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID

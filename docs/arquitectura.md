@@ -207,7 +207,7 @@ backend/src/main/kotlin/me/santiagoreina/parcheu/api/
 - **Entorno (`ENV`):** variable obligatoria (`local|dev|prod`) sin valor por defecto; si falta, el proceso no arranca. Solo `local` cablea `FakeTokenVerifier`/`FakeOidcVerifier` y se rechaza si Cloud Run define `K_SERVICE` o `CLOUD_RUN_JOB`. E0.5 (Terraform) y E0.6 (CD) deben fijar `ENV=dev|prod` en servicios y jobs.
 - **Modos de arranque:** `serve` (API), `migrate` (Flyway y salir), `seed-demo` y `purge-demo`. El mismo contenedor sirve para los tres Cloud Run Jobs.
 - **JDK:** el backend compila con toolchain 21 y el contrato con 17. Gradle resuelve los toolchains con el plugin foojay y, en la máquina del equipo, con `org.gradle.java.installations.paths=/opt/android-studio/jbr` (JBR 21). Detalle en `docs/desarrollo-local.md` (E0.1, E0.3).
-- **Migraciones:** `V1__esquema.sql`, `V2__semillas.sql`, luego `V<yyyyMMdd>_<HHmm>__<descripcion>.sql`. `outOfOrder=true` en dev/CI; check de orden en PR (E0.4). En prod se aplican en lote al desplegar el tag.
+- **Migraciones:** `V1__esquema.sql`, `V2__semillas.sql`, luego `V<yyyyMMdd>_<HHmm>__<descripcion>.sql`. `outOfOrder=true` en todos los entornos (también prod, ADR-0011); check de orden en PR (E0.4). En prod se aplican en lote al desplegar el tag.
 - **Pruebas:** `testApplication`, Testcontainers Postgres 16 (solo en CI; `-PsinContenedores` en local), emulador de Firestore, `FakeLlmClient`, `FakeTokenVerifier`, `FakeNotifier`, Kotest property testing para privacidad.
 
 ---

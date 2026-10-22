@@ -55,7 +55,7 @@ cd backend && PARCHEU_TEST_DB_URL=jdbc:postgresql://localhost:54329/e04test ./gr
 - Viven en `backend/src/main/resources/db/migration/`. `V1__esquema.sql` y `V2__semillas.sql` son fijas: **nunca edites una migración ya mezclada** (Flyway valida el checksum); agrega una nueva.
 - Nombre de las nuevas: `V<yyyyMMdd>_<HHmm>__<descripcion>.sql` en UTC, descripción en minúsculas con `_` (p. ej. `V20261029_1430__agrega_indice_cuotas.sql`).
 - Antes de abrir el PR: `git fetch origin dev && scripts/check-migration-order.sh`. Si otra rama mezcló antes una migración con fecha posterior, renombra la tuya con la fecha y hora actuales.
-- `outOfOrder` está activo en local, dev y CI y apagado en prod (`outOfOrderFor(env)`).
+- `outOfOrder` está activo en todos los entornos, prod incluido (ADR-0011).
 - Las tablas Exposed están en `platform/db/tables/` (un archivo por dominio) y solo describen el esquema: nunca uses `SchemaUtils.create`. Si agregas una columna jsonb, clasifícala en `PersonalJsonPaths` o falla `PersonalJsonPathsTest`.
 - `consents` solo admite INSERT (trigger). La purga por retención (E8.8) debe ejecutar `set local parcheu.consents_purge = 'on'` en su transacción antes del DELETE.
 

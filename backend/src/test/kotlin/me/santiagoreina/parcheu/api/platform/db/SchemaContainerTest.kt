@@ -16,7 +16,6 @@ import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.santiagoreina.parcheu.api.platform.db.tables.Consents
-import me.santiagoreina.parcheu.api.platform.db.tables.ConsentKind
 import me.santiagoreina.parcheu.api.platform.db.tables.Edges
 import me.santiagoreina.parcheu.api.platform.db.tables.EdgesView
 import me.santiagoreina.parcheu.api.platform.db.tables.Interests
@@ -26,6 +25,7 @@ import me.santiagoreina.parcheu.api.platform.db.tables.Schema
 import me.santiagoreina.parcheu.api.platform.db.tables.Twins
 import me.santiagoreina.parcheu.api.platform.db.tables.Universities
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
+import me.santiagoreina.parcheu.contract.ConsentKind
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.TraitKey
@@ -83,6 +83,26 @@ class SchemaContainerTest : FunSpec({
                 // El mapeo de tipos de Exposed funciona contra cada tabla (lectura vacía o con semillas).
                 val db = connectExposed(ds)
                 transaction(db) { (Schema.tables + Schema.views).forEach { it.selectAll().limit(1).toList() } }
+            }
+        }
+
+    test("una migración con versión menor que la ya aplicada se aplica por defecto (outOfOrder en todos los entornos)")
+        .config(enabled = TestDatabase.enabled) {
+            TestDatabase.withCleanDatabase { ds ->
+                val dir = java.nio.file.Files.createTempDirectory("migraciones-orden")
+                try {
+                    val loc = "filesystem:$dir"
+                    dir.resolve("V20261030_1015__a.sql").toFile().writeText("create table orden_a (id int);")
+                    runMigrations(ds, location = loc) shouldBe 1
+                    // Llega después una migración con versión menor (PR paralelo mezclado en orden inverso).
+                    dir.resolve("V20261029_0900__b.sql").toFile().writeText("create table orden_b (id int);")
+                    runMigrations(ds, location = loc) shouldBe 1
+                    // Con outOfOrder=false la misma situación falla la validación de Flyway.
+                    dir.resolve("V20261028_0800__c.sql").toFile().writeText("create table orden_c (id int);")
+                    shouldThrow<Exception> { runMigrations(ds, outOfOrder = false, location = loc) }
+                } finally {
+                    dir.toFile().deleteRecursively()
+                }
             }
         }
 

@@ -35,22 +35,24 @@ fun createDataSource(config: DbConfig, maxPoolSize: Int = 10): HikariDataSource 
 const val MIGRATIONS_LOCATION = "classpath:db/migration"
 
 /**
- * Aplica las migraciones Flyway (ADR-0011). [outOfOrder] va activo en dev, local y CI, donde varias
- * ramas mezclan migraciones con fechas cruzadas; en prod va apagado porque las migraciones llegan
- * en lote y en orden (lo garantiza `scripts/check-migration-order.sh` en cada PR).
+ * Aplica las migraciones Flyway (ADR-0011). [outOfOrder] va activo en todos los entornos, prod
+ * incluido: el check de orden solo corre al abrir o actualizar un PR hacia dev, y con auto-merge
+ * dos PR paralelos pueden mezclarse en orden inverso. Con `outOfOrder=false` esa migración tardía
+ * haría fallar la validación de Flyway y cortaría el despliegue; con `true` se aplica igual que en dev.
  */
-fun runMigrations(dataSource: DataSource, outOfOrder: Boolean = true): Int {
+fun runMigrations(
+    dataSource: DataSource,
+    outOfOrder: Boolean = true,
+    location: String = MIGRATIONS_LOCATION,
+): Int {
     val result = Flyway.configure()
         .dataSource(dataSource)
-        .locations(MIGRATIONS_LOCATION)
+        .locations(location)
         .outOfOrder(outOfOrder)
         .load()
         .migrate()
     return result.migrationsExecuted
 }
-
-/** `outOfOrder` según el entorno: solo prod lo apaga. */
-fun outOfOrderFor(env: Env): Boolean = env != Env.PROD
 
 /** Conecta Exposed al pool. Las transacciones se abren explícitamente en los servicios (§3.2). */
 fun connectExposed(dataSource: DataSource): Database = Database.connect(dataSource)

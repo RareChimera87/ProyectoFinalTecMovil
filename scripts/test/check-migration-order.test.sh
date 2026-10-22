@@ -61,6 +61,16 @@ if [[ $? -eq 1 ]]; then echo "ok   rechaza: modo git con versión menor"; else e
   backend/src/main/resources/db/migration/V20261101_0800__agrega_cuotas.sql)
 (cd "$tmp" && "$CHECK" --base-ref dev >/dev/null 2>&1)
 if [[ $? -eq 0 ]]; then echo "ok   acepta: modo git tras renombrar"; else echo "FALLA modo git debía aceptar"; fallos=$((fallos + 1)); fi
+# Referencia base posicional (como la invoca migration-order.yml).
+(cd "$tmp" && "$CHECK" dev >/dev/null 2>&1)
+if [[ $? -eq 0 ]]; then echo "ok   acepta: ref base posicional"; else echo "FALLA ref base posicional"; fallos=$((fallos + 1)); fi
+(cd "$tmp" && "$CHECK" no-existe >/dev/null 2>&1)
+if [[ $? -eq 2 ]]; then echo "ok   posicional inexistente"; else echo "FALLA posicional inexistente"; fallos=$((fallos + 1)); fi
+(cd "$tmp" && "$CHECK" dev otra >/dev/null 2>&1)
+if [[ $? -eq 2 ]]; then echo "ok   dos posicionales rechazados"; else echo "FALLA dos posicionales"; fallos=$((fallos + 1)); fi
+(cd "$tmp" && echo x >backend/src/main/resources/db/migration/V20260101_0000__vieja.sql && "$CHECK" dev >/dev/null 2>&1)
+if [[ $? -eq 1 ]]; then echo "ok   rechaza: posicional con versión menor"; else echo "FALLA posicional con versión menor"; fallos=$((fallos + 1)); fi
+(cd "$tmp" && rm backend/src/main/resources/db/migration/V20260101_0000__vieja.sql)
 (cd "$tmp" && "$CHECK" --base-ref no-existe >/dev/null 2>&1)
 if [[ $? -eq 2 ]]; then echo "ok   referencia inexistente"; else echo "FALLA referencia inexistente"; fallos=$((fallos + 1)); fi
 

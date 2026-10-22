@@ -3,11 +3,12 @@
 #
 # Falla si el PR agrega una migración cuya versión es menor o igual que la máxima de la base
 # (por defecto origin/dev), o si su nombre no sigue V<yyyyMMdd>_<HHmm>__<descripcion>.sql.
-# Así prod, que aplica en lote sin outOfOrder, siempre recibe las migraciones en orden.
+# Mantiene el historial ordenado (prod aplica con outOfOrder=true, ADR-0011).
 #
 # Uso:
 #   scripts/check-migration-order.sh                       (compara el árbol de trabajo con origin/dev)
-#   scripts/check-migration-order.sh --base-ref origin/dev (otra referencia de git como base)
+#   scripts/check-migration-order.sh origin/dev            (referencia base posicional; así lo llama migration-order.yml)
+#   scripts/check-migration-order.sh --base-ref origin/dev (equivalente)
 #   scripts/check-migration-order.sh --base-dir A --head-dir B   (dos carpetas; lo usan las pruebas)
 #
 # Variables: MIGRATIONS_DIR (ruta relativa a la raíz del repo; por defecto
@@ -20,14 +21,18 @@ MIGRATIONS_DIR="${MIGRATIONS_DIR:-backend/src/main/resources/db/migration}"
 base_ref="origin/dev"
 base_dir=""
 head_dir=""
+positional_set=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base-ref) base_ref="${2:?falta la referencia}"; shift 2 ;;
     --base-dir) base_dir="${2:?falta la carpeta}"; shift 2 ;;
     --head-dir) head_dir="${2:?falta la carpeta}"; shift 2 ;;
-    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
-    *) echo "Argumento desconocido: $1" >&2; exit 2 ;;
+    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    -*) echo "Argumento desconocido: $1" >&2; exit 2 ;;
+    *)
+      if [[ "$positional_set" == "1" ]]; then echo "Argumento desconocido: $1" >&2; exit 2; fi
+      base_ref="$1"; positional_set=1; shift ;;
   esac
 done
 

@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.platform.db.tables
 
+import me.santiagoreina.parcheu.contract.ConsentKind
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
 import org.jetbrains.exposed.v1.core.ReferenceOption
