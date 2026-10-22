@@ -12,12 +12,12 @@ class AvatarColorsTest {
         val failures = mutableListOf<String>()
         for ((theme, colors) in listOf(
             "oscuro" to DarkParcheUColors,
-            "claro" to LightParcheUColors
+            "claro" to LightParcheUColors,
         )) {
             for ((surfaceName, surface) in listOf(
                 "bg" to colors.bg,
                 "s1" to colors.s1,
-                "s2" to colors.s2
+                "s2" to colors.s2,
             )) {
                 for (alpha in alphas) {
                     val avatar = avatarColors(alpha, colors.isDark)

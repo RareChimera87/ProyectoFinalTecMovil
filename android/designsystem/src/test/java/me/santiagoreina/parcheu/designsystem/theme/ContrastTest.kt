@@ -29,7 +29,7 @@ class ContrastTest {
         val failures =
             listOf(
                 "oscuro" to DarkParcheUColors,
-                "claro" to LightParcheUColors
+                "claro" to LightParcheUColors,
             ).flatMap { (theme, colors) ->
                 (colors.declaredTextPairs() + colors.declaredSchemeTextPairs())
                     .map { pair ->
@@ -89,7 +89,7 @@ class ContrastTest {
         assertTrue("primary/s2 oscuro = $onS2", onS2 < Wcag.AA_NORMAL_TEXT)
         assertTrue(
             contrastRatio(DarkParcheUColors.onPrimary, DarkParcheUColors.primary) >=
-                Wcag.AA_NORMAL_TEXT
+                Wcag.AA_NORMAL_TEXT,
         )
     }
 
