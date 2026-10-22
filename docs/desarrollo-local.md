@@ -116,6 +116,8 @@ scripts/demo-mutacion-privacidad.sh ninguna    # control: suite en verde
 scripts/test/demo-mutacion-privacidad.test.sh  # comprobación rápida de las anclas, sin Gradle
 ```
 
+La mutación `memorias` hoy se ancla en `MemorySelection`; `TwinPromptBuilderDelegationTest` obliga a que el `TwinPromptBuilder` de E4.3 delegue en ella, y al entrar E4.3 el ancla debe moverse al builder real.
+
 La demo exige que el archivo a mutar no tenga cambios sin commit (lo restaura con `git checkout`).
 Una vista de terceros nueva se agrega en `ThirdPartyViews.registered` y con su sonda en
 `ThirdPartyViewProbes.byView`; sin ambas, `ThirdPartyViewRegistryTest` falla.
