@@ -26,6 +26,8 @@ import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
+import me.santiagoreina.parcheu.api.identity.profile.InMemoryProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
@@ -69,8 +71,10 @@ class ChatApiTest : FunSpec({
 
         fun container(): AppContainer {
             val identity = IdentityService(identityRepo, FIXED_CLOCK, TEST_LEGAL_VERSION)
+            val profile = ProfileService(identity, InMemoryProfileRepository(identityRepo), FIXED_CLOCK)
             return AppContainer(
-                testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identity, graph, chat,
+                testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identity, profile,
+                graph = graph, chat = chat,
             )
         }
 
