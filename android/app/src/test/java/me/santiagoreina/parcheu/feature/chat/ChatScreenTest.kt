@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.feature.chat
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -103,5 +104,30 @@ class ChatScreenTest {
         composeRule.onNodeWithTag(ChatTags.CONSENT_BANNER).assertIsDisplayed()
         composeRule.onNodeWithText("Entendido").performClick()
         assertEquals(true, dismissed)
+    }
+
+    @Test
+    fun liveErrorShowsRetryInsteadOfEmptyState() {
+        var retried = false
+        show(
+            ChatUiState(loading = false, header = header, liveError = AppError.Forbidden),
+            ChatActions(onRetryLive = { retried = true })
+        )
+        composeRule.onNodeWithText("Aún no hay mensajes. Rompe el hielo.").assertDoesNotExist()
+        composeRule.onNodeWithText("Ya no tienes acceso a este chat.").assertIsDisplayed()
+        composeRule.onNodeWithText("Reintentar").performClick()
+        assertEquals(true, retried)
+    }
+
+    @Test
+    fun reportIsDisabledWithoutRealUserId() {
+        var reported = false
+        show(
+            ChatUiState(loading = false, header = header.copy(otherUserId = null)),
+            ChatActions(onReport = { reported = true })
+        )
+        composeRule.onNodeWithTag(ChatTags.MENU).performClick()
+        composeRule.onNodeWithTag(ChatTags.MENU_REPORT).assertIsNotEnabled()
+        assertEquals(false, reported)
     }
 }

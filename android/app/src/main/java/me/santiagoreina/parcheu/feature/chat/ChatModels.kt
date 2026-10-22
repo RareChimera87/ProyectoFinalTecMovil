@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.feature.chat
 
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.ChatStatus
 import me.santiagoreina.parcheu.contract.ChatSummary
@@ -61,15 +62,31 @@ data class ChatHeader(
     val mode: Mode,
     val muted: Boolean,
     val closed: Boolean
-)
+) {
+    /** H1 necesita el id real de la otra persona; con una persona anónima no se puede reportar desde aquí. */
+    val canReport: Boolean get() = otherUserId != null
+}
 
 internal fun ChatSummary.toHeader(): ChatHeader = ChatHeader(
     chatId = id,
     name = other.label,
     initials = other.initials,
     anonymous = other.id == null && other.anonId != null,
-    otherUserId = other.id ?: other.anonId,
+    // El anonId NO es un userId: con una persona anónima no hay objetivo válido para H1 y se deshabilita.
+    otherUserId = other.id,
     mode = mode,
     muted = muted,
     closed = status == ChatStatus.CLOSED
 )
+
+/** Falla del listener de Firestore ya traducida a [error]; la lanza el repositorio y la lee el ViewModel. */
+class ChatLiveException(val error: AppError, cause: Throwable? = null) : Exception(cause)
+
+/** Error de la UI para una falla del listener de Firestore: sin permiso (bloqueo o salida del chat) o de red. */
+internal fun liveErrorOf(e: Throwable): AppError = if (e is FirebaseFirestoreException &&
+    e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
+) {
+    AppError.Forbidden
+} else {
+    AppError.Network
+}

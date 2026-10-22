@@ -40,6 +40,7 @@ fun ChatRoute(route: Chat, navigator: AppNavigator, modifier: Modifier = Modifie
                 onRetryMessage = viewModel::retry,
                 onToggleMute = viewModel::toggleMute,
                 onReport = viewModel::report,
+                onRetryLive = viewModel::retryLive,
                 onPrivacy = { navigator.navigate(PrivacySettings) },
                 onDismissConsent = viewModel::dismissConsentBanner,
                 onRetryLoad = viewModel::retryLoad

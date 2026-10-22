@@ -4,6 +4,7 @@ import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import me.santiagoreina.parcheu.contract.ChatSummary
 import me.santiagoreina.parcheu.contract.MessageDto
 import me.santiagoreina.parcheu.core.error.AppError
@@ -21,7 +22,15 @@ class FakeChatRepository(
     private var nextSend = CompletableDeferred<ApiResult<MessageDto>>()
     var autoComplete: ApiResult<MessageDto>? = null
 
-    override fun observeMessages(chatId: String): Flow<List<RemoteMessage>> = messages
+    /** Si no es nulo, el siguiente [observeMessages] falla con este error (simula PERMISSION_DENIED, etc.). */
+    var liveFailure: Throwable? = null
+    var observeCalls = 0
+
+    override fun observeMessages(chatId: String): Flow<List<RemoteMessage>> {
+        observeCalls++
+        val failure = liveFailure
+        return if (failure != null) flow { throw failure } else messages
+    }
 
     override suspend fun chats() = chats
 

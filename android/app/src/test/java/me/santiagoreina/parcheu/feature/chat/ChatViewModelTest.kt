@@ -193,4 +193,45 @@ class ChatViewModelTest {
         assertNull(vm.state.value.headerError)
         assertEquals("Laura Pinzón", vm.state.value.header?.name)
     }
+
+    @Test
+    fun liveListenerFailureShowsErrorAndRetryResubscribes() = runTest {
+        val repo = repo()
+        repo.liveFailure =
+            ChatLiveException(AppError.Forbidden)
+        val vm = viewModel(repo)
+        assertEquals(AppError.Forbidden, vm.state.value.liveError)
+        assertFalse(vm.state.value.loading)
+
+        repo.liveFailure = null
+        repo.messages.value = listOf(remote("m1", "other", "hola"))
+        vm.retryLive()
+        assertNull(vm.state.value.liveError)
+        assertEquals(2, repo.observeCalls)
+        assertEquals(1, vm.state.value.messages.size)
+    }
+
+    @Test
+    fun networkListenerFailureMapsToNetwork() = runTest {
+        val repo = repo()
+        repo.liveFailure = java.io.IOException("sin red")
+        val vm = viewModel(repo)
+        assertEquals(AppError.Network, vm.state.value.liveError)
+    }
+
+    @Test
+    fun anonymousChatNeverReportsAnonIdAsUserId() = runTest {
+        val anon =
+            summary.copy(
+                type = ChatType.SCENARIO,
+                other = PersonRef(anonId = "hmac-anon", label = "Alguien de la UIS", initials = "A")
+            )
+        val repo = FakeChatRepository(chats = ApiResult.Success(listOf(anon)))
+        val vm = viewModel(repo)
+        assertNull(vm.state.value.header?.otherUserId)
+        assertFalse(vm.state.value.header!!.canReport)
+        vm.report()
+        // Sin objetivo válido no se emite OpenReport.
+        assertNull(kotlinx.coroutines.withTimeoutOrNull(50) { vm.effects.first() })
+    }
 }

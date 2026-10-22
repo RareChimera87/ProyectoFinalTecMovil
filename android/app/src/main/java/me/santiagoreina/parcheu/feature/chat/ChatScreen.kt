@@ -42,6 +42,7 @@ data class ChatActions(
     val onRetryMessage: (String) -> Unit = {},
     val onToggleMute: () -> Unit = {},
     val onReport: () -> Unit = {},
+    val onRetryLive: () -> Unit = {},
     val onPrivacy: () -> Unit = {},
     val onDismissConsent: () -> Unit = {},
     val onRetryLoad: () -> Unit = {}
@@ -87,6 +88,7 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
                         )
                         DropdownMenuItem(
                             text = { Text("Reportar o bloquear") },
+                            enabled = header?.canReport == true,
                             onClick = {
                                 menuOpen = false
                                 actions.onReport()
@@ -101,6 +103,7 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
             ConsentBanner(onSettings = actions.onPrivacy, onDismiss = actions.onDismissConsent)
         }
         state.headerError?.let { InlineError(it, onRetry = actions.onRetryLoad) }
+        state.liveError?.let { InlineError(it, onRetry = actions.onRetryLive) }
         MessageList(state, actions, Modifier.weight(1f))
         if (state.header?.closed == true) {
             Text(
@@ -130,6 +133,8 @@ private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modi
         if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.lastIndex)
     }
     if (state.messages.isEmpty() && !state.loading) {
+        // Con el listener caído no se afirma que no hay mensajes: el error y su Reintentar van arriba.
+        if (state.liveError != null) return
         Box(modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
             Text(
                 text = "Aún no hay mensajes. Rompe el hielo.",
@@ -176,6 +181,7 @@ private fun InlineError(error: AppError, onRetry: () -> Unit) {
 internal fun errorMessage(error: AppError): String = when (error) {
     AppError.Network -> "Sin conexión. Revisa tu internet e inténtalo de nuevo."
     AppError.Blocked -> "No puedes escribir en este chat."
+    AppError.Forbidden -> "Ya no tienes acceso a este chat."
     AppError.Suspended -> "Tu cuenta está suspendida."
     AppError.ScenarioEnded -> "El escenario terminó."
     AppError.NotFound -> "No encontramos este chat."

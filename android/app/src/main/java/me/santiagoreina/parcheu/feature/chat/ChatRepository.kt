@@ -60,7 +60,7 @@ class FirestoreChatRepository(
                     .orderBy("createdAt", Query.Direction.ASCENDING)
                     .addSnapshotListener { snapshot, error ->
                         if (error != null) {
-                            close(error)
+                            close(ChatLiveException(liveErrorOf(error), error))
                         } else if (snapshot != null) {
                             trySend(snapshot.documents.map { it.toRemoteMessage() })
                         }

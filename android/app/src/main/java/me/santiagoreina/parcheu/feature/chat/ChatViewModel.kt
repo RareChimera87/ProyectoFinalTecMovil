@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,13 +96,22 @@ class ChatViewModel(
         viewModelScope.launch { repository.markRead(chatId) }
     }
 
+    private var liveJob: Job? = null
+
     private fun observeMessages() {
-        viewModelScope.launch {
+        liveJob?.cancel()
+        liveJob = viewModelScope.launch {
             repository
                 .observeMessages(chatId)
                 .catch { e ->
                     if (e is CancellationException) throw e
-                    meta.update { it.copy(loading = false, liveError = AppError.Network) }
+                    meta.update {
+                        it.copy(
+                            loading = false,
+                            liveError =
+                            (e as? ChatLiveException)?.error ?: AppError.Network
+                        )
+                    }
                 }.collect { messages ->
                     remote.value = messages
                     meta.update { it.copy(loading = false, liveError = null) }
@@ -129,6 +139,12 @@ class ChatViewModel(
     fun retryLoad() {
         meta.update { it.copy(headerError = null) }
         loadHeader()
+    }
+
+    /** "Reintentar" del error del listener: vuelve a suscribirse a Firestore. */
+    fun retryLive() {
+        meta.update { it.copy(loading = true, liveError = null) }
+        observeMessages()
     }
 
     fun onDraftChange(value: String) {
@@ -192,7 +208,8 @@ class ChatViewModel(
 
     /** Menú → "Reportar o bloquear" (H1). */
     fun report() {
-        val userId = state.value.header?.otherUserId ?: return
+        val header = state.value.header ?: return
+        val userId = header.otherUserId ?: return
         viewModelScope.launch { _effects.send(ChatEffect.OpenReport(userId, chatId)) }
     }
 
