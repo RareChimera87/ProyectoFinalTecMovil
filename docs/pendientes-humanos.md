@@ -103,3 +103,24 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
 
 9. **Después de mezclar E0.8:** quitar el disparador `pull_request` de `firebase-deploy.yml` (su job
    `rules-ci` queda duplicado con el workflow `rules-ci` de E0.6).
+
+## E10.2 · Pipeline de release Android
+
+Lo automatizable ya quedó hecho: workflow `.github/workflows/android-release.yml`, firma de release
+desde variables de entorno (`UPLOAD_*`), `versionCode` derivado de la ejecución
+(`scripts/version-code.sh`, probado en `scripts/test/version-code.test.sh`), Gradle Play Publisher
+4.1.1 verificado con AGP 9.4.1, notas en es-419 (`android/app/src/prod/play/release-notes/es-419/default.txt`)
+y un AAB `prod` construido en local con la llave de subida (huella `7F:51:…:03:D3`, versionCode 110).
+También quedó creada la cuenta de servicio **`play-publisher@parcheu-dev.iam.gserviceaccount.com`**
+(sin roles de GCP) y habilitada la API `androidpublisher.googleapis.com` en `parcheu-dev`.
+El agente **no** cargó secretos en GitHub ni creó llaves: el entorno no le permitió materializar credenciales.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Secretos de la llave de subida** (si E10.1/E7.0 no los cargaron; `gh secret list` debe mostrar los cuatro): `cd ~/.parcheu && set -a && . ./upload-key.env && set +a && R=RareChimera87/ProyectoFinalTecMovil`, luego `base64 -w0 upload-keystore.jks \| gh secret set UPLOAD_KEYSTORE -R $R`, `printf %s "$UPLOAD_KEYSTORE_PASSWORD" \| gh secret set UPLOAD_KEYSTORE_PASSWORD -R $R`, `printf %s "$UPLOAD_KEY_ALIAS" \| gh secret set UPLOAD_KEY_ALIAS -R $R` y `printf %s "$UPLOAD_KEY_PASSWORD" \| gh secret set UPLOAD_KEY_PASSWORD -R $R`. | I3 (o el usuario) | Antes de la primera corrida |
+| 2 | **Llave JSON de la cuenta de servicio de Play** (la llave solo sirve en Play porque la cuenta no tiene roles de GCP; alternativa sin llave para más adelante: WIF que suplante a esta cuenta + `useApplicationDefaultCredentials` de GPP, cuando exista el bootstrap de WIF): `gcloud iam service-accounts keys create ~/.parcheu/play-publisher.json --iam-account play-publisher@parcheu-dev.iam.gserviceaccount.com && gh secret set PLAY_SERVICE_ACCOUNT_JSON -R RareChimera87/ProyectoFinalTecMovil < ~/.parcheu/play-publisher.json`. Guarda o borra la copia local (`chmod 600`). | El usuario | Antes de la primera corrida |
+| 3 | **Invitar la cuenta en Play Console**: *Usuarios y permisos → Invitar usuarios →* `play-publisher@parcheu-dev.iam.gserviceaccount.com`; en *Permisos de la app* agrega ParcheU con **Ver información de la app**, **Lanzar a pistas de prueba** y **Administrar pistas de prueba y editar listas de testers**. Sin acceso a producción. El permiso puede tardar hasta 24 h en propagarse. | I3 | Después de la primera subida manual de E7.0 (28 oct) |
+| 4 | **Primera corrida (criterio de aceptación):** con la 0.0.1 ya en la pista interna, `gh workflow run android-release --ref feature/android-release-pipeline -f pista=internal` (o desde `dev` una vez mezclado). Debe terminar en verde y aparecer en *Pruebas internas* una versión `0.0.1-int.<n>` con versionCode `100 + n×10`. Si Play responde *"Only releases with status draft may be created on draft app"*, repetir con `-f estado=draft` y lanzar la versión desde la consola. Corre una segunda vez y confirma que el versionCode subió. Deja el enlace de ambas corridas en el PR. | I3 | 28-31 oct |
+| 5 | **Disparo tras `deploy-prod`:** `workflow_run` solo se activa con la copia del workflow en `main`; queda activo cuando `release/0.1.0` llegue a `main`. Un tag `vX.Y.Z` sube a la pista cerrada (`alpha`). Si la pista cerrada de Play tiene otro identificador (p. ej. una pista personalizada), cambia `alpha` en el paso *Parámetros de la versión*. | I3 | Con el primer tag |
+| 6 | **Opcional:** variable `UPLOAD_CERT_SHA256` del repo si se cambia la llave de subida (por defecto se exige la huella de `docs/play-console.md`). | I3 | Solo si se rota la llave |
+| 7 | **Aprobación del revisor par** del PR (feature major, check `major-gate`): según `docs/equipo.md` el par de E10.2 es I1. | I1 | Ventana de la ola 5 (31 oct) |

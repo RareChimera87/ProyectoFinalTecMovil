@@ -685,7 +685,7 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 
 **Terraform:** `infra/terraform/bootstrap` (una vez, con el ADC del usuario), `modules/platform`, `envs/dev`, `envs/prod`; estado en GCS versionado. CI hace `plan` en PR y `apply` de dev al mezclar; el `apply` de prod lo ejecuta solo el usuario.
 
-**Secretos de GitHub:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
+**Secretos de GitHub:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (llave de `play-publisher@parcheu-dev`, cuenta sin roles de GCP invitada en Play Console; E10.2). Variable opcional `UPLOAD_CERT_SHA256` (huella esperada del certificado de subida).
 
 ---
 
@@ -695,7 +695,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 - **Testcontainers:** la serie 2.x cambió los nombres de artefacto (`org.testcontainers:testcontainers-postgresql`, `testcontainers-junit-jupiter`); no mezclar con los nombres 1.x.
 - **Exposed:** 1.0 cambió paquetes y API respecto de 0.x; E0.3 elige **una** serie y los agentes no copian ejemplos de la otra.
 - **Kotest:** existe la serie 6.x; E0.3 decide entre 5.9.x y 6.x según compatibilidad con Kotlin 2.2.
-- **Jib y Gradle Play Publisher:** confirmar compatibilidad con Gradle 9 y AGP 9; GPP tiene plan B (acción de subida).
+- **Jib y Gradle Play Publisher:** confirmar compatibilidad de Jib con Gradle 9. GPP quedó en 4.1.1, verificada con AGP 9.4.1 en E10.2.
 
 | Librería | Versión de referencia | Uso |
 |---|---|---|
@@ -734,7 +734,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Testcontainers (`testcontainers-postgresql`, `testcontainers-junit-jupiter`) | 2.x (verificar nombres y versión) | Tests de BD |
 | foojay-resolver-convention (plugin de settings) | 1.0.0 (verificar) | Toolchains JDK |
 | Jib Gradle plugin | 3.4.5 (verificar) | Imagen |
-| Gradle Play Publisher | 3.12.x (verificar compatibilidad con AGP 9) | Subida a Play |
+| Gradle Play Publisher | 4.1.1 (fijada en E10.2; la serie 4.x funciona con AGP 9.4.1, sin plan B) | Subida a Play |
 | Terraform / provider google, google-beta | 1.15 / 7.x (verificar) | Infra |
 | `@firebase/rules-unit-testing` | 4.x (verificar) | Tests de reglas |
 
