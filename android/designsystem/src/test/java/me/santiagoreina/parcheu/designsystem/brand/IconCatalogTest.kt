@@ -41,8 +41,9 @@ class IconCatalogTest {
             "visibility", "warning", "work", "help", "lightbulb"
         )
 
-    private fun missing(names: List<String>) =
-        names.filter { name -> runCatching { R.drawable::class.java.getField("ic_$name") }.isFailure }
+    private fun missing(names: List<String>) = names.filter { name ->
+        runCatching { R.drawable::class.java.getField("ic_$name") }.isFailure
+    }
 
     @Test
     fun designListHasNoDuplicates() {

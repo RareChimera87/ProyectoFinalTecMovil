@@ -8,10 +8,12 @@ import org.junit.Test
 /** El color de "Parche" sigue el tema de la app que se le pasa, no el del sistema. */
 class WordmarkColorsTest {
     @Test
-    fun darkThemeUsesWhite() = assertEquals(Color(0xFFFFFFFF), WordmarkColors.base(darkTheme = true))
+    fun darkThemeUsesWhite() =
+        assertEquals(Color(0xFFFFFFFF), WordmarkColors.base(darkTheme = true))
 
     @Test
-    fun lightThemeUsesViolet() = assertEquals(Color(0xFF6D4AFF), WordmarkColors.base(darkTheme = false))
+    fun lightThemeUsesViolet() =
+        assertEquals(Color(0xFF6D4AFF), WordmarkColors.base(darkTheme = false))
 
     @Test
     fun parcheNeverMatchesTheUOrange() {
