@@ -10,13 +10,13 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.navigation.AppNavHost
 import me.santiagoreina.parcheu.navigation.AppRoute
 import me.santiagoreina.parcheu.navigation.NavControllerNavigator
 import me.santiagoreina.parcheu.navigation.ParcheUNavBar
 import me.santiagoreina.parcheu.navigation.Splash
 import me.santiagoreina.parcheu.navigation.isTopLevel
-import me.santiagoreina.parcheu.ui.theme.ParcheUTheme
 
 /** Raíz de la UI: tema, NavBar en las raíces y el grafo de navegación completo. */
 @Composable
