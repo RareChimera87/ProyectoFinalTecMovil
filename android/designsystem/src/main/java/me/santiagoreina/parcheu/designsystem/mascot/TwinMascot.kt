@@ -13,19 +13,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -80,7 +80,10 @@ fun TwinMascot(
                     initialValue = 0f,
                     targetValue = 1f,
                     animationSpec =
-                        infiniteRepeatable(tween(TALK_PERIOD_MS, easing = LinearEasing), RepeatMode.Reverse),
+                    infiniteRepeatable(
+                        tween(TALK_PERIOD_MS, easing = LinearEasing),
+                        RepeatMode.Reverse
+                    ),
                     label = "mascotPhase"
                 )
                 .value
@@ -117,7 +120,10 @@ private var SemanticsPropertyReceiver.mascotPhase by MascotPhaseKey
 fun rememberAnimationsEnabled(): Boolean {
     val resolver = LocalContext.current.contentResolver
     return remember(resolver) {
-        runCatching { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
+        runCatching {
+            Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) !=
+                0f
+        }
             .getOrDefault(true)
     }
 }
@@ -164,7 +170,17 @@ private fun DrawScope.drawMascot(body: Color, features: Color, phase: Float) {
     val mouthTop = top + bodyH * 0.63f
     val openH = mouthW * (0.5f + 0.5f * phase)
     val path = Path().apply {
-        arcTo(Rect(w * 0.5f - mouthW / 2f, mouthTop - openH, w * 0.5f + mouthW / 2f, mouthTop + openH), 0f, 180f, true)
+        arcTo(
+            Rect(
+                w * 0.5f - mouthW / 2f,
+                mouthTop - openH,
+                w * 0.5f + mouthW / 2f,
+                mouthTop + openH
+            ),
+            0f,
+            180f,
+            true
+        )
         close()
     }
     drawPath(path, features)
@@ -177,13 +193,13 @@ private fun blobPath(w: Float, h: Float, yOffset: Float): Path {
     val brx = w * 0.44f
     val blx = w * 0.46f
     val tly = h * 0.56f
-    val try_ = h * 0.54f
+    val topRightY = h * 0.54f
     val bry = h * 0.46f
     val bly = h * 0.44f
     return Path().apply {
         moveTo(tlx, yOffset)
         lineTo(w - trx, yOffset)
-        arcTo(Rect(w - 2 * trx, yOffset, w, yOffset + 2 * try_), -90f, 90f, false)
+        arcTo(Rect(w - 2 * trx, yOffset, w, yOffset + 2 * topRightY), -90f, 90f, false)
         lineTo(w, yOffset + h - bry)
         arcTo(Rect(w - 2 * brx, yOffset + h - 2 * bry, w, yOffset + h), 0f, 90f, false)
         lineTo(blx, yOffset + h)

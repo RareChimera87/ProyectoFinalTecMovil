@@ -1,14 +1,13 @@
 package me.santiagoreina.parcheu.designsystem.mascot
 
 import android.provider.Settings
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import org.robolectric.annotation.GraphicsMode
-import androidx.compose.ui.Modifier
-import androidx.compose.runtime.mutableStateOf
 import androidx.test.core.app.ApplicationProvider
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import org.junit.Assert.assertEquals
@@ -19,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -39,12 +39,16 @@ class TwinMascotTest {
     fun renderedBoundsKeepTheRatio() {
         val current = mutableStateOf(TwinMascotSize.S)
         composeRule.setContent {
-            ParcheUTheme { TwinMascot(Modifier.testTag("m"), size = current.value, animationsEnabled = false) }
+            ParcheUTheme {
+                TwinMascot(Modifier.testTag("m"), size = current.value, animationsEnabled = false)
+            }
         }
         TwinMascotSize.entries.forEach { s ->
             current.value = s
             composeRule.waitForIdle()
-            composeRule.onNodeWithTag("m").assertWidthIsEqualTo(s.width).assertHeightIsEqualTo(s.height)
+            composeRule.onNodeWithTag(
+                "m"
+            ).assertWidthIsEqualTo(s.width).assertHeightIsEqualTo(s.height)
         }
     }
 
@@ -66,7 +70,11 @@ class TwinMascotTest {
 
     @Test
     fun errorGrayIsComputedInSrgbNotLinear() {
-        val gray = androidx.compose.ui.graphics.Color(0x6D / 255f, 0x4A / 255f, 0xFF / 255f).toGray()
+        val gray = androidx.compose.ui.graphics.Color(
+            0x6D / 255f,
+            0x4A / 255f,
+            0xFF / 255f
+        ).toGray()
         // CSS grayscale(1) del violeta #6D4AFF da cerca de #5E5E5E (no #272727).
         assertEquals(0.37f, gray.red, 0.02f)
         assertEquals(gray.red, gray.green, 1e-6f)
@@ -76,7 +84,9 @@ class TwinMascotTest {
     private fun captureTalkingFrames(): Pair<Float, Float> {
         composeRule.mainClock.autoAdvance = false
         composeRule.setContent {
-            ParcheUTheme { TwinMascot(Modifier.testTag("m"), size = TwinMascotSize.XL, talking = true) }
+            ParcheUTheme {
+                TwinMascot(Modifier.testTag("m"), size = TwinMascotSize.XL, talking = true)
+            }
         }
         composeRule.mainClock.advanceTimeBy(50)
         val first = phase()
