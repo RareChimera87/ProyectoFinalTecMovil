@@ -347,7 +347,7 @@ class SimulationEngineTest : FunSpec({
         f.repo.block(beto, ana)
         module.engine.run(id)
         f.shouldHaveFailedSilently(id, ana, beto, Mode.AMISTAD)
-        f.mirror.docs.none { it.status != SimulationStatus.QUEUED } shouldBe true
+        f.mirror.last(id)!!.status shouldBe SimulationStatus.FAILED
     }
 
     test("si una cuenta se borra mientras está en QUEUED, la tarea no corre ni escribe en Firestore") {
@@ -389,5 +389,6 @@ class SimulationEngineTest : FunSpec({
         f.usage.refunded(sim.id.toString()) shouldBe true
         f.graphRepo.edge(ana, beto, Mode.AMISTAD) shouldBe null
         f.notifier.sent.shouldBeEmpty()
+        f.mirror.last(sim.id)!!.status shouldBe SimulationStatus.FAILED
     }
 })

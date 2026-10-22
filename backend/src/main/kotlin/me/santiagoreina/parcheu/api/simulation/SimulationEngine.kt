@@ -92,13 +92,14 @@ class SimulationEngine(
     /**
      * Mismas reglas que `SimulationService.create`: cuenta no borrada, sin bloqueo en ningún sentido,
      * modo activo en ambos y, en Pareja, edad verificada y confirmación (y sin usuarios demo).
-     * Las causas que no deben revelarse a la otra parte (bloqueo, borrado) son [Ineligible.silent].
+     * Solo el borrado de cuenta es [Ineligible.silent]: no se recrea el documento de una cuenta purgada.
+     * Con un bloqueo sí se publica FAILED (sin motivo) para que el espejo no quede en QUEUED/RUNNING.
      */
     private suspend fun ineligibility(record: SimulationRecord): Ineligible? {
         val a = repo.participant(record.userA)
         val b = repo.participant(record.userB)
         if (a == null || b == null || a.deleted || b.deleted) return Ineligible("Una de las cuentas ya no existe", silent = true)
-        if (repo.blockedEitherWay(record.userA, record.userB)) return Ineligible("Hay un bloqueo entre las dos personas", silent = true)
+        if (repo.blockedEitherWay(record.userA, record.userB)) return Ineligible("Hay un bloqueo entre las dos personas", silent = false)
         if (record.mode !in a.activeModes || record.mode !in b.activeModes) {
             return Ineligible("El modo ${record.mode.name} ya no está activo para los dos", silent = false)
         }
@@ -115,8 +116,8 @@ class SimulationEngine(
         log.warn("simulate: {} FAILED por elegibilidad: {}", record.id, why.reason)
         repo.markFailed(record.id, why.reason, clock.instant())
         quota.refund(QuotaKind.SIMULATION, record.id.toString())
-        // Sin aristas ni avisos. Con borrado o bloqueo tampoco se toca Firestore (no recrear el documento
-        // de una cuenta purgada ni delatar al bloqueador).
+        // Sin aristas ni avisos. FAILED no lleva el motivo, así que publicarlo no delata al bloqueador y evita
+        // que el cliente espere sin fin. Con una cuenta borrada no se toca Firestore (no recrear su documento).
         if (!why.silent) {
             publish(record, participantsOf(record), SimulationStatus.FAILED, repo.find(record.id)?.progress ?: record.progress, null)
         }
