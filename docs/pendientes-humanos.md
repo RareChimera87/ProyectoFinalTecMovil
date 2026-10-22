@@ -178,3 +178,14 @@ Lo automatizable ya quedó hecho: `billing-ktx` 8.3.0, `BillingClientProvider` c
 | 7 | Adjuntar al PR de E7.0 la captura de los planes base activos y de RTDN, sin correos ni datos personales | I3 | 28-29 oct |
 | 8 | Aprobación del revisor par (feature major, `major-gate`): según `docs/equipo.md` el par de E7.0 es I1 | I1 | Ventana de revisión del 29 oct |
 | 9 | **Mezclar antes E10.1 (PR #1)** o junto con este: esta rama mezcla `feature/play-console-setup` porque completa su `docs/play-console.md`; el PR de E7.0 muestra también el commit de E10.1 | I3 | Antes del merge de E7.0 |
+
+## E7.2 · Billing en el cliente
+
+Lo automatizable ya quedó hecho: `BillingRepository` (planes desde `ProductDetails`, compra con `obfuscatedAccountId = sha256(userId)`, `verify` → entitlement, compras pendientes, restaurar y deep link a la gestión en Play), `FakeBillingRepository` para E7.3 y tests JVM de todos los criterios automatizables. Lo que sigue necesita una persona, un dispositivo con Play Store y la consola.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar antes E7.0 (PR #17)** o junto con este: la rama `feature/billing-client` mezcla `feature/billing-bootstrap` (y por ella E10.1) porque parte de su `BillingClientProvider`; el PR de E7.2 muestra también esos commits | I3 | Antes del merge de E7.2 |
+| 2 | Con la versión **0.2** de la pista cerrada, instalada desde Play con una cuenta license tester: abrir una pantalla que llame a `loadPlans()` (o un build de depuración con un botón temporal, sin commitearlo) y confirmar que conecta y que llegan `mensual` ($5.000) y `anual` ($45.000) con '$3.750/mes' calculado. Requiere que `parcheu_plus` y sus dos planes estén **activos** (E7.0, paso 4) | I3 | Al publicar la 0.2 |
+| 3 | Con la versión **0.3 (13 nov)**, ya con E7.1 (verify en el servidor) y E7.3 (pantallas): comprar `anual` y `mensual` con license tester (tarjeta de prueba "siempre aprueba"), cancelar la hoja de Play (no debe mostrar error), probar "aprueba con retraso" (debe verse 'verificación pendiente' y luego Plus), restaurar desde G4 y abrir "Cancelar en Google Play". Registrar el resultado en el PR de E7.3 sin correos ni datos personales | I3 (con I1 e I2) | 13-14 nov |
+| 4 | Aprobación del revisor par (feature major, `major-gate`): según `docs/equipo.md` el par de E7.2 es I1 | I1 | Ventana de revisión del 8 nov |
