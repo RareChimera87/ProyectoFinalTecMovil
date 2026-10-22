@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import org.robolectric.annotation.GraphicsMode
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.mutableStateOf
 import androidx.test.core.app.ApplicationProvider
@@ -20,6 +21,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35])
 class TwinMascotTest {
     @get:Rule
@@ -47,21 +49,43 @@ class TwinMascotTest {
     }
 
     @Test
-    fun animationsDisabledWhenDurationScaleIsZero() {
+    fun animationScaleZeroKeepsMascotStill() {
         val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
         Settings.Global.putFloat(ctx.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
-        val enabled = mutableStateOf<Boolean?>(null)
-        composeRule.setContent {
-            ParcheUTheme {
-                enabled.value = rememberAnimationsEnabled()
-                TwinMascot(talking = true)
-            }
-        }
-        composeRule.waitForIdle()
-        assertFalse(enabled.value!!)
-        // Con escala 0 y talking=true no hay animación infinita: la composición queda en reposo.
-        assertTrue(composeRule.mainClock.autoAdvance)
+        val frames = captureTalkingFrames()
+        assertTrue("con escala 0 la mascota no debe cambiar", frames.first == frames.second)
     }
+
+    @Test
+    fun animationScaleOneAnimatesMascot() {
+        val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
+        Settings.Global.putFloat(ctx.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+        val frames = captureTalkingFrames()
+        assertTrue("con escala 1 la mascota debe animarse", frames.first != frames.second)
+    }
+
+    @Test
+    fun errorGrayIsComputedInSrgbNotLinear() {
+        val gray = androidx.compose.ui.graphics.Color(0x6D / 255f, 0x4A / 255f, 0xFF / 255f).toGray()
+        // CSS grayscale(1) del violeta #6D4AFF da cerca de #5E5E5E (no #272727).
+        assertEquals(0.37f, gray.red, 0.02f)
+        assertEquals(gray.red, gray.green, 1e-6f)
+        assertEquals(gray.red, gray.blue, 1e-6f)
+    }
+
+    private fun captureTalkingFrames(): Pair<Float, Float> {
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent {
+            ParcheUTheme { TwinMascot(Modifier.testTag("m"), size = TwinMascotSize.XL, talking = true) }
+        }
+        composeRule.mainClock.advanceTimeBy(50)
+        val first = phase()
+        composeRule.mainClock.advanceTimeBy(200)
+        return first to phase()
+    }
+
+    private fun phase(): Float =
+        composeRule.onNodeWithTag("m").fetchSemanticsNode().config[MascotPhaseKey]
 
     @Test
     fun animationsEnabledByDefault() {

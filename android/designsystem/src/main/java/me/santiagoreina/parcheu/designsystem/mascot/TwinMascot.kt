@@ -15,17 +15,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -90,9 +90,12 @@ fun TwinMascot(
 
     val semanticsModifier =
         if (contentDescription != null) {
-            Modifier.semantics { this.contentDescription = contentDescription }
+            Modifier.semantics {
+                this.contentDescription = contentDescription
+                mascotPhase = phase
+            }
         } else {
-            Modifier.clearAndSetSemantics {}
+            Modifier.clearAndSetSemantics { mascotPhase = phase }
         }
 
     Canvas(
@@ -105,6 +108,10 @@ fun TwinMascot(
     }
 }
 
+/** Fase de la animación (0..1), expuesta solo para verificar en tests que la mascota se mueva o no. */
+internal val MascotPhaseKey = SemanticsPropertyKey<Float>("MascotPhase")
+private var SemanticsPropertyReceiver.mascotPhase by MascotPhaseKey
+
 /** Lee `Settings.Global.ANIMATOR_DURATION_SCALE`: con 0 el usuario pidió no ver animaciones. */
 @Composable
 fun rememberAnimationsEnabled(): Boolean {
@@ -115,52 +122,52 @@ fun rememberAnimationsEnabled(): Boolean {
     }
 }
 
-private fun Color.toGray(): Color {
-    val l = luminance()
+/** Gris como CSS grayscale(1): luma Rec. 709 sobre componentes sRGB sin linealizar. */
+internal fun Color.toGray(): Color {
+    val l = 0.2126f * red + 0.7152f * green + 0.0722f * blue
     return Color(l, l, l, alpha)
 }
 
 private fun DrawScope.drawMascot(body: Color, features: Color, phase: Float) {
     val w = size.width
     val h = size.height
-    // Cuerpo: el blob ocupa el área bajo la antena.
+    // Cuerpo: ocupa el 81,7 % inferior del alto; la antena el resto.
     val top = h * ANTENNA_AREA
     val bodyH = h - top
     drawPath(blobPath(w, bodyH, top), body)
 
-    // Antena: tallo y bola; en 'conversando' se balancea ±12° desde la base.
+    // Antena: tallo tipo píldora y bola maciza del color del cuerpo; en 'conversando' se balancea.
     val baseX = w * 0.5f
-    val sway = (phase - 0.5f) * 2f * ANTENNA_SWAY_DEGREES
+    val sway = (phase - 0.5f) * 2f * ANTENNA_SWAY_DEGREES * (if (phase == 0f) 0f else 1f)
     rotate(sway, pivot = Offset(baseX, top)) {
-        val tipY = h * 0.03f
-        drawLine(features, Offset(baseX, top), Offset(baseX, tipY + w * 0.05f), strokeWidth = w * 0.04f, cap = StrokeCap.Round)
-        drawCircle(body, radius = w * 0.07f, center = Offset(baseX, tipY + w * 0.05f))
-        drawCircle(features, radius = w * 0.07f, center = Offset(baseX, tipY + w * 0.05f), style = Stroke(w * 0.03f))
-    }
-
-    // Ojos.
-    val eyeR = w * 0.07f
-    val eyeY = top + bodyH * 0.40f
-    drawCircle(features, eyeR, Offset(w * 0.34f, eyeY))
-    drawCircle(features, eyeR, Offset(w * 0.66f, eyeY))
-
-    // Boca: sonrisa cuando está quieta; óvalo que se abre y cierra al conversar.
-    val mouthY = top + bodyH * 0.66f
-    val mouthW = w * 0.28f
-    if (phase == 0f) {
-        drawArc(
-            features,
-            startAngle = 20f,
-            sweepAngle = 140f,
-            useCenter = false,
-            topLeft = Offset(w * 0.5f - mouthW / 2f, mouthY - mouthW * 0.35f),
-            size = Size(mouthW, mouthW * 0.7f),
-            style = Stroke(w * 0.045f, cap = StrokeCap.Round)
+        val ballR = w * 0.07f
+        val ballCy = ballR
+        val stalkW = w * 0.06f
+        drawRoundRect(
+            body,
+            topLeft = Offset(baseX - stalkW / 2f, ballCy),
+            size = Size(stalkW, top - ballCy + bodyH * 0.02f),
+            cornerRadius = CornerRadius(stalkW / 2f)
         )
-    } else {
-        val open = w * (0.03f + 0.09f * phase)
-        drawOval(features, Offset(w * 0.5f - mouthW / 2f, mouthY - open / 2f), Size(mouthW, open))
+        drawCircle(body, radius = ballR, center = Offset(baseX, ballCy))
     }
+
+    // Ojos ovalados opacos: 0,13 w x 0,18 del alto del cuerpo, a 36 % de alto y 27 % de ancho.
+    val eyeW = w * 0.13f
+    val eyeH = bodyH * 0.18f
+    val eyeY = top + bodyH * 0.36f
+    drawOval(features, Offset(w * 0.27f, eyeY), Size(eyeW, eyeH))
+    drawOval(features, Offset(w * 0.73f - eyeW, eyeY), Size(eyeW, eyeH))
+
+    // Boca: media elipse rellena (0,18 w, a 63 %); al conversar se abre y cierra.
+    val mouthW = w * 0.18f
+    val mouthTop = top + bodyH * 0.63f
+    val openH = mouthW * (0.5f + 0.5f * phase)
+    val path = Path().apply {
+        arcTo(Rect(w * 0.5f - mouthW / 2f, mouthTop - openH, w * 0.5f + mouthW / 2f, mouthTop + openH), 0f, 180f, true)
+        close()
+    }
+    drawPath(path, features)
 }
 
 /** Blob con radios elípticos "48% 52% 44% 46% / 56% 54% 46% 44%" del inventario. */
@@ -189,6 +196,6 @@ private fun blobPath(w: Float, h: Float, yOffset: Float): Path {
 
 private const val FEATURE_ALPHA = 0.85f
 private const val ERROR_ALPHA = 0.5f
-private const val ANTENNA_AREA = 0.14f
+private const val ANTENNA_AREA = 0.183f
 private const val ANTENNA_SWAY_DEGREES = 12f
 private const val TALK_PERIOD_MS = 420
