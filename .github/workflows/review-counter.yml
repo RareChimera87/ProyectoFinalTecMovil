@@ -1,0 +1,88 @@
+name: review-counter
+
+# E0.6 + PLAN.md §5 (punto 3). Al mezclar un PR a dev cuenta las features pequeñas (no major)
+# mezcladas desde la última revisión (docs/revisiones.md y el último issue de revisión) y, al
+# llegar a 3, abre UN issue 'Revisión de 3 features pequeñas' asignado al dueño de la ola.
+# La lógica está en scripts/review-counter.py (pruebas: scripts/test/review-counter.test.sh).
+# dev está protegida: este workflow no escribe en el repo; la revisión hecha se anota a mano
+# en docs/revisiones.md (eso reinicia el contador).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: review-counter
+  cancel-in-progress: false
+
+jobs:
+  # En PR que tocan el contador: solo sus pruebas (no es un check obligatorio).
+  pruebas:
+    name: review-counter-pruebas
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filtro
+        with:
+          filters: |
+            contador:
+              - 'scripts/review-counter.py'
+              - 'scripts/test/review-counter.test.sh'
+              - 'scripts/test/fixtures/review-counter/**'
+              - '.github/workflows/review-counter.yml'
+      - name: Pruebas con fixtures de docs/revisiones.md
+        if: steps.filtro.outputs.contador == 'true'
+        run: scripts/test/review-counter.test.sh
+
+  review-counter:
+    name: review-counter
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ETIQUETA: revision-3-pequenas
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+      - name: Datos de GitHub
+        run: |
+          gh pr list -R "$GITHUB_REPOSITORY" --base dev --state merged --limit 500 \
+            --json number,title,mergedAt,labels,headRefName,baseRefName > "$RUNNER_TEMP/prs.json"
+          gh label create "$ETIQUETA" -R "$GITHUB_REPOSITORY" --color 5319E7 \
+            --description "Revisión de 3 features pequeñas (review-counter)" 2>/dev/null || true
+          gh issue list -R "$GITHUB_REPOSITORY" --label "$ETIQUETA" --state all --limit 200 \
+            --json number,title,state,createdAt > "$RUNNER_TEMP/issues.json"
+      - name: Decide
+        env:
+          DUENOS_GITHUB: ${{ vars.DUENOS_GITHUB }}
+        run: |
+          python3 scripts/review-counter.py --revisiones docs/revisiones.md --backlog docs/backlog.md \
+            --prs "$RUNNER_TEMP/prs.json" --issues "$RUNNER_TEMP/issues.json" \
+            --duenos "${DUENOS_GITHUB:-{\}}" | tee "$RUNNER_TEMP/decision.json"
+          jq -r '"Features pequeñas desde la última revisión: \(.conteo) (\(.prs | map("#\(.)") | join(", ")))"' \
+            "$RUNNER_TEMP/decision.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Abre el issue de revisión
+        run: |
+          d="$RUNNER_TEMP/decision.json"
+          [[ "$(jq -r .accion "$d")" == abrir ]] || { echo "Aún no hay 3 features pequeñas."; exit 0; }
+          jq -r .cuerpo "$d" > "$RUNNER_TEMP/cuerpo.md"
+          titulo="$(jq -r .titulo "$d")"
+          asignado="$(jq -r .asignado "$d")"
+          if ! gh issue create -R "$GITHUB_REPOSITORY" --title "$titulo" --body-file "$RUNNER_TEMP/cuerpo.md" \
+              --label "$ETIQUETA" --assignee "$asignado"; then
+            echo "::warning::No se pudo asignar a @$asignado (¿no es colaborador?); se abre sin asignar."
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$titulo" --body-file "$RUNNER_TEMP/cuerpo.md" \
+              --label "$ETIQUETA"
+          fi

@@ -1,0 +1,223 @@
+name: infra-ci
+
+# Terraform (E0.5, ampliado en E0.6). Autenticación con WIF: sin llaves JSON.
+#  - PR: fmt, validate y pruebas de los scripts; si el PR toca infra/, `plan` de dev con
+#    sa-terraform-plan, check-plan/check-iam y el plan comentado en el PR.
+#  - push a dev que toca infra/: `apply` de dev con sa-terraform (solo la rama dev puede usarla).
+#  - El `apply` de prod NO corre en CI: lo ejecuta el usuario (infra/terraform/README.md).
+# El check obligatorio es `infra-ci` (siempre reporta; los jobs pesados solo si cambia infra/).
+on:
+  pull_request:
+  push:
+    branches: [dev]
+    paths:
+      - "infra/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.15.9"
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  cambios:
+    name: infra-cambios
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      infra: ${{ github.event_name != 'pull_request' && 'true' || steps.filtro.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filtro
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            infra:
+              - 'infra/**'
+              - 'scripts/check-plan.sh'
+              - 'scripts/check-iam.sh'
+              - 'scripts/cargar-secretos.sh'
+              - 'scripts/test/check-plan.test.sh'
+              - 'scripts/test/cargar-secretos.test.sh'
+              - 'scripts/test/plan-iam-permisos.test.sh'
+              - 'scripts/test/fixtures/plan-*.json'
+              - '.github/workflows/infra-ci.yml'
+
+  static:
+    name: infra-static
+    needs: cambios
+    if: needs.cambios.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: terraform fmt
+        run: terraform fmt -check -recursive infra/terraform
+      - name: terraform validate
+        run: |
+          for d in bootstrap envs/dev envs/prod; do
+            echo "::group::$d"
+            terraform -chdir=infra/terraform/$d init -backend=false -input=false
+            terraform -chdir=infra/terraform/$d validate
+            echo "::endgroup::"
+          done
+      - name: Pruebas de check-plan, check-iam y cargar-secretos
+        run: |
+          scripts/test/check-plan.test.sh
+          scripts/test/cargar-secretos.test.sh
+          scripts/test/plan-iam-permisos.test.sh
+
+  plan-dev:
+    name: infra-plan-dev
+    runs-on: ubuntu-latest
+    needs: static
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    env:
+      WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Requiere los secretos del bootstrap
+        if: env.WIF_PROVIDER == ''
+        run: |
+          echo "::error::Falta el secreto WIF_PROVIDER: aplica infra/terraform/bootstrap en dev (ver infra/terraform/README.md)."
+          exit 1
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          # Identidad de solo lectura de metadatos: cualquier PR puede usarla en dev.
+          service_account: ${{ secrets.TF_PLAN_SERVICE_ACCOUNT_DEV }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: terraform plan (dev)
+        working-directory: infra/terraform/envs/dev
+        run: |
+          terraform init -input=false
+          # sa-terraform-plan solo lee el estado: sin lock (el apply de dev sí lo toma).
+          terraform plan -input=false -lock=false -out=plan.tfplan
+          terraform show -json plan.tfplan > plan.json
+          terraform show -no-color plan.tfplan > plan.txt
+      - name: check-plan y check-iam
+        id: checks
+        run: |
+          {
+            scripts/check-plan.sh infra/terraform/envs/dev/plan.json
+            scripts/check-iam.sh infra/terraform/envs/dev/plan.json
+          } 2>&1 | tee checks.txt
+      - name: Comenta el plan en el PR
+        if: always() && hashFiles('infra/terraform/envs/dev/plan.txt') != ''
+        env:
+          CHECKS: ${{ steps.checks.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          plan=infra/terraform/envs/dev/plan.txt
+          resumen="$(grep -E '^(Plan:|No changes\.)' "$plan" | tail -1 || true)"
+          marca='<!-- infra-plan-dev -->'
+          {
+            echo "$marca"
+            echo "### infra-ci · plan de dev"
+            echo
+            echo "**${resumen:-sin resumen}** · check-plan/check-iam: \`$CHECKS\` · [ejecución]($RUN_URL)"
+            echo
+            echo '<details><summary>Plan completo</summary>'
+            echo
+            echo '```'
+            # Un comentario admite 65 536 caracteres: si el plan es más largo se corta aquí;
+            # el plan completo queda en el artefacto infra-plan-dev.
+            head -c 55000 "$plan"
+            echo
+            echo '```'
+            echo '</details>'
+          } > comentario.md
+          previo="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq "map(select(.body | startswith(\"$marca\"))) | .[0].id // empty" 2>/dev/null | head -1)"
+          if [[ -n "$previo" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$previo" -F body=@comentario.md >/dev/null
+          else
+            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file comentario.md
+          fi
+      - name: Guarda el plan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-plan-dev
+          path: |
+            infra/terraform/envs/dev/plan.txt
+            infra/terraform/envs/dev/plan.json
+          retention-days: 7
+
+  apply-dev:
+    name: infra-apply-dev
+    runs-on: ubuntu-latest
+    needs: static
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    concurrency:
+      group: infra-apply-dev
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_SERVICE_ACCOUNT_DEV: ${{ secrets.TF_SERVICE_ACCOUNT_DEV }}
+    steps:
+      - name: Requiere los secretos del bootstrap
+        if: env.TF_SERVICE_ACCOUNT_DEV == ''
+        run: |
+          echo "::error::Falta el secreto TF_SERVICE_ACCOUNT_DEV (salida terraform_service_account del bootstrap de dev)."
+          exit 1
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          # sa-terraform solo acepta tokens de la rama dev (attribute.ref en el bootstrap).
+          service_account: ${{ secrets.TF_SERVICE_ACCOUNT_DEV }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: terraform plan (dev)
+        working-directory: infra/terraform/envs/dev
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -out=plan.tfplan
+          terraform show -json plan.tfplan > plan.json
+      - name: check-plan y check-iam antes de aplicar
+        run: |
+          scripts/check-plan.sh infra/terraform/envs/dev/plan.json
+          scripts/check-iam.sh infra/terraform/envs/dev/plan.json
+      - name: terraform apply (dev)
+        working-directory: infra/terraform/envs/dev
+        run: terraform apply -input=false plan.tfplan
+
+  infra-ci:
+    name: infra-ci
+    needs: [cambios, static, plan-dev]
+    if: always() && github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resultado
+        env:
+          CAMBIOS: ${{ needs.cambios.result }}
+          STATIC: ${{ needs.static.result }}
+          PLAN: ${{ needs.plan-dev.result }}
+        run: |
+          echo "cambios=$CAMBIOS static=$STATIC plan-dev=$PLAN"
+          [[ "$CAMBIOS" == success ]] || exit 1
+          for r in "$STATIC" "$PLAN"; do
+            [[ "$r" == success || "$r" == skipped ]] || exit 1
+          done
