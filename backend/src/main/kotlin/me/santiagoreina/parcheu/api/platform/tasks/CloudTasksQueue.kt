@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory
  * `sa-tasks` y la audiencia fija de `/internal` (`INTERNAL_OIDC_AUDIENCE`, E0.5).
  */
 class CloudTasksQueue(
-    private val queues: Map<QueueKind, String>,
+    internal val queues: Map<QueueKind, String>,
     private val serviceUrl: String,
     private val serviceAccount: String,
     private val audience: String,
@@ -43,12 +43,30 @@ class CloudTasksQueue(
     }
 
     companion object {
+        private fun String?.orBlankNull() = this?.takeIf { it.isNotBlank() }
+
+        /**
+         * Cloud Tasks exige `projects/<p>/locations/<r>/queues/<cola>`. Si [value] ya es la ruta se respeta;
+         * si es el nombre corto se completa con [project] y [region].
+         */
+        internal fun queuePath(value: String, project: String?, region: String?): String =
+            if (value.startsWith("projects/")) value else "projects/$project/locations/$region/queues/$value"
+
         /**
          * Lee `TASKS_QUEUE_*` y `SERVICE_URL`. Si falta algo devuelve [UnconfiguredTaskQueue] para que
          * el servicio arranque y el fallo se vea (y se registre) al encolar.
          */
         fun fromEnv(config: AppConfig, vars: Map<String, String>): TaskQueue {
-            val queues = QueueKind.entries.mapNotNull { kind -> vars[kind.envVar]?.takeIf { it.isNotBlank() }?.let { kind to it } }.toMap()
+            val raw = QueueKind.entries.mapNotNull { kind -> vars[kind.envVar]?.takeIf { it.isNotBlank() }?.let { kind to it } }.toMap()
+            val sqlParts = vars["CLOUD_SQL_INSTANCE"]?.split(':')?.takeIf { it.size == 3 }
+            val project = vars["GCP_PROJECT"].orBlankNull() ?: vars["FIREBASE_PROJECT_ID"].orBlankNull() ?: sqlParts?.get(0)
+            val region = vars["GCP_REGION"].orBlankNull() ?: sqlParts?.get(1)
+            // El Terraform de E0.5 entrega el nombre corto de la cola (`ai-light`), no la ruta completa.
+            val unresolved = raw.values.any { !it.startsWith("projects/") } && (project == null || region == null)
+            if (unresolved) {
+                return UnconfiguredTaskQueue("las colas usan nombre corto y falta GCP_PROJECT o GCP_REGION para armar la ruta")
+            }
+            val queues = raw.mapValues { (_, v) -> queuePath(v, project, region) }
             val url = vars["SERVICE_URL"]?.takeIf { it.isNotBlank() }
             val missing = buildList {
                 if (url == null) add("SERVICE_URL")
