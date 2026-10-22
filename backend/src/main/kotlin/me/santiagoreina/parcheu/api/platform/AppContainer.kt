@@ -3,7 +3,11 @@ package me.santiagoreina.parcheu.api.platform
 import me.santiagoreina.parcheu.api.admin.AdminRoutes
 import me.santiagoreina.parcheu.api.billing.BillingRoutes
 import me.santiagoreina.parcheu.api.chat.ChatRoutes
+import me.santiagoreina.parcheu.api.graph.AnonIdSigner
+import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
+import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
+import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
@@ -39,8 +43,10 @@ class AppContainer(
     val tokenVerifier: TokenVerifier,
     val oidcVerifier: OidcVerifier,
     val identity: IdentityService,
+    /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
+    val graph: GraphModule = inMemoryGraphModule(clock),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity),
+    val domains: List<DomainRoutes> = allDomains(identity, graph),
 ) {
     companion object {
         /** Cableado de producción: verificadores reales (Fake solo con `ENV=local`). */
@@ -62,20 +68,21 @@ class AppContainer(
             }
             val database = connectExposed(createDataSource(dbConfig, failFast = false))
             val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity)
+            val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, graph)
         }
     }
 }
 
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
-fun allDomains(identity: IdentityService): List<DomainRoutes> = listOf(
+fun allDomains(identity: IdentityService, graph: GraphModule = inMemoryGraphModule(systemClock())): List<DomainRoutes> = listOf(
     IdentityRoutes(identity),
     TwinRoutes(),
     QuotaRoutes(),
     MatchingRoutes(),
     SimulationRoutes(),
     ScenarioRoutes(),
-    GraphRoutes(),
+    GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),
     ChatRoutes(),
     NotificationsRoutes(),
