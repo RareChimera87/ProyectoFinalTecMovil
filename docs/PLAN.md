@@ -16,7 +16,7 @@
 - **Privacidad:** una sola `GraphVisibilityPolicy` más filtros en SQL y una **suite de pruebas por propiedades** que garantiza que Pareja, ocultos, bloqueados y borrados nunca aparecen a terceros (con demo de mutación para la sustentación).
 - **Riesgo n.º 1, no técnico:** la regla de Play de **12 testers durante 14 días** en prueba cerrada, que corre desde que Play **aprueba** la versión y los testers se **inscriben**, no desde la subida. Por eso: el **28 oct** sube a mano a la pista interna un AAB con Play Billing (permite crear `parcheu_plus`); el **29 oct** la 0.1 se envía a revisión en la prueba cerrada (aprobación estimada 30-31 oct); la 0.2 con el ciclo principal sale el **9 nov** (fecha de la materia); la 0.3 con billing de punta a punta el **13 nov**; se pide acceso a producción cuando se cumplen los 14 días (**≈14 nov**); la 0.9 se envía a revisión de producción **apenas llega el acceso** y la 1.0 entra como actualización el **24-25 nov**.
 - **Ley 1581 desde el primer usuario:** aceptación expresa de términos y política en A4 (versionada), aviso de IA y transferencia a EE. UU., edad pedida a todos, retención definida y exportación y borrado completos.
-- **Backlog:** 11 épicas y 69 features pequeñas en 13 olas paralelizables, 28 de ellas major (con revisión obligatoria y revisor par humano), con medio día de revisión al final de cada ola.
+- **Backlog:** 11 épicas y 69 features pequeñas en 13 olas paralelizables, 28 de ellas major (con revisión obligatoria del agente y revisor par humano a posteriori), con medio día de revisión al final de cada ola.
 
 ---
 
@@ -126,7 +126,7 @@ ParcheU/                                  (git: github.com/RareChimera87/Proyect
 
 ### Ramas
 - `main`: solo recibe PR desde `release/*` o `fix/*` urgentes; **lo aprueba el usuario**. Cada merge lleva tag `vX.Y.Z`.
-- `dev`: integración. Los PR `feature/*` → `dev` se mezclan solos (squash) cuando pasan **CI** y la **revisión automática del agente** (check `revision-agente`); si el PR es de una feature major (etiqueta `major`), además hace falta la **aprobación de un revisor par humano** distinto del dueño (check `major-gate`). Así 'se mezclan cuando pasa CI y la revisión' es literal y verificable.
+- `dev`: integración. Los PR `feature/*` → `dev` los mezcla (squash) el **agente integrador del workflow** cuando pasan **CI** y la **revisión adversarial del agente revisor** (veredicto como comentario del PR; el integrador pone la etiqueta `revisado-agente`, que exigen los checks `revision-agente` y `major-gate`). No hay revisor humano obligatorio en feature→dev: el repo tiene una sola cuenta de GitHub y la revisión por pares del equipo (equipo.md) es una práctica, no un check. Así 'se mezclan cuando pasa CI y la revisión' es literal y verificable. *(Corregido el 22 oct: la versión inicial exigía la aprobación de otro usuario de GitHub y dejó 40 PR sin mezclar.)*
 - `feature/<kebab>`: una por feature del backlog (el nombre está en cada ficha).
 - `fix/<kebab>`: correcciones. `release/<versión>`: estabilización antes de `main`.
 - El repositorio remoto tiene historial viejo; reemplazarlo (force push) **solo con la aprobación explícita del usuario** en E0.1.
@@ -144,7 +144,7 @@ lint + tests de la parte tocada (filtros por ruta): `android-ci`, `backend-ci` (
 - Tag `v*` en `main` → `deploy-prod` con el environment `production` (aprobación del usuario). El `terraform apply` de prod lo ejecuta **solo el usuario**.
 
 ### Revisiones obligatorias
-1. **Antes del merge, en todo PR:** revisión automática del agente (`revision-agente`). En features major, además, aprobación del revisor par humano (tabla en [equipo.md](equipo.md#revisores-par)).
+1. **Antes del merge, en todo PR:** revisión adversarial del agente revisor (hasta 2 rondas de corrección), registrada con la etiqueta `revisado-agente`. En features major, el revisor par humano de [equipo.md](equipo.md#revisores-par) la mira después del merge, en la ventana de revisión de la ola.
 2. **Tras cada feature major** (28, listadas en backlog.md §5): revisión en busca de errores sobre `dev` con el diff mezclado, antes de que arranque cualquier feature que dependa de ella.
 3. **Cada 3 features pequeñas** (no major) mezcladas: el workflow `review-counter` lleva la cuenta en `docs/revisiones.md` y, al llegar a 3, abre un issue de revisión asignado al dueño de la ola; se hace en la ventana de revisión de esa ola.
 4. **Al cerrar cada épica mayor** (E0, E1, E2, E3, E4, E7, E8, E10): revisión de la épica completa.

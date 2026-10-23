@@ -21,6 +21,8 @@ data class DbConfig(
  *   `https://api.parcheu-<env>.internal`). Si falta se usa `SERVICE_URL` como respaldo.
  * - `TASKS_SERVICE_ACCOUNT`: correo de `sa-tasks`, única identidad válida en las rutas `/internal`.
  * - `FIREBASE_PROJECT_ID`: proyecto de Firebase Auth; si falta se usa `GCP_PROJECT` (lo define E0.5).
+ * - `LEGAL_TEXT_VERSION`: versión vigente de los Términos y la Política de privacidad (E2.1, ADR-0017). Debe coincidir
+ *   con la de las páginas web (E8.4); al subirla, todos los usuarios vuelven a `NEEDS_TERMS`.
  *
  * Obligatorias según el modo (solo `serve` valida Firebase y OIDC; `migrate`, `seed-demo` y `purge-demo` no los usan):
  * - todos: `ENV`.
@@ -38,6 +40,8 @@ data class AppConfig(
     val tasksServiceAccount: String,
     val firebaseProjectId: String?,
     val db: DbConfig?,
+    /** Versión vigente del texto legal; se guarda en `consents.text_version` al aceptar. */
+    val legalTextVersion: String = DEFAULT_LEGAL_TEXT_VERSION,
 ) {
     companion object {
         /**
@@ -71,10 +75,14 @@ data class AppConfig(
                 tasksServiceAccount = vars["TASKS_SERVICE_ACCOUNT"].orNull() ?: LOCAL_TASKS_ACCOUNT,
                 firebaseProjectId = vars["FIREBASE_PROJECT_ID"].orNull() ?: vars["GCP_PROJECT"].orNull(),
                 db = db,
+                legalTextVersion = vars["LEGAL_TEXT_VERSION"].orNull() ?: DEFAULT_LEGAL_TEXT_VERSION,
             )
             if (serving) config.validateForServe(explicitTasksAccount = !vars["TASKS_SERVICE_ACCOUNT"].isNullOrBlank())
             return config
         }
+
+        /** Versión del texto legal publicada con la prueba cerrada (E8.4 usa la misma). */
+        const val DEFAULT_LEGAL_TEXT_VERSION = "2026-10-29"
 
         private const val LOCAL_TASKS_ACCOUNT = "sa-tasks@parcheu-local.iam.gserviceaccount.com"
 

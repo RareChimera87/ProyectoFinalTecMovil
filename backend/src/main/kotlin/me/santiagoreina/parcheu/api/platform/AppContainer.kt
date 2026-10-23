@@ -11,7 +11,9 @@ import me.santiagoreina.parcheu.api.billing.BillingRoutes
 import me.santiagoreina.parcheu.api.chat.ChatRoutes
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
 import me.santiagoreina.parcheu.api.home.HomeRoutes
+import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
+import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
 import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
@@ -30,6 +32,7 @@ import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
 import me.santiagoreina.parcheu.api.social.SocialRoutes
 import me.santiagoreina.parcheu.api.twin.TwinRoutes
+import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Clock
 
 /**
@@ -42,8 +45,9 @@ class AppContainer(
     val clock: Clock,
     val tokenVerifier: TokenVerifier,
     val oidcVerifier: OidcVerifier,
+    val identity: IdentityService,
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(),
+    val domains: List<DomainRoutes> = allDomains(identity),
     /** Pasarela de IA (E0.9). Por defecto Fake con uso en memoria (tests y `ENV=local`). */
     val ai: AiGateway = localAiGateway(clock),
 ) {
@@ -66,14 +70,29 @@ class AppContainer(
                 GoogleOidcVerifier(config.oidcAudience, config.tasksServiceAccount)
             }
             val clock = systemClock()
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, ai = aiGateway(config, vars, clock))
+            val dbConfig = requireNotNull(config.db) {
+                "El servicio necesita la base de datos: define DB_NAME y CLOUD_SQL_INSTANCE (o DB_URL en local)"
+            }
+            val database = connectExposed(createDataSource(dbConfig, failFast = false))
+            val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
+            val ai = aiGateway(config, vars, clock) { database }
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, ai = ai)
         }
 
-        /** Pasarela de IA: uso en Postgres si hay base configurada; en memoria solo con `ENV=local`. */
-        fun aiGateway(config: AppConfig, vars: Map<String, String>, clock: Clock): AiGateway {
+        /**
+         * Pasarela de IA: uso en Postgres si hay base configurada (reutiliza [database] si se pasa;
+         * si no, abre un pool perezoso propio); en memoria solo con `ENV=local`.
+         */
+        fun aiGateway(
+            config: AppConfig,
+            vars: Map<String, String>,
+            clock: Clock,
+            database: (() -> Database)? = null,
+        ): AiGateway {
             val aiConfig = AiConfig.fromEnv(vars, config.env)
             val db = config.db
             val usage = when {
+                database != null -> ExposedAiUsageStore(database)
                 db != null -> ExposedAiUsageStore { connectExposed(createDataSource(db, maxPoolSize = 2)) }
                 config.env == Env.LOCAL -> InMemoryAiUsageStore()
                 else -> error("La pasarela de IA necesita DB_NAME y la conexión a la base en ${config.env}")
@@ -89,8 +108,8 @@ class AppContainer(
 }
 
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
-fun allDomains(): List<DomainRoutes> = listOf(
-    IdentityRoutes(),
+fun allDomains(identity: IdentityService): List<DomainRoutes> = listOf(
+    IdentityRoutes(identity),
     TwinRoutes(),
     QuotaRoutes(),
     MatchingRoutes(),

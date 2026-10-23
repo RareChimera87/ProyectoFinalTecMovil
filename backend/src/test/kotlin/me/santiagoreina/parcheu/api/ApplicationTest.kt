@@ -70,11 +70,11 @@ class ApplicationTest : FunSpec({
         }
     }
 
-    test("GET /v1/me con el token Fake no es 401 (el stub responde 501)") {
+    test("GET /v1/me con el token Fake no es 401") {
         testApplication {
             val response = startApp().get("/v1/me", bearer(fakeToken))
             response.status shouldNotBe HttpStatusCode.Unauthorized
-            response.status shouldBe HttpStatusCode.NotImplemented
+            response.status shouldBe HttpStatusCode.OK
         }
     }
 
