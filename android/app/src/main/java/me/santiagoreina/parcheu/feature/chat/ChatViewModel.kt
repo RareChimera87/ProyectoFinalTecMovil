@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
+import me.santiagoreina.parcheu.feature.safety.SafetyTarget
 
 /** Estado de F9. */
 data class ChatUiState(
@@ -35,8 +36,8 @@ data class ChatUiState(
 }
 
 sealed interface ChatEffect {
-    /** Abre H1 (reportar o bloquear) para [userId] desde este chat. */
-    data class OpenReport(val userId: String, val chatId: String) : ChatEffect
+    /** Abre H1 (reportar o bloquear) para [target] desde este chat (E8.1). */
+    data class OpenReport(val target: SafetyTarget) : ChatEffect
 
     /** No se pudo silenciar o quitar el silencio. */
     data class MuteFailed(val error: AppError) : ChatEffect
@@ -206,11 +207,25 @@ class ChatViewModel(
         }
     }
 
-    /** Menú → "Reportar o bloquear" (H1). */
+    /** Menú → "Reportar o bloquear" (H1). Con una persona anónima el objetivo es su `anonId`. */
     fun report() {
         val header = state.value.header ?: return
-        val userId = header.otherUserId ?: return
-        viewModelScope.launch { _effects.send(ChatEffect.OpenReport(userId, chatId)) }
+        val anonymous = header.otherUserId == null
+        val id = header.otherUserId ?: header.otherAnonId ?: return
+        val target =
+            SafetyTarget(
+                id = id,
+                name = header.name,
+                anonymous = anonymous,
+                chatId = chatId,
+                muted = header.muted
+            )
+        viewModelScope.launch { _effects.send(ChatEffect.OpenReport(target)) }
+    }
+
+    /** H1 cambió el silencio del chat: la barra lo refleja sin recargar. */
+    fun onMutedChanged(muted: Boolean) {
+        meta.update { m -> m.copy(header = m.header?.copy(muted = muted)) }
     }
 
     private fun merge(

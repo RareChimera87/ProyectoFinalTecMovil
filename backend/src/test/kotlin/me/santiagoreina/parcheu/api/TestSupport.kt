@@ -12,6 +12,8 @@ import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.safety.SafetyModule
+import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.chat.ChatModule
@@ -71,6 +73,7 @@ fun testContainer(
     simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
+    safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
 ): AppContainer {
     val identity = IdentityService(repo, clock, legalTextVersion)
     val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
@@ -89,7 +92,8 @@ fun testContainer(
         simulation = simulation,
         notifier = notifier,
         matching = matching,
-        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching) + extra,
+        safety = safety,
+        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety) + extra,
     )
 }
 

@@ -11,6 +11,7 @@ import me.santiagoreina.parcheu.contract.PersonRef
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
+import me.santiagoreina.parcheu.feature.safety.SafetyTarget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -165,7 +166,18 @@ class ChatViewModelTest {
     fun reportOpensH1WithTheOtherPerson() = runTest {
         val vm = viewModel(repo())
         vm.report()
-        assertEquals(ChatEffect.OpenReport("user-2", "chat-1"), vm.effects.first())
+        assertEquals(
+            ChatEffect.OpenReport(
+                SafetyTarget(
+                    "user-2",
+                    "Laura Pinzón",
+                    anonymous = false,
+                    chatId = "chat-1",
+                    muted = false
+                )
+            ),
+            vm.effects.first()
+        )
     }
 
     @Test
@@ -220,7 +232,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun anonymousChatNeverReportsAnonIdAsUserId() = runTest {
+    fun anonymousChatReportsWithAnonIdNeverAsUserId() = runTest {
         val anon =
             summary.copy(
                 type = ChatType.SCENARIO,
@@ -229,9 +241,12 @@ class ChatViewModelTest {
         val repo = FakeChatRepository(chats = ApiResult.Success(listOf(anon)))
         val vm = viewModel(repo)
         assertNull(vm.state.value.header?.otherUserId)
-        assertFalse(vm.state.value.header!!.canReport)
+        assertTrue(vm.state.value.header!!.canReport)
         vm.report()
-        // Sin objetivo válido no se emite OpenReport.
-        assertNull(kotlinx.coroutines.withTimeoutOrNull(50) { vm.effects.first() })
+        // El anonId viaja marcado como anónimo: H2 lo manda como `anonId` y el servidor lo resuelve.
+        val target = (vm.effects.first() as ChatEffect.OpenReport).target
+        assertEquals("hmac-anon", target.id)
+        assertTrue(target.anonymous)
+        assertEquals("chat-1", target.chatId)
     }
 }

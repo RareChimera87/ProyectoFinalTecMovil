@@ -1,21 +1,53 @@
 package me.santiagoreina.parcheu.api.safety
 
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.auth.principal
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
-import me.santiagoreina.parcheu.api.platform.stubDelete
-import me.santiagoreina.parcheu.api.platform.stubGet
+import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
+import me.santiagoreina.parcheu.api.platform.errors.NotFound
+import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
 import me.santiagoreina.parcheu.api.platform.stubPost
+import me.santiagoreina.parcheu.contract.ReportRequest
+import java.util.UUID
 
-/** Rutas del dominio safety: stubs 501 de E0.3; las rellena su feature. */
-class SafetyRoutes : DomainRoutes {
+/**
+ * Rutas del dominio safety (E8.1, arquitectura.md §5.2). [currentUserId] traduce el usuario de
+ * Firebase a `users.id`. La moderación interna (`/tasks/moderate`) sigue como stub hasta E8.6.
+ */
+class SafetyRoutes(
+    private val safety: SafetyService,
+    private val currentUserId: suspend (FirebaseUser) -> UUID,
+) : DomainRoutes {
     override fun Route.v1() {
-        stubPost("/reports")
-        stubGet("/blocks")
-        stubPost("/blocks/{userId}")
-        stubDelete("/blocks/{userId}")
+        post("/reports") {
+            val user = call.userId()
+            call.respond(HttpStatusCode.Created, safety.report(user, call.receive<ReportRequest>()))
+        }
+        get("/blocks") {
+            call.respond(safety.blocks(call.userId()))
+        }
+        post("/blocks/{userId}") {
+            safety.block(call.userId(), call.target())
+            call.respond(HttpStatusCode.NoContent)
+        }
+        delete("/blocks/{userId}") {
+            safety.unblock(call.userId(), call.target())
+            call.respond(HttpStatusCode.NoContent)
+        }
     }
 
     override fun Route.internal() {
         stubPost("/tasks/moderate")
     }
+
+    private suspend fun ApplicationCall.userId(): UUID = currentUserId(principal<FirebaseUser>() ?: throw Unauthenticated())
+
+    private fun ApplicationCall.target(): String = parameters["userId"]?.takeIf { it.isNotBlank() } ?: throw NotFound("La persona no existe")
 }

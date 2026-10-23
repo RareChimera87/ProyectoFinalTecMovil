@@ -4,14 +4,19 @@ import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.santiagoreina.parcheu.feature.safety.CloseReason
+import me.santiagoreina.parcheu.feature.safety.SafetySheetHost
+import me.santiagoreina.parcheu.feature.safety.SafetyTarget
+import me.santiagoreina.parcheu.feature.safety.toReportRoute
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Chat
 import me.santiagoreina.parcheu.navigation.PrivacySettings
-import me.santiagoreina.parcheu.navigation.Report
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -21,11 +26,11 @@ fun ChatRoute(route: Chat, navigator: AppNavigator, modifier: Modifier = Modifie
     val viewModel: ChatViewModel = koinViewModel(key = route.chatId) { parametersOf(route.chatId) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var safetyTarget by remember { mutableStateOf<SafetyTarget?>(null) }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is ChatEffect.OpenReport ->
-                    navigator.navigate(Report(userId = effect.userId, chatId = effect.chatId))
+                is ChatEffect.OpenReport -> safetyTarget = effect.target
                 is ChatEffect.MuteFailed ->
                     Toast.makeText(context, errorMessage(effect.error), Toast.LENGTH_SHORT).show()
             }
@@ -47,4 +52,16 @@ fun ChatRoute(route: Chat, navigator: AppNavigator, modifier: Modifier = Modifie
             )
         }
     ChatScreen(state = state, actions = actions, modifier = modifier)
+    // H1 (E8.1): hoja sobre el chat con Silenciar, Reportar y Bloquear.
+    safetyTarget?.let { target ->
+        SafetySheetHost(target) { reason, sheet ->
+            safetyTarget = null
+            when (reason) {
+                CloseReason.Report -> navigator.navigate(target.toReportRoute())
+                CloseReason.Blocked -> navigator.back()
+                CloseReason.Muted -> viewModel.onMutedChanged(sheet.muted)
+                CloseReason.Dismissed -> Unit
+            }
+        }
+    }
 }

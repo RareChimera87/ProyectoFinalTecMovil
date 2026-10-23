@@ -51,7 +51,10 @@ import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.quota.quotaModule
+import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
+import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
+import me.santiagoreina.parcheu.api.safety.safetyModule
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.simulation.NotifierSimulationNotifier
 import me.santiagoreina.parcheu.api.simulation.SimulationModule
@@ -98,8 +101,13 @@ class AppContainer(
         inMemorySimulationModule(clock, ai, quota, graph, notifier = NotifierSimulationNotifier(notifier)),
     /** Fila de match (E4.2). Por defecto en memoria: solo [fromConfig] cablea Postgres y Firestore. */
     val matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
+    /**
+     * Reportar y bloquear (E8.1). Por defecto en memoria (propaga los bloqueos a chat, grafo y fila):
+     * solo [fromConfig] cablea Postgres.
+     */
+    val safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety),
 ) {
     companion object {
         /**
@@ -148,10 +156,12 @@ class AppContainer(
                 config.env, database, clock, quota, simulation, graph, notifier, config.firebaseProjectId,
                 MatchingFlags.fromEnv(config.env, vars),
             )
+            // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
+            val safety = safetyModule(database, chat, graph, matching, clock)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
-                matching = matching,
+                matching = matching, safety = safety,
             )
         }
 
@@ -193,6 +203,7 @@ fun allDomains(
     chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
     simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
     matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
+    safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile),
     TwinRoutes(twin),
@@ -205,7 +216,7 @@ fun allDomains(
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     NotificationsRoutes(),
     BillingRoutes(),
-    SafetyRoutes(),
+    SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
     AdminRoutes(),
     HomeRoutes(),
 )

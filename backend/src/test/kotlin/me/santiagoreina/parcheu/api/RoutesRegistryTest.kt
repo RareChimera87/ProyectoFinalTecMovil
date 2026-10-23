@@ -52,10 +52,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
     "notifications" to listOf(HttpMethod.Get to "/v1/notifications", HttpMethod.Post to "/v1/notifications/read"),
     "billing" to listOf(HttpMethod.Get to "/v1/billing/entitlement", HttpMethod.Post to "/v1/billing/verify"),
-    "safety" to listOf(
-        HttpMethod.Post to "/v1/reports", HttpMethod.Get to "/v1/blocks",
-        HttpMethod.Post to "/v1/blocks/u1", HttpMethod.Delete to "/v1/blocks/u1",
-    ),
+    // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` sigue en 501 (E8.6).
     "admin" to listOf(HttpMethod.Get to "/v1/admin/reports", HttpMethod.Post to "/v1/admin/reports/r1/resolve"),
     "home" to listOf(HttpMethod.Get to "/v1/home"),
 )
