@@ -120,6 +120,10 @@ Lo automatizable ya quedó hecho: flavors, `BuildConfig`, `scripts/fetch-google-
 | 4 | **Prueba en dispositivo (I2).** Instalar `./gradlew :app:installDevDebug`, abrir el catálogo de rutas del stub de Splash y recorrer las 36 pantallas, la NavBar en las 5 raíces y los enlaces legales de A4. Repetir con `:app:installProdRelease` (R8 activo, firmado con la llave de debug) para confirmar que las rutas tipadas y el contrato sobreviven a la minificación. Dejar el resultado en el PR. | I2 | Revisión del PR de E0.7 |
 | 5 | **Aprobación del revisor par** del PR (feature major): la pide `major-gate`; según `docs/equipo.md` el par de E0.7 es I1. | I1 | Revisión del PR de E0.7 |
 
+## E1.2 Iconos y marca
+
+- [ ] Revisar a ojo el icono de lanzador y el splash en un dispositivo o emulador (Android 13+ para ver la capa monocroma con iconos temáticos). La geometría de la U (5 nodos) se dibujó a partir de la descripción del inventario; si el Claude Design tiene coordenadas distintas, ajustar `ic_launcher_foreground.xml` y `ic_launcher_monochrome.xml`.
+- [ ] Confirmar la lista de íconos: se eligió un conjunto representativo (NavBar, app bars, estados, privacidad) sin recorrer cada pantalla del archivo de diseño. Si falta alguno, agregarlo en `designsystem/src/main/res/drawable/` y en `IconCatalogTest`.
 ## E1.1 · Tokens de diseño
 
 Lo automatizable ya quedó hecho: tokens, fuentes Sora e Inter (OFL) en `android/designsystem/src/main/res/font`, pruebas de afinidad y contraste AA, y capturas Roborazzi de la hoja de tokens en ambos temas (`android/designsystem/src/test/screenshots/token_sheet_{dark,light}.png`).
