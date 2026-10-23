@@ -6,5 +6,6 @@
   "affinity": 87,
   "mode": "AMISTAD",
   "state": "CONNECTED",
-  "anonymous": false
+  "anonymous": false,
+  "isDemo": false
 }
