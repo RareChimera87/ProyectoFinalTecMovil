@@ -10,6 +10,7 @@ import me.santiagoreina.parcheu.navigation.AddFriends
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Communities
 import me.santiagoreina.parcheu.navigation.Evolution
+import me.santiagoreina.parcheu.navigation.Introduce
 import me.santiagoreina.parcheu.navigation.MatchQueue
 import me.santiagoreina.parcheu.navigation.Parche
 import me.santiagoreina.parcheu.navigation.Paywall
@@ -63,7 +64,8 @@ fun ParcheRoute(
                 },
                 onAddFriends = { navigator.navigate(AddFriends()) },
                 onRandomMatch = { navigator.navigate(MatchQueue()) },
-                onUnlock = { navigator.navigate(Paywall(PAYWALL_SOURCE_PARCHE)) }
+                onUnlock = { navigator.navigate(Paywall(PAYWALL_SOURCE_PARCHE)) },
+                onIntroduce = { navigator.navigate(Introduce) }
             )
         }
     ParcheScreen(state = state, callbacks = callbacks, modifier = modifier)
