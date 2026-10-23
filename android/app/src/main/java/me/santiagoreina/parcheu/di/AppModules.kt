@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.di
 
 import me.santiagoreina.parcheu.core.network.networkModule
+import me.santiagoreina.parcheu.data.auth.authModule
 import me.santiagoreina.parcheu.data.billing.billingModule
 import me.santiagoreina.parcheu.feature.addfriends.addFriendsModule
 import me.santiagoreina.parcheu.feature.basicprofile.basicProfileModule
@@ -41,7 +42,7 @@ import me.santiagoreina.parcheu.feature.underage.underageModule
 import org.koin.core.module.Module
 
 /** Módulos de infraestructura compartida (red, sesión, errores, billing). */
-val coreModules: List<Module> = listOf(networkModule, billingModule)
+val coreModules: List<Module> = listOf(networkModule, authModule, billingModule)
 
 /**
  * Un módulo Koin por feature (ADR-0006). Todos existen desde E0.7, vacíos; cada feature llena solo el

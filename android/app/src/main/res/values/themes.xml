@@ -11,7 +11,7 @@
     <!-- Tema de arranque (core-splashscreen): A1 del sistema; installSplashScreen() pasa a Theme.ParcheU. -->
     <style name="Theme.ParcheU.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/parcheu_ink</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
         <item name="postSplashScreenTheme">@style/Theme.ParcheU</item>
     </style>
 </resources>
