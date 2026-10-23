@@ -38,8 +38,8 @@ interface NotificationStore {
     /** Marca como leídos los avisos de [userId] sin leer; con [ids] nulo, todos. Ids ajenos se ignoran. */
     suspend fun markRead(userId: UUID, ids: Collection<UUID>?, now: Instant)
 
-    /** Avisos sin leer de [userId] (la campana de C1). */
-    suspend fun unread(userId: UUID): Int
+    /** Avisos sin leer de [userId] (la campana de C1), sin contar los que tienen `actorId` en [excludingActors]. */
+    suspend fun unread(userId: UUID, excludingActors: Set<UUID> = emptySet()): Int
 }
 
 class ExposedNotificationStore(private val db: Database) : NotificationStore {
@@ -73,11 +73,14 @@ class ExposedNotificationStore(private val db: Database) : NotificationStore {
         }
     }
 
-    override suspend fun unread(userId: UUID): Int = tx {
-        Notifications.selectAll()
-            .where { (Notifications.userId eq userId) and Notifications.readAt.isNull() }
-            .count()
-            .toInt()
+    override suspend fun unread(userId: UUID, excludingActors: Set<UUID>): Int = tx {
+        val query = Notifications.selectAll().where { (Notifications.userId eq userId) and Notifications.readAt.isNull() }
+        if (excludingActors.isEmpty()) {
+            query.count().toInt()
+        } else {
+            // Pocas filas por usuario (retención de 90 días, E8.5): se filtra el actor del payload aquí.
+            query.count { row -> actorIdOf(row[Notifications.payload] as? JsonObject) !in excludingActors }
+        }
     }
 }
 
@@ -104,5 +107,6 @@ class InMemoryNotificationStore : NotificationStore {
         }
     }
 
-    override suspend fun unread(userId: UUID): Int = rows.count { it.userId == userId && it.readAt == null }
+    override suspend fun unread(userId: UUID, excludingActors: Set<UUID>): Int =
+        rows.count { it.userId == userId && it.readAt == null && it.actorId() !in excludingActors }
 }

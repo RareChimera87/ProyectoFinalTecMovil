@@ -9,7 +9,10 @@ import java.time.Clock
 /** Lo que el centro de notificaciones (E5.4) expone al contenedor: la bandeja y su servicio. */
 class NotificationCenterModule(val store: NotificationStore, val service: NotificationCenterService)
 
-/** Cableado común: el actor se presenta con la policy del grafo y Plus sale del cupo (ADR-0013). */
+/**
+ * Cableado común: el actor se presenta con la policy del grafo, los bloqueos salen del grafo (E8.1) y Plus
+ * sale del cupo (ADR-0013).
+ */
 fun notificationCenterModule(store: NotificationStore, clock: Clock, quota: QuotaModule, graph: GraphModule): NotificationCenterModule {
     val people = graphPersonPresenter(graph)
     val service = NotificationCenterService(
@@ -17,6 +20,7 @@ fun notificationCenterModule(store: NotificationStore, clock: Clock, quota: Quot
         actors = { viewer, actor -> people.present(viewer, actor) },
         isPlus = { viewer -> quota.service.status(viewer).plus },
         clock = clock,
+        blockedOf = { viewer -> graph.repository.blockedEitherWay(viewer) },
     )
     return NotificationCenterModule(store, service)
 }

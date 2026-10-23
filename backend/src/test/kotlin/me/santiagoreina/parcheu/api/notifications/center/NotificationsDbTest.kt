@@ -50,6 +50,14 @@ class NotificationsDbTest : FunSpec({
                 // La campana de Inicio (E4.7) cuenta sobre la misma tabla.
                 ExposedUnreadCounter(db).unread(ana.id) shouldBe 0
                 store.unread(beto.id) shouldBe 1
+
+                // La campana sin los avisos de bloqueados: filtra por `payload.actorId` en Postgres.
+                fun conActor(actor: java.util.UUID) = JsonObject(mapOf("title" to JsonPrimitive("t"), "actorId" to JsonPrimitive(actor.toString())))
+                push.saveNotification(ana.id, NotificationKinds.CHAT_MESSAGE, conActor(beto.id), Instant.parse("2026-10-25T11:00:00Z"))
+                push.saveNotification(ana.id, NotificationKinds.CHAT_MESSAGE, conActor(java.util.UUID.randomUUID()), Instant.parse("2026-10-25T11:00:00Z"))
+                push.saveNotification(ana.id, NotificationKinds.ACCOUNT, payload, Instant.parse("2026-10-25T11:00:00Z"))
+                store.unread(ana.id) shouldBe 3
+                store.unread(ana.id, excludingActors = setOf(beto.id)) shouldBe 2
             } }
         }
 })

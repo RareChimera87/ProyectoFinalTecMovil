@@ -21,7 +21,6 @@ import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
-import me.santiagoreina.parcheu.api.home.ExposedUnreadCounter
 import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.home.HomeService
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
@@ -130,10 +129,10 @@ class AppContainer(
     /** Centro de notificaciones C2 (E5.4). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
     val notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
     /**
-     * No leídas de la campana de Inicio (E4.7). Por defecto cuenta en la bandeja de [notifications] (E5.4),
-     * así 'Marcar leídas' deja la campana en 0; [fromConfig] cuenta en Postgres.
+     * No leídas de la campana de Inicio (E4.7). Cuenta en la bandeja de [notifications] (E5.4, en Postgres
+     * con [fromConfig]): 'Marcar leídas' deja la campana en 0 y los avisos de bloqueados no cuentan.
      */
-    val unread: UnreadCounter = UnreadCounter { notifications.store.unread(it) },
+    val unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
     val domains: List<DomainRoutes> =
         allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications),
@@ -201,7 +200,6 @@ class AppContainer(
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
                 matching = matching, safety = safety, account = account,
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
-                unread = ExposedUnreadCounter(database),
             )
         }
 

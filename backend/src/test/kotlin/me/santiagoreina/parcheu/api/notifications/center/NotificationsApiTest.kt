@@ -21,6 +21,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.graph.InMemoryGraphRepository
+import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
@@ -29,9 +31,12 @@ import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.contract.HomeDto
+import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.MarkRead
+import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.NotificationsDto
+import me.santiagoreina.parcheu.contract.Visibility
 import java.time.Instant
 import java.util.UUID
 
@@ -44,7 +49,8 @@ class NotificationsApiTest : FunSpec({
         }
         val entitlements = InMemoryDevEntitlementService()
         val quota = inMemoryQuotaModule(FIXED_CLOCK, entitlements = entitlements)
-        val graph = inMemoryGraphModule(FIXED_CLOCK)
+        val graphRepo = InMemoryGraphRepository()
+        val graph = inMemoryGraphModule(FIXED_CLOCK, graphRepo)
         val store = InMemoryNotificationStore()
         val center = notificationCenterModule(store, FIXED_CLOCK, quota, graph)
 
@@ -55,6 +61,7 @@ class NotificationsApiTest : FunSpec({
             at: String,
             kind: String = NotificationKinds.SIMULATION_READY,
             title: String = "Resultado listo",
+            body: String = "cuerpo",
             route: String? = "parcheu://results/s1",
             actor: UUID? = null,
             locked: Boolean = false,
@@ -63,7 +70,7 @@ class NotificationsApiTest : FunSpec({
             kind,
             mapOf<String, JsonElement>(
                 "title" to JsonPrimitive(title),
-                "body" to JsonPrimitive("cuerpo"),
+                "body" to JsonPrimitive(body),
                 "route" to (route?.let(::JsonPrimitive) ?: JsonNull),
                 "actorId" to (actor?.let { JsonPrimitive(it.toString()) } ?: JsonNull),
                 "locked" to JsonPrimitive(locked),
@@ -143,6 +150,20 @@ class NotificationsApiTest : FunSpec({
         }
     }
 
+    test("más de MAX_ITEMS ids es 400 y no marca nada") {
+        val w = World()
+        val a = w.add("ana", "2026-10-25T11:00:00Z")
+        testApplication {
+            val ids = listOf(a.toString()) + List(NotificationCenterService.MAX_ITEMS) { UUID.randomUUID().toString() }
+            app(w).post("/v1/notifications/read") {
+                auth("ana")
+                contentType(ContentType.Application.Json)
+                setBody(MarkRead(ids = ids))
+            }.status shouldBe HttpStatusCode.BadRequest
+            w.store.unread(w.id("ana")) shouldBe 1
+        }
+    }
+
     test("un cuerpo mal formado es 400 y no marca nada") {
         val w = World()
         w.add("ana", "2026-10-25T11:00:00Z")
@@ -163,17 +184,68 @@ class NotificationsApiTest : FunSpec({
         w.add(
             "ana", "2026-10-25T11:00:00Z", kind = NotificationKinds.CONNECT_REQUEST,
             title = "2 personas quieren conectar contigo", route = "parcheu://notifications", actor = beto, locked = true,
+            body = "Beto quiere conectar contigo",
         )
         testApplication {
             val client = app(w)
             val free = client.inbox("ana").today.single()
             free.locked shouldBe true
             free.actor shouldBe null
+            // Regla 6: el cuerpo y la ruta del productor no salen para el plan gratis.
+            free.title shouldBe "2 personas quieren conectar contigo"
+            free.body shouldBe NotificationCenterService.LOCKED_BODY
+            free.route shouldBe null
 
             w.entitlements.grantPlus(w.id("ana"), 30, FIXED_CLOCK.instant())
             val plus = client.inbox("ana").today.single()
             plus.locked shouldBe false
             plus.actor?.label shouldBe "Alguien"
+            plus.body shouldBe "Beto quiere conectar contigo"
+            plus.route shouldBe "parcheu://notifications"
+        }
+    }
+
+    test("con un bloqueo en cualquier sentido los avisos de esa persona no salen ni cuentan en la campana") {
+        val w = World()
+        val ana = w.id("ana")
+        val beto = w.id("beto")
+        w.graphRepo.addPerson(PersonRow(ana, "Ana", "https://foto/ana.jpg", "UIS", Visibility.ANONYMOUS, false, null))
+        w.graphRepo.addPerson(PersonRow(beto, "Beto", null, "UIS", Visibility.ANONYMOUS, false, null))
+        // Bloquear (E8.1) no borra la arista CONNECTED: sin el filtro, la policy mostraría a Ana con nombre.
+        w.graphRepo.putEdge(ana, beto, Mode.AMISTAD, EdgeState.CONNECTED, affinity = 80)
+        val chat = w.add(
+            "beto", "2026-10-25T11:00:00Z", kind = NotificationKinds.CHAT_MESSAGE, title = "Ana",
+            route = "parcheu://chat/c1", actor = ana,
+        )
+        val connection = w.add(
+            "beto", "2026-10-24T11:00:00Z", kind = NotificationKinds.NEW_CONNECTION, title = "¡Conectaron!",
+            route = "parcheu://chat/c1", actor = ana,
+        )
+        val sinActor = w.add("beto", "2026-10-25T10:00:00Z")
+        testApplication {
+            val client = app(w)
+            suspend fun visibles(): List<String> = client.inbox("beto").let { it.today + it.week + it.older }.map { it.id }
+            suspend fun campana(): Int = client.get("/v1/home") { auth("beto") }.body<HomeDto>().unread
+
+            client.inbox("beto").today.first { it.id == chat.toString() }.actor?.label shouldBe "Ana"
+            visibles() shouldContainExactly listOf(chat.toString(), sinActor.toString(), connection.toString())
+            campana() shouldBe 3
+
+            // Ana bloquea a Beto: Beto deja de ver sus avisos (nombre, uuid, foto y enlace al chat).
+            w.graphRepo.block(ana, beto)
+            visibles() shouldContainExactly listOf(sinActor.toString())
+            campana() shouldBe 1
+
+            // En el otro sentido (Beto bloquea a Ana) tampoco salen.
+            w.graphRepo.unblock(ana, beto)
+            w.graphRepo.block(beto, ana)
+            visibles() shouldContainExactly listOf(sinActor.toString())
+            campana() shouldBe 1
+
+            // Al desbloquear vuelven: el aviso no se borra, solo se oculta mientras dure el bloqueo.
+            w.graphRepo.unblock(beto, ana)
+            visibles() shouldContainExactly listOf(chat.toString(), sinActor.toString(), connection.toString())
+            campana() shouldBe 3
         }
     }
 
