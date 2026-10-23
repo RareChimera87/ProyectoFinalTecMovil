@@ -325,6 +325,19 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
 9. **Después de mezclar E0.8:** quitar el disparador `pull_request` de `firebase-deploy.yml` (su job
    `rules-ci` queda duplicado con el workflow `rules-ci` de E0.6).
 
+## E8.4 · Páginas web legales
+
+Lo automatizable ya quedó hecho: `/privacidad`, `/terminos`, `/borrar-cuenta`, respaldo de `/i/{codigo}` y `assetlinks.json` vacío en `firebase/public/`, y `scripts/test/legal-pages.sh` (emulador de Hosting) con su workflow `legal-pages-ci`.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Revisar los textos.** Los redactó el agente; no son asesoría legal. Confirmar responsable, datos recolectados, plazos (consultas 10 días hábiles, reclamos 15) y la lista de la tabla de retención (los plazos marcados 'verificar' en arquitectura.md §10.2, p. ej. 5 años de consentimientos). | I3 con el docente | Antes del 29 oct |
+| 2 | **Correo de contacto.** Las páginas usan `sanctireinadiaz@gmail.com` como canal de derechos y de borrado. Es público una vez desplegado. Si se prefiere un correo dedicado, reemplazar en `firebase/public/*.html` (`grep -rl sanctireinadiaz firebase/public`). | I3 | Antes de mezclar |
+| 3 | **Orden de mezcla con E0.8.** `firebase/firebase.json` y `firebase-deploy` llegan con `feature/firebase-setup`; mientras E0.8 no esté en `dev`, los textos no se despliegan. Para `/i/{codigo}` agregar en `firebase.json` el rewrite `{"source": "/i/**", "destination": "/i/index.html"}`, y para `assetlinks.json` quitar `**/.*` de `hosting.ignore` (o permitir `.well-known`); ambos cambios son de E0.8/E6.1 y no los hace este PR. `legal-pages.sh` ya prueba contra `firebase/firebase.json` real y marca `OMITIDO` esas dos rutas mientras falten las reglas; al agregarlas se prueban solas. **Mezclar #6 (E0.8) antes que este PR**: `rules-ci` y `rules-verificar` fallan aquí porque `dev` aún no tiene `firebase/package-lock.json`; tras mezclar #6, rebasar `feature/privacy-web` sobre `dev` y volver a correr la CI. | I3 | Con E0.8 / E6.1 |
+| 4 | **Comprobar dev tras mezclar:** `curl -sI https://parcheu-dev.web.app/privacidad` debe dar 200 (si el sitio de Hosting de dev tiene otro ID, ajustar la URL). | I3 | Tras mezclar a `dev` |
+| 5 | **Prod:** con el tag `v0.1.0` y la aprobación del environment `production`, `firebase-deploy` publica en `https://parcheu-prod.web.app`. Verificar 200 y pegar `/privacidad` y `/borrar-cuenta` en Play Console (Contenido de la app y Seguridad de los datos). | I3 | 28-29 oct |
+| 6 | **`LEGAL_TEXT_VERSION`.** E2.1 debe definirla como `2026-10-29` (la versión de los textos publicados); si se cambian los textos, subir ambas. | I1 (E2.1) | Con E2.1 |
+| 7 | **Etiqueta del botón de borrado.** `/borrar-cuenta` indica `Perfil > Ajustes > Privacidad > Borrar mi cuenta`, pero el mockup H3 dice 'Borrar mi gemelo y mis datos'. Fijar una sola etiqueta en la ficha de E8.3/E9.x y, si cambia, actualizar `firebase/public/borrar-cuenta.html` (Play exige que la ruta descrita exista en la app). | I3 | Con E8.3 / E9.x |
 ## E1.3 · Componentes base
 
 1. **Logo oficial de Google para `GoogleSignInButton`:** descargar el recurso "G" de las pautas de marca de
