@@ -1,3 +1,3 @@
 <resources>
-    <string name="app_name">ParcheU</string>
+    <!-- app_name lo define cada flavor con resValue en app/build.gradle.kts ("ParcheU dev" / "ParcheU"). -->
 </resources>

@@ -15,6 +15,13 @@ backend/build/
 backend/*/build/
 contract/.gradle/
 contract/build/
+# Salidas de compilación y cachés
+**/build/
+**/.gradle/
+**/.kotlin/
+**/node_modules/
+__pycache__/
+*.pyc
 # IDE
 **/.idea/
 *.iml
