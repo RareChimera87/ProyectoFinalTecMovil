@@ -44,7 +44,7 @@ fun main(args: Array<String>) {
                 log.info("Migraciones aplicadas: {}", runMigrations(ds))
             }
         }
-        Mode.SEED_DEMO -> DemoJobs.seed()
-        Mode.PURGE_DEMO -> DemoJobs.purge()
+        Mode.SEED_DEMO -> DemoJobs.seed(config)
+        Mode.PURGE_DEMO -> DemoJobs.purge(config)
     }
 }
