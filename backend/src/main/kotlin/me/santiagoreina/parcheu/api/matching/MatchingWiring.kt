@@ -12,6 +12,8 @@ import java.time.Clock
 class MatchingModule(
     val service: MatchingService,
     val repository: MatchingRepository,
+    /** Banderas de la fila; Inicio (E4.7) lee `demoUsersEnabled` para no sugerir demos con la bandera apagada. */
+    val flags: MatchingFlags,
 )
 
 /** Cableado con Postgres y Firestore (si hay proyecto de Firebase); sin proyecto, solo en `ENV=local`. */
@@ -54,4 +56,5 @@ private fun assemble(
 ) = MatchingModule(
     service = MatchingService(repo, quota.service, simulation.service, graph.anonIds, notifier, mirror, flags, clock),
     repository = repo,
+    flags = flags,
 )

@@ -44,6 +44,8 @@ class SimulationService(
     private val clock: Clock,
     /** Quién ve el contenido completo (Plus o informe desbloqueado, E4.6). */
     private val fullAccess: ReportAccess = ReportAccess { viewer, _ -> quota.isPlus(viewer) },
+    /** `DEMO_USERS_ENABLED` (ADR-0027): apagada, nadie simula con un demo aunque quede una arista con él. */
+    private val demoUsersEnabled: Boolean = true,
 ) {
     private val log = LoggerFactory.getLogger(SimulationService::class.java)
 
@@ -77,6 +79,7 @@ class SimulationService(
         val a = repo.participant(userA)?.takeIf { !it.deleted } ?: throw NotFound("Usuario no encontrado")
         val b = repo.participant(userB)?.takeIf { !it.deleted } ?: throw NotFound("Usuario no encontrado")
         if (repo.blockedEitherWay(userA, userB)) throw Blocked()
+        if (!demoUsersEnabled && (a.isDemo || b.isDemo)) throw ValidationFailed("Los usuarios de demostración están desactivados")
         if (mode !in a.activeModes || mode !in b.activeModes) throw ValidationFailed("El modo ${mode.name} debe estar activo para los dos")
         if (mode == Mode.PAREJA) {
             if (a.isDemo || b.isDemo) throw ValidationFailed("Los usuarios demo no participan en Pareja")

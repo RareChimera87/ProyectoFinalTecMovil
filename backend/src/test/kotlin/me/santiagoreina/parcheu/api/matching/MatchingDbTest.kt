@@ -135,7 +135,7 @@ class MatchingDbTest : FunSpec({
         val notifier = FakeNotifier()
         val service = matchingModule(Env.DEV, db, clock, quota, simulation, graph, notifier, null, flags).let { module ->
             // Misma lógica con el espejo que registra, en vez del Noop de ENV=DEV sin proyecto.
-            MatchingModule(MatchingService(repo, quota.service, simulation.service, graph.anonIds, notifier, mirror, flags, clock), repo)
+            MatchingModule(MatchingService(repo, quota.service, simulation.service, graph.anonIds, notifier, mirror, flags, clock), repo, flags)
         }.service
     }
 

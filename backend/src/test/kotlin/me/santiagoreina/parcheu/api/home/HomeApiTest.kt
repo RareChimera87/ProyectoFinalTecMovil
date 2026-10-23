@@ -20,8 +20,12 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
+import me.santiagoreina.parcheu.api.matching.MatchingFlags
+import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.simulation.SimFixture
 import me.santiagoreina.parcheu.api.startApp
@@ -38,11 +42,11 @@ import java.util.UUID
 class HomeApiTest : FunSpec({
     val uids = listOf("ana", "beto", "caro", "dani", "eli")
 
-    class World {
+    class World(val demoUsersEnabled: Boolean = true) {
         val identity = InMemoryIdentityRepository().also { repo -> uids.forEach { repo.seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
 
         /** La tarea `simulate` no corre sola: la prueba decide cuándo avanza cada simulación. */
-        val sim = SimFixture(inline = false)
+        val sim = SimFixture(inline = false, demoUsersEnabled = demoUsersEnabled)
         val ids = uids.associateWith { uid -> sim.person(uid, id = identity.user(uid).id) }
         val unread = mutableMapOf<UUID, Int>()
 
@@ -61,6 +65,10 @@ class HomeApiTest : FunSpec({
             quota = w.sim.quota,
             graph = w.sim.graph,
             simulation = w.sim.module,
+            matching = inMemoryMatchingModule(
+                FIXED_CLOCK, w.sim.quota, w.sim.module, w.sim.graph, NoopNotifier,
+                flags = MatchingFlags(demoUsersEnabled = w.demoUsersEnabled, scenarioModeEnabled = false),
+            ),
             unread = UnreadCounter { w.unread[it] ?: 0 },
         ),
     )
@@ -177,6 +185,39 @@ class HomeApiTest : FunSpec({
             val home = client.get("/v1/home") { auth("ana") }.body<HomeDto>()
             home.running!!.status shouldBe SimulationStatus.QUEUED
             home.suggestions.map { it.other.label } shouldContainExactly listOf("eli")
+        }
+    }
+
+    test("con DEMO_USERS_ENABLED=false las sugerencias excluyen al demo aunque haya arista CONNECTED con él") {
+        val w = World(demoUsersEnabled = false)
+        // Valentina (demo) dijo "Conectar" durante la prueba cerrada; luego se apagó la bandera sin purgar aún.
+        val valentina = w.sim.person("valentina", id = UUID.randomUUID(), isDemo = true)
+        w.sim.graphRepo.putEdge(w.id("ana"), valentina, Mode.AMISTAD, EdgeState.CONNECTED, 95)
+        w.connect("ana", "beto", affinity = 60)
+        testApplication {
+            val client = app(w)
+            val home = client.get("/v1/home") { auth("ana") }.body<HomeDto>()
+            home.suggestions.map { it.other.label } shouldContainExactly listOf("beto")
+            home.suggestions.none { it.other.isDemo } shouldBe true
+            // Defensa en profundidad: simular con el demo se rechaza sin gastar cupo.
+            val started = client.post("/v1/simulations") {
+                auth("ana")
+                contentType(ContentType.Application.Json)
+                setBody(StartSimulation(valentina.toString(), Mode.AMISTAD))
+            }
+            started.status shouldBe HttpStatusCode.BadRequest
+            client.get("/v1/home") { auth("ana") }.body<HomeDto>().quota.simulations.used shouldBe 0
+        }
+    }
+
+    test("con DEMO_USERS_ENABLED=true el demo conectado sí se sugiere, marcado como demo") {
+        val w = World(demoUsersEnabled = true)
+        val valentina = w.sim.person("valentina", id = UUID.randomUUID(), isDemo = true)
+        w.sim.graphRepo.putEdge(w.id("ana"), valentina, Mode.AMISTAD, EdgeState.CONNECTED, 95)
+        testApplication {
+            val suggestion = app(w).get("/v1/home") { auth("ana") }.body<HomeDto>().suggestions.single()
+            suggestion.other.id shouldBe valentina.toString()
+            suggestion.other.isDemo shouldBe true
         }
     }
 

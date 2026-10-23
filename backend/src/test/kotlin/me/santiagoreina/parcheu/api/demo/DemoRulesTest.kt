@@ -87,18 +87,16 @@ class DemoRulesTest : FunSpec({
         DemoVisibility.proposable(isDemo = false, demoUsersEnabled = false) shouldBe true
     }
 
-    test("el criterio de sugerencias queda traspasado a E4.7 en el backlog y en pendientes-humanos") {
-        // GET /v1/home aún es un esqueleto: el filtro no tiene consumidor y el traspaso no debe perderse.
+    test("el traspaso a E4.7 quedó cerrado: el backlog marca el criterio y los docs ya no hablan de esqueleto") {
+        // El filtro lo consume HomeSuggestions (HomeApiTest lo prueba con DEMO_USERS_ENABLED=false).
         val docs = generateSequence(java.io.File("").absoluteFile) { it.parentFile }
             .map { java.io.File(it, "docs") }
             .first { java.io.File(it, "backlog.md").isFile }
         val e47 = java.io.File(docs, "backlog.md").readText()
             .substringAfter("#### E4.7 · Pantalla de inicio").substringBefore("#### E4.8")
-        e47.contains("DEMO_USERS_ENABLED=false") shouldBe true
-        e47.contains("DemoVisibility.withoutDisabledDemos") shouldBe true
+        e47.contains("- [x] Test: con `DEMO_USERS_ENABLED=false`") shouldBe true
         val e49 = java.io.File(docs, "pendientes-humanos.md").readText()
             .substringAfter("## E4.9 · Usuarios semilla de demo")
-        e49.contains("Traspaso a E4.7") shouldBe true
-        e49.contains("DemoVisibility.withoutDisabledDemos") shouldBe true
+        e49.contains("todavía es un esqueleto") shouldBe false
     }
 })

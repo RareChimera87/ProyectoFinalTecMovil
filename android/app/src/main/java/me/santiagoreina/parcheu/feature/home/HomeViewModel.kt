@@ -103,7 +103,11 @@ class HomeViewModel(
         update { if (it.home.running?.id == running.id) it.copy(progress = progress) else it }
     }
 
-    /** "Simular" de una sugerencia: inicia y abre F4. Sin cupo o con función premium abre el paywall. */
+    /**
+     * "Simular" de una sugerencia: inicia y abre F4. Sin cupo o con función premium abre el paywall, salvo
+     * para ParcheU+: si ya es Plus y llegó al uso justo diario, el paywall le vendería lo que ya tiene, así
+     * que se muestra el aviso en C1.
+     */
     fun onSimulate(suggestion: Suggestion) {
         val loaded = _state.value as? HomeUiState.Loaded ?: return
         val otherId = suggestion.other.id ?: return
@@ -117,7 +121,10 @@ class HomeViewModel(
                 }
                 is ApiResult.Failure -> {
                     val error = result.error
-                    if (error is AppError.QuotaExceeded || error == AppError.PlusRequired) {
+                    val plus = (_state.value as? HomeUiState.Loaded)?.home?.plus == true
+                    if (!plus &&
+                        (error is AppError.QuotaExceeded || error == AppError.PlusRequired)
+                    ) {
                         update { it.copy(startingId = null) }
                         _effects.send(HomeEffect.Navigate(Paywall(PAYWALL_SOURCE_HOME)))
                     } else {
