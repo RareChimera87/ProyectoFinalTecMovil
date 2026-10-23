@@ -570,6 +570,10 @@ Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/...
 5. **Texto legal:** pide al docente revisar el aviso de A4 ("Al continuar aceptas los Términos y la Política de
    privacidad (Ley 1581 de 2012)…") junto con la revisión legal de E2.1.
 
+## E5.2 · UI de chat y lista de chats
+
+- [ ] Prueba manual en dispositivo (flavor dev) cuando E5.1 (API de chat) y E0.8 (reglas de Firestore) estén desplegadas en dev: iniciar sesión con dos cuentas, crear un chat DIRECT, enviar mensajes en ambos sentidos, apagar la red y comprobar que el mensaje queda con "Reintentar", y ocultar un mensaje desde Firestore (`hidden=true`) para ver "Mensaje oculto". Requiere el `google-services.json` del entorno dev (`scripts/fetch-google-services.sh`).
+- [ ] Revisar a ojo las capturas de `android/app/src/test/screenshots/chat/` contra los mockups F9 (17) y el estilo de la lista de chats; la comparación con el diseño la hace I2.
 ## E2.1 · API de sesión y usuarios
 
 No hay pasos bloqueantes: la feature no crea recursos en GCP, Firebase ni consolas.

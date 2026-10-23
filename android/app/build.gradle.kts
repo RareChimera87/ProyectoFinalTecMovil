@@ -258,6 +258,7 @@ dependencies {
     implementation(libs.firebase.messaging)
     // E4.4: fila de match en tiempo real (Firestore de solo lectura).
     // E4.5: progreso en vivo de simulations/{id} (ADR-0004: Firestore es canal de solo lectura).
+    // E5.2: chat en vivo, listener de mensajes con caché offline (arquitectura.md §8).
     implementation(libs.firebase.firestore)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
