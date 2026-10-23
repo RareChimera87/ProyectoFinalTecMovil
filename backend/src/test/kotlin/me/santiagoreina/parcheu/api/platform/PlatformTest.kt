@@ -114,7 +114,7 @@ class PlatformTest : FunSpec({
                 "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu",
             ),
         )
-        val c = AppContainer.fromConfig(config)
+        val c = AppContainer.fromConfig(config, mapOf("GCP_PROJECT" to "parcheu-prod"))
         (c.tokenVerifier is FakeTokenVerifier) shouldBe false
         (c.oidcVerifier is FakeOidcVerifier) shouldBe false
     }
