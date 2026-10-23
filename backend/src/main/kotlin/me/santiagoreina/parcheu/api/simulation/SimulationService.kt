@@ -122,7 +122,7 @@ class SimulationService(
         try {
             repo.create(record)
             // El documento de Firestore existe antes de que la tarea empiece a escribir progreso.
-            publishQueued(record, a, b)
+            publishQueued(record)
             tasks.enqueue(TaskRequest(QueueKind.SIMULATIONS, "/tasks/simulate", "simulate-$id", """{"id":"$id"}"""))
         } catch (e: CancellationException) {
             throw e
@@ -135,9 +135,9 @@ class SimulationService(
         return repo.find(id) ?: record
     }
 
-    private suspend fun publishQueued(record: SimulationRecord, a: Participant, b: Participant) {
+    private suspend fun publishQueued(record: SimulationRecord) {
         try {
-            mirror.publish(SimulationMirrorDoc(record.id, listOf(a.firebaseUid, b.firebaseUid), SimulationStatus.QUEUED, record.progress, null, clock.instant()))
+            mirror.publish(SimulationMirrorDoc(record.id, repo.mirrorReaders(record), SimulationStatus.QUEUED, record.progress, null, clock.instant()))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -145,7 +145,10 @@ class SimulationService(
         }
     }
 
-    /** `GET /v1/simulations`: las simulaciones del usuario, más recientes primero. */
+    /**
+     * `GET /v1/simulations`: las simulaciones del usuario, más recientes primero. Las de una presentación
+     * (`INTRODUCTION`, E6.2) no salen aquí: sus personas las ven solo por `/v1/introductions/{id}`.
+     */
     suspend fun list(viewer: UUID, cursor: String?, limit: Int?): Page<SimulationSummary> {
         val size = (limit ?: DEFAULT_PAGE).also { if (it !in 1..MAX_PAGE) throw ValidationFailed("limit va de 1 a $MAX_PAGE") }
         val before = cursor?.takeIf { it.isNotBlank() }?.let { SimulationCursor.parse(it) ?: throw ValidationFailed("cursor inválido") }
@@ -176,10 +179,15 @@ class SimulationService(
         )
     }
 
+    /**
+     * Simulación en la que participa [viewer]; si no, 404 (no revela si existe). Una presentación
+     * (`INTRODUCTION`, E6.2) también es 404: ni las personas presentadas (que solo la ven en la propuesta,
+     * y nunca si quien presenta eligió 'No por ahora') ni quien presenta la consultan por esta API.
+     */
     private suspend fun visible(viewer: UUID, rawId: String): SimulationRecord {
         val id = runCatching { UUID.fromString(rawId) }.getOrNull() ?: throw NotFound()
         val record = repo.find(id) ?: throw NotFound()
-        if (record.sideOf(viewer) == null) throw NotFound()
+        if (record.sideOf(viewer) == null || record.origin == SimulationOrigin.INTRODUCTION) throw NotFound()
         return record
     }
 

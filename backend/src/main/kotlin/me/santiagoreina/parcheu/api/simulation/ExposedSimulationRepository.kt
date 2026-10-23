@@ -15,6 +15,7 @@ import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Progress
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -131,7 +132,8 @@ class ExposedSimulationRepository(private val db: Database) : SimulationReposito
     }
 
     override suspend fun listFor(userId: UUID, before: SimulationCursor?, limit: Int): List<SimulationRecord> = tx {
-        val mine: Op<Boolean> = (Simulations.userA eq userId) or (Simulations.userB eq userId)
+        val mine: Op<Boolean> = ((Simulations.userA eq userId) or (Simulations.userB eq userId)) and
+            (Simulations.origin neq SimulationOrigin.INTRODUCTION)
         val page = if (before == null) {
             mine
         } else {

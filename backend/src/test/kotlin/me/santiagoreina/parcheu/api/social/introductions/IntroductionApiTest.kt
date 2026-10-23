@@ -43,6 +43,7 @@ import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.contract.ApiError
 import me.santiagoreina.parcheu.contract.ContractJson
+import me.santiagoreina.parcheu.contract.Decision
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.ErrorCode
 import me.santiagoreina.parcheu.contract.GraphDto
@@ -53,8 +54,11 @@ import me.santiagoreina.parcheu.contract.IntroductionDto
 import me.santiagoreina.parcheu.contract.IntroductionStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NotificationKinds
+import me.santiagoreina.parcheu.contract.Page
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.SimulationOrigin
+import me.santiagoreina.parcheu.contract.SimulationStatus
+import me.santiagoreina.parcheu.contract.SimulationSummary
 import me.santiagoreina.parcheu.contract.Visibility
 import java.util.UUID
 
@@ -133,6 +137,37 @@ class IntroductionApiTest : FunSpec({
     }
 
     suspend fun HttpResponse.error() = body<ApiError>()
+
+    suspend fun HttpClient.decision(uid: String, simulationId: String, connect: Boolean) = post("/v1/simulations/$simulationId/decision") {
+        auth(uid)
+        contentType(ContentType.Application.Json)
+        setBody(Decision(connect))
+    }
+
+    /**
+     * Por `/v1/simulations` la simulación de la presentación no existe para [uid] (persona presentada):
+     * ni en la lista, ni el detalle, la transcripción, el informe, el desbloqueo o la decisión.
+     */
+    suspend fun HttpClient.simulationHiddenFor(w: World, uid: String, simulationId: String) {
+        val list = get("/v1/simulations") { auth(uid) }
+        list.status shouldBe HttpStatusCode.OK
+        list.body<Page<SimulationSummary>>().items.map { it.id } shouldNotContain simulationId
+        list.bodyAsText() shouldNotContain simulationId
+        get("/v1/simulations/$simulationId") { auth(uid) }.status shouldBe HttpStatusCode.NotFound
+        get("/v1/simulations/$simulationId/transcript") { auth(uid) }.status shouldBe HttpStatusCode.NotFound
+        get("/v1/simulations/$simulationId/report") { auth(uid) }.status shouldBe HttpStatusCode.NotFound
+        post("/v1/simulations/$simulationId/report:unlock") { auth(uid) }.status shouldBe HttpStatusCode.NotFound
+        decision(uid, simulationId, connect = true).status shouldBe HttpStatusCode.NotFound
+        // Ni el desbloqueo ni la decisión dejaron rastro.
+        w.sim.quota.service.status(w.id(uid)).fullReport.used shouldBe 0
+    }
+
+    /** vale y sebas siguen sin conectarse: ni arista CONNECTED ni chat. */
+    suspend fun World.notConnected() {
+        sim.graphRepo.edge(id("vale"), id("sebas"), Mode.AMISTAD)?.state shouldNotBe EdgeState.CONNECTED
+        chatRepo.chatsOf(id("vale")).shouldBeEmpty()
+        chatRepo.chatsOf(id("sebas")).shouldBeEmpty()
+    }
 
     /** mari presenta a vale y sebas (la simulación corre en línea) y envía la propuesta. */
     suspend fun HttpClient.proposed(w: World): String {
@@ -343,7 +378,7 @@ class IntroductionApiTest : FunSpec({
             client.post("/v1/simulations/$id/decision") {
                 auth("mari")
                 contentType(ContentType.Application.Json)
-                setBody(me.santiagoreina.parcheu.contract.Decision(true))
+                setBody(Decision(true))
             }.status shouldBe HttpStatusCode.NotFound
 
             w.sim.plus(w.id("sebas"))
@@ -385,6 +420,59 @@ class IntroductionApiTest : FunSpec({
             client.intro("sebas", id).status shouldBe HttpStatusCode.NotFound
             w.block("mari", "nico")
             client.intro("mari", id).status shouldBe HttpStatusCode.OK
+        }
+    }
+
+    test("las personas presentadas no ven la simulación por /v1/simulations ni se conectan por /decision, antes y después de 'No por ahora'") {
+        val w = World()
+        w.sim.plus(w.id("sebas"))
+        var introId = ""
+        testApplication {
+            val client = app(w)
+            val id = client.introduce(w, "mari", "vale", "sebas").body<IntroductionDto>().id
+            introId = id
+            // READY: solo quien presenta lo sabe.
+            listOf("vale", "sebas").forEach { client.simulationHiddenFor(w, it, id) }
+            w.notConnected()
+
+            client.respond("mari", id, interested = false).body<IntroductionDto>().status shouldBe IntroductionStatus.DECLINED
+            listOf("vale", "sebas").forEach { client.simulationHiddenFor(w, it, id) }
+            // La decisión de vale de antes no quedó guardada: sebas tampoco completa el par.
+            client.decision("sebas", id, connect = true).status shouldBe HttpStatusCode.NotFound
+            w.notConnected()
+            client.intro("vale", id).status shouldBe HttpStatusCode.NotFound
+            client.intro("mari", id).body<IntroductionDto>().status shouldBe IntroductionStatus.DECLINED
+
+            // Quien presenta no participa: tampoco la ve en su lista, aunque sí su informe (E2).
+            client.get("/v1/simulations") { auth("mari") }.body<Page<SimulationSummary>>().items.shouldBeEmpty()
+            client.get("/v1/simulations/$id/report") { auth("mari") }.status shouldBe HttpStatusCode.OK
+        }
+        // El espejo de Firestore solo lo lee quien presenta.
+        val docs = w.sim.mirror.docs.filter { it.id.toString() == introId }
+        docs.map { it.status }.toSet() shouldBe setOf(SimulationStatus.QUEUED, SimulationStatus.RUNNING, SimulationStatus.DONE)
+        docs.forEach { it.participants shouldContainExactly listOf("uid-mari") }
+    }
+
+    test("con la propuesta enviada, las personas presentadas tampoco se conectan por /decision: solo por la respuesta") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val id = client.proposed(w)
+            listOf("vale", "sebas").forEach { client.simulationHiddenFor(w, it, id) }
+            w.notConnected()
+            client.intro("vale", id).body<IntroductionDto>().status shouldBe IntroductionStatus.PROPOSED
+            client.intro("mari", id).body<IntroductionDto>().status shouldBe IntroductionStatus.PROPOSED
+
+            // El informe de E3 sigue llegando por la presentación, sin ofrecer un desbloqueo que no existe.
+            val e3 = client.intro("vale", id).body<IntroductionDto>().report!!
+            e3.locked shouldBe true
+            e3.unlockAvailable shouldBe false
+
+            // La conexión llega solo por /response, y después la simulación sigue fuera de /v1/simulations.
+            client.respond("vale", id, interested = true)
+            client.respond("sebas", id, interested = true).body<IntroductionDto>().status shouldBe IntroductionStatus.CONNECTED
+            listOf("vale", "sebas").forEach { client.simulationHiddenFor(w, it, id) }
+            w.chatRepo.chatsOf(w.id("vale")) shouldHaveSize 1
         }
     }
 
@@ -470,6 +558,38 @@ class IntroductionApiTest : FunSpec({
             val client = app(w)
             client.introduce(w, "mari", "vale", "sebas").status shouldBe HttpStatusCode.Accepted
             client.introduce(w, "mari", "sebas", "vale").status shouldBe HttpStatusCode.Conflict
+        }
+    }
+
+    test("un 'No, gracias' no libera la presentación: el mismo POST sigue en 409 y no hay otra propuesta") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val id = client.proposed(w)
+            val conflict = client.introduce(w, "mari", "vale", "sebas")
+            conflict.status shouldBe HttpStatusCode.Conflict
+            val before = conflict.error()
+
+            client.respond("vale", id, interested = false).status shouldBe HttpStatusCode.OK
+            // La misma respuesta antes y después del rechazo: el POST no lo delata.
+            val after = client.introduce(w, "mari", "sebas", "vale")
+            after.status shouldBe HttpStatusCode.Conflict
+            after.error() shouldBe before
+            client.intro("mari", id).body<IntroductionDto>().status shouldBe IntroductionStatus.PROPOSED
+
+            w.sentTo("vale").map { it.kind } shouldContainExactly listOf(NotificationKinds.INTRODUCTION_PROPOSAL)
+            w.store.all() shouldHaveSize 1
+            w.sim.usage.charges shouldContainExactly listOf(id)
+        }
+    }
+
+    test("tras 'No por ahora' de quien presenta sí se puede volver a presentar al mismo par") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val id = client.introduce(w, "mari", "vale", "sebas").body<IntroductionDto>().id
+            client.respond("mari", id, interested = false).status shouldBe HttpStatusCode.OK
+            client.introduce(w, "mari", "vale", "sebas").status shouldBe HttpStatusCode.Accepted
         }
     }
 

@@ -23,7 +23,10 @@ interface GraphRepository {
 
     suspend fun person(userId: UUID): PersonRow?
 
-    /** Simulación más reciente entre los dos usuarios, en cualquier modo y estado. */
+    /**
+     * Simulación más reciente entre los dos usuarios, en cualquier modo y estado. No cuenta las de una
+     * presentación (`INTRODUCTION`, E6.2), que no se consultan por `/v1/simulations`.
+     */
     suspend fun lastSimulation(a: UUID, b: UUID): SimulationRow?
 
     /**

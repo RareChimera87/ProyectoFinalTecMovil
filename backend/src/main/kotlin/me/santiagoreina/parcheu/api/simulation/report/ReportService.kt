@@ -60,12 +60,25 @@ class ReportService(
     private val log = LoggerFactory.getLogger(ReportService::class.java)
 
     /**
-     * `GET /v1/simulations/{id}/report`. Quien presentó (simulación `INTRODUCTION`, E6.2) también lo ve
-     * (E2), con la misma regla del informe mensual y sin campos de decisión.
+     * `GET /v1/simulations/{id}/report`. De una presentación (simulación `INTRODUCTION`, E6.2) solo lo ve
+     * quien presentó (E2), con la misma regla del informe mensual y sin campos de decisión; para las
+     * personas presentadas es 404 (ver [Access.REPORT]).
      */
     suspend fun report(viewer: UUID, id: String): ReportDto {
-        val record = finished(viewer, id, allowIntroducer = true)
+        val record = finished(viewer, id, Access.REPORT)
         return build(viewer, record, checkNotNull(record.report))
+    }
+
+    /**
+     * Informe de una presentación (E6.2) para `GET /v1/introductions/{id}`: E2 de quien presenta y E3 de
+     * cada persona presentada, con la regla del informe mensual. `IntroductionService` decide antes si la
+     * propuesta ya le llegó a [viewer]. Las personas presentadas no lo desbloquean (`unlockAvailable = false`):
+     * por `/v1/simulations` la presentación no existe para ellas.
+     */
+    suspend fun introductionReport(viewer: UUID, simulationId: UUID): ReportDto {
+        val record = finished(viewer, simulationId.toString(), Access.INTRODUCTION)
+        val dto = build(viewer, record, checkNotNull(record.report))
+        return if (record.sideOf(viewer) != null) dto.copy(unlockAvailable = false) else dto
     }
 
     /**
@@ -73,7 +86,7 @@ class ReportService(
      * devuelve el informe completo sin cobrar. Sin cupo → 402 `QUOTA_EXCEEDED(kind=FULL_REPORT)`.
      */
     suspend fun unlock(viewer: UUID, id: String): ReportDto {
-        val record = finished(viewer, id, allowIntroducer = true)
+        val record = finished(viewer, id, Access.REPORT)
         if (!hasFullAccess(viewer, record.id)) {
             val refId = "report:${record.id}:$viewer"
             quota.consume(viewer, QuotaKind.FULL_REPORT, refId)
@@ -90,9 +103,12 @@ class ReportService(
         return build(viewer, record, checkNotNull(record.report))
     }
 
-    /** `POST /v1/simulations/{id}/decision`. Repetir la decisión → 409 CONFLICT. */
+    /**
+     * `POST /v1/simulations/{id}/decision`. Repetir la decisión → 409 CONFLICT. Una presentación (E6.2) es
+     * 404: sus personas se conectan solo con `POST /v1/introductions/{id}/response`.
+     */
     suspend fun decide(viewer: UUID, id: String, body: Decision): DecisionResult {
-        val record = finished(viewer, id)
+        val record = finished(viewer, id, Access.DECISION)
         val other = record.otherThan(viewer)
         if (simulations.blockedEitherWay(viewer, other)) throw Blocked()
         decideForDemo(record, other)
@@ -200,15 +216,37 @@ class ReportService(
         false
     }
 
+    /** Quién llega a una simulación según la ruta (ver [finished]). */
+    private enum class Access {
+        /** `/report` y `/report:unlock`: participantes; en una presentación, solo quien presentó. */
+        REPORT,
+
+        /** `/decision`: participantes; una presentación no admite decisión (se responde en `/v1/introductions`). */
+        DECISION,
+
+        /** `GET /v1/introductions/{id}`: en una presentación, quien presentó y las dos personas presentadas. */
+        INTRODUCTION,
+    }
+
     /**
-     * Simulación DONE con informe en la que participa [viewer] (o que presentó, con [allowIntroducer]);
-     * si no, 404 (no revela si existe). Decidir conectar exige participar.
+     * Simulación DONE con informe a la que [viewer] llega con [access]; si no, 404 (no revela si existe).
+     * Las personas presentadas no ven una presentación por `/v1/simulations` (antes o después de la
+     * propuesta, y aunque quien presenta elija 'No por ahora'), ni pueden conectarse saltándose su flujo.
      */
-    private suspend fun finished(viewer: UUID, rawId: String, allowIntroducer: Boolean = false): SimulationRecord {
+    private suspend fun finished(viewer: UUID, rawId: String, access: Access): SimulationRecord {
         val id = runCatching { UUID.fromString(rawId) }.getOrNull() ?: throw NotFound()
         val record = simulations.find(id) ?: throw NotFound()
-        val introducer = allowIntroducer && record.origin == SimulationOrigin.INTRODUCTION && record.requestedBy == viewer
-        if (record.sideOf(viewer) == null && !introducer) throw NotFound()
+        val participant = record.sideOf(viewer) != null
+        val allowed = if (record.origin == SimulationOrigin.INTRODUCTION) {
+            when (access) {
+                Access.REPORT -> record.requestedBy == viewer
+                Access.DECISION -> false
+                Access.INTRODUCTION -> participant || record.requestedBy == viewer
+            }
+        } else {
+            participant && access != Access.INTRODUCTION
+        }
+        if (!allowed) throw NotFound()
         if (record.status != SimulationStatus.DONE || record.report == null) throw NotFound("El informe todavía no está listo")
         return record
     }

@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.graph
 
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import java.time.Instant
 import java.util.UUID
 
@@ -80,6 +81,7 @@ class InMemoryGraphRepository : GraphRepository {
     override suspend fun lastSimulation(a: UUID, b: UUID): SimulationRow? = synchronized(lock) {
         simulations.filter { (x, y, _) -> (x == a && y == b) || (x == b && y == a) }
             .map { it.third }
+            .filter { it.origin != SimulationOrigin.INTRODUCTION }
             .maxByOrNull { it.createdAt }
     }
 

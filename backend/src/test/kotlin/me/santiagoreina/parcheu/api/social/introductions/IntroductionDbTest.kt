@@ -1,6 +1,8 @@
 package me.santiagoreina.parcheu.api.social.introductions
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -34,9 +36,11 @@ import me.santiagoreina.parcheu.api.platform.db.tables.Twins
 import me.santiagoreina.parcheu.api.platform.db.tables.UsageEvents
 import me.santiagoreina.parcheu.api.platform.db.tables.UserModes
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
+import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.quota.quotaModule
+import me.santiagoreina.parcheu.api.simulation.ExposedSimulationRepository
 import me.santiagoreina.parcheu.api.simulation.NoopSimulationNotifier
 import me.santiagoreina.parcheu.api.simulation.judgeJson
 import me.santiagoreina.parcheu.api.simulation.simulationModule
@@ -48,6 +52,7 @@ import me.santiagoreina.parcheu.contract.Introduce
 import me.santiagoreina.parcheu.contract.IntroductionStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -177,6 +182,14 @@ class IntroductionDbTest : FunSpec({
                     w.module.service.respond(vale, id, IntroResponseBody(false)).status shouldBe IntroductionStatus.DECLINED
                     w.module.service.get(sebas, id).status shouldBe IntroductionStatus.PROPOSED
                     w.module.service.get(mari, id).status shouldBe IntroductionStatus.PROPOSED
+                    // El rechazo no libera la presentación: el mismo POST sigue en 409.
+                    shouldThrow<Conflict> { w.module.service.introduce(mari, Introduce(Mode.AMISTAD, sebas.toString(), vale.toString())) }
+                    // Fuera de `/v1/simulations` y del detalle del nodo para las personas presentadas.
+                    val simulations = ExposedSimulationRepository(db)
+                    simulations.find(UUID.fromString(id))!!.origin shouldBe SimulationOrigin.INTRODUCTION
+                    simulations.listFor(vale, null, 10).shouldBeEmpty()
+                    simulations.listFor(sebas, null, 10).shouldBeEmpty()
+                    ExposedGraphRepository(db).lastSimulation(vale, sebas) shouldBe null
                 }
                 w.quota.devPlus!!.grantPlus(juli, 30, FIXED_CLOCK.instant())
                 runBlocking { w.module.service.request(juli, IntroRequest(AnonIdSigner.forTests().anonId(juli, mari))) }

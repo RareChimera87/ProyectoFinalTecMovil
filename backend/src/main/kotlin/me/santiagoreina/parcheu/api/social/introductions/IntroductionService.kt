@@ -315,7 +315,7 @@ class IntroductionService(
 
     /** Informe con la regla del informe mensual (gratis: sin `reasons`, `frictions` ni `dimensions`). */
     private suspend fun reportFor(viewer: UUID, simulation: SimulationRecord): ReportDto? = try {
-        reports.report(viewer, simulation.id.toString())
+        reports.introductionReport(viewer, simulation.id)
     } catch (_: NotFound) {
         null
     }
@@ -326,10 +326,16 @@ class IntroductionService(
         return PersonRef(id = viewer.toString(), label = name, initials = GraphVisibilityPolicy.initialsOf(name), photoUrl = me?.photoUrl, isDemo = me?.isDemo ?: false)
     }
 
-    private suspend fun isActive(record: IntroductionRecord): Boolean = when (record.status) {
-        IntroductionStatus.PROPOSED -> true
-        IntroductionStatus.SIMULATING -> simulationOf(record)?.status != SimulationStatus.FAILED
-        else -> false
+    /**
+     * ¿Impide presentar otra vez al mismo par (409)? Sí, salvo que quien presenta la haya dejado en
+     * 'No por ahora' o que la simulación haya fallado. Un 'No, gracias' de una persona presentada la deja
+     * DECLINED pero sigue contando: si el mismo POST pasara de 409 a 202, quien presenta descubriría el
+     * rechazo que GET le oculta, y quien rechazó volvería a recibir la propuesta.
+     */
+    private suspend fun isActive(record: IntroductionRecord): Boolean = when {
+        record.declinedByIntroducer -> false
+        record.status == IntroductionStatus.SIMULATING -> simulationOf(record)?.status != SimulationStatus.FAILED
+        else -> true
     }
 
     private suspend fun simulationOf(record: IntroductionRecord): SimulationRecord? =

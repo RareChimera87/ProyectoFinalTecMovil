@@ -242,8 +242,8 @@ class SimulationEngine(
         throw StepFailed("Falló el $what tras $LLM_ATTEMPTS intentos: ${last?.message}")
     }
 
-    private suspend fun participantsOf(record: SimulationRecord): List<String> =
-        listOf(record.userA, record.userB).mapNotNull { repo.participant(it)?.firebaseUid }
+    /** Lectores de `simulations/{id}` (en una presentación, solo quien presenta: [mirrorReaders]). */
+    private suspend fun participantsOf(record: SimulationRecord): List<String> = repo.mirrorReaders(record)
 
     private suspend fun publish(record: SimulationRecord, participants: List<String>, status: SimulationStatus, progress: Progress, score: Int?) {
         try {
