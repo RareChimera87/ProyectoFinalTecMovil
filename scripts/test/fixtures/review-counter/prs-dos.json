@@ -1,0 +1,4 @@
+[
+  {"number": 2, "title": "E0.1 Agrega monorepo y git flow", "mergedAt": "2026-10-23T14:00:00Z", "labels": [], "headRefName": "feature/monorepo-gitflow", "baseRefName": "dev"},
+  {"number": 7, "title": "E0.3 Agrega el esqueleto del backend", "mergedAt": "2026-10-27T16:00:00Z", "labels": [], "headRefName": "feature/backend-skeleton", "baseRefName": "dev"}
+]
