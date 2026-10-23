@@ -88,6 +88,49 @@ object HomeSamples {
     val noneLeft =
         loaded(home(used = 5, ready = listOf(ready)).copy(quota = quota(used = 5, randomUsed = 1)))
 
+    /**
+     * Perfiles demo (ADR-0027, prueba cerrada): en curso con un demo con nombre, resultado listo con un demo
+     * anónimo ("Alguien de la UIS", sin sufijo) y sugerencia de un demo; los tres llevan la insignia.
+     */
+    val demo =
+        loaded(
+            home(
+                used = 2,
+                running = running.copy(
+                    other = PersonRef(
+                        id = "u-valen",
+                        label = "Valentina (demo)",
+                        initials = "V",
+                        isDemo = true
+                    )
+                ),
+                ready = listOf(
+                    ready.copy(
+                        other = PersonRef(
+                            id = null,
+                            label = "Alguien de la UIS",
+                            initials = "?",
+                            isDemo = true
+                        )
+                    )
+                ),
+                suggestions = listOf(
+                    Suggestion(
+                        other = PersonRef(
+                            id = "u-tomas",
+                            label = "Tomás (demo)",
+                            initials = "T",
+                            isDemo = true
+                        ),
+                        mode = Mode.AMISTAD,
+                        estimatedAffinity = 70,
+                        reason = "La última vez salieron 70 % afines"
+                    )
+                )
+            ),
+            RunningProgress(percent = 60, scenario = 2)
+        )
+
     /** ParcheU+: sin límite visible y con amigos en común. */
     val plus =
         loaded(

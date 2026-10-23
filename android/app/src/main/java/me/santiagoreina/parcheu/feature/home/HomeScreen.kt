@@ -29,8 +29,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +54,7 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUIconButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheULinearProgress
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUPlusBadge
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
+import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.SectionHeader
 import me.santiagoreina.parcheu.designsystem.components.base.SegmentedQuota
@@ -81,6 +84,9 @@ object HomeTags {
     const val BELL_BADGE = "home:bellBadge"
     const val PLUS_CHIP = "home:plusChip"
     const val RANDOM_MATCH = "home:randomMatch"
+    const val AVATAR = "home:avatar"
+    const val ACTION_ERROR = "home:actionError"
+    const val DEMO_BADGE = "home:demoBadge"
 
     fun ready(id: String) = "home:ready:$id"
 
@@ -121,16 +127,7 @@ fun HomeScreen(
             wordmark = { Wordmark(darkTheme = colors.isDark) },
             actions = {
                 Bell(unread = loaded?.home?.unread ?: 0, onClick = callbacks.onBell)
-                AvatarInitials(
-                    name = loaded?.firstName ?: "Tú",
-                    affinity = 100,
-                    size = AvatarSizes.Home,
-                    modifier =
-                    Modifier
-                        .padding(horizontal = 8.dp)
-                        .clip(CircleShape)
-                        .clickable(role = Role.Button, onClick = callbacks.onAvatar)
-                )
+                ProfileAvatar(name = loaded?.firstName ?: "Tú", onClick = callbacks.onAvatar)
             }
         )
         when (state) {
@@ -144,6 +141,47 @@ fun HomeScreen(
             is HomeUiState.Error -> ErrorContent(state, callbacks.onRetry)
             is HomeUiState.Loaded -> LoadedContent(state, callbacks, now, animate)
         }
+    }
+}
+
+/**
+ * Acceso a Perfil (C3) desde la barra: el avatar mide 34 dp, pero la zona táctil es de 48 dp y TalkBack
+ * lo anuncia como "Tu perfil" (no con el nombre de la persona).
+ */
+@Composable
+private fun ProfileAvatar(name: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .sizeIn(minWidth = ParcheUSizes.IconButton, minHeight = ParcheUSizes.IconButton)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClickLabel = "Abrir tu perfil", onClick = onClick)
+            .semantics { contentDescription = "Tu perfil" }
+            .testTag(HomeTags.AVATAR),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(Modifier.clearAndSetSemantics {}) {
+            AvatarInitials(name = name, affinity = 100, size = AvatarSizes.Home)
+        }
+    }
+}
+
+/**
+ * Insignia de ADR-0027 para perfiles demo. [compact] cabe en las tarjetas angostas de sugerencias y
+ * TalkBack la lee igual que la completa.
+ */
+@Composable
+private fun DemoBadge(compact: Boolean = false) {
+    if (compact) {
+        PillChip(
+            text = "Demostración",
+            modifier =
+            Modifier.clearAndSetSemantics {
+                contentDescription = DEMO_PROFILE_BADGE
+                testTag = HomeTags.DEMO_BADGE
+            }
+        )
+    } else {
+        PillChip(text = DEMO_PROFILE_BADGE, modifier = Modifier.testTag(HomeTags.DEMO_BADGE))
     }
 }
 
@@ -167,7 +205,8 @@ private fun Bell(unread: Int, onClick: () -> Unit) {
                     .clip(ParcheUTheme.shapes.pill)
                     .background(colors.error)
                     .padding(horizontal = 4.dp)
-                    .testTag(HomeTags.BELL_BADGE),
+                    // El número ya va en la descripción de la campana: TalkBack no lo repite.
+                    .clearAndSetSemantics { testTag = HomeTags.BELL_BADGE },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -219,10 +258,17 @@ private fun LoadedContent(
         }
         state.actionError?.let { error ->
             Text(
-                text = errorMessage(error),
+                text = homeErrorMessage(error),
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.error,
-                modifier = Modifier.clickable(onClick = callbacks.onDismissError)
+                modifier =
+                Modifier
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "Descartar",
+                        onClick = callbacks.onDismissError
+                    )
+                    .testTag(HomeTags.ACTION_ERROR)
             )
         }
     }
@@ -359,6 +405,7 @@ private fun RunningRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.mu
                 )
+                if (running.other.isDemo) DemoBadge()
             }
             if (progress != null) {
                 Text(
@@ -410,6 +457,7 @@ private fun ReadyRow(item: SimulationSummary, onOpen: (SimulationSummary) -> Uni
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.mu
             )
+            if (item.other.isDemo) DemoBadge()
         }
         ModeChip(
             label = item.mode.label(),
@@ -479,6 +527,7 @@ private fun SuggestionCard(
             mode = colors.forMode(suggestion.mode),
             size = ModeChipSize.S
         )
+        if (suggestion.other.isDemo) DemoBadge(compact = true)
         TonalButton(
             text = if (starting) "Iniciando…" else "Simular",
             onClick = { onSimulate(suggestion) },

@@ -86,6 +86,8 @@ class SimFixture(
     val graphRepo: InMemoryGraphRepository = InMemoryGraphRepository(),
     /** false: la tarea `simulate` queda encolada y se ejecuta llamando a la ruta interna. */
     inline: Boolean = true,
+    /** `DEMO_USERS_ENABLED` de la simulación (E4.9). */
+    demoUsersEnabled: Boolean = true,
 ) {
     val requests = CopyOnWriteArrayList<LlmRequest>()
     val fake = FakeLlmClient(
@@ -100,7 +102,7 @@ class SimFixture(
     val mirror = RecordingSimulationMirror()
     val notifier = RecordingSimulationNotifier()
     val queue = FakeTaskQueue()
-    val module = inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph, repo, queue, mirror, notifier, runInline = inline)
+    val module = inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph, repo, queue, mirror, notifier, runInline = inline, demoUsersEnabled = demoUsersEnabled)
 
     /** Agota el presupuesto del día de la pasarela de pruebas (10 USD). */
     fun exhaustBudget() = aiUsage.seedSpent(AI_DAY, 10_000_000)
@@ -116,10 +118,11 @@ class SimFixture(
         id: UUID = UUID.nameUUIDFromBytes("sim:$name".toByteArray()),
         ageVerified: Boolean = true,
         version: Int = 1,
+        isDemo: Boolean = false,
     ): UUID {
-        repo.putParticipant(Participant(id, "uid-$name", modes, ageVerified, ageVerified, isDemo = false, deleted = false))
+        repo.putParticipant(Participant(id, "uid-$name", modes, ageVerified, ageVerified, isDemo = isDemo, deleted = false))
         repo.putTwin(TwinProfile(id, version, traits, persona, personaReady = true))
-        graphRepo.addPerson(PersonRow(id, name, null, "UIS", Visibility.ANONYMOUS, false, null))
+        graphRepo.addPerson(PersonRow(id, name, null, "UIS", Visibility.ANONYMOUS, isDemo, null))
         return id
     }
 

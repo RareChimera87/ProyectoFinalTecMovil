@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.feature.home
 
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Progress
 import me.santiagoreina.parcheu.contract.QuotaKind
@@ -96,6 +97,24 @@ class HomeViewModelTest {
         vm.load()
         vm.onSimulate(HomeSamples.suggestions(plus = false).first())
         assertEquals(HomeEffect.Navigate(Paywall(PAYWALL_SOURCE_HOME)), vm.effects.first())
+    }
+
+    @Test
+    fun plusAtFairUseLimitStaysOnScreenInsteadOfThePaywall() = runTest {
+        // ParcheU+ que llegó al uso justo diario (QUOTA_PLUS_DAILY_SIMULATIONS): el 429 no abre G1.
+        simulations.startResult =
+            ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.SIMULATION, null))
+        val vm = viewModel(ApiResult.Success(HomeSamples.plus.home))
+        vm.load()
+        vm.onSimulate(HomeSamples.suggestions(plus = true).first())
+        val state = vm.state.value as HomeUiState.Loaded
+        assertEquals(AppError.QuotaExceeded(QuotaKind.SIMULATION, null), state.actionError)
+        assertNull(state.startingId)
+        assertEquals(
+            "Ya usaste tus simulaciones disponibles por ahora.",
+            homeErrorMessage(state.actionError!!)
+        )
+        assertNull(withTimeoutOrNull(1_000) { vm.effects.first() })
     }
 
     @Test

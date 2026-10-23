@@ -3,6 +3,8 @@ package me.santiagoreina.parcheu.feature.home
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.Suggestion
 import me.santiagoreina.parcheu.contract.Usage
+import me.santiagoreina.parcheu.core.error.AppError
+import me.santiagoreina.parcheu.feature.simulation.errorMessage
 
 /*
  * Textos de C1 calculados desde el DTO. Sin `java.time` (minSdk 24 sin desugaring): Bogotá no tiene
@@ -69,4 +71,16 @@ internal fun relativeTime(then: Instant, now: Instant): String {
         seconds < SECONDS_PER_DAY -> "hace ${seconds / 3600} h"
         else -> "hace ${seconds / SECONDS_PER_DAY} d"
     }
+}
+
+/** Insignia de los perfiles demo (ADR-0027), la misma de D2, resultados y chat. */
+internal const val DEMO_PROFILE_BADGE = "Perfil de demostración"
+
+/**
+ * Aviso de C1 tras un "Simular" fallido. Sin cupo solo llega aquí un ParcheU+ en el uso justo diario (a
+ * gratis se le abre el paywall), así que no se habla de "la semana", como en D2.
+ */
+internal fun homeErrorMessage(error: AppError): String = when (error) {
+    is AppError.QuotaExceeded -> "Ya usaste tus simulaciones disponibles por ahora."
+    else -> errorMessage(error)
 }

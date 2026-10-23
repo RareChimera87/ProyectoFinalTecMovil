@@ -173,7 +173,7 @@ class AppContainer(
             val simulation = simulationModule(
                 config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId,
                 notifier = NotifierSimulationNotifier(notifier), chat = chat, push = notifier,
-                demo = DemoConnectPolicy(demo.connectProbability),
+                demo = DemoConnectPolicy(demo.connectProbability), demoUsersEnabled = demo.enabled,
             )
             // Fila de match (E4.2): misma base, cuotas, simulación, grafo y avisos; espejo matchTickets en Firestore fuera de local.
             val matching = matchingModule(
@@ -248,13 +248,16 @@ fun allDomains(
     AdminRoutes(),
     // Inicio (E4.7): agregador de cupos, simulaciones, sugerencias del grafo y no leídas.
     // Las sugerencias solo ofrecen modos activos para los dos, como exige SimulationService.create.
-    HomeRoutes(HomeService(quota.service, simulation.service, homeSuggestions(graph, simulation), unread)) { firebase ->
+    HomeRoutes(HomeService(quota.service, simulation.service, homeSuggestions(graph, simulation, matching.flags.demoUsersEnabled), unread)) { firebase ->
         identity.requireUser(firebase).id
     },
 )
 
-/** Sugerencias de Inicio con los modos activos leídos de `user_modes` (vía el repositorio de simulaciones). */
-private fun homeSuggestions(graph: GraphModule, simulation: SimulationModule) =
-    HomeSuggestions(graph.repository, graph.policy) { userId ->
+/**
+ * Sugerencias de Inicio con los modos activos leídos de `user_modes` (vía el repositorio de simulaciones).
+ * [demoUsersEnabled] es `DEMO_USERS_ENABLED`, la misma bandera que aplica la fila (E4.9, ADR-0027).
+ */
+private fun homeSuggestions(graph: GraphModule, simulation: SimulationModule, demoUsersEnabled: Boolean) =
+    HomeSuggestions(graph.repository, graph.policy, demoUsersEnabled) { userId ->
         simulation.repository.participant(userId)?.takeIf { !it.deleted }?.activeModes.orEmpty()
     }

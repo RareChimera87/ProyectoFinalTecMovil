@@ -800,7 +800,7 @@ Cuotas, fila de match, motor de simulación, resultados, decisión mutua, inicio
 
 - [ ] Test API: `home` refleja el cupo de `QuotaService` y la simulación RUNNING del usuario.
 - [ ] Test: para gratis las sugerencias no incluyen `mutualCount`.
-- [ ] Test: con `DEMO_USERS_ENABLED=false` las sugerencias excluyen a los usuarios demo aunque haya arista con ellos (filtrar con `DemoVisibility.withoutDisabledDemos` de E4.9; traspaso del criterio de sugerencias de E4.9, ADR-0027).
+- [x] Test: con `DEMO_USERS_ENABLED=false` las sugerencias excluyen a los usuarios demo aunque haya arista con ellos (filtrar con `DemoVisibility.withoutDisabledDemos` de E4.9; traspaso del criterio de sugerencias de E4.9, ADR-0027).
 - [ ] Roborazzi de C1 (3 de 5, en curso, resultado listo, vacío, 0 restantes, Plus) e I1.
 
 #### E4.8 · Modo escenario
