@@ -1,7 +1,12 @@
 package me.santiagoreina.parcheu.feature.deleteaccount
 
+import me.santiagoreina.parcheu.data.account.accountDataModule
+import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
-/** Dependencias de la feature de [DeleteAccountRoute]. Vacío en E0.7; ya está registrado en AppModules.kt. */
-val deleteAccountModule = module {
-}
+/** Confirmación de borrado de cuenta (E8.3). El `AuthRepository` viene de `authModule`. */
+val deleteAccountModule =
+    module {
+        includes(accountDataModule)
+        viewModelOf(::DeleteAccountViewModel)
+    }

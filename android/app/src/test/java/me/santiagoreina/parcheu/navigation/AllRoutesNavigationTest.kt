@@ -71,8 +71,9 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * edad (E2.6, BasicProfileScreenTest y UnderageViewModelTest), B1-B2 (E2.4, TwinQuestions), B3-B5
          * (E2.5: Modes, Consent, TwinReady), D1-D5 (E3.4, ParcheViewModelTest), F1-F2 (E4.4,
          * MatchQueueViewModelTest), F4-F6 (E4.5, feature/simulation), F7-F8 e I3 (E4.6, feature/results),
-         * lista de chats y F9 (E5.2) y H2 con sus confirmaciones (E8.1, ReportScreenTest y
-         * SafetyScreenshotTest).
+         * lista de chats y F9 (E5.2), H2 con sus confirmaciones (E8.1, ReportScreenTest y
+         * SafetyScreenshotTest) y el borrado y 'Descargar mis datos' (E8.3, DeleteAccountScreenTest,
+         * ExportDataRouteTest y AccountScreenshotTest).
          */
         val implementedRoutes =
             setOf(
@@ -92,7 +93,9 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 Results::class,
                 ChatList::class,
                 Chat::class,
-                Report::class
+                Report::class,
+                DeleteAccount::class,
+                ExportData::class
             )
     }
 }

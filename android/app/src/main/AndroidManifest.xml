@@ -37,6 +37,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Compartir el JSON de 'Descargar mis datos' (E8.3) sin exponer otros archivos. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.exports"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/export_paths" />
+        </provider>
+
         <service
             android:name=".push.ParcheUMessagingService"
             android:exported="false">
