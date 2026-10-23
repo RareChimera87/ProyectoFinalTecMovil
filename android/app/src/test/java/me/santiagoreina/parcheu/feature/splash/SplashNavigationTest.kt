@@ -92,7 +92,8 @@ class SplashNavigationTest {
     @Test
     fun withSessionWithoutTwinSplashOpensTwinQuestions() {
         launch(session(OnboardingStep.NEEDS_TWIN))
-        composeRule.onNodeWithTag(stubTag(TwinQuestions)).assertIsDisplayed()
+        // E2.4 reemplazó el stub de B1-B2 por la pantalla real.
+        composeRule.onNodeWithTag("twinQuestions:screen").assertIsDisplayed()
         assertOnlyDestination { it.hasRoute<TwinQuestions>() }
     }
 

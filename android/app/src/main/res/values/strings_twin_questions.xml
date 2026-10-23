@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="twin_questions_close">Cerrar</string>
+    <string name="twin_questions_progress">%1$d de %2$d</string>
+    <string name="twin_questions_progress_description">Pregunta %1$d de %2$d</string>
+    <string name="twin_questions_taking_note">Tu gemelo está tomando nota…</string>
+    <string name="twin_questions_option_a">Opción A</string>
+    <string name="twin_questions_option_b">Opción B</string>
+    <string name="twin_questions_depends">Depende</string>
+    <string name="twin_questions_swipe_a">Desliza a la izquierda</string>
+    <string name="twin_questions_swipe_b">Desliza a la derecha</string>
+    <string name="twin_questions_sending">Enviando tus respuestas…</string>
+    <string name="twin_questions_loading">Cargando preguntas…</string>
+    <string name="twin_questions_error_title">No pudimos continuar</string>
+    <string name="twin_questions_error_network">Revisa tu conexión e inténtalo de nuevo. Tus respuestas están guardadas.</string>
+    <string name="twin_questions_error_generic">Algo salió mal. Tus respuestas están guardadas; inténtalo de nuevo.</string>
+    <string name="twin_questions_retry">Reintentar</string>
+</resources>
