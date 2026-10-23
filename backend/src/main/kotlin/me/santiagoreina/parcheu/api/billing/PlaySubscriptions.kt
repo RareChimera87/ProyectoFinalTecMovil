@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.billing
 
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.client.http.HttpRequestInitializer
 import com.google.api.client.http.HttpTransport
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.JsonFactory
@@ -108,6 +109,17 @@ class GooglePlaySubscriptions(
 
     companion object {
         private val TOKEN_NOT_FOUND = setOf(400, 404, 410)
+        /** Tiempos máximos por llamada a Play: sin ellos una Play colgada deja sin hilo al servidor (por defecto, 20 s de conexión y lectura). */
+        internal const val CONNECT_TIMEOUT_MS = 5_000
+        internal const val READ_TIMEOUT_MS = 10_000
+
+        /** Envuelve [auth] (puede ser nulo) fijando [CONNECT_TIMEOUT_MS] y [READ_TIMEOUT_MS] en cada petición. */
+        internal fun withTimeouts(auth: HttpRequestInitializer?): HttpRequestInitializer = HttpRequestInitializer { request ->
+            auth?.initialize(request)
+            request.connectTimeout = CONNECT_TIMEOUT_MS
+            request.readTimeout = READ_TIMEOUT_MS
+        }
+
         const val SCOPE = "https://www.googleapis.com/auth/androidpublisher"
         private const val APPLICATION_NAME = "parcheu-api"
 
@@ -118,8 +130,8 @@ class GooglePlaySubscriptions(
             transport: HttpTransport = NetHttpTransport(),
             jsonFactory: JsonFactory = GsonFactory.getDefaultInstance(),
         ): GooglePlaySubscriptions {
-            val initializer = credentials?.let { HttpCredentialsAdapter(it.createScoped(listOf(SCOPE))) }
-            val publisher = AndroidPublisher.Builder(transport, jsonFactory, initializer)
+            val auth = credentials?.let { HttpCredentialsAdapter(it.createScoped(listOf(SCOPE))) }
+            val publisher = AndroidPublisher.Builder(transport, jsonFactory, withTimeouts(auth))
                 .setApplicationName(APPLICATION_NAME)
                 .build()
             return GooglePlaySubscriptions(publisher, packageName)

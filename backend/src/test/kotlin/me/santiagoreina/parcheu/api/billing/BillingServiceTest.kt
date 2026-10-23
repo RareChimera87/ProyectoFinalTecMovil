@@ -111,6 +111,29 @@ class BillingServiceTest : FunSpec({
         dto.state shouldBe EntitlementState.EXPIRED
     }
 
+    test("ACTIVE que se renueva sola conserva Plus 1 h tras expires_at; sin renovación automática, CANCELED y gracia se cortan en el segundo (B2)") {
+        val w = World()
+        w.play.purchase("tok-m", "active", owner = w.ana)
+        w.verify(w.ana, "tok-m").plus shouldBe true
+        val row = w.store.entitlement(w.ana)!!
+        row.autoRenewing shouldBe true
+        val exp = row.expiresAt!!
+        w.clock.now = exp.plusSeconds(3_599)
+        w.entitlements.isPlus(w.ana, w.clock.instant()) shouldBe true
+        w.service.entitlement(w.ana).let { it.plus shouldBe true; it.state shouldBe EntitlementState.ACTIVE }
+        w.clock.now = exp.plusSeconds(3_600)
+        w.entitlements.isPlus(w.ana, w.clock.instant()) shouldBe false
+        w.service.entitlement(w.ana).let { it.plus shouldBe false; it.state shouldBe EntitlementState.EXPIRED }
+        // Sin renovación automática no hay margen.
+        w.store.save(row.copy(autoRenewing = false))
+        w.clock.now = exp.plusSeconds(1)
+        w.entitlements.isPlus(w.ana, w.clock.instant()) shouldBe false
+        w.store.save(row.copy(state = EntitlementState.IN_GRACE_PERIOD))
+        w.entitlements.isPlus(w.ana, w.clock.instant()) shouldBe false
+        w.store.save(row.copy(state = EntitlementState.CANCELED))
+        w.entitlements.isPlus(w.ana, w.clock.instant()) shouldBe false
+    }
+
     test("sin compra: NONE y gratis") {
         val w = World()
         val dto = w.service.entitlement(w.ana)
@@ -174,7 +197,7 @@ class BillingServiceTest : FunSpec({
         w.play.acknowledgeCalls("tok-pend") shouldBe 1
     }
 
-    test("si acknowledge falla en verify, el derecho se guarda igual y la RTDN lo reintenta") {
+    test("si acknowledge falla en verify, el derecho se guarda igual y lo reintenta el syncPurchases del cliente (otro verify)") {
         val w = World()
         w.play.purchase("tok-x", "active", owner = w.ana)
         // Falla solo el acknowledge: el get va a Play y el reconocimiento lanza.
@@ -183,7 +206,10 @@ class BillingServiceTest : FunSpec({
         }, w.clock)
         service.verify(w.ana, VerifyPurchase("tok-x", BillingService.PLUS_PRODUCT_ID)).plus shouldBe true
         w.play.acknowledgeCalls("tok-x") shouldBe 0
+        // La RTDN SUBSCRIPTION_PURCHASED suele llegar antes del verify y se ignora; no es ella quien lo reintenta.
         w.rtdn("m-x", "tok-x", RtdnTypes.SUBSCRIPTION_PURCHASED) shouldBe BillingService.RtdnOutcome.PROCESSED
+        // El cliente vuelve a verificar la compra sin reconocer y entonces se reconoce.
+        w.verify(w.ana, "tok-x").plus shouldBe true
         w.play.acknowledgeCalls("tok-x") shouldBe 1
     }
 
@@ -329,6 +355,109 @@ class BillingServiceTest : FunSpec({
             dto.state shouldBe EntitlementState.REVOKED
             dto.plus shouldBe false
             w.store.entitlement(w.ana)!!.state shouldBe EntitlementState.REVOKED
+        }
+
+        test("un token reembolsado sigue revocado aunque la fila haya pasado a otra compra (B1)") {
+            val w = World()
+            w.play.purchase("t1", "active-anual-acknowledged", owner = w.ana)
+            w.play.purchase("t0", "active", owner = w.ana)
+            w.verify(w.ana, "t1").plus shouldBe true
+            w.rtdn("m-rev", "t1", RtdnTypes.SUBSCRIPTION_REVOKED)
+            w.entitlements.isPlus(w.ana, NOW) shouldBe false
+            // 'Restaurar' manda una compra vieja vigente: reemplaza la fila REVOKED...
+            w.verify(w.ana, "t0").plus shouldBe true
+            w.store.entitlement(w.ana)!!.purchaseToken shouldBe "t0"
+            // ...pero re-verificar el token reembolsado (Play aún lo muestra ACTIVE) no devuelve Plus ni pisa la vigente.
+            w.verify(w.ana, "t1").plus shouldBe true
+            w.store.entitlement(w.ana)!!.purchaseToken shouldBe "t0"
+            // Y si no hubiera otra compra vigente, la fila queda REVOKED, no ACTIVE.
+            w.play.update("t0", "expired", owner = w.ana)
+            w.rtdn("m-exp", "t0", 13)
+            w.verify(w.ana, "t1").state shouldBe EntitlementState.REVOKED
+            w.entitlements.isPlus(w.ana, NOW) shouldBe false
+            // Una RTDN posterior del token reembolsado tampoco lo revive.
+            w.rtdn("m-late", "t1", RtdnTypes.SUBSCRIPTION_RENEWED)
+            w.entitlements.isPlus(w.ana, NOW) shouldBe false
+        }
+
+        test("la revocación de un token aún sin verificar se recuerda: su verify posterior no da Plus (B1)") {
+            val w = World()
+            w.play.purchase("t-new", "active-anual-acknowledged", owner = w.ana)
+            w.rtdn("m-1", "t-new", RtdnTypes.SUBSCRIPTION_REVOKED) shouldBe BillingService.RtdnOutcome.IGNORED
+            w.verify(w.ana, "t-new").plus shouldBe false
+        }
+
+        test("Play se consulta fuera de la transacción: no se retiene la conexión mientras responde (M1)") {
+            val w = World()
+            w.play.purchase("tok-m1", "active", owner = w.ana)
+            w.verify(w.ana, "tok-m1")
+            w.play.update("tok-m1", "active-anual-acknowledged", owner = w.ana)
+            var depth = 0
+            val tracking = object : BillingStore by w.store {
+                override fun <T> atomically(block: () -> T): T {
+                    depth++
+                    try {
+                        return w.store.atomically(block)
+                    } finally {
+                        depth--
+                    }
+                }
+            }
+            val inTx = mutableListOf<String>()
+            val watching = object : PlaySubscriptions by w.play.client {
+                override fun get(purchaseToken: String): PlaySubscription? = w.play.client.get(purchaseToken).also { if (depth > 0) inTx += "get" }
+                override fun acknowledge(productId: String, purchaseToken: String) {
+                    if (depth > 0) inTx += "acknowledge"
+                    w.play.client.acknowledge(productId, purchaseToken)
+                }
+            }
+            val service = BillingService(tracking, watching, w.clock)
+            service.handleRtdn(decodeRtdn(rtdnBody("m-m1", "tok-m1", RtdnTypes.SUBSCRIPTION_RENEWED))) shouldBe BillingService.RtdnOutcome.PROCESSED
+            inTx shouldBe emptyList()
+        }
+
+        test("si el acknowledge falla en la RTDN, se libera el reclamo y se propaga: Pub/Sub la reintenta y la reconoce") {
+            val w = World()
+            w.play.purchase("tok-ak", "active", owner = w.ana)
+            w.verify(w.ana, "tok-ak")
+            w.play.update("tok-ak", "active", owner = w.ana) // vuelve a PENDING de reconocimiento
+            var fail = true
+            val service = BillingService(w.store, object : PlaySubscriptions by w.play.client {
+                override fun acknowledge(productId: String, purchaseToken: String) {
+                    if (fail) error("Play caído")
+                    w.play.client.acknowledge(productId, purchaseToken)
+                }
+            }, w.clock)
+            val rtdn = decodeRtdn(rtdnBody("m-ak", "tok-ak", RtdnTypes.SUBSCRIPTION_RENEWED))
+            shouldThrow<IllegalStateException> { service.handleRtdn(rtdn) }
+            w.store.eventIds shouldBe emptySet()
+            fail = false
+            service.handleRtdn(rtdn) shouldBe BillingService.RtdnOutcome.PROCESSED
+        }
+
+        test("una RTDN de una cuenta ya borrada (lápida) no guarda el payload completo ni el token (B4)") {
+            val w = World()
+            val vivo = UUID.fromString("11111111-1111-4111-8111-111111111111")
+            val store = InMemoryBillingStore(tombstones = { it == w.ana })
+            val service = BillingService(store, w.play.client, w.clock)
+            w.play.purchase("tok-lap", "active-anual-acknowledged", owner = w.ana)
+            service.verify(w.ana, VerifyPurchase("tok-lap", BillingService.PLUS_PRODUCT_ID))
+            service.handleRtdn(decodeRtdn(rtdnBody("m-lap", "tok-lap", RtdnTypes.SUBSCRIPTION_RENEWED))) shouldBe BillingService.RtdnOutcome.PROCESSED
+            val (token, user, payload) = store.eventOf("m-lap")!!
+            token.shouldBeNull()
+            user.shouldBeNull()
+            payload.toString() shouldBe """{"redacted":true,"eventTimeMillis":"1793102400000","notificationType":2}"""
+
+            // Con la cuenta viva el evento queda ligado a su dueño (la purga lo encuentra por user_id).
+            val store2 = InMemoryBillingStore()
+            val service2 = BillingService(store2, w.play.client, w.clock)
+            w.play.purchase("tok-viv", "active-anual-acknowledged", owner = vivo)
+            service2.verify(vivo, VerifyPurchase("tok-viv", BillingService.PLUS_PRODUCT_ID))
+            service2.handleRtdn(decodeRtdn(rtdnBody("m-viv", "tok-viv", RtdnTypes.SUBSCRIPTION_RENEWED)))
+            store2.eventOf("m-viv")!!.let { (t, u, _) ->
+                t shouldBe "tok-viv"
+                u shouldBe vivo
+            }
         }
 
         test("compra aún sin verificar: se registra y se ignora (la app la verificará)") {

@@ -53,7 +53,7 @@ class BillingService(
         val state = store.atomically {
             val owner = store.entitlementByToken(token, forUpdate = true)
             if (owner != null && owner.userId != userId) throw Forbidden("La compra pertenece a otra cuenta")
-            resolveState(sub, previous = owner, revoked = false)?.also { saveIfBetter(userId, token, sub, it, clock.instant()) }
+            resolveState(token, sub, previous = owner, revoked = false)?.also { saveIfBetter(userId, token, sub, it, clock.instant()) }
         }
         acknowledgeIfNeeded(token, sub, state, failOnError = false)
         return entitlement(userId)
@@ -61,37 +61,64 @@ class BillingService(
 
     /**
      * `POST /internal/billing/rtdn`. Idempotente por `messageId` (`purchase_events`): una entrega repetida
-     * no se procesa. El reclamo y el procesamiento van en una sola transacción ([BillingStore.atomically]):
-     * si algo falla (Play, la base, o la instancia muere a mitad) el reclamo se deshace con el resto y el
-     * reintento de Pub/Sub vuelve a procesar el mensaje. Una entrega simultánea del mismo mensaje espera a
-     * que la primera confirme y entonces es `DUPLICATE`.
+     * no se procesa. Play se consulta **antes** de abrir la transacción (no se retiene una conexión de Hikari
+     * mientras Play responde; una entrega ya reclamada ni siquiera la consulta). Dentro de ella van solo el reclamo, el `select ... for update` y el guardado
+     * ([BillingStore.atomically]): si algo falla (la base, o la instancia muere a mitad) el reclamo se deshace
+     * con el resto y el reintento de Pub/Sub vuelve a procesar el mensaje. Una entrega simultánea del mismo
+     * mensaje espera a que la primera confirme y entonces es `DUPLICATE`.
+     *
+     * El `acknowledge` va después de confirmar. Si falla, se libera el reclamo y se propaga el error para
+     * que Pub/Sub reintente (el reintento es idempotente: guarda el mismo estado); si ni siquiera se puede
+     * liberar (la base también cayó), lo reintenta el `syncPurchases` del cliente.
      */
     fun handleRtdn(rtdn: DecodedRtdn): RtdnOutcome {
         val notification = rtdn.notification
         val subscription = notification?.subscriptionNotification
-        return store.atomically {
+        if (store.eventClaimed(rtdn.messageId)) {
+            log.info("RTDN {} repetida: se ignora", rtdn.messageId)
+            return RtdnOutcome.DUPLICATE
+        }
+        val relevant = subscription != null && notification.packageName == packageName
+        val sub = if (relevant) play.get(subscription!!.purchaseToken) else null
+        val applied = store.atomically {
             if (!store.claimEvent(rtdn.messageId, subscription?.purchaseToken, rtdn.raw, clock.instant())) {
                 log.info("RTDN {} repetida: se ignora", rtdn.messageId)
-                RtdnOutcome.DUPLICATE
-            } else if (notification == null || subscription == null || notification.packageName != packageName) {
+                Applied(RtdnOutcome.DUPLICATE)
+            } else if (!relevant) {
                 // Notificación de prueba, de otro tipo (compras únicas, anuladas) o de otra app: queda registrada.
                 log.info("RTDN {} sin suscripción de {}: se registra y se ignora", rtdn.messageId, packageName)
-                RtdnOutcome.IGNORED
+                Applied(RtdnOutcome.IGNORED)
             } else {
-                applyNotification(subscription)
+                applyNotification(rtdn.messageId, subscription!!, sub)
             }
         }
+        applied.acknowledge?.let { (token, purchase) ->
+            try {
+                acknowledgeIfNeeded(token, purchase, applied.state, failOnError = true)
+            } catch (e: Exception) {
+                runCatching { store.releaseEvent(rtdn.messageId) }
+                    .onFailure { log.warn("No se pudo liberar la RTDN {}; la compra la reconocerá el syncPurchases del cliente", rtdn.messageId, it) }
+                throw e
+            }
+        }
+        return applied.outcome
     }
 
-    private fun applyNotification(notification: SubscriptionNotification): RtdnOutcome {
+    /** Resultado de procesar una RTDN dentro de la transacción; [acknowledge] se ejecuta ya confirmada. */
+    private class Applied(
+        val outcome: RtdnOutcome,
+        val state: EntitlementState? = null,
+        val acknowledge: Pair<String, PlaySubscription>? = null,
+    )
+
+    private fun applyNotification(messageId: String, notification: SubscriptionNotification, sub: PlaySubscription?): Applied {
         val token = notification.purchaseToken
         val revoked = notification.notificationType == RtdnTypes.SUBSCRIPTION_REVOKED
-        val sub = play.get(token)
         if (sub == null) {
             log.warn("RTDN tipo {}: Google Play no reconoce el token; se ignora", notification.notificationType)
-            return RtdnOutcome.IGNORED
+            return Applied(RtdnOutcome.IGNORED)
         }
-        if (sub.productId != productId) return RtdnOutcome.IGNORED
+        if (sub.productId != productId) return Applied(RtdnOutcome.IGNORED)
         // Con bloqueo: un `verify` simultáneo espera a que esta transacción confirme (no pisa una revocación).
         val current = store.entitlementByToken(token, forUpdate = true)
         // Sin fila para el token: si viene de un cambio de plan o una nueva suscripción con el token
@@ -102,9 +129,12 @@ class BillingService(
             ?.takeIf { sub.obfuscatedAccountId == obfuscatedAccountId(it) }
         if (ownerId == null) {
             log.info("RTDN tipo {} de una compra aún sin verificar: la app la verificará", notification.notificationType)
-            return RtdnOutcome.IGNORED
+            return Applied(RtdnOutcome.IGNORED)
         }
-        val state = resolveState(sub, previous = current, revoked = revoked)
+        // Privacidad (arquitectura.md §10.2): el evento de una cuenta ya borrada (lápida) no guarda el payload
+        // completo ni el token; el de una viva se liga a su dueño para poder redactarlo si luego se borra.
+        if (store.isTombstone(ownerId)) store.redactEvent(messageId) else store.assignEvent(messageId, ownerId)
+        val state = resolveState(token, sub, previous = current, revoked = revoked)
         if (state != null) {
             if (current != null) {
                 store.save(rowFrom(ownerId, token, sub, state, clock.instant()))
@@ -112,16 +142,16 @@ class BillingService(
                 saveIfBetter(ownerId, token, sub, state, clock.instant())
             }
         }
-        acknowledgeIfNeeded(token, sub, state, failOnError = true)
-        return RtdnOutcome.PROCESSED
+        return Applied(RtdnOutcome.PROCESSED, state, token to sub)
     }
 
     /**
      * Estado a guardar: el de Play, salvo que la compra se haya revocado (RTDN `SUBSCRIPTION_REVOKED` ahora
-     * o antes para este mismo token): un reembolso no se deshace aunque Play aún muestre el periodo pagado.
+     * o antes para este mismo token, aunque la fila ya sea de otra compra): un reembolso no se deshace
+     * aunque Play aún muestre el periodo pagado.
      */
-    private fun resolveState(sub: PlaySubscription, previous: EntitlementRow?, revoked: Boolean): EntitlementState? = when {
-        revoked || previous?.state == EntitlementState.REVOKED -> EntitlementState.REVOKED
+    private fun resolveState(token: String, sub: PlaySubscription, previous: EntitlementRow?, revoked: Boolean): EntitlementState? = when {
+        revoked || previous?.state == EntitlementState.REVOKED || store.tokenRevoked(token) -> EntitlementState.REVOKED
         else -> sub.state.toEntitlementState()
     }
 
@@ -151,7 +181,8 @@ class BillingService(
      * Reconoce en el servidor una compra pagada que Play aún no tiene reconocida (si no, Play la reembolsa a
      * los 3 días). En `verify` un fallo solo se registra (no lo reintenta ninguna RTDN: esa suele llegar antes del
      * `verify` y se ignora; lo reintenta el `syncPurchases` del cliente, que vuelve a verificar las compras sin
-     * reconocer, antes de que Play reembolse a los 3 días); en la RTDN se propaga para que Pub/Sub la reintente.
+     * reconocer, antes de que Play reembolse a los 3 días); en la RTDN se propaga para que Pub/Sub la reintente
+     * (ver [handleRtdn]).
      */
     private fun acknowledgeIfNeeded(token: String, sub: PlaySubscription, state: EntitlementState?, failOnError: Boolean) {
         if (sub.acknowledged || state == null || state in NOT_ACKNOWLEDGEABLE) return
