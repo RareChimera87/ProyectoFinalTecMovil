@@ -146,11 +146,13 @@ class IdentityApiTest : FunSpec({
             client.get("/v1/me/consents") { auth("lucia") }.error() shouldBe ErrorCode.TERMS_REQUIRED
             client.patchMe("lucia", UpdateMe(displayName = "Lu")).error() shouldBe ErrorCode.TERMS_REQUIRED
             client.get("/v1/twin") { auth("lucia") }.error() shouldBe ErrorCode.TERMS_REQUIRED
-            // Exentas: sesión, GET /me y DELETE /me (stub 501, pero no 403) y el propio POST terms.
+            // Exentas: sesión, GET /me, DELETE /me y el propio POST terms.
             client.get("/v1/me") { auth("lucia") }.status shouldBe HttpStatusCode.OK
-            client.delete("/v1/me") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
             client.acceptTerms("lucia").status shouldBe HttpStatusCode.OK
             client.get("/v1/twin/memories") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+            // DELETE /me (E8.3) borra de verdad: se prueba con otra cuenta que tampoco aceptó los términos.
+            client.session("nico")
+            client.delete("/v1/me") { auth("nico") }.status shouldBe HttpStatusCode.Accepted
         }
     }
 

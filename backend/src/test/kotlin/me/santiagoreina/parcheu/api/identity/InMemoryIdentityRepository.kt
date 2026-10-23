@@ -100,4 +100,9 @@ class InMemoryIdentityRepository : IdentityRepository {
     override suspend fun deleteFcmToken(userId: UUID, token: String) {
         if (fcmTokens[token] == userId) fcmTokens.remove(token)
     }
+
+    override suspend fun markDeleted(userId: UUID, now: Instant) {
+        val user = users.first { it.id == userId }
+        if (user.deletedAt == null) replace(user.copy(deletedAt = now))
+    }
 }

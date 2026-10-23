@@ -17,6 +17,7 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -129,6 +130,15 @@ class ExposedIdentityRepository(private val db: Database) :
 
     override suspend fun deleteFcmToken(userId: UUID, token: String) {
         tx { FcmTokens.deleteWhere { (FcmTokens.token eq token) and (FcmTokens.userId eq userId) } }
+    }
+
+    override suspend fun markDeleted(userId: UUID, now: Instant) {
+        tx {
+            Users.update({ (Users.id eq userId) and Users.deletedAt.isNull() }) {
+                it[deletedAt] = now.odt()
+                it[updatedAt] = now.odt()
+            }
+        }
     }
 }
 

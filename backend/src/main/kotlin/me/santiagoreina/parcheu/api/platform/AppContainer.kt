@@ -23,6 +23,9 @@ import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
+import me.santiagoreina.parcheu.api.identity.deletion.AccountModule
+import me.santiagoreina.parcheu.api.identity.deletion.accountModule
+import me.santiagoreina.parcheu.api.identity.deletion.inMemoryAccountModule
 import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.matching.MatchingFlags
@@ -110,8 +113,13 @@ class AppContainer(
      * solo [fromConfig] cablea Postgres.
      */
     val safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
+    /**
+     * Borrado y exportación de la cuenta (E8.3). Por defecto en memoria: solo [fromConfig] cablea
+     * Postgres, la cola `maintenance`, Firestore y Firebase Auth.
+     */
+    val account: AccountModule = inMemoryAccountModule(identity, graph, twin, clock),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account),
 ) {
     companion object {
         /**
@@ -163,10 +171,12 @@ class AppContainer(
             )
             // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
             val safety = safetyModule(database, chat, graph, matching, clock)
+            // Borrado y exportación (E8.3): purga por la cola `maintenance`; Firestore y Auth reales fuera de local.
+            val account = accountModule(config.env, database, identity, graph, twin, tasks, config.firebaseProjectId, clock)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
-                matching = matching, safety = safety,
+                matching = matching, safety = safety, account = account,
             )
         }
 
@@ -209,8 +219,9 @@ fun allDomains(
     simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
     matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
     safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
+    account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
 ): List<DomainRoutes> = listOf(
-    IdentityRoutes(identity, profile),
+    IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
     QuotaRoutes(quota),
     MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
