@@ -18,6 +18,8 @@ import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.home.UnreadCounter
+import me.santiagoreina.parcheu.api.notifications.center.NotificationCenterModule
+import me.santiagoreina.parcheu.api.notifications.center.inMemoryNotificationCenter
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
@@ -81,7 +83,9 @@ fun testContainer(
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
-    unread: UnreadCounter = UnreadCounter.NONE,
+    notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
+    // Por defecto la campana de Inicio cuenta en la misma bandeja que C2 (E5.4).
+    unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
     // Presentaciones (E6.2): para que el fin de simulación avise solo a quien presenta, [simulation] debe
     // usar un `IntroductionSimulationNotifier` sobre este mismo [introductionStore] (IntroductionApiTest).
     introductionStore: IntroductionRepository = InMemoryIntroductionRepository(),
@@ -110,9 +114,10 @@ fun testContainer(
         matching = matching,
         safety = safety,
         account = accountModule,
+        notifications = notifications,
         introductions = introductions,
         unread = unread,
-        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, introductions) + extra,
+        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications, introductions) + extra,
     )
 }
 

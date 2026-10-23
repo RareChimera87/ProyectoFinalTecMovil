@@ -21,7 +21,6 @@ import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
-import me.santiagoreina.parcheu.api.home.ExposedUnreadCounter
 import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.home.HomeService
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
@@ -39,7 +38,10 @@ import me.santiagoreina.parcheu.api.matching.MatchingModule
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
 import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
 import me.santiagoreina.parcheu.api.matching.matchingModule
-import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
+import me.santiagoreina.parcheu.api.notifications.center.NotificationCenterModule
+import me.santiagoreina.parcheu.api.notifications.center.NotificationsRoutes
+import me.santiagoreina.parcheu.api.notifications.center.exposedNotificationCenter
+import me.santiagoreina.parcheu.api.notifications.center.inMemoryNotificationCenter
 import me.santiagoreina.parcheu.api.notifications.push.ExposedPushStore
 import me.santiagoreina.parcheu.api.notifications.push.FakeFcmClient
 import me.santiagoreina.parcheu.api.notifications.push.FcmNotifier
@@ -141,11 +143,16 @@ class AppContainer(
     /** Presentar a dos amigos (E6.2): sobre [introductionStore], [simulation], [chat] y [notifier]. */
     val introductions: IntroductionModule =
         introductionModule(introductionStore, simulation, graph, chat, quota, notifier, clock),
-    /** No leídas de la campana de Inicio (E4.7). Por defecto sin base: 0; [fromConfig] cuenta en Postgres. */
-    val unread: UnreadCounter = UnreadCounter.NONE,
+    /** Centro de notificaciones C2 (E5.4). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
+    /**
+     * No leídas de la campana de Inicio (E4.7). Cuenta en la bandeja de [notifications] (E5.4, en Postgres
+     * con [fromConfig]): 'Marcar leídas' deja la campana en 0 y los avisos de bloqueados no cuentan.
+     */
+    val unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
     val domains: List<DomainRoutes> =
-        allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, introductions),
+        allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications, introductions),
 ) {
     companion object {
         /**
@@ -214,7 +221,7 @@ class AppContainer(
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
                 introductionStore = introductionStore, simulation = simulation,
                 matching = matching, safety = safety, account = account, introductions = introductions,
-                unread = ExposedUnreadCounter(database),
+                notifications = exposedNotificationCenter(database, clock, quota, graph),
             )
         }
 
@@ -259,6 +266,7 @@ fun allDomains(
     safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
     unread: UnreadCounter = UnreadCounter.NONE,
+    notifications: NotificationCenterModule = inMemoryNotificationCenter(systemClock(), quota, graph),
     introductions: IntroductionModule =
         introductionModule(InMemoryIntroductionRepository(), simulation, graph, chat, quota, NoopNotifier, systemClock()),
 ): List<DomainRoutes> = listOf(
@@ -273,7 +281,8 @@ fun allDomains(
     // Presentar a dos amigos (E6.2).
     IntroductionRoutes(introductions.service) { firebase -> identity.requireUser(firebase).id },
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
-    NotificationsRoutes(),
+    // Centro de notificaciones C2 (E5.4): bandeja agrupada por fecha de Bogotá y 'Marcar leídas'.
+    NotificationsRoutes(notifications.service) { firebase -> identity.requireUser(firebase).id },
     BillingRoutes(),
     SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
     AdminRoutes(),
