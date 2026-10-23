@@ -16,6 +16,7 @@ import me.santiagoreina.parcheu.navigation.BasicProfile
 import me.santiagoreina.parcheu.navigation.Home
 import me.santiagoreina.parcheu.navigation.Modes
 import me.santiagoreina.parcheu.navigation.TwinQuestions
+import me.santiagoreina.parcheu.navigation.Underage
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -215,5 +216,19 @@ class OnboardingViewModelTest {
 
         assertEquals(LoginState.Error(AppError.Unauthorized), viewModel.state.value.login)
         assertEquals(listOf("signIn", "signOut"), repository.calls)
+    }
+
+    @Test
+    fun underageAccountGoesToAgeLockInsteadOfShowingAnError() = runTest {
+        val repository =
+            FakeAuthRepository().apply {
+                signInResult = SignInResult.Failure(AppError.Underage)
+            }
+        val viewModel = OnboardingViewModel(repository)
+        viewModel.effects.test {
+            viewModel.onContinueWithGoogle(context)
+            assertEquals(OnboardingEffect.Navigate(Underage), awaitItem())
+        }
+        assertEquals(LoginState.Idle, viewModel.state.value.login)
     }
 }

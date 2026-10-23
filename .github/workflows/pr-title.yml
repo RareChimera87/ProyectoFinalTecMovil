@@ -1,0 +1,21 @@
+name: pr-title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    name: pr-title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pruebas de commit-lint
+        run: scripts/test/commit-lint.test.sh
+      - name: Valida el título del PR
+        env:
+          TITULO: ${{ github.event.pull_request.title }}
+        run: scripts/commit-lint.sh --titulo "$TITULO"

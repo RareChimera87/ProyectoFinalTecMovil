@@ -21,6 +21,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      existe: ${{ steps.existe.outputs.existe }}
       contract: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filtro.outputs.contract }}
     steps:
       - uses: actions/checkout@v4
@@ -31,11 +32,20 @@ jobs:
             contract:
               - 'contract/**'
               - '.github/workflows/contract-ci.yml'
+      - name: Comprueba que existe contract/
+        id: existe
+        run: |
+          if [[ -f "contract/gradlew" ]]; then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No existe contract/gradlew en esta rama (solo un README o nada): se omite la verificación hasta que lleguen los cimientos."
+          fi
 
   verificar:
     name: contract-verificar
     needs: cambios
-    if: needs.cambios.outputs.contract == 'true'
+    if: needs.cambios.outputs.contract == 'true' && needs.cambios.outputs.existe == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

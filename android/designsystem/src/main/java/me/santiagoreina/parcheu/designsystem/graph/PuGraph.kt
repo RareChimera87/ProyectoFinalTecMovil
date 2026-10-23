@@ -45,6 +45,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 import me.santiagoreina.parcheu.designsystem.graph.layout.FofNode
 import me.santiagoreina.parcheu.designsystem.graph.layout.GraphLayout
@@ -199,8 +200,40 @@ internal fun computeGraphLayout(
             FofNode(it.id, it.parentId?.let { p -> "${modeOf[p].orEmpty()}:$p" } ?: "")
         }
     )
-    return if (base.fof.isEmpty()) base else base.copy(fof = alignFofToParents(base, nodes, fof))
+    if (base.fof.isEmpty()) return base
+    val aligned = alignFofToParents(base, nodes, fof)
+    // El alineado por padre es una mejora estética: si deja fof pisándose (muchos fof en el arco
+    // exterior), se vuelve a las posiciones de RadialLayout, que sí garantiza la separación.
+    if (!fofOverlap(aligned)) return base.copy(fof = aligned)
+    return base.copy(fof = base.fof, hasOverlaps = base.hasOverlaps || fofOverlap(base.fof))
 }
+
+/** true si algún par de fof queda más cerca que 2r + [RadialLayout.MIN_GAP]. */
+internal fun fofOverlap(fof: List<PlacedNode>): Boolean {
+    for (i in fof.indices) {
+        for (j in i + 1 until fof.size) {
+            val a = fof[i]
+            val b = fof[j]
+            if (hypot(a.x - b.x, a.y - b.y) < a.radius + b.radius + RadialLayout.MIN_GAP - 0.01f) {
+                return true
+            }
+        }
+    }
+    return false
+}
+
+/** Lado mínimo de una zona táctil en dp (guía de Android). */
+internal const val MIN_TOUCH_TARGET_DP = 48f
+
+/** Margen táctil de un nodo de radio [radius]: al menos [HIT_SLOP_DP] y lo justo para llegar a 48 dp. */
+internal fun hitSlopFor(radius: Float): Float = max(HIT_SLOP_DP, MIN_TOUCH_TARGET_DP / 2f - radius)
+
+/** Como [GraphLayout.hitTest] pero con el margen táctil variable de [hitSlopFor]. */
+internal fun GraphLayout.hitTestTouch(x: Float, y: Float): PlacedNode? = (nodes + fof)
+    .map { it to hypot(it.x - x, it.y - y) }
+    .filter { (n, d) -> d <= n.radius + hitSlopFor(n.radius) }
+    .minWithOrNull(compareBy({ it.second }, { it.first.id }))
+    ?.first
 
 /**
  * Separación mínima en dp entre los centros de dos amigos de amigos vecinos sobre la capa exterior.
@@ -235,7 +268,10 @@ private fun alignFofToParents(
 
     val outer = layout.ringRadii.last()
     // Paso angular mínimo entre centros vecinos sobre el arco exterior (escala con el lienzo).
-    val step = FOF_SPACING_DP * (layout.size / RadialLayout.BASE_SIZE) / outer.toDouble()
+    val step = min(
+        FOF_SPACING_DP * (layout.size / RadialLayout.BASE_SIZE) / outer.toDouble(),
+        2 * PI / anchored.size
+    )
 
     // Abanico entre hermanos centrado en el ángulo del padre.
     val targets = anchored.groupBy { it.second }.flatMap { (angle, group) ->
@@ -386,7 +422,7 @@ private fun normalize(angle: Double): Double {
  * - [selectedId] dibuja el halo sobre ese nodo y atenúa el resto.
  * - [fof] activa la capa de amigos de amigos (los anillos se comprimen a 48/80/108 y la capa va en 140).
  * - Con [size] < 200 dp se dibuja la miniatura, sin etiquetas.
- * - Un toque sobre un nodo (o su margen de [HIT_SLOP_DP]) llama a [onNodeClick] con su id.
+ * - Un toque sobre un nodo (o su margen táctil, hasta 48 dp de lado) llama a [onNodeClick] con su id.
  * - TalkBack recorre una lista semántica paralela, un elemento por nodo, de mayor a menor afinidad.
  */
 @Composable
@@ -422,10 +458,9 @@ fun PuGraph(
                 .clearAndSetSemantics { }
                 .pointerInput(layout) {
                     detectTapGestures { offset ->
-                        val hit = layout.hitTest(
+                        val hit = layout.hitTestTouch(
                             offset.x / density.density,
-                            offset.y / density.density,
-                            HIT_SLOP_DP
+                            offset.y / density.density
                         )
                         if (hit != null) currentOnClick.value(hit.id)
                     }
@@ -468,7 +503,7 @@ private fun SemanticNodes(
         val description = nodes[placed.id]?.let(::graphNodeDescription)
             ?: fof[placed.id]?.let(::graphFofDescription)
             ?: return@forEachIndexed
-        val half = placed.radius + HIT_SLOP_DP
+        val half = placed.radius + hitSlopFor(placed.radius)
         Box(
             modifier = Modifier
                 .offset((placed.x - half).dp, (placed.y - half).dp)

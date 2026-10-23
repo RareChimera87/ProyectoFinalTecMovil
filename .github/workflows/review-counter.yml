@@ -17,16 +17,15 @@ permissions:
   issues: write
   pull-requests: read
 
-concurrency:
-  group: review-counter
-  cancel-in-progress: false
-
 jobs:
   # En PR que tocan el contador: solo sus pruebas (no es un check obligatorio).
   pruebas:
     name: review-counter-pruebas
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
+    concurrency:
+      group: review-counter-pruebas-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       contents: read
       pull-requests: read
@@ -49,6 +48,12 @@ jobs:
     name: review-counter
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    # La concurrencia va en ESTE job y no en el workflow: si los opened/synchronize de otros PR
+    # compartieran el grupo, GitHub cancelaría la corrida pendiente del merge (solo se conserva la
+    # última pendiente de un grupo) y no se abriría el issue. Las corridas se serializan sin cancelarse.
+    concurrency:
+      group: review-counter
+      cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       ETIQUETA: revision-3-pequenas

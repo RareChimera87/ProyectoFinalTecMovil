@@ -12,7 +12,8 @@
       },
       "createdAt": "2026-10-23T15:30:00Z",
       "origin": "PARCHE",
-      "score": 82
+      "score": 82,
+      "refunded": false
     }
   ],
   "nextCursor": "eyJpZCI6IjEyMyJ9"

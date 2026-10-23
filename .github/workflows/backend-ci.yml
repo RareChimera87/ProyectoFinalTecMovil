@@ -22,6 +22,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      existe: ${{ steps.existe.outputs.existe }}
       backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filtro.outputs.backend }}
     steps:
       - uses: actions/checkout@v4
@@ -32,12 +33,22 @@ jobs:
             backend:
               - 'backend/**'
               - 'contract/**'
+              - 'firebase/firebase.json'
               - '.github/workflows/backend-ci.yml'
+      - name: Comprueba que existe backend/
+        id: existe
+        run: |
+          if [[ -f "backend/gradlew" ]]; then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No existe backend/gradlew en esta rama (solo un README o nada): se omite la verificación hasta que lleguen los cimientos."
+          fi
 
   verificar:
     name: backend-verificar
     needs: cambios
-    if: needs.cambios.outputs.backend == 'true'
+    if: needs.cambios.outputs.backend == 'true' && needs.cambios.outputs.existe == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -50,9 +61,19 @@ jobs:
             17
             21
       - uses: gradle/actions/setup-gradle@v4
-      - name: Tests (con Testcontainers) e imagen Jib
-        working-directory: backend
-        run: ./gradlew --stacktrace test jibBuildTar
+      # E5.1: el espejo del chat se prueba contra el emulador de Firestore (necesita Java 21,
+      # que queda como JAVA_HOME). `emulators:exec` define FIRESTORE_EMULATOR_HOST para Gradle.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: firebase/package-lock.json
+      - name: Herramientas de Firebase (emulador)
+        working-directory: firebase
+        run: npm ci
+      - name: Tests (con Testcontainers y emulador de Firestore) e imagen Jib
+        working-directory: firebase
+        run: npx firebase emulators:exec --only firestore --project demo-parcheu "cd ../backend && ./gradlew --stacktrace test jibBuildTar"
       - name: Reportes de tests
         if: failure()
         uses: actions/upload-artifact@v4

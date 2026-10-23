@@ -59,7 +59,8 @@ class FirebaseAuthSource(private val appContext: Context) {
 class FirebaseAuthRepository(
     private val source: FirebaseAuthSource,
     private val api: SessionApi,
-    private val errorMapper: ApiErrorMapper
+    private val errorMapper: ApiErrorMapper,
+    private val cleaners: List<SessionCleaner> = emptyList()
 ) : AuthRepository {
     override fun hasSession(): Boolean = source.authOrNull()?.currentUser != null
 
@@ -99,6 +100,16 @@ class FirebaseAuthRepository(
     }
 
     override suspend fun signOut() {
+        // Los datos locales de la persona se borran siempre, aunque Credential Manager falle después.
+        cleaners.forEach { cleaner ->
+            try {
+                cleaner.clear()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Un fallo al borrar una caché no debe impedir cerrar la sesión.
+            }
+        }
         source.authOrNull()?.signOut()
         // clearCredentialState necesita un Context; el de la aplicación basta para borrar la selección.
         try {
