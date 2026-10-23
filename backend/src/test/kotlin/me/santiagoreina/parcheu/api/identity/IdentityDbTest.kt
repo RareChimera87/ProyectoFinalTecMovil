@@ -142,7 +142,7 @@ class IdentityDbTest : FunSpec({
             }
         }
 
-    test("terms agrega dos filas con LEGAL_TEXT_VERSION, bloquea twin/answers antes y subir la versión devuelve NEEDS_TERMS")
+    test("terms agrega dos filas con LEGAL_TEXT_VERSION, bloquea twin/memories antes y subir la versión devuelve NEEDS_TERMS")
         .config(enabled = TestDatabase.enabled) {
             TestDatabase.withCleanDatabase { ds ->
                 runMigrations(ds)
@@ -150,7 +150,7 @@ class IdentityDbTest : FunSpec({
                 testApplication {
                     val client = startApp(container(db, TEST_LEGAL_VERSION))
                     client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_TERMS
-                    val blocked = client.post("/v1/twin/answers") { auth("lucia") }
+                    val blocked = client.get("/v1/twin/memories") { auth("lucia") }
                     blocked.status shouldBe HttpStatusCode.Forbidden
                     blocked.body<ApiError>().code shouldBe ErrorCode.TERMS_REQUIRED
                     consentCount(db) shouldBe 0L
@@ -162,13 +162,13 @@ class IdentityDbTest : FunSpec({
                         ConsentKind.TERMS to TEST_LEGAL_VERSION,
                         ConsentKind.PRIVACY to TEST_LEGAL_VERSION,
                     )
-                    client.post("/v1/twin/answers") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+                    client.get("/v1/twin/memories") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
                 }
                 // Se sube la versión: el mismo usuario vuelve a NEEDS_TERMS y a 403 TERMS_REQUIRED.
                 testApplication {
                     val client = startApp(container(db, "2026-12-01"))
                     client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_TERMS
-                    client.post("/v1/twin/answers") { auth("lucia") }.body<ApiError>().code shouldBe ErrorCode.TERMS_REQUIRED
+                    client.get("/v1/twin/memories") { auth("lucia") }.body<ApiError>().code shouldBe ErrorCode.TERMS_REQUIRED
                     client.terms("lucia", "2026-12-01").status shouldBe HttpStatusCode.OK
                     consentCount(db) shouldBe 4L
                     client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_PROFILE
