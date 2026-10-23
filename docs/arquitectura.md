@@ -506,7 +506,7 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
    ```
    Rúbricas (semillas): Amistad = humor, planes, valores, comunicación, ritmo; Pareja = valores, comunicación, manejo del conflicto, proyectos, química conversacional; Estudio = organización, responsabilidad, comunicación, horarios, estilo de trabajo.
 7. **Puntaje:** `score = round(0.35 · simRasgos + 0.65 · promedioJuez)`, con `simRasgos = 100 · (1 − ‖tA − tB‖₂ / √6)`. Sin acotar el rango (tono honesto).
-8. **Cierre:** DONE → arista SIMULATED (si no hay CONNECTED) con la afinidad, notificación a ambos. FAILED (3 reintentos agotados) → `refunded = true`, notificación de error (F5).
+8. **Cierre:** DONE → arista SIMULATED (si no hay CONNECTED) con la afinidad, notificación a ambos. Si el origen es INTRODUCTION (E6.2) no se toca la arista: la verían las dos personas presentadas en `GET /v1/graph` antes de la propuesta o tras el 'No por ahora' de quien presenta; la arista nace solo con `Connected(INTRODUCTION)` cuando ambas aceptan. FAILED (3 reintentos agotados) → `refunded = true`, notificación de error (F5).
 9. **Idempotencia:** la tarea usa el id de la simulación; si el estado es DONE no hace nada; los turnos ya guardados no se repiten.
 10. **Costo:** unas 25 llamadas cortas (24 turnos + juez por escenario); del orden de 1-3 centavos de USD por simulación con Flash (verificar con los precios vigentes en E0.9).
 11. **Implementación (E4.3, `backend/.../simulation/`).** `SimulationService` (API), `SimulationEngine` (tarea), `TwinAgent`, `TwinPromptBuilder`, `SimulationJudge` y `SimulationScoring`. Decisiones:

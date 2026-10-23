@@ -162,11 +162,29 @@ class IntroductionApiTest : FunSpec({
         w.sim.quota.service.status(w.id(uid)).fullReport.used shouldBe 0
     }
 
-    /** vale y sebas siguen sin conectarse: ni arista CONNECTED ni chat. */
+    /**
+     * vale y sebas siguen sin conectarse: sin chat y sin ninguna arista entre ellos (ni siquiera SIMULATED,
+     * que delataría la simulación y su puntaje en el grafo).
+     */
     suspend fun World.notConnected() {
-        sim.graphRepo.edge(id("vale"), id("sebas"), Mode.AMISTAD)?.state shouldNotBe EdgeState.CONNECTED
+        sim.graphRepo.edge(id("vale"), id("sebas"), Mode.AMISTAD) shouldBe null
         chatRepo.chatsOf(id("vale")).shouldBeEmpty()
         chatRepo.chatsOf(id("sebas")).shouldBeEmpty()
+    }
+
+    /** En el ego-grafo de vale y de sebas (D1/D2) solo está mari: ni nodo del otro ni simulación pendiente. */
+    suspend fun HttpClient.graphHidesPair(w: World) {
+        listOf("vale" to "sebas", "sebas" to "vale").forEach { (viewer, other) ->
+            val raw = get("/v1/graph?mode=AMISTAD") { auth(viewer) }
+            raw.status shouldBe HttpStatusCode.OK
+            val graph = raw.body<GraphDto>()
+            graph.nodes.map { it.state }.toSet() shouldBe setOf(EdgeState.CONNECTED)
+            graph.nodes shouldHaveSize 1
+            graph.edges.map { it.state }.toSet() shouldBe setOf(EdgeState.CONNECTED)
+            graph.stats.simulated shouldBe 0
+            graph.stats.pending shouldBe 0
+            raw.bodyAsText() shouldNotContain w.id(other).toString()
+        }
     }
 
     /** mari presenta a vale y sebas (la simulación corre en línea) y envía la propuesta. */
@@ -350,7 +368,8 @@ class IntroductionApiTest : FunSpec({
             client.intro("mari", id).body<IntroductionDto>().status shouldBe IntroductionStatus.PROPOSED
             client.intro("vale", id).body<IntroductionDto>().status shouldBe IntroductionStatus.DECLINED
 
-            w.sim.graphRepo.edge(w.id("vale"), w.id("sebas"), Mode.AMISTAD)?.state shouldNotBe EdgeState.CONNECTED
+            w.notConnected()
+            client.graphHidesPair(w)
             w.chatRepo.chatsOf(w.id("vale")).shouldBeEmpty()
         }
     }
@@ -434,9 +453,12 @@ class IntroductionApiTest : FunSpec({
             // READY: solo quien presenta lo sabe.
             listOf("vale", "sebas").forEach { client.simulationHiddenFor(w, it, id) }
             w.notConnected()
+            client.graphHidesPair(w)
 
             client.respond("mari", id, interested = false).body<IntroductionDto>().status shouldBe IntroductionStatus.DECLINED
             listOf("vale", "sebas").forEach { client.simulationHiddenFor(w, it, id) }
+            w.notConnected()
+            client.graphHidesPair(w)
             // La decisión de vale de antes no quedó guardada: sebas tampoco completa el par.
             client.decision("sebas", id, connect = true).status shouldBe HttpStatusCode.NotFound
             w.notConnected()
@@ -460,6 +482,7 @@ class IntroductionApiTest : FunSpec({
             val id = client.proposed(w)
             listOf("vale", "sebas").forEach { client.simulationHiddenFor(w, it, id) }
             w.notConnected()
+            client.graphHidesPair(w)
             client.intro("vale", id).body<IntroductionDto>().status shouldBe IntroductionStatus.PROPOSED
             client.intro("mari", id).body<IntroductionDto>().status shouldBe IntroductionStatus.PROPOSED
 
