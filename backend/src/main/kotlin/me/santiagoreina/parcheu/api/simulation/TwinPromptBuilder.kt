@@ -1,6 +1,9 @@
 package me.santiagoreina.parcheu.api.simulation
 
+import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
+import java.time.Instant
+import java.util.UUID
 
 /** Una línea de la transcripción tal como la ve un agente: lo que dijo él o lo que dijo el otro. */
 data class AgentLine(val mine: Boolean, val text: String)
@@ -25,7 +28,8 @@ data class AgentPrompt(val system: String, val prompt: String)
 /**
  * **Único** lugar que arma el prompt de un `TwinAgent` y que decide qué memorias entran
  * (ADR-0032, arquitectura.md §7.2 punto 4): solo las aceptadas del modo de la simulación, como
- * máximo [MAX_MEMORIES_IN_PROMPT], delimitadas como datos y saneadas.
+ * máximo [MAX_MEMORIES_IN_PROMPT], delimitadas como datos y saneadas. Selección y saneado de memorias
+ * delegan en [MemorySelection] (lo exige `TwinPromptBuilderDelegationTest`).
  */
 object TwinPromptBuilder {
     /** Reglas comunes a todos los modos. */
@@ -49,13 +53,30 @@ object TwinPromptBuilder {
 
     fun rulesFor(mode: Mode): String = MODE_RULES.getValue(mode)
 
-    /** Filtro por modo de ADR-0032 (segunda barrera después del SQL) y saneado de cada memoria. */
-    fun memoriesFor(mode: Mode, memories: List<TwinMemory>): List<String> = memories
-        .filter { it.mode == mode }
-        .map { sanitize(it.text) }
-        .filter { it.isNotEmpty() }
-        .distinct()
-        .take(MAX_MEMORIES_IN_PROMPT)
+    /**
+     * Memorias del prompt: la selección (solo del modo, segunda barrera después del SQL, ADR-0032) y
+     * el saneado los decide [MemorySelection], la costura que cubre la suite de privacidad (E3.5);
+     * aquí solo se quita además la marca de cierre [END_MARK]. [memories] llega del repositorio,
+     * que solo devuelve aceptadas y de la más reciente a la más antigua: ese orden se conserva.
+     */
+    fun memoriesFor(mode: Mode, memories: List<TwinMemory>): List<String> {
+        val candidates = memories.mapIndexed { index, memory ->
+            CandidateMemory(
+                id = UUID(0L, index.toLong()),
+                mode = memory.mode,
+                text = memory.text,
+                status = MemoryStatus.ACCEPTED,
+                createdAt = Instant.EPOCH.plusSeconds((memories.size - index).toLong()),
+            )
+        }
+        return MemorySelection.select(mode, candidates)
+            .map { MemorySelection.sanitize(it.text).replace(END_MARK, "").replace(SPACES, " ").trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .take(MAX_MEMORIES_IN_PROMPT)
+    }
+
+    private val SPACES = Regex("\\s{2,}")
 
     fun build(input: AgentPromptInput): AgentPrompt {
         val memories = memoriesFor(input.mode, input.memories)

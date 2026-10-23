@@ -22,9 +22,9 @@ import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.startApp
-import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
+import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.contract.Answers
@@ -40,15 +40,17 @@ import java.util.UUID
 class TwinApiTest : FunSpec({
     fun userId(uid: String): UUID = DerivedTwinUserLookup.idFor(uid)
 
+    // La puerta de términos (E2.1) exige usuarios con términos aceptados: `ana` viene sembrada y se
+    // agrega `carolina.restrepo` para la prueba de privacidad del prompt.
     suspend fun ApplicationTestBuilder.app(fixture: TwinFixture): HttpClient =
         startApp(
             testContainer(
+                repo = InMemoryIdentityRepository().also {
+                    it.seedAcceptedUser("ana", TEST_LEGAL_VERSION)
+                    it.seedAcceptedUser("carolina.restrepo", TEST_LEGAL_VERSION)
+                },
                 twin = fixture.module,
                 ai = fixture.gateway,
-                // E2.1: la puerta de términos exige usuarios con TERMS y PRIVACY vigentes.
-                repo = InMemoryIdentityRepository().also { repo ->
-                    listOf("ana", "carolina.restrepo").forEach { repo.seedAcceptedUser(it, TEST_LEGAL_VERSION) }
-                },
             ),
         )
 

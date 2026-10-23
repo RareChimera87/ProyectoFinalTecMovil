@@ -20,10 +20,10 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * (E4.1, probadas en `QuotaApiTest`).
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
-    // Identity: solo los stubs que quedan; las rutas implementadas por E2.1 las cubre IdentityApiTest.
+    // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest y E2.5 (modos) ModesApiTest.
     "identity" to listOf(
         HttpMethod.Get to "/v1/catalog", HttpMethod.Delete to "/v1/me", HttpMethod.Get to "/v1/me/export",
-        HttpMethod.Put to "/v1/me/modes", HttpMethod.Post to "/v1/me/age-verification",
+        HttpMethod.Post to "/v1/me/age-verification",
         HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",
     ),
     // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest); el resto sigue en 501.
@@ -52,10 +52,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
         HttpMethod.Post to "/v1/introductions/i1/response", HttpMethod.Post to "/v1/introductions/request",
         HttpMethod.Get to "/v1/invites/me", HttpMethod.Post to "/v1/invites/redeem", HttpMethod.Post to "/v1/invites/u1/accept",
     ),
-    "chat" to listOf(
-        HttpMethod.Get to "/v1/chats", HttpMethod.Post to "/v1/chats/c1/messages",
-        HttpMethod.Post to "/v1/chats/c1/read", HttpMethod.Post to "/v1/chats/c1/mute",
-    ),
+    // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
     "notifications" to listOf(HttpMethod.Get to "/v1/notifications", HttpMethod.Post to "/v1/notifications/read"),
     "billing" to listOf(HttpMethod.Get to "/v1/billing/entitlement", HttpMethod.Post to "/v1/billing/verify"),
     "safety" to listOf(

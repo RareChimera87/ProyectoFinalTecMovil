@@ -44,7 +44,7 @@ class OnboardingViewModelTest {
                 OnboardingStep.NEEDS_PROFILE to BasicProfile(),
                 OnboardingStep.NEEDS_TWIN to TwinQuestions,
                 OnboardingStep.NEEDS_MODES to Modes(),
-                OnboardingStep.DONE to Home,
+                OnboardingStep.DONE to Home
             )
         expected.forEach { (step, route) ->
             val viewModel = OnboardingViewModel(loggedInWith(step))
@@ -81,7 +81,7 @@ class OnboardingViewModelTest {
         assertEquals(LoginState.Error(AppError.Network), viewModel.state.value.login)
         assertEquals(
             "No hay conexión. Revisa tu internet e inténtalo de nuevo.",
-            loginErrorMessage(AppError.Network),
+            loginErrorMessage(AppError.Network)
         )
 
         repository.signInResult = SignInResult.Success(sessionDto(OnboardingStep.NEEDS_TWIN))
@@ -153,7 +153,7 @@ class OnboardingViewModelTest {
             FakeAuthRepository(signedIn = true).apply {
                 nextSessions(
                     ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, newVersion)),
-                    ApiResult.Success(sessionDto(OnboardingStep.DONE, newVersion)),
+                    ApiResult.Success(sessionDto(OnboardingStep.DONE, newVersion))
                 )
             }
         val viewModel = OnboardingViewModel(repository)
@@ -174,7 +174,7 @@ class OnboardingViewModelTest {
             FakeAuthRepository(signedIn = true).apply {
                 nextSessions(
                     ApiResult.Failure(AppError.Network),
-                    ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, newVersion)),
+                    ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, newVersion))
                 )
             }
         val viewModel = OnboardingViewModel(repository)
@@ -191,7 +191,7 @@ class OnboardingViewModelTest {
         val repository =
             FakeAuthRepository(signedIn = true).apply {
                 nextSessions(
-                    ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, "2026-12-01")),
+                    ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, "2026-12-01"))
                 )
             }
         val viewModel = OnboardingViewModel(repository)

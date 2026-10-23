@@ -11,6 +11,10 @@ import me.santiagoreina.parcheu.navigation.DeleteAccount
  * [deleteAccountModule]; AppNavHost.kt no cambia.
  */
 @Composable
-fun DeleteAccountRoute(route: DeleteAccount, navigator: AppNavigator, modifier: Modifier = Modifier) {
+fun DeleteAccountRoute(
+    route: DeleteAccount,
+    navigator: AppNavigator,
+    modifier: Modifier = Modifier
+) {
     StubScreen(route = route, navigator = navigator, modifier = modifier)
 }

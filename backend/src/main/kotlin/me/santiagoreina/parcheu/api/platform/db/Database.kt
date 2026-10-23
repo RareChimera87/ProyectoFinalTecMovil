@@ -10,7 +10,7 @@ import javax.sql.DataSource
 
 /**
  * Pool Hikari hacia Postgres. En Cloud Run usa el conector de Cloud SQL (autenticación IAM, sin
- * VPC connector); en local/CI usa `DB_URL` JDBC directo. Con [failFast] = false no falla si la base aún no responde.
+ * VPC connector); en local/CI usa `DB_URL` JDBC directo.
  */
 fun createDataSource(config: DbConfig, maxPoolSize: Int = 10, failFast: Boolean = true): HikariDataSource {
     val hikari = HikariConfig().apply {
@@ -22,7 +22,7 @@ fun createDataSource(config: DbConfig, maxPoolSize: Int = 10, failFast: Boolean 
         username = config.user
         password = config.password
         maximumPoolSize = maxPoolSize
-        // Sin failFast el pool no exige conexión al crearse: el servicio arranca aunque Cloud SQL tarde.
+        // El servicio no debe caerse al arrancar si Cloud SQL tarda: Hikari reintenta al pedir la conexión.
         if (!failFast) initializationFailTimeout = -1
         if (config.cloudSqlInstance != null) {
             addDataSourceProperty("socketFactory", "com.google.cloud.sql.postgres.SocketFactory")

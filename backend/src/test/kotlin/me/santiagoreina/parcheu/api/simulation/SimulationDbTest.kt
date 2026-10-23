@@ -103,7 +103,7 @@ class SimulationDbTest : FunSpec({
         val quota = quotaModule(Env.DEV, db, FIXED_CLOCK)
         val graph = GraphModule(ExposedGraphRepository(db), AnonIdSigner.forTests(), FIXED_CLOCK)
         val queue = FakeTaskQueue()
-        val module = simulationModule(Env.DEV, db, FIXED_CLOCK, ai, quota, graph, queue, firebaseProjectId = null).also { m ->
+        val module = simulationModule(Env.DEV, db, FIXED_CLOCK, ai, quota, graph, queue, firebaseProjectId = null, notifier = NoopSimulationNotifier).also { m ->
             queue.inline = { task -> m.engine.run(ContractJson.decodeFromString<TaskPayload>(task.body).uuid()) }
         }
 

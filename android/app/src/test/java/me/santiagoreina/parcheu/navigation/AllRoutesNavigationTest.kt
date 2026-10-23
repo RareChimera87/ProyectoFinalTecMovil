@@ -44,7 +44,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         val tag = stubTag(entry.route)
         composeRule.onNodeWithTag(tag).assertIsDisplayed()
         composeRule.onAllNodes(
-            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag)),
+            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag))
         ).onFirst().assertIsDisplayed()
         // Los argumentos llegan intactos a la pantalla (round-trip de la ruta tipada).
         composeRule
@@ -55,7 +55,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         assertEquals(
             "NavBar solo en las raíces",
             TopLevelDestination.entries.any { it.routeClass == entry.route::class },
-            shown.isTopLevel(),
+            shown.isTopLevel()
         )
     }
 
@@ -66,7 +66,25 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
             .filterNot { it.route::class in implementedRoutes }
             .map { arrayOf<Any>(it) }
 
-        /** Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest). */
-        val implementedRoutes = setOf(Splash::class, Onboarding::class)
+        /**
+         * Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest), B1-B2 (E2.4,
+         * TwinQuestions), B3-B5 (E2.5: Modes, Consent, TwinReady), F1-F2 (E4.4, MatchQueueViewModelTest),
+         * F4-F6 (E4.5, feature/simulation) y lista de chats y F9 (E5.2).
+         */
+        val implementedRoutes =
+            setOf(
+                Splash::class,
+                Onboarding::class,
+                TwinQuestions::class,
+                Modes::class,
+                Consent::class,
+                TwinReady::class,
+                MatchQueue::class,
+                MatchFound::class,
+                Simulation::class,
+                Simulations::class,
+                ChatList::class,
+                Chat::class
+            )
     }
 }
