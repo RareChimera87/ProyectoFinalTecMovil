@@ -1,0 +1,115 @@
+name: firebase-deploy
+
+# E0.8. Reglas, índices y Hosting de Firebase.
+#  - PR que toca firebase/**: prueba las reglas en el emulador (rules-ci; E0.6 puede absorber este job).
+#  - push a dev que toca firebase/**: despliega a parcheu-dev.
+#  - tag v*: despliega a prod con la aprobación del environment `production`.
+# Autenticación con WIF (sa-deployer): sin llaves JSON.
+on:
+  pull_request:
+    paths:
+      - "firebase/**"
+      - ".github/workflows/firebase-deploy.yml"
+  push:
+    branches: [dev]
+    paths:
+      - "firebase/**"
+      - ".github/workflows/firebase-deploy.yml"
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rules-test:
+    name: rules-ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firebase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: firebase/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm ci
+      - name: Pruebas de reglas en el emulador de Firestore
+        run: npm test
+
+  deploy-dev:
+    name: deploy-dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: rules-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      FIREBASE_PROJECT: parcheu-dev
+    defaults:
+      run:
+        working-directory: firebase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: firebase/package-lock.json
+      - run: npm ci
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT_DEV }}
+      - name: Despliega reglas, índices y Hosting a dev
+        run: npx firebase deploy --only firestore:rules,firestore:indexes,hosting --project "$FIREBASE_PROJECT" --non-interactive
+      - name: Humo del Hosting
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://${FIREBASE_PROJECT}.web.app/")
+          echo "Hosting respondió $code"
+          test "$code" = "200"
+
+  deploy-prod:
+    name: deploy-prod
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: rules-test
+    runs-on: ubuntu-latest
+    # El environment `production` exige la aprobación del usuario.
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      FIREBASE_PROJECT: parcheu-prod
+    defaults:
+      run:
+        working-directory: firebase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: firebase/package-lock.json
+      - run: npm ci
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER_PROD }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT_PROD }}
+      - name: Despliega reglas, índices y Hosting a prod
+        run: npx firebase deploy --only firestore:rules,firestore:indexes,hosting --project "$FIREBASE_PROJECT" --non-interactive
+      - name: Humo del Hosting
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://${FIREBASE_PROJECT}.web.app/")
+          echo "Hosting respondió $code"
+          test "$code" = "200"

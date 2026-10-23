@@ -1,7 +1,9 @@
 package me.santiagoreina.parcheu.feature.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,10 +28,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -50,8 +56,23 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PillChipVariant
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
+import me.santiagoreina.parcheu.designsystem.graph.GraphEdgeState
+import me.santiagoreina.parcheu.designsystem.graph.GraphMode
+import me.santiagoreina.parcheu.designsystem.graph.GraphNode
+import me.santiagoreina.parcheu.designsystem.graph.PuGraph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+
+/** Conexiones de ejemplo del grafo de A4 (datos fijos: la persona aún no tiene conexiones). */
+internal val ONBOARDING_GRAPH_NODES =
+    listOf(
+        GraphNode("o1", "Laura P.", "LP", 82, GraphMode.AMISTAD, GraphEdgeState.CONNECTED),
+        GraphNode("o2", "Mateo R.", "MR", 74, GraphMode.ESTUDIO, GraphEdgeState.CONNECTED),
+        GraphNode("o3", "Sofía G.", "SG", 66, GraphMode.PAREJA, GraphEdgeState.SIMULATED),
+        GraphNode("o4", "Andrés V.", "AV", 58, GraphMode.AMISTAD, GraphEdgeState.SIMULATED),
+        GraphNode("o5", "Camila T.", "CT", 41, GraphMode.ESTUDIO, GraphEdgeState.PENDING),
+        GraphNode("o6", "Juan D.", "JD", 33, GraphMode.AMISTAD, GraphEdgeState.PENDING)
+    )
 
 /** Número de páginas del pager A2-A4. */
 const val ONBOARDING_PAGES = 3
@@ -139,7 +160,12 @@ fun OnboardingScreen(
     val page = pagerState.currentPage
     val isLoginPage = page == ONBOARDING_PAGES - 1
     Box(modifier.fillMaxSize().background(colors.bg).testTag(OnboardingTags.SCREEN)) {
-        Column(Modifier.fillMaxSize()) {
+        Column(
+            // Con la hoja visible el fondo no es alcanzable por TalkBack (la hoja se comporta como modal).
+            Modifier.fillMaxSize().then(
+                if (login is LoginState.TermsSheet) Modifier.clearAndSetSemantics {} else Modifier
+            )
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -301,7 +327,7 @@ private fun OnboardingPage(index: Int) {
             when (index) {
                 0 -> TwinIllustration()
                 1 -> SimulationIllustration()
-                else -> OnboardingGraph(size = 260.dp)
+                else -> PuGraph(nodes = ONBOARDING_GRAPH_NODES, size = 260.dp)
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -404,17 +430,18 @@ private fun TermsSheet(
     animateLoading: Boolean
 ) {
     val colors = ParcheUTheme.colors
+    // Atrás equivale a "Ahora no": Onboarding es la única entrada de la pila y, sin esto, cerraría la app.
+    BackHandler(enabled = true) { if (!sheet.submitting) onDecline() }
     Box(
         Modifier
             .fillMaxSize()
+            .semantics {
+                paneTitle = "Actualizamos los Términos y la Política"
+                isTraversalGroup = true
+            }
             .background(colors.scrim)
-            .clickable(
-                interactionSource = remember {
-                    MutableInteractionSource()
-                },
-                indication = null,
-                onClick = {}
-            )
+            // Absorbe los toques sobre el scrim sin exponer una acción de clic a TalkBack.
+            .pointerInput(Unit) { detectTapGestures { } }
     ) {
         Column(
             modifier =

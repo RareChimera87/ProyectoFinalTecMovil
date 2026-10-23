@@ -66,8 +66,25 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
             .filterNot { it.route::class in implementedRoutes }
             .map { arrayOf<Any>(it) }
 
-        /** Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest), lista de chats y F9 (E5.2). */
+        /**
+         * Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest), B1-B2 (E2.4,
+         * TwinQuestions), B3-B5 (E2.5: Modes, Consent, TwinReady), F1-F2 (E4.4, MatchQueueViewModelTest),
+         * F4-F6 (E4.5, feature/simulation) y lista de chats y F9 (E5.2).
+         */
         val implementedRoutes =
-            setOf(Splash::class, Onboarding::class, ChatList::class, Chat::class)
+            setOf(
+                Splash::class,
+                Onboarding::class,
+                TwinQuestions::class,
+                Modes::class,
+                Consent::class,
+                TwinReady::class,
+                MatchQueue::class,
+                MatchFound::class,
+                Simulation::class,
+                Simulations::class,
+                ChatList::class,
+                Chat::class
+            )
     }
 }

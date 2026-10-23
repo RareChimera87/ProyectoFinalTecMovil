@@ -267,7 +267,7 @@ Monorepo, contrato, backend base, esquema, infraestructura, CI/CD, esqueleto And
 - [ ] Un PR que rompe un test de Android queda bloqueado.
 - [ ] Tras mezclar a dev, `/v1/health` de dev responde con el SHA del commit.
 - [ ] El job `migrate` corre **antes** del despliegue de la API; si falla, la API no se despliega.
-- [ ] No hay llaves JSON en secretos de GitHub para GCP: solo `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_DEV` y `WIF_SERVICE_ACCOUNT_PROD` (mismos nombres que arquitectura.md §12).
+- [ ] No hay llaves JSON en secretos de GitHub para GCP: solo identificadores de WIF, sin credenciales: `WIF_PROVIDER`, `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_DEV`, `WIF_SERVICE_ACCOUNT_PROD`, `TF_PLAN_SERVICE_ACCOUNT_DEV` y `TF_SERVICE_ACCOUNT_DEV` (mismos nombres que arquitectura.md §12; hay un pool WIF por proyecto, ADR-0014).
 - [ ] Un PR con etiqueta `major` y CI verde **no** se mezcla hasta que un revisor distinto del autor lo aprueba; uno sin la etiqueta se mezcla con CI y `revision-agente` en verde.
 - [ ] Tras mezclar 3 PR no major, `review-counter` abre exactamente un issue de revisión (probado con un fixture de `docs/revisiones.md`).
 
@@ -466,6 +466,8 @@ Sesión, términos y política, onboarding con Google, perfil básico y edad, pr
 
 **Descripción.** A1 Splash (sin sesión → A2; con sesión y gemelo → C1; con sesión sin gemelo → B1), A2-A4 en pager con 'Saltar' que lleva a A4, Credential Manager + `googleid` → `FirebaseAuth.signInWithCredential` → `POST /v1/session`, estados de cargando y error (no están en los mockups) y regreso a A4 tras cerrar sesión. A4 agrega bajo el botón el texto 'Al continuar aceptas los Términos y la Política de privacidad (Ley 1581 de 2012). Tus respuestas y mensajes se procesan con IA de Google Cloud en EE. UU.' con enlaces a Hosting; tras el login, si el estado es `NEEDS_TERMS`, la app llama `POST /v1/me/terms` antes de seguir (una hoja de confirmación lo pide de nuevo si cambió la versión). Destinos tras el login: `NEEDS_PROFILE` → B0 (E2.6), `NEEDS_TWIN` → B1.
 
+**Contrato con E5.3.** El `FirebaseTokenProvider` debe implementar `currentUserId()` (abstracto en `TokenProvider`) devolviendo `FirebaseAuth.currentUser?.uid`; de lo contrario el registro del token FCM no ocurre.
+
 **Criterios de aceptación (verificables):**
 
 - [ ] ViewModel con `FakeAuthRepository`: éxito navega según `onboarding`; cancelación vuelve a A4 sin error; error de red muestra mensaje y botón reintentar.
@@ -625,7 +627,7 @@ API del grafo, layout radial, componente G0, pantalla D1-D5 y suite de invariant
 
 **Descripción.** D1 con grafo, chips de filtro funcionales (modo, afinidad 70 %+, comunidad), StatCards, banner bloqueado para gratis, D2 bottom sheet con variantes conectados, simularon y pendiente ('Simular de nuevo' → F4, 'Chatear' → F9), D3 vacío, D4 skeleton, D5 error con reintentar, I2 claro. Pinta al instante el último grafo guardado en DataStore.
 
-**Hueco de contrato (E3.3, ronda 2).** `GraphFof.parentId` (la conexión por la que se llega al amigo de amigo) es nulo porque `FofCandidate` y la consulta de arquitectura §6.2 no lo devuelven. Sin él, el fof conserva la posición radial y no dibuja la línea punteada. Coordinar con E3.1/E6.3 un campo `viaId` (uno de los mutuals; nunca la Pareja, que ya se excluye de 'mine') en `FofCandidate` y en la consulta SQL; mientras tanto, mapear `parentId = null`.
+**Hueco de contrato (E3.3, ronda 2).** `GraphFof.parentId` (la conexión por la que se llega al amigo de amigo) es nulo porque `FofCandidate` y la consulta de arquitectura §6.2 no lo devuelven. Sin él, el fof conserva la posición radial y no dibuja la línea punteada. Coordinar con E3.1/E6.3 un campo `viaId` (uno de los mutuals) en `FofCandidate` y en la consulta SQL; mientras tanto, mapear `parentId = null`. `viaId` debe salir de la misma fila `e.me` de la consulta §6.2, que ya filtra `e.mode <> 'PAREJA'` y `e.state = 'CONNECTED'`, y nunca de una subconsulta aparte: 'mine' solo excluye la arista Pareja entre el observador y X, no las aristas Pareja de X con el candidato, y una subconsulta sin ese filtro revelaría una arista de Pareja que no involucra al observador (regla 1 de `GraphVisibilityPolicy`).
 
 **Criterios de aceptación (verificables):**
 
@@ -651,6 +653,7 @@ API del grafo, layout radial, componente G0, pantalla D1-D5 y suite de invariant
 - [ ] `scripts/demo-mutacion-privacidad.sh` termina con código ≠ 0 con la mutación y 0 sin ella, y deja el árbol limpio.
 - [ ] El test de registro falla si se agrega una clase `ThirdPartyView` sin registrarla (probado con una clase de prueba).
 - [ ] La propiedad de memorias por modo corre ≥ 1.000 casos y falla si `TwinPromptBuilder` deja de filtrar por modo (variante de la demo de mutación).
+- [ ] Propiedad `viaId`: cuando `FofCandidate` incluya `viaId`, nunca es un usuario cuya arista con el candidato sea de Pareja (ni no CONNECTED).
 
 ### E4 · Conocer (épica mayor)
 
@@ -709,7 +712,7 @@ Cuotas, fila de match, motor de simulación, resultados, decisión mutua, inicio
 - **Pantallas del inventario:** -
 - **Archivos y módulos:** backend/.../simulation/**
 
-**Descripción.** `POST /v1/simulations` (valida modo común, bloqueos y cupo, responde 202) → Cloud Task `/internal/tasks/simulate`. Elige 3 escenarios del modo (solo básicos si es gratis). Por escenario, hasta 8 turnos alternados entre dos `TwinAgent` independientes (cada uno solo ve su persona, sus memorias aceptadas **del mismo modo de la simulación** y la transcripción del escenario; ≤ 120 tokens por turno). `TwinPromptBuilder` es el único lugar que arma el prompt y filtra memorias por modo (ADR-0032). La tarea va a la cola `simulations`. Juez con salida JSON y la rúbrica del modo (`scenarios.rubric`). Puntaje = round(.35·similitud de rasgos + .65·promedio del juez). Caché 7 días por (par, modo, versiónA, versiónB). Estados QUEUED → RUNNING → DONE/FAILED, progreso en Firestore `simulations/{id}`, devolución del cupo si falla, idempotencia por id, arista SIMULATED, aviso al terminar. `GET /v1/simulations`, `GET /v1/simulations/{id}`, `GET .../transcript`.
+**Descripción.** `POST /v1/simulations` (valida modo común, bloqueos y cupo, responde 202) → Cloud Task `/internal/tasks/simulate`. Elige 3 escenarios del modo (solo básicos si es gratis). Por escenario, hasta 8 turnos alternados entre dos `TwinAgent` independientes (cada uno solo ve su persona, sus memorias aceptadas **del mismo modo de la simulación** y la transcripción del escenario; ≤ 120 tokens por turno). `TwinPromptBuilder` es el único lugar que arma el prompt; su `memoriesFor` DEBE delegar en `MemorySelection.select` (solo aceptadas del modo) y `MemorySelection.sanitize`, sin filtrar por su cuenta (ADR-0032). El test de arquitectura `TwinPromptBuilderDelegationTest` (E3.5) falla si el `.class` del builder no referencia `MemorySelection`; al entrar E4.3 hay que mover el ancla de la mutación `memorias` al builder real. La tarea va a la cola `simulations`. Juez con salida JSON y la rúbrica del modo (`scenarios.rubric`). Puntaje = round(.35·similitud de rasgos + .65·promedio del juez). Caché 7 días por (par, modo, versiónA, versiónB). Estados QUEUED → RUNNING → DONE/FAILED, progreso en Firestore `simulations/{id}`, devolución del cupo si falla, idempotencia por id, arista SIMULATED, aviso al terminar. `GET /v1/simulations`, `GET /v1/simulations/{id}`, `GET .../transcript`.
 
 **Criterios de aceptación (verificables):**
 
@@ -718,6 +721,7 @@ Cuotas, fila de match, motor de simulación, resultados, decisión mutua, inicio
 - [ ] Test: reintentar la misma tarea no duplica turnos ni cobros.
 - [ ] Test: un acierto de caché devuelve el resultado sin llamar al LLM (contador del Fake = 0).
 - [ ] Test: el prompt del gemelo A no contiene la persona ni las memorias de B.
+- [ ] `TwinPromptBuilderDelegationTest` (privacy/) en verde: `TwinPromptBuilder` delega en `MemorySelection.select` y `sanitize`.
 - [ ] Test (captura del prompt con FakeLlm): un usuario con memorias aceptadas de Pareja, Amistad y Estudio; en una simulación de Amistad el prompt contiene solo las de Amistad, y ninguna de Pareja aparece en el transcript ni en el informe guardados.
 - [ ] Test: un usuario gratis solo recibe escenarios básicos; en Pareja el prompt incluye las reglas de contenido.
 - [ ] Test: con el presupuesto agotado → 503 AI_BUDGET y no se consume cupo.
@@ -1409,7 +1413,7 @@ Play Console, pipeline de release, prueba cerrada temprana, tema claro y accesib
 - **Pantallas del inventario:** -
 - **Archivos y módulos:** docs/play-console.md
 
-**Descripción.** Enviar la versión 0.1 a **revisión en la prueba cerrada el 29 oct**. Contenido: esqueleto navegable de E0.7, enlaces a Términos y Política en A4, y Play Billing de E7.0 (la suscripción `parcheu_plus` ya existe desde el 28 oct). **No incluye login** (E2.2 llega en la ola 6); por eso la 0.1 no trata datos personales. Declaraciones de contenido (URL de privacidad, sin anuncios, clasificación de contenido, público 18+, borrador de Data safety, instrucciones para testers que dicen que es una versión temprana y que habrá perfiles de demostración). Registrar en Firebase prod el SHA-1 y SHA-256 de Play App Signing. **El reloj de 14 días corre desde que Play aprueba la versión y los testers se inscriben (opt-in), no desde la subida:** I3 envía el enlace de inscripción apenas llegue la aprobación (estimada 30-31 oct) y registra la fecha real. El proceso de release es el de PLAN.md §5 ('Releases intermedios'): `release/0.1.0` → `main` (aprueba el usuario) → tag `v0.1.0` → `firebase-deploy` prod (Hosting) → AAB.
+**Descripción.** Enviar la versión 0.1 a **revisión en la prueba cerrada el 29 oct**. Contenido: esqueleto navegable de E0.7, enlaces a Términos y Política en A4, y Play Billing de E7.0 (la suscripción `parcheu_plus` ya existe desde el 28 oct). **No incluye login** (E2.2 llega en la ola 6); por eso la 0.1 no trata datos personales. Declaraciones de contenido (URL de privacidad, sin anuncios, clasificación de contenido, público 18+, borrador de Data safety, instrucciones para testers que dicen que es una versión temprana y que habrá perfiles de demostración). Registrar en Firebase prod el SHA-1 y SHA-256 de Play App Signing. **El reloj de 14 días corre desde que Play aprueba la versión y los testers se inscriben (opt-in), no desde la subida:** I3 envía el enlace de inscripción apenas llegue la aprobación (estimada 30-31 oct) y registra la fecha real. **Base de la rama de release:** como la 0.1 no lleva login ni backend, `release/0.1.0` se corta desde `d7989af` (E1.1, anterior a E2.2/#28) y no desde `dev`: con E2.2 en `dev` el Splash real manda a A4 y el tester no podría salir sin un login que en prod aún no funciona (y el borrador de Data safety 'no trata datos personales' sería falso). Alternativa: una bandera de release 0.1 que conserve el Splash con el catálogo de rutas. El proceso de release es el de PLAN.md §5 ('Releases intermedios'): `release/0.1.0` → `main` (aprueba el usuario) → tag `v0.1.0` → `firebase-deploy` prod (Hosting) → AAB.
 
 **Criterios de aceptación (verificables):**
 
