@@ -378,6 +378,29 @@ class SimulationEngineTest : FunSpec({
         f.fake.calls shouldBe 0
     }
 
+    test("si una cuenta se borra durante un turno, ese turno no se guarda ni se publica en Firestore (E8.3)") {
+        val f = SimFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        val betoDeleted = f.repo.participant(beto)!!.copy(deleted = true)
+        var turns = 0
+        f.textReply = {
+            turns++
+            if (turns == 3) f.repo.putParticipant(betoDeleted)
+            "Va, me sirve."
+        }
+        val sim = f.start(ana, beto)
+        sim.status shouldBe SimulationStatus.FAILED
+        f.usage.refunded(sim.id.toString()) shouldBe true
+        // Solo los dos turnos anteriores al borrado quedan guardados; el tercero no llega a Postgres.
+        sim.transcript.scenarios.first().turns shouldHaveSize 2
+        // Ni el turno 3 ni el FAILED se publican: no se recrea `simulations/{id}` con el uid borrado.
+        f.mirror.docs.filter { it.id == sim.id }.none { it.progress.turn >= 3 } shouldBe true
+        f.mirror.last(sim.id)!!.status shouldBe SimulationStatus.RUNNING
+        f.graphRepo.edge(ana, beto, Mode.AMISTAD) shouldBe null
+        f.notifier.sent.shouldBeEmpty()
+    }
+
     test("si el bloqueo llega a mitad de camino, la simulación se detiene antes de la arista y del aviso") {
         val f = SimFixture()
         val ana = f.person("ana")

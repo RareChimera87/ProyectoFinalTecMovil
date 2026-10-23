@@ -5,6 +5,7 @@ locals {
     "memories"      = { schedule = "0 2 * * *", description = "Extrae memorias pendientes (diario 02:00)" }
     "twin-accuracy" = { schedule = "0 23 * * 0", description = "Precisión del gemelo (domingos 23:00)" }
     "retention"     = { schedule = "30 3 * * *", description = "Aplica la retención de datos (diario 03:30)" }
+    "purge-sweep"   = { schedule = "15 * * * *", description = "Reencola las purgas de cuentas atascadas (cada hora)" }
   }
 }
 

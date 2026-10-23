@@ -90,7 +90,7 @@ class ProfileApiTest : FunSpec({
         }
     }
 
-    test("le falta un día: 403 UNDERAGE, underage_at fijado y la cuenta queda bloqueada salvo GET y DELETE /v1/me") {
+    test("le falta un día: 403 UNDERAGE, underage_at fijado y la cuenta queda bloqueada salvo GET y DELETE /v1/me y la exportación") {
         val repo = seeded()
         app(repo) { client ->
             val response = client.verifyAge("ana", "2008-10-24")
@@ -105,8 +105,8 @@ class ProfileApiTest : FunSpec({
             val me = client.get("/v1/me") { auth("ana") }
             me.status shouldBe HttpStatusCode.OK
             me.body<MeDto>().underage shouldBe true
-            val delete = client.delete("/v1/me") { auth("ana") }
-            delete.status shouldNotBe HttpStatusCode.Forbidden
+            // 'Descargar mis datos primero' desde el bloqueo por edad (E8.3): la exportación también se permite.
+            client.get("/v1/me/export") { auth("ana") }.status shouldBe HttpStatusCode.OK
 
             // Todo lo demás, incluidas las rutas exentas de términos, responde 403 UNDERAGE.
             client.post("/v1/session") { auth("ana") }.error() shouldBe ErrorCode.UNDERAGE
@@ -120,6 +120,11 @@ class ProfileApiTest : FunSpec({
             client.get("/v1/graph") { auth("ana") }.error() shouldBe ErrorCode.UNDERAGE
             client.verifyAge("ana", "2000-01-01").error() shouldBe ErrorCode.UNDERAGE
             repo.user("ana").birthDate shouldBe LocalDate.parse("2008-10-24")
+
+            // Y borrarla (E8.3): al final, porque el borrado deja la cuenta inactiva.
+            val delete = client.delete("/v1/me") { auth("ana") }
+            delete.status shouldBe HttpStatusCode.Accepted
+            repo.user("ana").deletedAt shouldNotBe null
         }
     }
 

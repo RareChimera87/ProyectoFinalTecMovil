@@ -20,10 +20,9 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * (E4.1, probadas en `QuotaApiTest`).
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
-    // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest
-    // y E2.6 (catálogo y edad) ProfileApiTest.
+    // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
+    // E2.6 (catálogo y edad) ProfileApiTest y E8.3 (DELETE /me y exportación) AccountApiTest.
     "identity" to listOf(
-        HttpMethod.Delete to "/v1/me", HttpMethod.Get to "/v1/me/export",
         HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",
     ),
     // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest); el resto sigue en 501.
@@ -53,11 +52,12 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Home: E4.7 implementa GET /v1/home (HomeApiTest); ya no queda ningún stub.
 )
 
-// `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest).
+// `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest) y
+// `/internal/tasks/purge-user`, E8.3 (AccountApiTest).
 private val internalRoutes = listOf(
     "/internal/tasks/judge-scenario",
     "/internal/tasks/extract-memories", "/internal/tasks/moderate", "/internal/tasks/name-community",
-    "/internal/tasks/purge-user", "/internal/jobs/communities", "/internal/jobs/memories",
+    "/internal/jobs/communities", "/internal/jobs/memories",
     "/internal/jobs/twin-accuracy", "/internal/jobs/retention", "/internal/billing/rtdn",
 )
 

@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.identity
 
 import me.santiagoreina.parcheu.api.identity.consent.LearningConsentPolicy
+import me.santiagoreina.parcheu.api.identity.deletion.tombstoneUid
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Suspended
@@ -38,6 +39,12 @@ class IdentityService(
     suspend fun session(firebase: FirebaseUser): SessionDto {
         val now = clock.instant()
         val existing = repo.findByFirebaseUid(firebase.uid)
+        // Una cuenta purgada (E8.3) deja su lápida: un ID token anterior al borrado (válido hasta 1 h, por
+        // ejemplo en otro dispositivo) no puede volver a crear la fila con el correo y el nombre. Si la persona
+        // vuelve a entrar con Google, Firebase Auth le da un uid nuevo y el alta sigue normal.
+        if (existing == null && repo.findByFirebaseUid(tombstoneUid(firebase.uid)) != null) {
+            throw Unauthenticated("La cuenta fue eliminada")
+        }
         var user = existing ?: repo.createIfAbsent(
             uid = firebase.uid,
             email = firebase.email,

@@ -5,6 +5,8 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
 import me.santiagoreina.parcheu.api.identity.IdentityService
+import me.santiagoreina.parcheu.api.identity.deletion.AccountModule
+import me.santiagoreina.parcheu.api.identity.deletion.inMemoryAccountModule
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.identity.profile.InMemoryProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
@@ -76,9 +78,12 @@ fun testContainer(
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
     unread: UnreadCounter = UnreadCounter.NONE,
+    // Último parámetro: los tests de E8.3 lo pasan como lambda final.
+    account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
     val identity = IdentityService(repo, clock, legalTextVersion)
     val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
+    val accountModule = account(identity)
     return AppContainer(
         config = config,
         clock = clock,
@@ -95,8 +100,9 @@ fun testContainer(
         notifier = notifier,
         matching = matching,
         safety = safety,
+        account = accountModule,
         unread = unread,
-        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, unread) + extra,
+        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread) + extra,
     )
 }
 

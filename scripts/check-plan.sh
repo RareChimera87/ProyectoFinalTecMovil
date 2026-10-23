@@ -10,7 +10,7 @@
 #   - el mapa de tareas → colas documentado en el README;
 #   - los secretos hmac-anon-key y play-sa sin valor (ninguna secret_version ni secret_data);
 #   - escalado de la API: dev min 0; prod min 1 y máx 5;
-#   - Firestore nativo en nam5, Firebase, Pub/Sub play-rtdn, 4 trabajos de Scheduler,
+#   - Firestore nativo en nam5, Firebase, Pub/Sub play-rtdn, 5 trabajos de Scheduler (con purge-sweep de E8.3),
 #     uptime check. El presupuesto (50 % y 90 %) lo crea el bootstrap, no la
 #     plataforma; para un plan de bootstrap solo se verifica eso.
 set -euo pipefail
@@ -109,7 +109,7 @@ fs="$(q '[.[] | select(.type=="google_firestore_database") | "\(.values.type) \(
 [ "$(q '[.[] | select(.type=="google_firebase_project")] | length')" = "1" ] && ok "google_firebase_project" || fail "falta google_firebase_project"
 [ "$(q '[.[] | select(.type=="google_pubsub_topic" and .values.name=="play-rtdn")] | length')" = "1" ] && ok "Pub/Sub play-rtdn" || fail "falta el tema play-rtdn"
 sched="$(q '[.[] | select(.type=="google_cloud_scheduler_job") | .values.name] | sort | join(",")')"
-[ "$sched" = "communities,memories,retention,twin-accuracy" ] && ok "Scheduler: $sched" || fail "Scheduler esperado communities,memories,retention,twin-accuracy (es '$sched')"
+[ "$sched" = "communities,memories,purge-sweep,retention,twin-accuracy" ] && ok "Scheduler: $sched" || fail "Scheduler esperado communities,memories,purge-sweep,retention,twin-accuracy (es '$sched')"
 [ "$(q '[.[] | select(.type=="google_billing_budget")] | length')" = "0" ] \
   && ok "sin presupuesto en la plataforma (vive en bootstrap)" \
   || fail "el presupuesto no debe estar en la plataforma: CI no tiene roles de facturación (va en bootstrap)"
