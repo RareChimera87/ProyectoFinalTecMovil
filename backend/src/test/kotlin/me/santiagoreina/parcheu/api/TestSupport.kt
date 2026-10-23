@@ -10,6 +10,8 @@ import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.graph.GraphModule
+import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
@@ -53,6 +55,7 @@ fun testContainer(
     config: AppConfig = testConfig(),
     ai: AiGateway = testGateway(),
     twin: TwinModule = inMemoryTwinModule(FIXED_CLOCK, ai),
+    graph: GraphModule = inMemoryGraphModule(FIXED_CLOCK),
 ): AppContainer {
     val identity = IdentityService(repo, FIXED_CLOCK, legalTextVersion)
     return AppContainer(
@@ -64,7 +67,8 @@ fun testContainer(
         quota = quota,
         ai = ai,
         twin = twin,
-        domains = allDomains(identity, quota, twin) + extra,
+        graph = graph,
+        domains = allDomains(identity, quota, twin, graph) + extra,
     )
 }
 

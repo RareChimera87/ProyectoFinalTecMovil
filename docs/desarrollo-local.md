@@ -120,3 +120,7 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
 - Con `ENV=local` sin base, el gemelo corre en memoria y la tarea `build-persona` se ejecuta en línea al enviar `POST /v1/twin/answers` (cola Fake) con el LLM Fake de la pasarela.
 - Con base (dev/prod) la tarea va a la cola `ai-light` de Cloud Tasks: necesita `TASKS_QUEUE_AI_LIGHT` (nombre corto `ai-light` o ruta completa; el nombre corto se completa con `GCP_PROJECT`/`GCP_REGION`, o con `CLOUD_SQL_INSTANCE` si faltan), `SERVICE_URL`, `TASKS_SERVICE_ACCOUNT` e `INTERNAL_OIDC_AUDIENCE`.
 - Para ejecutar `TwinDbTest` sin Docker, apunta `PARCHEU_TEST_DB_URL` a un Postgres 16 desechable (ver `TestDatabase`).
+
+## Grafo (E3.1)
+
+- Clave de `anonId` del grafo: `HMAC_ANON_KEY` (valor directo) o `SECRET_HMAC_ANON_KEY` (nombre del secreto `projects/<p>/secrets/hmac-anon-key`, que define el Terraform de E0.5; se lee la versión `latest` en el primer uso). Con `ENV=local` y sin ninguna de las dos se usa una clave fija de desarrollo; en dev y prod, sin clave, `GET /v1/graph` falla con 500 en vez de usar una clave débil.

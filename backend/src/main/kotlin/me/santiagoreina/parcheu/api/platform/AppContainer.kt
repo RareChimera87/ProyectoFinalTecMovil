@@ -9,7 +9,11 @@ import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.InMemoryAiUsageStore
 import me.santiagoreina.parcheu.api.billing.BillingRoutes
 import me.santiagoreina.parcheu.api.chat.ChatRoutes
+import me.santiagoreina.parcheu.api.graph.AnonIdSigner
+import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
+import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
+import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
@@ -60,8 +64,10 @@ class AppContainer(
     val ai: AiGateway = localAiGateway(clock),
     /** Gemelo (E2.3). Por defecto en memoria: solo [fromConfig] cablea Postgres y Cloud Tasks. */
     val twin: TwinModule = inMemoryTwinModule(clock, ai),
+    /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
+    val graph: GraphModule = inMemoryGraphModule(clock),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, quota, twin),
+    val domains: List<DomainRoutes> = allDomains(identity, quota, twin, graph),
 ) {
     companion object {
         /**
@@ -91,7 +97,8 @@ class AppContainer(
             val ai = aiGateway(config, vars, clock) { database }
             val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
             val twin = twinModule(config.env, database, clock, ai, tasks)
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, quota, ai = ai, twin = twin)
+            val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, quota, ai = ai, twin = twin, graph = graph)
         }
 
         /**
@@ -123,14 +130,19 @@ class AppContainer(
 }
 
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
-fun allDomains(identity: IdentityService, quota: QuotaModule, twin: TwinModule): List<DomainRoutes> = listOf(
+fun allDomains(
+    identity: IdentityService,
+    quota: QuotaModule,
+    twin: TwinModule,
+    graph: GraphModule = inMemoryGraphModule(systemClock()),
+): List<DomainRoutes> = listOf(
     IdentityRoutes(identity),
     TwinRoutes(twin),
     QuotaRoutes(quota),
     MatchingRoutes(),
     SimulationRoutes(),
     ScenarioRoutes(),
-    GraphRoutes(),
+    GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),
     ChatRoutes(),
     NotificationsRoutes(),
