@@ -37,7 +37,7 @@ data class ParcheUShapeTokens(
     val field: RoundedCornerShape = RoundedCornerShape(ParcheURadius.Field),
     val checkbox: RoundedCornerShape = RoundedCornerShape(ParcheURadius.Checkbox),
     val navPill: RoundedCornerShape = RoundedCornerShape(ParcheURadius.NavPill),
-    val progress: RoundedCornerShape = RoundedCornerShape(ParcheURadius.Progress),
+    val progress: RoundedCornerShape = RoundedCornerShape(ParcheURadius.Progress)
 )
 
 /** Formas de Material 3 alineadas con el inventario (los componentes M3 las toman por defecto). */
@@ -47,5 +47,5 @@ val ParcheUMaterialShapes =
         small = RoundedCornerShape(ParcheURadius.ButtonCompact),
         medium = RoundedCornerShape(ParcheURadius.Button),
         large = RoundedCornerShape(ParcheURadius.Card),
-        extraLarge = RoundedCornerShape(ParcheURadius.HeroLarge),
+        extraLarge = RoundedCornerShape(ParcheURadius.HeroLarge)
     )

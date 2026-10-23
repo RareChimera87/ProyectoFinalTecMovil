@@ -64,14 +64,14 @@ import me.santiagoreina.parcheu.designsystem.theme.avatarColors
 enum class GraphMode(val label: String) {
     AMISTAD("Amistad"),
     PAREJA("Pareja"),
-    ESTUDIO("Estudio"),
+    ESTUDIO("Estudio")
 }
 
 /** Estado de la arista. Mismos nombres que `contract.EdgeState`. */
 enum class GraphEdgeState(val label: String) {
     CONNECTED("conectados"),
     SIMULATED("simularon"),
-    PENDING("pendiente"),
+    PENDING("pendiente")
 }
 
 /**
@@ -86,7 +86,7 @@ data class GraphNode(
     val affinity: Int,
     val mode: GraphMode,
     val state: GraphEdgeState,
-    val anonymous: Boolean = false,
+    val anonymous: Boolean = false
 )
 
 /**
@@ -101,7 +101,7 @@ data class GraphFof(
     val name: String,
     val initials: String,
     val affinity: Int,
-    val anonymous: Boolean = true,
+    val anonymous: Boolean = true
 )
 
 /** Tamaño por debajo del cual el grafo se dibuja como miniatura (sin etiquetas). */
@@ -136,10 +136,14 @@ fun graphFofDescription(fof: GraphFof): String {
 }
 
 /** true si el nodo se atenúa por selección de otro nodo, por filtro de modo o por [dimmedIds]. */
-internal fun isDimmed(node: GraphNode, modeFilter: GraphMode?, selectedId: String?, dimmedIds: Set<String>): Boolean =
-    (selectedId != null && selectedId != node.id) ||
-        (modeFilter != null && node.mode != modeFilter) ||
-        node.id in dimmedIds
+internal fun isDimmed(
+    node: GraphNode,
+    modeFilter: GraphMode?,
+    selectedId: String?,
+    dimmedIds: Set<String>
+): Boolean = (selectedId != null && selectedId != node.id) ||
+    (modeFilter != null && node.mode != modeFilter) ||
+    node.id in dimmedIds
 
 internal fun edgeAlpha(node: GraphNode, dimmed: Boolean): Float = when {
     dimmed -> GraphAlpha.EDGE_DIMMED
@@ -182,14 +186,18 @@ internal fun nodeAvatarColors(node: GraphNode, isDark: Boolean): AvatarColors {
  * Layout de G0 para un lienzo de [sizeDp] dp. Los amigos de amigos se ordenan por su conexión de
  * origen para que queden agrupados en la capa exterior. Coordenadas en dp.
  */
-internal fun computeGraphLayout(nodes: List<GraphNode>, fof: List<GraphFof>, sizeDp: Float): GraphLayout {
+internal fun computeGraphLayout(
+    nodes: List<GraphNode>,
+    fof: List<GraphFof>,
+    sizeDp: Float
+): GraphLayout {
     val modeOf = nodes.associate { it.id to it.mode.name }
     val base = RadialLayout.compute(
         nodes = nodes.map { LayoutNode(it.id, it.mode.name, it.affinity) },
         size = sizeDp,
         fof = fof.map {
             FofNode(it.id, it.parentId?.let { p -> "${modeOf[p].orEmpty()}:$p" } ?: "")
-        },
+        }
     )
     return if (base.fof.isEmpty()) base else base.copy(fof = alignFofToParents(base, nodes, fof))
 }
@@ -206,7 +214,11 @@ private const val FOF_SPACING_DP = 62f
  * capa exterior que calculó [RadialLayout]. Si dos grupos vecinos quedarían tapándose, se separan
  * angularmente. Un fof sin padre conocido conserva la posición de [RadialLayout].
  */
-private fun alignFofToParents(layout: GraphLayout, nodes: List<GraphNode>, fof: List<GraphFof>): List<PlacedNode> {
+private fun alignFofToParents(
+    layout: GraphLayout,
+    nodes: List<GraphNode>,
+    fof: List<GraphFof>
+): List<PlacedNode> {
     val parentOf = fof.mapNotNull { f -> f.parentId?.let { f.id to it } }.toMap()
     val placedById = layout.nodes.associateBy { it.id }
     val cx = layout.centerX
@@ -251,7 +263,7 @@ private fun alignFofToParents(layout: GraphLayout, nodes: List<GraphNode>, fof: 
     val obstacles = layout.nodes.map { n ->
         listOf(
             Box(n.x - n.radius, n.y - n.radius, n.x + n.radius, n.y + n.radius),
-            labelBox(n, labelOf[n.id].orEmpty(), 13f * k, CONNECTION_CHAR_DP * k),
+            labelBox(n, labelOf[n.id].orEmpty(), 13f * k, CONNECTION_CHAR_DP * k)
         )
     }.flatten()
     val fofLabelOf = fof.associate {
@@ -266,12 +278,12 @@ private fun alignFofToParents(layout: GraphLayout, nodes: List<GraphNode>, fof: 
         x: Float,
         y: Float,
         others: List<Pair<Float, Float>>,
-        extra: List<Box> = emptyList(),
+        extra: List<Box> = emptyList()
     ): Boolean {
         val moved = f.copy(x = x, y = y)
         val boxes = listOf(
             Box(x - f.radius, y - f.radius, x + f.radius, y + f.radius),
-            labelBox(moved, fofLabelOf[f.id].orEmpty(), 12f * k, FOF_CHAR_DP * k),
+            labelBox(moved, fofLabelOf[f.id].orEmpty(), 12f * k, FOF_CHAR_DP * k)
         )
         if (boxes.any { b -> (obstacles + extra).any { it.intersects(b) } }) return true
         return others.any { (ox, oy) ->
@@ -313,8 +325,8 @@ private fun alignFofToParents(layout: GraphLayout, nodes: List<GraphNode>, fof: 
                         f.copy(x = x, y = y),
                         fofLabelOf[f.id].orEmpty(),
                         12f * k,
-                        FOF_CHAR_DP * k,
-                    ),
+                        FOF_CHAR_DP * k
+                    )
                 )
             }
             val boxesOf = idx.associateWith { i ->
@@ -387,7 +399,7 @@ fun PuGraph(
     fof: List<GraphFof> = emptyList(),
     dimmedIds: Set<String> = emptySet(),
     centerLabel: String = "Tú",
-    onNodeClick: (String) -> Unit = {},
+    onNodeClick: (String) -> Unit = {}
 ) {
     val sizeDp = size.value
     val layout = remember(nodes, fof, sizeDp) { computeGraphLayout(nodes, fof, sizeDp) }
@@ -402,7 +414,7 @@ fun PuGraph(
         modifier = modifier
             .size(size)
             .testTag(PU_GRAPH_TEST_TAG)
-            .semantics { isTraversalGroup = true },
+            .semantics { isTraversalGroup = true }
     ) {
         Canvas(
             modifier = Modifier
@@ -413,11 +425,11 @@ fun PuGraph(
                         val hit = layout.hitTest(
                             offset.x / density.density,
                             offset.y / density.density,
-                            HIT_SLOP_DP,
+                            HIT_SLOP_DP
                         )
                         if (hit != null) currentOnClick.value(hit.id)
                     }
-                },
+                }
         ) {
             drawGraph(
                 layout = layout,
@@ -429,7 +441,7 @@ fun PuGraph(
                 centerLabel = centerLabel,
                 colors = colors,
                 textMeasurer = textMeasurer,
-                labels = size >= PU_GRAPH_MINI_THRESHOLD,
+                labels = size >= PU_GRAPH_MINI_THRESHOLD
             )
         }
         SemanticNodes(layout, byId, fofById, selectedId) { currentOnClick.value(it) }
@@ -445,12 +457,12 @@ private fun SemanticNodes(
     nodes: Map<String, GraphNode>,
     fof: Map<String, GraphFof>,
     selectedId: String?,
-    onClick: (String) -> Unit,
+    onClick: (String) -> Unit
 ) {
     val ordered = layout.nodes.sortedWith(
-        compareByDescending<PlacedNode> { nodes[it.id]?.affinity ?: 0 }.thenBy { it.id },
+        compareByDescending<PlacedNode> { nodes[it.id]?.affinity ?: 0 }.thenBy { it.id }
     ) + layout.fof.sortedWith(
-        compareByDescending<PlacedNode> { fof[it.id]?.affinity ?: 0 }.thenBy { it.id },
+        compareByDescending<PlacedNode> { fof[it.id]?.affinity ?: 0 }.thenBy { it.id }
     )
     ordered.forEachIndexed { index, placed ->
         val description = nodes[placed.id]?.let(::graphNodeDescription)
@@ -470,7 +482,7 @@ private fun SemanticNodes(
                         onClick(placed.id)
                         true
                     }
-                },
+                }
         )
     }
 }
@@ -485,7 +497,7 @@ private fun DrawScope.drawGraph(
     centerLabel: String,
     colors: ParcheUColors,
     textMeasurer: TextMeasurer,
-    labels: Boolean,
+    labels: Boolean
 ) {
     if (layout.size <= 0f) return
     val u = density // px por dp
@@ -503,7 +515,7 @@ private fun DrawScope.drawGraph(
             color = colors.ln,
             radius = r * u,
             center = center,
-            style = Stroke(width = 1f * u, pathEffect = ringDash),
+            style = Stroke(width = 1f * u, pathEffect = ringDash)
         )
     }
 
@@ -517,7 +529,7 @@ private fun DrawScope.drawGraph(
             end = f.offset(),
             strokeWidth = 1.5f * u,
             pathEffect = fofDash,
-            alpha = GraphAlpha.FOF_EDGE,
+            alpha = GraphAlpha.FOF_EDGE
         )
     }
 
@@ -538,7 +550,7 @@ private fun DrawScope.drawGraph(
             strokeWidth = width * strokeK * u,
             cap = StrokeCap.Round,
             pathEffect = if (node.state == GraphEdgeState.SIMULATED) simDash else null,
-            alpha = edgeAlpha(node, dimmed),
+            alpha = edgeAlpha(node, dimmed)
         )
     }
 
@@ -551,10 +563,10 @@ private fun DrawScope.drawGraph(
             color = ParcheUPalette.White,
             fontFamily = SoraFontFamily,
             fontWeight = FontWeight.Bold,
-            fontSize = toSp(14f * k),
+            fontSize = toSp(14f * k)
         ),
         x = center.x,
-        baseline = center.y + 5f * k * u,
+        baseline = center.y + 5f * k * u
     )
 
     // Conexiones.
@@ -569,7 +581,7 @@ private fun DrawScope.drawGraph(
                     color = colors.tx,
                     radius = r + 6f * k * u,
                     center = o,
-                    style = Stroke(width = 2f * u),
+                    style = Stroke(width = 2f * u)
                 )
             }
             val avatar = nodeAvatarColors(node, colors.isDark)
@@ -579,7 +591,7 @@ private fun DrawScope.drawGraph(
                 color = modeColor(colors, node.mode),
                 radius = r,
                 center = o,
-                style = Stroke(width = 2f * strokeK * u),
+                style = Stroke(width = 2f * strokeK * u)
             )
         }
         withLayerAlpha(textAlpha(dimmed)) {
@@ -593,10 +605,10 @@ private fun DrawScope.drawGraph(
                     color = avatar.content,
                     fontFamily = SoraFontFamily,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = toSp(12.5f * k),
+                    fontSize = toSp(12.5f * k)
                 ),
                 x = o.x,
-                baseline = o.y + 4.5f * k * u,
+                baseline = o.y + 4.5f * k * u
             )
             if (labels) {
                 drawCenteredText(
@@ -606,10 +618,10 @@ private fun DrawScope.drawGraph(
                         color = colors.mu,
                         fontFamily = InterFontFamily,
                         fontWeight = FontWeight.Medium,
-                        fontSize = toSp(10.5f * k),
+                        fontSize = toSp(10.5f * k)
                     ),
                     x = o.x,
-                    baseline = o.y + r + 13f * k * u,
+                    baseline = o.y + r + 13f * k * u
                 )
             }
         }
@@ -626,7 +638,7 @@ private fun DrawScope.drawGraph(
             color = colors.prt,
             radius = r,
             center = o,
-            style = Stroke(width = 1.5f * u, pathEffect = if (f.anonymous) anonDash else null),
+            style = Stroke(width = 1.5f * u, pathEffect = if (f.anonymous) anonDash else null)
         )
         drawCenteredText(
             textMeasurer,
@@ -635,10 +647,10 @@ private fun DrawScope.drawGraph(
                 color = colors.tx,
                 fontFamily = SoraFontFamily,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = toSp(12f * k),
+                fontSize = toSp(12f * k)
             ),
             x = o.x,
-            baseline = o.y + 4.5f * k * u,
+            baseline = o.y + 4.5f * k * u
         )
         if (labels) {
             drawCenteredText(
@@ -648,10 +660,10 @@ private fun DrawScope.drawGraph(
                     color = colors.mu,
                     fontFamily = InterFontFamily,
                     fontWeight = FontWeight.Medium,
-                    fontSize = toSp(9.5f * k),
+                    fontSize = toSp(9.5f * k)
                 ),
                 x = o.x,
-                baseline = o.y + r + 12f * k * u,
+                baseline = o.y + r + 12f * k * u
             )
         }
     }
@@ -675,7 +687,7 @@ private inline fun DrawScope.withLayerAlpha(alpha: Float, block: DrawScope.() ->
     drawIntoCanvas { canvas ->
         canvas.saveLayer(
             Rect(Offset.Zero, size),
-            Paint().apply { this.alpha = alpha },
+            Paint().apply { this.alpha = alpha }
         )
         block()
         canvas.restore()
@@ -688,11 +700,11 @@ private fun DrawScope.drawCenteredText(
     text: String,
     style: TextStyle,
     x: Float,
-    baseline: Float,
+    baseline: Float
 ) {
     val result = measurer.measure(text, style, softWrap = false, maxLines = 1)
     drawText(
         textLayoutResult = result,
-        topLeft = Offset(x - result.size.width / 2f, baseline - result.firstBaseline),
+        topLeft = Offset(x - result.size.width / 2f, baseline - result.firstBaseline)
     )
 }

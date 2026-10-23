@@ -65,8 +65,8 @@ internal fun OnboardingWordmark(size: Dp, modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold,
             fontSize = size.value.sp,
             lineHeight = size.value.sp,
-            letterSpacing = (-size.value * 0.03f).sp,
-        ),
+            letterSpacing = (-size.value * 0.03f).sp
+        )
     )
 }
 
@@ -85,7 +85,7 @@ internal fun OnboardingAppIcon(size: Dp, modifier: Modifier = Modifier) {
                 points[i],
                 points[i + 1],
                 strokeWidth = 4f * k,
-                cap = StrokeCap.Round,
+                cap = StrokeCap.Round
             )
         }
         val radii = listOf(7f, 6f, 8f, 6f, 7f)
@@ -99,7 +99,7 @@ internal fun OnboardingAppIcon(size: Dp, modifier: Modifier = Modifier) {
                     Color.White
                 },
                 radius = radii[i] * k,
-                center = p,
+                center = p
             )
         }
     }
@@ -118,7 +118,7 @@ internal fun OnboardingMascot(width: Dp, color: Color, modifier: Modifier = Modi
             color,
             topLeft = Offset(w / 2 - w * 0.04f, h * 0.053f),
             size = Size(w * 0.08f, w * 0.16f),
-            cornerRadius = CornerRadius(w * 0.04f),
+            cornerRadius = CornerRadius(w * 0.04f)
         )
         drawCircle(color, radius = w * 0.08f, center = Offset(w / 2, w * 0.08f))
         // Cuerpo: elipse algo achatada abajo (aproxima el border-radius 48/52/44/46 del mockup).
@@ -126,7 +126,7 @@ internal fun OnboardingMascot(width: Dp, color: Color, modifier: Modifier = Modi
             color,
             topLeft = Offset(0f, bodyTop),
             size = Size(w, bodyH),
-            cornerRadius = CornerRadius(w * 0.5f, bodyH * 0.55f),
+            cornerRadius = CornerRadius(w * 0.5f, bodyH * 0.55f)
         )
         val ink = ParcheUPalette.Ink
         val eyeW = w * 0.13f
@@ -142,7 +142,7 @@ internal fun OnboardingMascot(width: Dp, color: Color, modifier: Modifier = Modi
             sweepAngle = 180f,
             useCenter = true,
             topLeft = Offset(w / 2 - mouthW / 2, mouthY - mouthW * 0.39f),
-            size = Size(mouthW, mouthW * 0.78f),
+            size = Size(mouthW, mouthW * 0.78f)
         )
     }
 }
@@ -152,7 +152,7 @@ internal fun OnboardingMascot(width: Dp, color: Color, modifier: Modifier = Modi
 internal fun InitialsAvatar(initials: String, size: Dp, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier.size(size).background(ParcheUPalette.Violet, CircleShape),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text = initials,
@@ -163,8 +163,8 @@ internal fun InitialsAvatar(initials: String, size: Dp, modifier: Modifier = Mod
                 fontSize = (
                     size.value *
                         0.375f
-                    ).sp,
-            ),
+                    ).sp
+            )
         )
     }
 }
@@ -182,7 +182,7 @@ internal fun OnboardingGraph(size: Dp, modifier: Modifier = Modifier) {
                 colors.ln,
                 radius = it * k,
                 center = c,
-                style = Stroke(width = 1.5f * k, pathEffect = dash),
+                style = Stroke(width = 1.5f * k, pathEffect = dash)
             )
         }
         val nodes =
@@ -193,13 +193,13 @@ internal fun OnboardingGraph(size: Dp, modifier: Modifier = Modifier) {
                 Triple(230f, 102f, ParcheUPalette.ElectricBlue),
                 Triple(15f, 140f, ParcheUPalette.ElectricBlue),
                 Triple(120f, 140f, ParcheUPalette.Mint),
-                Triple(285f, 140f, ParcheUPalette.Violet),
+                Triple(285f, 140f, ParcheUPalette.Violet)
             )
         nodes.forEachIndexed { i, (deg, r, color) ->
             val rad = Math.toRadians(deg.toDouble())
             val p = Offset(
                 c.x + (r * k * kotlin.math.cos(rad)).toFloat(),
-                c.y + (r * k * kotlin.math.sin(rad)).toFloat(),
+                c.y + (r * k * kotlin.math.sin(rad)).toFloat()
             )
             val solid = i < 4
             drawLine(
@@ -213,7 +213,7 @@ internal fun OnboardingGraph(size: Dp, modifier: Modifier = Modifier) {
                     PathEffect.dashPathEffect(floatArrayOf(10f * k, 10f * k))
                 } else {
                     null
-                },
+                }
             )
             drawCircle(color, radius = (if (r < 100f) 20f else 16f) * k, center = p)
         }
@@ -222,7 +222,7 @@ internal fun OnboardingGraph(size: Dp, modifier: Modifier = Modifier) {
             Color.White,
             radius = 28f * k,
             center = c,
-            style = Stroke(width = 3f * k, join = StrokeJoin.Round),
+            style = Stroke(width = 3f * k, join = StrokeJoin.Round)
         )
     }
 }
@@ -233,7 +233,7 @@ internal fun PageIndicator(count: Int, current: Int, modifier: Modifier = Modifi
     val colors = ParcheUTheme.colors
     Row(
         modifier = modifier.semantics { contentDescription = "Paso ${current + 1} de $count" },
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         repeat(count) { i ->
             Box(
@@ -247,8 +247,8 @@ internal fun PageIndicator(count: Int, current: Int, modifier: Modifier = Modifi
                         } else {
                             colors.ln
                         },
-                        RoundedCornerShape(4.dp),
-                    ),
+                        RoundedCornerShape(4.dp)
+                    )
             )
         }
     }
@@ -264,7 +264,7 @@ internal fun LoadingDots(modifier: Modifier = Modifier, animate: Boolean = true)
                 initialValue = 0f,
                 targetValue = 3f,
                 animationSpec = infiniteRepeatable(tween(900), RepeatMode.Restart),
-                label = "phase",
+                label = "phase"
             )
             value
         } else {
@@ -272,7 +272,7 @@ internal fun LoadingDots(modifier: Modifier = Modifier, animate: Boolean = true)
         }
     Row(
         modifier = modifier.semantics { contentDescription = "Cargando" },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         repeat(3) { i ->
             val distance = ((i - phase) % 3 + 3) % 3
@@ -282,7 +282,7 @@ internal fun LoadingDots(modifier: Modifier = Modifier, animate: Boolean = true)
                     .width(8.dp)
                     .size(8.dp)
                     .alpha(alpha)
-                    .background(ParcheUPalette.Violet, CircleShape),
+                    .background(ParcheUPalette.Violet, CircleShape)
             )
         }
     }
