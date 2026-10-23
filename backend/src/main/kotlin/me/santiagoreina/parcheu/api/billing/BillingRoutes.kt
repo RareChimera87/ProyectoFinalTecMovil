@@ -15,6 +15,8 @@ import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.api.quota.DevPlusGranter
 import me.santiagoreina.parcheu.contract.GrantPlus
 import me.santiagoreina.parcheu.contract.VerifyPurchase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Clock
 import java.util.UUID
 
@@ -34,12 +36,14 @@ class BillingRoutes(
     override fun Route.v1() {
         get("/billing/entitlement") {
             val user = call.principal<FirebaseUser>() ?: throw Unauthenticated()
-            call.respond(billing.entitlement(viewerId(user)))
+            val userId = viewerId(user)
+            call.respond(io { billing.entitlement(userId) })
         }
         post("/billing/verify") {
             val user = call.principal<FirebaseUser>() ?: throw Unauthenticated()
             val body = call.receive<VerifyPurchase>()
-            call.respond(billing.verify(viewerId(user), body))
+            val userId = viewerId(user)
+            call.respond(io { billing.verify(userId, body) })
         }
     }
 
@@ -50,7 +54,7 @@ class BillingRoutes(
             } catch (e: IllegalArgumentException) {
                 throw ValidationFailed(e.message ?: "Push de Pub/Sub inválido")
             }
-            billing.handleRtdn(rtdn)
+            io { billing.handleRtdn(rtdn) }
             // 204 también para repetidas e ignoradas: así Pub/Sub no las reintenta.
             call.respond(HttpStatusCode.NoContent)
         }
@@ -58,8 +62,14 @@ class BillingRoutes(
         post("/dev/grant-plus") {
             val body = call.receive<GrantPlus>()
             val userId = runCatching { UUID.fromString(body.userId) }.getOrElse { throw ValidationFailed("userId no es un UUID") }
-            granter.grantPlus(userId, body.days, clock.instant())
+            io { granter.grantPlus(userId, body.days, clock.instant()) }
             call.respond(HttpStatusCode.NoContent)
         }
     }
 }
+
+/**
+ * Billing llama a Play (red, hasta 15 s) y a la base de forma bloqueante: se pasa a `Dispatchers.IO` para no
+ * ocupar el hilo de llamadas de Netty (en Cloud Run con 1 CPU es uno solo y bloquearía toda la API).
+ */
+private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }

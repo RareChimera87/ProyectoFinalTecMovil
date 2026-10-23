@@ -1,5 +1,7 @@
 package me.santiagoreina.parcheu.api.billing
 
+import com.google.api.client.http.GenericUrl
+import com.google.api.client.testing.http.MockHttpTransport
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
@@ -34,6 +36,20 @@ class PlayConfigTest : FunSpec({
         config.client.shouldBeInstanceOf<LazyPlaySubscriptions>()
         PlayConfig.fromEnv(Env.DEV, mapOf("SECRET_PLAY_SA" to "projects/p/secrets/play-sa")).client
             .shouldBeInstanceOf<LazyPlaySubscriptions>()
+    }
+
+    test("las llamadas a Play llevan tiempos máximos de 5 s de conexión y 10 s de lectura, con o sin credenciales (M1)") {
+        var delegated = 0
+        val request = MockHttpTransport().createRequestFactory().buildGetRequest(GenericUrl("https://example.com"))
+        GooglePlaySubscriptions.withTimeouts(null).initialize(request)
+        request.connectTimeout shouldBe 5_000
+        request.readTimeout shouldBe 10_000
+
+        val other = MockHttpTransport().createRequestFactory().buildGetRequest(GenericUrl("https://example.com"))
+        GooglePlaySubscriptions.withTimeouts { delegated++ }.initialize(other)
+        delegated shouldBe 1
+        other.connectTimeout shouldBe 5_000
+        other.readTimeout shouldBe 10_000
     }
 
     test("estados de subscriptionsv2 → estado guardado (nulo = la compra aún no da derecho)") {

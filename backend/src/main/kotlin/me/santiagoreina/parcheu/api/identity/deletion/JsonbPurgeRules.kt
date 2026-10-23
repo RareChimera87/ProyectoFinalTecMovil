@@ -59,15 +59,18 @@ object JsonbPurgeRules {
         ),
         JsonbPurgeRule(
             PurchaseEvents.payload,
-            "Eventos de compra (obligación contable): se conservan solo tipo y fecha del evento, sin datos de la cuenta",
-            "update purchase_events set payload = jsonb_strip_nulls(jsonb_build_object(" +
+            "Eventos de compra (obligación contable) de todos sus tokens: se conservan solo tipo y fecha, sin token ni cuenta",
+            "update purchase_events set payload = case when payload->'redacted' is not distinct from 'true'::jsonb then payload " +
+                "else jsonb_strip_nulls(jsonb_build_object(" +
                 "'redacted', true, " +
                 "'eventTimeMillis', payload->'eventTimeMillis', " +
-                "'notificationType', payload#>'{subscriptionNotification,notificationType}')) " +
-                "where payload->'redacted' is distinct from 'true'::jsonb and (" +
-                "purchase_token in (select purchase_token from entitlements where user_id = ?) " +
-                "or payload::text like ? or payload::text like ?)",
-            listOf(PurgeParam.USER, PurgeParam.PATTERN, PurgeParam.HASH_PATTERN),
+                "'notificationType', payload#>'{subscriptionNotification,notificationType}')) end, " +
+                "purchase_token = null, user_id = null " +
+                "where user_id = ? " +
+                "or purchase_token in (select purchase_token from entitlements where user_id = ?) " +
+                "or purchase_token in (select purchase_token from purchase_events where user_id = ?) " +
+                "or payload::text like ? or payload::text like ?",
+            listOf(PurgeParam.USER, PurgeParam.USER, PurgeParam.USER, PurgeParam.PATTERN, PurgeParam.HASH_PATTERN),
         ),
     )
 

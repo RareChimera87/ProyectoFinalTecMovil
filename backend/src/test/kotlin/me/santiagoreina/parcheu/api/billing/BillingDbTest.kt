@@ -10,6 +10,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
@@ -23,12 +24,18 @@ import me.santiagoreina.parcheu.api.platform.db.tables.PurchaseEvents
 import me.santiagoreina.parcheu.api.platform.errors.Forbidden
 import me.santiagoreina.parcheu.api.quota.QuotaLimits
 import me.santiagoreina.parcheu.api.quota.quotaModule
+import me.santiagoreina.parcheu.contract.EntitlementDto
 import me.santiagoreina.parcheu.contract.EntitlementState
 import me.santiagoreina.parcheu.contract.VerifyPurchase
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /**
  * Billing contra Postgres 16 (`entitlements` y `purchase_events` reales, con su `unique` y sus CHECK).
@@ -160,6 +167,101 @@ class BillingDbTest : FunSpec({
                 w.play.purchase("tok-real", "active", owner = w.ana)
                 w.verify(w.ana, "tok-real").plus shouldBe true
                 w.store.entitlement(w.ana)!!.purchaseToken shouldBe "tok-real"
+            }
+        }
+
+    test("Postgres: carrera verify/revocación — la RTDN REVOKED mantiene el for update, verify espera y el resultado es REVOKED sin Plus (B3)")
+        .config(enabled = TestDatabase.enabled) {
+            withBilling { w ->
+                w.play.purchase("tok-race", "active-anual-acknowledged", owner = w.ana)
+                w.verify(w.ana, "tok-race").plus shouldBe true // Play seguirá mostrando ACTIVE (periodo pagado)
+
+                val locked = CountDownLatch(1)
+                val release = CountDownLatch(1)
+                // La RTDN toma el bloqueo (`select ... for update` real) y se detiene antes de guardar.
+                val holding = object : BillingStore by w.store {
+                    override fun entitlementByToken(purchaseToken: String, forUpdate: Boolean): EntitlementRow? =
+                        w.store.entitlementByToken(purchaseToken, forUpdate).also {
+                            if (forUpdate) {
+                                locked.countDown()
+                                check(release.await(20, TimeUnit.SECONDS)) { "la prueba no liberó el bloqueo" }
+                            }
+                        }
+                }
+                val pool = Executors.newFixedThreadPool(2)
+                try {
+                    val rtdn = pool.submit<BillingService.RtdnOutcome> {
+                        BillingService(holding, w.play.client, FIXED_CLOCK)
+                            .handleRtdn(decodeRtdn(rtdnBody("msg-race", "tok-race", RtdnTypes.SUBSCRIPTION_REVOKED)))
+                    }
+                    check(locked.await(20, TimeUnit.SECONDS)) { "la RTDN no tomó el bloqueo" }
+                    val verify = pool.submit<EntitlementDto> { w.verify(w.ana, "tok-race") }
+
+                    // Mientras la RTDN conserva el bloqueo, verify no puede terminar (espera en su propio for update).
+                    shouldThrow<TimeoutException> { verify.get(1, TimeUnit.SECONDS) }
+                    release.countDown()
+
+                    rtdn.get(20, TimeUnit.SECONDS) shouldBe BillingService.RtdnOutcome.PROCESSED
+                    val dto = verify.get(20, TimeUnit.SECONDS)
+                    dto.state shouldBe EntitlementState.REVOKED
+                    dto.plus shouldBe false
+                } finally {
+                    release.countDown()
+                    pool.shutdownNow()
+                }
+                w.store.entitlement(w.ana)!!.state shouldBe EntitlementState.REVOKED
+                StoredEntitlementService(w.store).isPlus(w.ana, FIXED_CLOCK.instant()) shouldBe false
+            }
+        }
+
+    test("Postgres: un token reembolsado no vuelve a dar Plus aunque la fila haya pasado a otra compra (B1)")
+        .config(enabled = TestDatabase.enabled) {
+            withBilling { w ->
+                w.play.purchase("t1", "active-anual-acknowledged", owner = w.ana)
+                w.play.purchase("t0", "active", owner = w.ana)
+                w.verify(w.ana, "t1").plus shouldBe true
+                w.service.handleRtdn(decodeRtdn(rtdnBody("msg-rev", "t1", RtdnTypes.SUBSCRIPTION_REVOKED)))
+                w.store.tokenRevoked("t1") shouldBe true
+                w.store.tokenRevoked("t0") shouldBe false
+                w.verify(w.ana, "t0").plus shouldBe true
+                w.store.entitlement(w.ana)!!.purchaseToken shouldBe "t0"
+
+                // Play aún muestra t1 ACTIVE: re-verificarlo no pisa la vigente...
+                w.verify(w.ana, "t1").plus shouldBe true
+                w.store.entitlement(w.ana)!!.purchaseToken shouldBe "t0"
+                // ...y sin otra vigente queda REVOKED, no Plus.
+                w.play.update("t0", "expired", owner = w.ana)
+                w.service.handleRtdn(decodeRtdn(rtdnBody("msg-exp", "t0", 13)))
+                w.verify(w.ana, "t1").state shouldBe EntitlementState.REVOKED
+                StoredEntitlementService(w.store).isPlus(w.ana, FIXED_CLOCK.instant()) shouldBe false
+            }
+        }
+
+    test("Postgres: la RTDN liga el evento a su dueño y, si la cuenta ya fue borrada (lápida), lo guarda redactado y sin token (B4)")
+        .config(enabled = TestDatabase.enabled) {
+            withBilling { w ->
+                w.play.purchase("tok-viva", "active-anual-acknowledged", owner = w.ana)
+                w.verify(w.ana, "tok-viva")
+                w.service.handleRtdn(decodeRtdn(rtdnBody("msg-viva", "tok-viva", RtdnTypes.SUBSCRIPTION_RENEWED)))
+                transaction(w.db) { PurchaseEvents.selectAll().single() }.let {
+                    it[PurchaseEvents.userId] shouldBe w.ana
+                    it[PurchaseEvents.purchaseToken] shouldBe "tok-viva"
+                }
+                w.store.isTombstone(w.ana) shouldBe false
+
+                val lapida = ExposedIdentityRepository(w.db).createIfAbsent("deleted:abc123", null, null, FIXED_CLOCK.instant()).id
+                w.store.isTombstone(lapida) shouldBe true
+                w.play.purchase("tok-lapida", "active-anual-acknowledged", owner = lapida)
+                w.store.save(
+                    EntitlementRow(lapida, "parcheu_plus", "anual", "tok-lapida", EntitlementState.ACTIVE, null, true, FIXED_CLOCK.instant()),
+                )
+                w.service.handleRtdn(decodeRtdn(rtdnBody("msg-lapida", "tok-lapida", RtdnTypes.SUBSCRIPTION_RENEWED)))
+                transaction(w.db) { PurchaseEvents.selectAll().where { PurchaseEvents.messageId eq "msg-lapida" }.single() }.let {
+                    it[PurchaseEvents.purchaseToken].shouldBeNull()
+                    it[PurchaseEvents.userId].shouldBeNull()
+                    it[PurchaseEvents.payload] shouldBe
+                        Json.parseToJsonElement("""{"redacted":true,"eventTimeMillis":"1793102400000","notificationType":2}""")
+                }
             }
         }
 })

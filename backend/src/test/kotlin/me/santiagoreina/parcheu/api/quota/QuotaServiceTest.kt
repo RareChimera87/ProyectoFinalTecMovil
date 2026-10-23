@@ -186,6 +186,11 @@ class QuotaServiceTest : FunSpec({
         grantsPlus(EntitlementState.ACTIVE, future, at) shouldBe true
         grantsPlus(EntitlementState.ACTIVE, past, at) shouldBe false
         grantsPlus(EntitlementState.IN_GRACE_PERIOD, future, at) shouldBe true
+        // Margen de 1 h solo para ACTIVE con renovación automática (B2).
+        grantsPlus(EntitlementState.ACTIVE, at.minusSeconds(3_599), at, autoRenewing = true) shouldBe true
+        grantsPlus(EntitlementState.ACTIVE, at.minusSeconds(3_600), at, autoRenewing = true) shouldBe false
+        grantsPlus(EntitlementState.IN_GRACE_PERIOD, past, at, autoRenewing = true) shouldBe false
+        grantsPlus(EntitlementState.CANCELED, past, at, autoRenewing = true) shouldBe false
         listOf(EntitlementState.ON_HOLD, EntitlementState.PAUSED, EntitlementState.EXPIRED, EntitlementState.REVOKED)
             .forEach { grantsPlus(it, future, at) shouldBe false }
     }

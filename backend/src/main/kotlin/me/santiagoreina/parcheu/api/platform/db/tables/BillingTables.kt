@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.platform.db.tables
 
 import me.santiagoreina.parcheu.contract.EntitlementState
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
 
 /* Billing (ADR-0013): estado de la suscripción y eventos RTDN de Play. */
@@ -23,6 +24,8 @@ object Entitlements : Table("entitlements") {
 object PurchaseEvents : Table("purchase_events") {
     val messageId = text("message_id")
     val purchaseToken = text("purchase_token").nullable()
+    /** Cuenta dueña de la compra cuando se conoce; sin llave foránea: la purga la pone en `null` (E8.3). */
+    val userId = javaUUID("user_id").nullable()
     val payload = jsonbColumn("payload")
     val receivedAt = timestampWithTimeZone("received_at")
     override val primaryKey = PrimaryKey(messageId)

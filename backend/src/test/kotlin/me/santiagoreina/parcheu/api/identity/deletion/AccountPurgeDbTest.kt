@@ -189,6 +189,21 @@ class AccountPurgeDbTest : FunSpec({
             """{"eventTimeMillis":"1","subscriptionNotification":{"notificationType":4,"purchaseToken":"$token"},"obfuscatedExternalAccountId":"${sha256Hex(z.toString())}"}""",
             now,
         )
+        // Un token histórico (la fila de entitlements ya pasó a otra compra): su evento ligado a la cuenta y otro
+        // posterior que llegó sin dueño conocido. Un tercero con otro token conserva el suyo (E7.1, B4).
+        c.exec("update purchase_events set user_id = ? where message_id = 'm-1'", z)
+        c.exec(
+            "insert into purchase_events (message_id, purchase_token, payload, received_at, user_id) values ('m-2', 'tok-historico', ?::jsonb, ?, ?)",
+            """{"eventTimeMillis":"2","subscriptionNotification":{"notificationType":12,"purchaseToken":"tok-historico"}}""", now, z,
+        )
+        c.exec(
+            "insert into purchase_events (message_id, purchase_token, payload, received_at) values ('m-3', 'tok-historico', ?::jsonb, ?)",
+            """{"eventTimeMillis":"3","subscriptionNotification":{"notificationType":13,"purchaseToken":"tok-historico"}}""", now,
+        )
+        c.exec(
+            "insert into purchase_events (message_id, purchase_token, payload, received_at) values ('m-ajeno', 'tok-de-otro', ?::jsonb, ?)",
+            """{"eventTimeMillis":"4","subscriptionNotification":{"notificationType":4,"purchaseToken":"tok-de-otro"}}""", now,
+        )
         c.exec("insert into ai_usage (day, purpose, provider, model, user_id, created_at) values ('2026-10-25', 'simulate', 'fake', 'fake', ?, ?)", z, now)
         c.exec("insert into invites (code, user_id) values ('ZORA-0001', ?)", z)
         c.exec("insert into introductions (id, introducer_id, mode, user_a, user_b) values (?, ?, 'AMISTAD', ?, ?)", UUID.randomUUID(), b, z, cId)
@@ -293,6 +308,22 @@ class AccountPurgeDbTest : FunSpec({
                     }
                     c.one("select payload::text from purchase_events where message_id = 'm-1'") { it.getString(1) } shouldBe
                         """{"redacted": true, "eventTimeMillis": "1", "notificationType": 4}"""
+                    // E7.1 (B4): se redactan los eventos de TODOS sus tokens (también el histórico y el que llegó sin dueño),
+                    // sin token ni cuenta; el de un tercero no se toca.
+                    c.one("select payload::text, purchase_token, user_id from purchase_events where message_id = 'm-2'") { rs ->
+                        rs.getString(1) shouldBe """{"redacted": true, "eventTimeMillis": "2", "notificationType": 12}"""
+                        rs.getString(2) shouldBe null
+                        rs.getObject(3) shouldBe null
+                    }
+                    c.one("select payload::text, purchase_token from purchase_events where message_id = 'm-3'") { rs ->
+                        rs.getString(1) shouldBe """{"redacted": true, "eventTimeMillis": "3", "notificationType": 13}"""
+                        rs.getString(2) shouldBe null
+                    }
+                    c.count("select count(*) from purchase_events where purchase_token is not null and message_id <> 'm-ajeno'") shouldBe 0
+                    c.one("select purchase_token, payload->>'redacted' from purchase_events where message_id = 'm-ajeno'") { rs ->
+                        rs.getString(1) shouldBe "tok-de-otro"
+                        rs.getString(2) shouldBe null
+                    }
 
                     // Reportes: el abierto contra ella se resuelve y pierde la instantánea; el ajeno no se toca.
                     c.one("select status, resolution, snapshot, target_id, reporter_id from reports where id = ?", s.reportAgainstZoraida) { rs ->
