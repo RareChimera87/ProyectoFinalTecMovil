@@ -1,0 +1,84 @@
+name: migration-order
+
+# E0.6 + ADR-0011. Rechaza migraciones Flyway con versión menor que la última de dev. La lógica
+# vive en scripts/check-migration-order.sh (E0.4); contrato: `--base-ref <ref>` (aquí origin/dev),
+# código distinto de 0 si alguna migración nueva queda fuera de orden (2 si el uso es incorrecto).
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-order-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cambios:
+    name: migration-cambios
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      existe: ${{ steps.existe.outputs.existe }}
+      migraciones: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filtro.outputs.migraciones }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filtro
+        with:
+          filters: |
+            migraciones:
+              - 'backend/src/main/resources/db/migration/**'
+              - 'scripts/check-migration-order.sh'
+              - 'scripts/test/**migration**'
+              - '.github/workflows/migration-order.yml'
+      - name: Comprueba que existe backend/src/main/resources/db/migration/
+        id: existe
+        run: |
+          if [[ -d "backend/src/main/resources/db/migration" ]]; then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No existe backend/src/main/resources/db/migration en esta rama (solo un README o nada): se omite la verificación hasta que lleguen los cimientos."
+          fi
+
+  verificar:
+    name: migration-verificar
+    needs: cambios
+    if: needs.cambios.outputs.migraciones == 'true' && needs.cambios.outputs.existe == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Orden de migraciones contra dev
+        run: |
+          git fetch --no-tags origin dev
+          if [[ ! -x scripts/check-migration-order.sh ]]; then
+            echo "::error::Falta scripts/check-migration-order.sh (lo agrega E0.4) y el PR toca migraciones."
+            exit 1
+          fi
+          scripts/check-migration-order.sh --base-ref origin/dev
+      - name: Pruebas del script
+        run: |
+          shopt -s nullglob
+          for t in scripts/test/*migration*.test.sh; do "$t"; done
+
+  migration-order:
+    name: migration-order
+    needs: [cambios, verificar]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resultado
+        env:
+          CAMBIOS: ${{ needs.cambios.result }}
+          VERIFICAR: ${{ needs.verificar.result }}
+        run: |
+          echo "cambios=$CAMBIOS verificar=$VERIFICAR"
+          [[ "$CAMBIOS" == success ]] || exit 1
+          [[ "$VERIFICAR" == success || "$VERIFICAR" == skipped ]] || exit 1

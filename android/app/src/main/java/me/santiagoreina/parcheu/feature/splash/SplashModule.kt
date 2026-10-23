@@ -1,7 +1,10 @@
 package me.santiagoreina.parcheu.feature.splash
 
+import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
-/** Dependencias de la feature de [SplashRoute]. Vacío en E0.7; ya está registrado en AppModules.kt. */
-val splashModule = module {
-}
+/** Dependencias de A1 (E2.2). El `AuthRepository` viene de `authModule`. */
+val splashModule =
+    module {
+        viewModelOf(::SplashViewModel)
+    }

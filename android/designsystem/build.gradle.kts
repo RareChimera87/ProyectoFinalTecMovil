@@ -1,5 +1,5 @@
-// Módulo del sistema de diseño. E0.7 lo deja vacío; E1.x agrega tokens, tipografía,
-// componentes, mascota, RadialLayout y PuGraph (docs/arquitectura.md §2.2).
+// Módulo del sistema de diseño (docs/arquitectura.md §2.2). E1.1 agrega tokens, tipografía, formas y
+// espaciado; E1.x siguientes agregan componentes, mascota, RadialLayout y PuGraph.
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -33,7 +33,7 @@ kotlin {
 }
 
 roborazzi {
-    // Las capturas de referencia se versionan junto a las pruebas.
+    // Las capturas de referencia se versionan junto a las pruebas (ADR-0022).
     outputDir.set(file("src/test/screenshots"))
 }
 
@@ -44,6 +44,7 @@ dependencies {
     api(libs.androidx.compose.material3)
     api(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.androidx.test.core)
@@ -53,5 +54,4 @@ dependencies {
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
