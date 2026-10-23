@@ -40,7 +40,10 @@ interface InviteRepository {
     /** Marca como CONNECTED el canje (si existe), con la fecha de aceptación. */
     suspend fun markConnected(owner: UUID, redeemer: UUID, mode: Mode, now: Instant)
 
-    /** Borra el canje PENDING (si existe): su modo dejó de estar activo para alguno de los dos. */
+    /**
+     * Borra el canje (si existe, en cualquier estado): un PENDING cuyo modo dejó de estar activo para alguno
+     * de los dos, o un CONNECTED viejo cuya arista ya no está conectada (para que un canje nuevo se reabra).
+     */
     suspend fun removeRedemption(owner: UUID, redeemer: UUID, mode: Mode)
 
     /**
@@ -94,7 +97,7 @@ class InMemoryInviteRepository : InviteRepository {
     override suspend fun removeRedemption(owner: UUID, redeemer: UUID, mode: Mode) {
         synchronized(lock) {
             val key = Triple(owner, redeemer, mode)
-            if (redemptions[key]?.status == RedeemStatus.PENDING) redemptions.remove(key)
+            redemptions.remove(key)
         }
     }
 

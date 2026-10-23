@@ -128,6 +128,10 @@ class InviteService(
             return RedeemResult(RedeemStatus.CONNECTED, connectedRef(userId, ownerPerson))
         }
 
+        // Un canje CONNECTED de antes cuya arista ya no está conectada (p. ej. se borró) no cuenta: se borra
+        // para que este canje quede PENDING, con aviso y fila en C5, en vez de quedar ignorado.
+        if (repo.redemption(owner, userId, mode)?.status == RedeemStatus.CONNECTED) repo.removeRedemption(owner, userId, mode)
+
         // Primero la arista (no se crea si hay un bloqueo) y luego el canje, que decide si se avisa.
         val edge = edges.apply(EdgeEvent.InterestShown(userId, owner, mode, EdgeSource.INVITE)) ?: throw Blocked()
         val created = repo.addRedemption(owner, userId, mode, clock.instant())

@@ -418,6 +418,26 @@ class InviteApiTest : FunSpec({
         }
     }
 
+    test("si la arista de un canje ya aceptado deja de estar CONNECTED, un canje nuevo vuelve a quedar PENDING") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val code = client.me("ana").code
+            client.redeem("beto", code).status shouldBe HttpStatusCode.OK
+            client.accept("ana", client.me("ana").pending.single().id).status shouldBe HttpStatusCode.OK
+            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.CONNECTED
+
+            // La arista deja de estar conectada (p. ej. un futuro 'desconectar'); la fila CONNECTED sigue ahí.
+            w.f.graphRepo.putEdge(w.ana, w.beto, Mode.AMISTAD, EdgeState.SIMULATED, affinity = null)
+            client.redeem("beto", code).body<RedeemResult>().status shouldBe RedeemStatus.PENDING
+            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
+            w.f.notifier.sent.count { it.notification.kind == NotificationKinds.INVITE_PENDING } shouldBe 2
+            val again = client.me("ana").pending.single()
+            client.accept("ana", again.id).body<RedeemResult>().status shouldBe RedeemStatus.CONNECTED
+            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.CONNECTED
+        }
+    }
+
     test("INVITE_PENDING y NEW_CONNECTION llegan a la bandeja de C2 (GET /v1/notifications) y a la campana") {
         val inbox = InMemoryNotificationStore()
         // El mismo FcmNotifier de producción: guarda el aviso para C2 (aquí en la bandeja en memoria) y manda push.

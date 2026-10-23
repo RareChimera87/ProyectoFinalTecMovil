@@ -88,7 +88,7 @@ class ExposedInviteRepository(private val db: Database) : InviteRepository {
         tx {
             InviteRedemptions.deleteWhere {
                 (InviteRedemptions.ownerId eq owner) and (InviteRedemptions.redeemerId eq redeemer) and
-                    (InviteRedemptions.mode eq mode) and (InviteRedemptions.status eq RedeemStatus.PENDING)
+                    (InviteRedemptions.mode eq mode)
             }
         }
     }
