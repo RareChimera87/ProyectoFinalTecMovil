@@ -15,6 +15,8 @@ import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.safety.SafetyModule
+import me.santiagoreina.parcheu.api.social.invites.InviteModule
+import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.home.UnreadCounter
@@ -78,6 +80,7 @@ fun testContainer(
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
     unread: UnreadCounter = UnreadCounter.NONE,
+    invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
@@ -102,7 +105,8 @@ fun testContainer(
         safety = safety,
         account = accountModule,
         unread = unread,
-        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread) + extra,
+        invites = invites,
+        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, invites) + extra,
     )
 }
 

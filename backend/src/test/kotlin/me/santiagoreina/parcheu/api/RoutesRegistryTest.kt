@@ -42,7 +42,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     "social" to listOf(
         HttpMethod.Post to "/v1/introductions", HttpMethod.Get to "/v1/introductions/i1",
         HttpMethod.Post to "/v1/introductions/i1/response", HttpMethod.Post to "/v1/introductions/request",
-        HttpMethod.Get to "/v1/invites/me", HttpMethod.Post to "/v1/invites/redeem", HttpMethod.Post to "/v1/invites/u1/accept",
+        // Las invitaciones las implementa E6.1 (InviteApiTest).
     ),
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
     "notifications" to listOf(HttpMethod.Get to "/v1/notifications", HttpMethod.Post to "/v1/notifications/read"),

@@ -71,6 +71,10 @@ import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
 import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.api.social.SocialRoutes
+import me.santiagoreina.parcheu.api.social.invites.InviteLinks
+import me.santiagoreina.parcheu.api.social.invites.InviteModule
+import me.santiagoreina.parcheu.api.social.invites.exposedInviteModule
+import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.platform.tasks.CloudTasksQueue
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.twin.TwinModule
@@ -126,8 +130,11 @@ class AppContainer(
     val account: AccountModule = inMemoryAccountModule(identity, graph, twin, clock),
     /** No leídas de la campana de Inicio (E4.7). Por defecto sin base: 0; [fromConfig] cuenta en Postgres. */
     val unread: UnreadCounter = UnreadCounter.NONE,
+    /** Invitaciones por QR y código (E6.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread),
+    val domains: List<DomainRoutes> =
+        allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, invites),
 ) {
     companion object {
         /**
@@ -187,10 +194,13 @@ class AppContainer(
                 config.env, database, identity, graph, twin, tasks, config.firebaseProjectId, clock,
                 closedMatches = matching.service::onMatchesClosedByDeletion,
             )
+            // Invitaciones (E6.1): aristas por EdgeService, modos de user_modes y enlace https://<hosting>/i/{codigo}.
+            val invites = exposedInviteModule(database, graph, simulation, notifier, InviteLinks.fromConfig(config, vars), clock)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
                 matching = matching, safety = safety, account = account, unread = ExposedUnreadCounter(database),
+                invites = invites,
             )
         }
 
@@ -235,6 +245,7 @@ fun allDomains(
     safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
     unread: UnreadCounter = UnreadCounter.NONE,
+    invites: InviteModule = inMemoryInviteModule(systemClock(), graph, simulation, NoopNotifier),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -243,7 +254,7 @@ fun allDomains(
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
-    SocialRoutes(),
+    SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     NotificationsRoutes(),
     BillingRoutes(),
