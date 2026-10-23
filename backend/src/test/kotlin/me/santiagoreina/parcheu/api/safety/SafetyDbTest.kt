@@ -80,9 +80,13 @@ class SafetyDbTest : FunSpec({
             val error = runCatching { env.chat.service.send(beto, chat.id, SendMessage("b-1", "hola")) }.exceptionOrNull()
             (error as DomainException).code shouldBe ErrorCode.BLOCKED
             env.graph.repository.blockedEitherWay(beto.id) shouldBe setOf(ana.id)
-            env.service.blocks(ana.id).map { it.userId } shouldContainExactly listOf(beto.id.toString())
-
+            // Sin conexión mutua, la lista presenta a Beto con su anonId, nunca con el uuid interno.
+            val anonId = env.graph.anonIds.anonId(ana.id, beto.id)
+            env.service.blocks(ana.id).map { it.userId } shouldContainExactly listOf(anonId)
             env.service.unblock(ana.id, beto.id.toString())
+            env.service.blocks(ana.id).map { it.userId } shouldContainExactly listOf(anonId)
+
+            env.service.unblock(ana.id, anonId)
             env.service.blocks(ana.id).shouldBeEmpty()
             env.graph.repository.blockedEitherWay(beto.id).shouldBeEmpty()
         }

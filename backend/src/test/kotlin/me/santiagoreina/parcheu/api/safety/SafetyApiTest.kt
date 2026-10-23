@@ -181,6 +181,11 @@ class SafetyApiTest : FunSpec({
             // Sin conexión mutua sigue anónimo: el nombre nunca se revela al bloquear.
             blocked.label shouldNotContain "Nombre Secreto"
 
+            // DELETE con el uuid interno no sirve de oráculo: responde igual que un uuid cualquiera y no desbloquea.
+            client.delete("/v1/blocks/${w.caro}") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
+            client.delete("/v1/blocks/${UUID.randomUUID()}") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
+            w.safetyRepo.allBlocks shouldBe setOf(w.ana to w.caro)
+
             client.delete("/v1/blocks/${blocked.userId}") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
             client.get("/v1/blocks") { auth("ana") }.body<List<BlockedDto>>().shouldBeEmpty()
             w.safetyRepo.allBlocks.shouldBeEmpty()

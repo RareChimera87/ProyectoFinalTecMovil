@@ -153,24 +153,34 @@ class SafetyService(
     }
 
     /**
-     * `DELETE /v1/blocks/{userId}`: acepta el id que devuelve `GET /v1/blocks` (uuid si estaban conectados,
-     * `anonId` si no). El `anonId` se resuelve entre los bloqueados de [blocker]. Idempotente.
+     * `DELETE /v1/blocks/{userId}`: solo acepta el id con el que `GET /v1/blocks` presenta a la persona
+     * (uuid si están conectados, `anonId` si no), resuelto entre los bloqueados de [blocker]. El uuid
+     * interno de una persona anónima no sirve: si sirviera, la respuesta confirmaría a quién pertenece.
+     * Idempotente: un uuid que no está entre los bloqueados responde igual (204) sin hacer nada.
      */
     suspend fun unblock(blocker: UUID, rawTarget: String) {
-        val target = parseUuid(rawTarget)
-            ?: repo.blocksOf(blocker).map { it.blocked.id }.firstOrNull { anonIds.anonId(blocker, it) == rawTarget }
-            ?: throw NotFound("La persona no existe")
+        val target = presentedBlocks(blocker).firstOrNull { (_, dto) -> dto.userId == rawTarget }?.first
+        if (target == null) {
+            // Un uuid desconocido o de alguien no conectado es un no-op indistinguible; un anonId
+            // que no está entre los bloqueados es 404, como en POST.
+            if (parseUuid(rawTarget) != null) return
+            throw NotFound("La persona no existe")
+        }
         // Los chats cerrados siguen cerrados: un DIRECT se reabre solo con una nueva conexión mutua.
         repo.unblock(blocker, target)
     }
 
-    /** `GET /v1/blocks`: las personas que bloqueó [viewer], como las veía (nombre si estaban conectados). */
-    suspend fun blocks(viewer: UUID): List<BlockedDto> {
+    /**
+     * `GET /v1/blocks`: las personas que bloqueó [viewer], como las presenta [GraphVisibilityPolicy]:
+     * nombre y uuid solo con conexión mutua; si no, `anonId` y etiqueta anónima (nunca el uuid interno).
+     */
+    suspend fun blocks(viewer: UUID): List<BlockedDto> = presentedBlocks(viewer).map { it.second }
+
+    private suspend fun presentedBlocks(viewer: UUID): List<Pair<UUID, BlockedDto>> {
         val connected = graph.connectedWith(viewer)
         return repo.blocksOf(viewer).map { row ->
             val view = policy.present(viewer, row.blocked, connected = row.blocked.id in connected, context = ViewContext.EGO)
-            BlockedDto(
-                // view.id es el anonId si no hay conexión mutua: nunca se expone el uuid de una persona anónima.
+            row.blocked.id to BlockedDto(
                 userId = view.id,
                 label = view.label,
                 initials = view.initials,
