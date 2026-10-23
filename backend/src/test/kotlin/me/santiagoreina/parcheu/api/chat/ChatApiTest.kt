@@ -26,7 +26,11 @@ import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
+import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.platform.AppContainer
+import me.santiagoreina.parcheu.api.platform.allDomains
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
+import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
@@ -69,8 +73,20 @@ class ChatApiTest : FunSpec({
 
         fun container(): AppContainer {
             val identity = IdentityService(identityRepo, FIXED_CLOCK, TEST_LEGAL_VERSION)
+            val quota = inMemoryQuotaModule(FIXED_CLOCK)
+            val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())
             return AppContainer(
-                testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identity, graph, chat,
+                config = testConfig(),
+                clock = FIXED_CLOCK,
+                tokenVerifier = FakeTokenVerifier(),
+                oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
+                identity = identity,
+                quota = quota,
+                twin = twin,
+                graph = graph,
+                notifier = notifier,
+                chat = chat,
+                domains = allDomains(identity, quota, twin, graph, chat),
             )
         }
 

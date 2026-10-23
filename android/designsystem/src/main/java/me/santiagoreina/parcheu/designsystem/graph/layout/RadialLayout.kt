@@ -20,7 +20,14 @@ data class FofNode(val id: String, val mode: String = "")
 enum class NodeKind { CONNECTION, FOF }
 
 /** Nodo ya ubicado. Coordenadas y radio en dp dentro de un lienzo cuadrado de lado `size`. */
-data class PlacedNode(val id: String, val kind: NodeKind, val ring: Int, val x: Float, val y: Float, val radius: Float)
+data class PlacedNode(
+    val id: String,
+    val kind: NodeKind,
+    val ring: Int,
+    val x: Float,
+    val y: Float,
+    val radius: Float
+)
 
 data class GraphLayout(
     val size: Float,
@@ -31,7 +38,7 @@ data class GraphLayout(
     val nodes: List<PlacedNode>,
     val fof: List<PlacedNode>,
     /** true si, aun con radios reducidos, algún par queda más cerca que la separación mínima. */
-    val hasOverlaps: Boolean = false,
+    val hasOverlaps: Boolean = false
 ) {
     /**
      * Devuelve el nodo más cercano cuyo círculo contiene el punto (x, y), o null si el punto
@@ -76,7 +83,11 @@ object RadialLayout {
         else -> 3
     }
 
-    fun compute(nodes: List<LayoutNode>, size: Float, fof: List<FofNode> = emptyList()): GraphLayout {
+    fun compute(
+        nodes: List<LayoutNode>,
+        size: Float,
+        fof: List<FofNode> = emptyList()
+    ): GraphLayout {
         if (!size.isFinite() || size <= 0f) {
             return GraphLayout(0f, 0f, 0f, 0f, emptyList(), emptyList(), emptyList())
         }
@@ -119,7 +130,7 @@ object RadialLayout {
             radii + FOF_RING * k,
             place(NodeKind.CONNECTION),
             place(NodeKind.FOF),
-            hasOverlaps = overlapping,
+            hasOverlaps = overlapping
         )
     }
 
@@ -130,7 +141,7 @@ object RadialLayout {
         allRadii: List<Float>,
         centerR: Float,
         c: Float,
-        k: Float,
+        k: Float
     ): List<Item> {
         val items = ArrayList<Item>()
         for (ring in 1..3) {
@@ -143,7 +154,7 @@ object RadialLayout {
                 allRadii,
                 centerR,
                 c,
-                k,
+                k
             )
         }
         if (fofSorted.isNotEmpty()) {
@@ -155,7 +166,7 @@ object RadialLayout {
                 allRadii,
                 centerR,
                 c,
-                k,
+                k
             )
         }
         items.forEach {
@@ -166,7 +177,8 @@ object RadialLayout {
     }
 
     // Ángulo estable: reparto uniforme por orden (modo, id) con desfase fijo por anillo.
-    private fun angle(index: Int, count: Int, ring: Int): Double = -PI / 2 + 2 * PI * index / count + ring * 0.6
+    private fun angle(index: Int, count: Int, ring: Int): Double =
+        -PI / 2 + 2 * PI * index / count + ring * 0.6
 
     private fun overlaps(items: List<Item>): Boolean {
         for (a in items.indices) {
@@ -188,14 +200,20 @@ object RadialLayout {
         val r: Float,
         val fullR: Float,
         val lo: Float,
-        val hi: Float,
+        val hi: Float
     ) {
         var x = 0f
         var y = 0f
     }
 
     /** Rango de radios (centro del nodo) permitido para el anillo [ring] con nodos de radio [r]. */
-    private fun band(ring: Int, r: Float, allRadii: List<Float>, centerR: Float, c: Float): Pair<Float, Float> {
+    private fun band(
+        ring: Int,
+        r: Float,
+        allRadii: List<Float>,
+        centerR: Float,
+        c: Float
+    ): Pair<Float, Float> {
         val base = allRadii[ring - 1]
         var lo = centerR + r + MIN_GAP
         var hi = c - r
@@ -240,7 +258,7 @@ object RadialLayout {
         allRadii: List<Float>,
         centerR: Float,
         c: Float,
-        k: Float,
+        k: Float
     ): List<Item> {
         if (ids.isEmpty()) return emptyList()
         val base = allRadii[ring - 1]

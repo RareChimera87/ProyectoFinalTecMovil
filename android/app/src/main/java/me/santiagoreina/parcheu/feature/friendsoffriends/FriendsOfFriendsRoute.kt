@@ -11,6 +11,10 @@ import me.santiagoreina.parcheu.navigation.FriendsOfFriends
  * [friendsOfFriendsModule]; AppNavHost.kt no cambia.
  */
 @Composable
-fun FriendsOfFriendsRoute(route: FriendsOfFriends, navigator: AppNavigator, modifier: Modifier = Modifier) {
+fun FriendsOfFriendsRoute(
+    route: FriendsOfFriends,
+    navigator: AppNavigator,
+    modifier: Modifier = Modifier
+) {
     StubScreen(route = route, navigator = navigator, modifier = modifier)
 }

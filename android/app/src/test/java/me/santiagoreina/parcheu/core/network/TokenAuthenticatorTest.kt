@@ -26,6 +26,8 @@ class TokenAuthenticatorTest {
             current = "nuevo-$refreshes"
             return current
         }
+
+        override suspend fun currentUserId(): String? = null
     }
 
     private val tokens = CountingTokenProvider()
@@ -42,7 +44,8 @@ class TokenAuthenticatorTest {
         server.close()
     }
 
-    private fun get() = client.newCall(Request.Builder().url(server.url("/v1/me")).build()).execute()
+    private fun get() =
+        client.newCall(Request.Builder().url(server.url("/v1/me")).build()).execute()
 
     @Test
     fun on401RefreshesTokenOnceAndRetries() {
@@ -55,11 +58,11 @@ class TokenAuthenticatorTest {
         assertEquals(1, tokens.refreshes)
         assertEquals(
             "Bearer viejo",
-            server.takeRequest(1, TimeUnit.SECONDS)?.headers?.get("Authorization"),
+            server.takeRequest(1, TimeUnit.SECONDS)?.headers?.get("Authorization")
         )
         assertEquals(
             "Bearer nuevo-1",
-            server.takeRequest(1, TimeUnit.SECONDS)?.headers?.get("Authorization"),
+            server.takeRequest(1, TimeUnit.SECONDS)?.headers?.get("Authorization")
         )
         assertEquals(2, server.requestCount)
     }

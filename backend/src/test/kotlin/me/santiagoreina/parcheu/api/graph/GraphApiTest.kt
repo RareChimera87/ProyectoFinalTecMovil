@@ -14,7 +14,10 @@ import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
+import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.platform.AppContainer
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
+import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.allDomains
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
@@ -61,9 +64,18 @@ class GraphApiTest : FunSpec({
         fun container(): AppContainer {
             val identity = IdentityService(identityRepo, FIXED_CLOCK, TEST_LEGAL_VERSION)
             val graph = inMemoryGraphModule(FIXED_CLOCK, graphRepo)
+            val quota = inMemoryQuotaModule(FIXED_CLOCK)
+            val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())
             return AppContainer(
-                testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identity, graph,
-                domains = allDomains(identity, graph),
+                config = testConfig(),
+                clock = FIXED_CLOCK,
+                tokenVerifier = FakeTokenVerifier(),
+                oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
+                identity = identity,
+                quota = quota,
+                twin = twin,
+                graph = graph,
+                domains = allDomains(identity, quota, twin, graph),
             )
         }
     }
