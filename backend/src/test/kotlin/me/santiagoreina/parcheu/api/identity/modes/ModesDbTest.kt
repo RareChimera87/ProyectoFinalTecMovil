@@ -25,6 +25,8 @@ import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.consent.LearningConsentPolicy
+import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.platform.allDomains
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
@@ -68,6 +70,7 @@ class ModesDbTest : FunSpec({
 
     fun container(db: Database): AppContainer {
         val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, TEST_LEGAL_VERSION)
+        val profile = ProfileService(identity, ExposedProfileRepository(db), FIXED_CLOCK)
         val quota = inMemoryQuotaModule(FIXED_CLOCK)
         val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())
         return AppContainer(
@@ -76,9 +79,10 @@ class ModesDbTest : FunSpec({
             tokenVerifier = FakeTokenVerifier(),
             oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
             identity = identity,
+            profile = profile,
             quota = quota,
             twin = twin,
-            domains = allDomains(identity, quota, twin),
+            domains = allDomains(identity, profile, quota, twin),
         )
     }
 

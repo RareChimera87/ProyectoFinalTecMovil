@@ -155,6 +155,11 @@ JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
   npx firebase emulators:exec --only firestore --project demo-parcheu "cd ../backend && ./gradlew test -PsinContenedores"
 ```
 
+## Perfil básico y edad (E2.6)
+
+- La edad se verifica solo en el servidor: `POST /v1/me/age-verification` guarda `birth_date` una sola vez (inmutable) y calcula los 18 años con la fecha de hoy en America/Bogota. La app nunca decide la edad.
+- Una cuenta de menor queda con `underage_at` y la puerta de `identity/TermsGate.kt` le responde 403 `UNDERAGE` en toda ruta, incluidas `session` y `terms`, salvo `GET` y `DELETE /v1/me`. Para probarlo en local, envía una fecha de menos de 18 años desde B0 o con `curl`.
+- El catálogo de B0 (`GET /v1/catalog`) sale de las semillas de V2 más `V20261022_0745__universidad_unipaz.sql`; `universityId` se valida en `1..32767` (la columna es `smallint`).
 ## Simulación (E4.3)
 
 - La tarea `simulate` va a la cola `simulations` de Cloud Tasks: además de lo que pide el gemelo necesita `TASKS_QUEUE_SIM`. Con `ENV=local` la cola es Fake y no ejecuta en línea: para correr una simulación local llama `POST /internal/tasks/simulate` con `{"id":"<simulationId>"}` y el token Fake de tareas (`oidc-tasks-fake`).

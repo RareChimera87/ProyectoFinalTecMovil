@@ -1,7 +1,9 @@
 package me.santiagoreina.parcheu.feature.underage
 
+import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
-/** Dependencias de la feature de [UnderageRoute]. Vacío en E0.7; ya está registrado en AppModules.kt. */
+/** Dependencias del bloqueo por edad (E2.6). El `AuthRepository` viene de `authModule`. */
 val underageModule = module {
+    viewModelOf(::UnderageViewModel)
 }

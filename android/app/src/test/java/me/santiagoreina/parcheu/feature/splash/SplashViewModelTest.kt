@@ -12,6 +12,7 @@ import me.santiagoreina.parcheu.navigation.BasicProfile
 import me.santiagoreina.parcheu.navigation.Home
 import me.santiagoreina.parcheu.navigation.Onboarding
 import me.santiagoreina.parcheu.navigation.TwinQuestions
+import me.santiagoreina.parcheu.navigation.Underage
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -87,5 +88,15 @@ class SplashViewModelTest {
             assertEquals(Onboarding(page = 0), awaitItem())
         }
         assertEquals(listOf("session", "signOut"), repository.calls)
+    }
+
+    @Test
+    fun underageAccountGoesToAgeLock() = runTest {
+        val repository =
+            FakeAuthRepository(signedIn = true).apply {
+                nextSessions(ApiResult.Failure(AppError.Underage))
+            }
+        SplashViewModel(repository).destination.test { assertEquals(Underage, awaitItem()) }
+        assertEquals(listOf("session"), repository.calls)
     }
 }

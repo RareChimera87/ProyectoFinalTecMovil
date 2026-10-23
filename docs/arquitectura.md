@@ -149,7 +149,7 @@ G2 (límite) es un bottom sheet global controlado por el `ErrorRouter`. Deep lin
 - Login: Credential Manager (`androidx.credentials`) + `googleid` (`GetGoogleIdOption` con el client id web de Firebase) → `GoogleAuthProvider.getCredential` → `signInWithCredential` → `POST /v1/session`.
 - DataStore (Preferences): sesión, último grafo serializado (pintado instantáneo de D1), progreso de B1, preferencias de tema.
 - **Cerrar sesión** (E8.2): `DELETE /v1/me/fcm-token` → `FirebaseAuth.signOut()` → `CredentialManager.clearCredentialState()` → borrar DataStore de sesión, grafo y B1 (se conserva el tema) → `FirebaseFirestore.terminate()` + `clearPersistence()` → A4 sin historial.
-- Onboarding: `SessionDto.onboarding` decide el destino: `NEEDS_TERMS` (hoja de aceptación en A4), `NEEDS_PROFILE` (B0), `NEEDS_TWIN` (B1), `NEEDS_MODES` (B2), `DONE` (C1).
+- Onboarding: `SessionDto.onboarding` decide el destino: `NEEDS_TERMS` (hoja de aceptación en A4), `NEEDS_PROFILE` (B0), `NEEDS_TWIN` (B1), `NEEDS_MODES` (B2), `DONE` (C1). `NEEDS_PROFILE` dura hasta que haya fecha verificada y universidad (E2.6); una cuenta de menor recibe 403 `UNDERAGE` en `POST /v1/session` y la app abre `Underage`.
 - Firestore: caché offline del SDK para chats; listeners en `simulations/{id}` y `matchTickets/{uid}`.
 - Imágenes: Coil 3 (foto de Google).
 - QR: ZXing core para generar; Google Code Scanner (`play-services-code-scanner`) para leer, sin permiso de cámara.
@@ -798,6 +798,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
 | Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |

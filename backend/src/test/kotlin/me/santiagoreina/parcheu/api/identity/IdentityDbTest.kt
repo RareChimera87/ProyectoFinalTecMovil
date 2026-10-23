@@ -27,6 +27,8 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.ai.testGateway
@@ -74,6 +76,7 @@ class IdentityDbTest : FunSpec({
 
     fun container(db: Database, version: String): AppContainer {
         val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, version)
+        val profile = ProfileService(identity, ExposedProfileRepository(db), FIXED_CLOCK)
         val quota = inMemoryQuotaModule(FIXED_CLOCK)
         val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())
         return AppContainer(
@@ -82,9 +85,10 @@ class IdentityDbTest : FunSpec({
             tokenVerifier = FakeTokenVerifier(),
             oidcVerifier = FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"),
             identity = identity,
+            profile = profile,
             quota = quota,
             twin = twin,
-            domains = allDomains(identity, quota, twin),
+            domains = allDomains(identity, profile, quota, twin),
         )
     }
 
@@ -211,6 +215,9 @@ class IdentityDbTest : FunSpec({
                 val userId = UUID.fromString(client.session("lucia").me.id)
                 val now = OffsetDateTime.ofInstant(FIXED_CLOCK.instant(), ZoneOffset.UTC)
                 transaction(db) { Users.update({ Users.id eq userId }) { it[ageVerifiedAt] = now } }
+                // Sin universidad B0 no está completo (E2.6).
+                client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_PROFILE
+                transaction(db) { Users.update({ Users.id eq userId }) { it[universityId] = 1 } }
                 client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_TWIN
 
                 transaction(db) { Twins.insert { it[Twins.userId] = userId; it[updatedAt] = now } }

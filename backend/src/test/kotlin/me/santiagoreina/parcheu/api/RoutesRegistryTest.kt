@@ -20,10 +20,10 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * (E4.1, probadas en `QuotaApiTest`).
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
-    // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest y E2.5 (modos) ModesApiTest.
+    // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest
+    // y E2.6 (catálogo y edad) ProfileApiTest.
     "identity" to listOf(
-        HttpMethod.Get to "/v1/catalog", HttpMethod.Delete to "/v1/me", HttpMethod.Get to "/v1/me/export",
-        HttpMethod.Post to "/v1/me/age-verification",
+        HttpMethod.Delete to "/v1/me", HttpMethod.Get to "/v1/me/export",
         HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",
     ),
     // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest); el resto sigue en 501.

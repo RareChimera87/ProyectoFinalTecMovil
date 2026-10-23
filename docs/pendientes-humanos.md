@@ -569,6 +569,7 @@ Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/...
    capturas (`./gradlew :app:recordRoborazziDevDebug`).
 5. **Texto legal:** pide al docente revisar el aviso de A4 ("Al continuar aceptas los Términos y la Política de
    privacidad (Ley 1581 de 2012)…") junto con la revisión legal de E2.1.
+
 ## E0.9 · Pasarela de IA
 
 Lo automatizable ya quedó hecho: API `aiplatform.googleapis.com` habilitada en `parcheu-dev`, spike de modelos con llamadas reales (resultado en ADR-0008), IDs y precios en `backend/src/main/resources/ai/modelos.properties`, y el humo `@Tag("vertex")` pasó contra Vertex dev con `gemini-3.8-flash` y `gemini-3.5-flash-lite` el 22 oct 2026.
@@ -741,6 +742,19 @@ Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/...
 | 2 | **Revisión visual lado a lado.** Comparar las capturas de `screenshots/compound/*.png` con los mockups B-H de Claude Design (radios, paddings, colores de burbujas, anillo de afinidad, QR). Diferencias aceptadas: el QR de las capturas es sintético (el codificador llega con E6.1) y los iconos son círculos de prueba hasta que E1.2 se mezcle. | I2 | Ventana de revisión de la ola 6 |
 | 3 | **Prueba del blur en un dispositivo real.** Robolectric no renderiza `RenderEffect`, así que el desenfoque de `LockedOverlay` solo se verifica por rama (etiqueta `locked_overlay_blur`) y no por píxeles. Abrir una pantalla que lo use (D7 o F7, cuando existan) en un dispositivo/emulador con API >= 31 y en otro con API < 31 y confirmar blur y scrim opaco respectivamente. | I2 | Cuando exista la primera pantalla con LockedOverlay |
 
+## E2.6 · Perfil básico y edad
+
+Lo automatizable ya quedó hecho: `POST /v1/me/age-verification`, `GET /v1/catalog`, la puerta 403 `UNDERAGE`, la migración
+`V20261022_0745__universidad_unipaz.sql`, B0 'Tu perfil', el bloqueo por edad y sus pruebas (API, ViewModel, semántica y
+Roborazzi en ambos temas). No se crean recursos en GCP ni en consolas.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Confirmar la lista de universidades.** La ficha pide UIS, UNAB, UPB, UDES, UTS, USTA, UCC, UNIPAZ y 'Otra'. V2 sembró además UMB, UDI, UNISANGIL y SENA (siguen activas) y E2.6 agregó UNIPAZ (id 12). Si el equipo decide ocultar alguna, crear una migración `V<yyyyMMdd>_<HHmm>__universidades.sql` con `update universities set active = false where short_name in (...)` (no borrar filas: puede haber usuarios que ya la eligieron). | I1 + equipo | Antes de la prueba cerrada |
+| 2 | **Revisión de B0 y del bloqueo (ADR-0022).** No hay mockup: I2 revisa `android/app/src/test/screenshots/basicprofile/*.png` contra el sistema de diseño y anota las diferencias aceptadas en el PR. La flecha de 'Editar perfil' es un vector local hasta que E1.2 (iconos) se mezcle. | I2 | Ventana de revisión de la ola 7 |
+| 3 | **'Borrar mi cuenta' depende de E8.3.** El bloqueo por edad abre la ruta `DeleteAccount`, que sigue siendo stub, y `DELETE /v1/me` responde 501 hasta que E8.3 lo implemente. La puerta de edad ya deja pasar `DELETE /v1/me`. | I1/I3 | Al mezclar E8.3 |
+| 4 | **Prueba manual en un teléfono** (tras desplegar E2.1 y E2.6 en dev): cuenta nueva → A4 → B0 → elegir fecha de alguien de 18 años, universidad e intereses → B1. Con otra cuenta de prueba, una fecha de menor de 18 → pantalla de bloqueo; cerrar y abrir la app debe volver al bloqueo (el Splash recibe 403 `UNDERAGE`). Para repetir con la misma cuenta hay que limpiar `birth_date`, `age_verified_at` y `underage_at` en la base de dev. | I2 | Antes de cerrar la ola 7 |
+| 5 | **Texto del bloqueo.** Pedir al docente revisar el mensaje "ParcheU es solo para mayores de 18…" junto con la revisión legal de E2.1. | I3 | Antes de la prueba cerrada |
 ## E2.5 · Modos, +18 y consentimiento
 
 Lo automatizable ya quedó hecho: `PUT /v1/me/modes` con la regla +18, el consentimiento de aprendizaje por modo

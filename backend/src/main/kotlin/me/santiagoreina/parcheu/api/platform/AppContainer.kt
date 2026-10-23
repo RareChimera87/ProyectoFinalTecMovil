@@ -23,6 +23,8 @@ import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
+import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
 import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
 import me.santiagoreina.parcheu.api.notifications.push.ExposedPushStore
@@ -73,6 +75,8 @@ class AppContainer(
     val tokenVerifier: TokenVerifier,
     val oidcVerifier: OidcVerifier,
     val identity: IdentityService,
+    /** Perfil básico B0 y verificación de edad (E2.6). */
+    val profile: ProfileService,
     /** Cuotas (E4.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
     val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Pasarela de IA (E0.9). Por defecto Fake con uso en memoria (tests y `ENV=local`). */
@@ -89,7 +93,7 @@ class AppContainer(
     val simulation: SimulationModule =
         inMemorySimulationModule(clock, ai, quota, graph, notifier = NotifierSimulationNotifier(notifier)),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, quota, twin, graph, chat, simulation),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation),
 ) {
     companion object {
         /**
@@ -115,6 +119,7 @@ class AppContainer(
             }
             val database = connectExposed(createDataSource(dbConfig, failFast = false))
             val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
+            val profile = ProfileService(identity, ExposedProfileRepository(database), clock)
             val quota = quotaModule(config.env, database, clock)
             val ai = aiGateway(config, vars, clock) { database }
             val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
@@ -133,7 +138,7 @@ class AppContainer(
                 notifier = NotifierSimulationNotifier(notifier),
             )
             return AppContainer(
-                config, clock, tokenVerifier, oidcVerifier, identity, quota,
+                config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
             )
         }
@@ -169,13 +174,14 @@ class AppContainer(
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
 fun allDomains(
     identity: IdentityService,
+    profile: ProfileService,
     quota: QuotaModule,
     twin: TwinModule,
     graph: GraphModule = inMemoryGraphModule(systemClock()),
     chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
     simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
 ): List<DomainRoutes> = listOf(
-    IdentityRoutes(identity),
+    IdentityRoutes(identity, profile),
     TwinRoutes(twin),
     QuotaRoutes(quota),
     MatchingRoutes(),

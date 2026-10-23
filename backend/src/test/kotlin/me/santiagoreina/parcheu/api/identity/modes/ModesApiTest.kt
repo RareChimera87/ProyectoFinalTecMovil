@@ -139,7 +139,11 @@ class ModesApiTest : FunSpec({
     }
 
     test("guardar modos completa el paso NEEDS_MODES del onboarding") {
-        val repo = repoWithAna(ageVerified = true).apply { twins += user("ana").id }
+        // B0 completo (E2.6): edad verificada y universidad.
+        val repo = repoWithAna(ageVerified = true).apply {
+            replace(user("ana").copy(universityId = 1))
+            twins += user("ana").id
+        }
         testApplication {
             val client = startApp(testContainer(repo = repo))
             client.post("/v1/session") { auth("ana") }.body<SessionDto>().onboarding shouldBe OnboardingStep.NEEDS_MODES

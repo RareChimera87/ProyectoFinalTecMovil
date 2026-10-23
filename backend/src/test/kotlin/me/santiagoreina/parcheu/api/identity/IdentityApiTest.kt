@@ -106,7 +106,7 @@ class IdentityApiTest : FunSpec({
                 "ana",
                 UpdateMe(interests = listOf("musica", "futbol", "cine", "lectura", "gym", "series")),
             ).status shouldBe HttpStatusCode.BadRequest
-            client.patchMe("ana", UpdateMe(career = "x".repeat(81))).status shouldBe HttpStatusCode.BadRequest
+            client.patchMe("ana", UpdateMe(career = "x".repeat(61))).status shouldBe HttpStatusCode.BadRequest
 
             val me = client.patchMe(
                 "ana",
@@ -211,6 +211,9 @@ class IdentityApiTest : FunSpec({
             // La edad la fija E2.6 (POST /me/age-verification); aquí se simula su efecto en el repositorio.
             val user = repo.user("lucia")
             repo.replace(user.copy(birthDate = LocalDate.parse("2003-04-05"), ageVerifiedAt = Instant.parse("2026-10-25T12:00:00Z")))
+            // Sin universidad B0 no está completo (E2.6).
+            client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_PROFILE
+            repo.replace(repo.user("lucia").copy(universityId = 1))
             client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_TWIN
 
             repo.twins += user.id

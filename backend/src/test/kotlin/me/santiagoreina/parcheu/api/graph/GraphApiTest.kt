@@ -15,6 +15,8 @@ import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.identity.profile.InMemoryProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
@@ -63,6 +65,7 @@ class GraphApiTest : FunSpec({
 
         fun container(): AppContainer {
             val identity = IdentityService(identityRepo, FIXED_CLOCK, TEST_LEGAL_VERSION)
+            val profile = ProfileService(identity, InMemoryProfileRepository(identityRepo), FIXED_CLOCK)
             val graph = inMemoryGraphModule(FIXED_CLOCK, graphRepo)
             val quota = inMemoryQuotaModule(FIXED_CLOCK)
             val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())
@@ -72,10 +75,11 @@ class GraphApiTest : FunSpec({
                 tokenVerifier = FakeTokenVerifier(),
                 oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
                 identity = identity,
+                profile = profile,
                 quota = quota,
                 twin = twin,
                 graph = graph,
-                domains = allDomains(identity, quota, twin, graph),
+                domains = allDomains(identity, profile, quota, twin, graph),
             )
         }
     }
