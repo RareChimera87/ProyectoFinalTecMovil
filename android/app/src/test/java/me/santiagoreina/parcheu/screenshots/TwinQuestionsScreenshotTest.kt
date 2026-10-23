@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.screenshots
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import me.santiagoreina.parcheu.contract.TwinAnswer
 import me.santiagoreina.parcheu.core.error.AppError
@@ -50,7 +51,11 @@ class TwinQuestionsScreenshotTest {
         }
         rule.onRoot().captureRoboImage(
             filePath = "src/test/screenshots/twin_questions_$name.png",
-            roborazziOptions = OnboardingStubScreenshotTest.ROBORAZZI_OPTIONS
+            // Umbral documentado en arquitectura.md §2.7 y ADR-0022 (igual que OnboardingScreenshotTest).
+            roborazziOptions =
+            RoborazziOptions(
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+            )
         )
     }
 
