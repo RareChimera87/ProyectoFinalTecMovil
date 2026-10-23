@@ -20,6 +20,8 @@ import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.home.UnreadCounter
+import me.santiagoreina.parcheu.api.notifications.center.NotificationCenterModule
+import me.santiagoreina.parcheu.api.notifications.center.inMemoryNotificationCenter
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
@@ -79,7 +81,9 @@ fun testContainer(
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
-    unread: UnreadCounter = UnreadCounter.NONE,
+    notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
+    // Por defecto la campana de Inicio cuenta en la misma bandeja que C2 (E5.4).
+    unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
     invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
@@ -104,9 +108,13 @@ fun testContainer(
         matching = matching,
         safety = safety,
         account = accountModule,
+        notifications = notifications,
         unread = unread,
         invites = invites,
-        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, invites) + extra,
+        domains = allDomains(
+            identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread,
+            notifications, invites,
+        ) + extra,
     )
 }
 
