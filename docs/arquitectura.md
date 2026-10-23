@@ -295,6 +295,9 @@ chat_messages(id uuid pk, chat_id uuid fk, sender_id uuid /* null = sistema */, 
 
 -- Social
 invites(code text pk /* XXXX-0000 */, user_id uuid unique fk)
+invite_redemptions(owner_id uuid fk, redeemer_id uuid fk, mode text, status text check (status in ('PENDING','CONNECTED')),
+                   created_at timestamptz, accepted_at timestamptz, primary key (owner_id, redeemer_id, mode)) /* E6.1: quién canjeó a quién; la arista no lo dice */
+invite_redeem_attempts(id uuid pk, user_id uuid fk on delete cascade, created_at timestamptz) /* E6.1: límite diario de canjes; se borran al pasar 24 h */
 introductions(id uuid pk, introducer_id uuid, mode text check (mode in ('AMISTAD','ESTUDIO')),
               user_a uuid, user_b uuid, simulation_id uuid, a_response text, b_response text,
               status text, created_at timestamptz)
@@ -414,9 +417,9 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | GET `/v1/introductions/{id}` | - | `IntroductionDto{..., report: ReportDto?, myResponse?}` | NOT_FOUND |
 | POST `/v1/introductions/{id}/response` | `IntroResponse{interested}` | `IntroductionDto` | CONFLICT |
 | POST `/v1/introductions/request` | `IntroRequest{anonId}` | 202 | PLUS_REQUIRED |
-| GET `/v1/invites/me` | - | `InviteDto{code, link}` | - |
-| POST `/v1/invites/redeem` | `Redeem{code, mode}` | `RedeemResult{status: PENDING\|CONNECTED, other: PersonRef}` | VALIDATION, BLOCKED, NOT_FOUND |
-| POST `/v1/invites/{userId}/accept` | - | `RedeemResult` | NOT_FOUND |
+| GET `/v1/invites/me` | - | `InviteDto{code /* XXXX-0000 todo al azar */, link, pending: List<PendingInvite{id /* anonId:MODO, un canje por persona y modo */, other: PersonRef, mode, createdAt}>}` (E6.1: `pending` son los canjes de mi código por aceptar; el dueño ve el nombre de quien canjeó, sin `id` ni foto) | - |
+| POST `/v1/invites/redeem` | `Redeem{code, mode}` (modo activo para los dos; idempotente; si el dueño ya había canjeado el código de quien canjea en ese modo, CONNECTED directo; si el dueño no tiene el modo se responde PENDING sin crear nada, para no revelar sus modos; 20 intentos por persona en 24 h, existan o no los códigos, en `invite_redeem_attempts`) | `RedeemResult{status: PENDING\|CONNECTED, other: PersonRef}` | VALIDATION (formato, propio código, modo inactivo para quien canjea), BLOCKED, NOT_FOUND, FORBIDDEN (límite diario) |
+| POST `/v1/invites/{id}/accept?mode=` (`id` = `PendingInvite.id` `anonId:MODO`, o `anonId`/`users.id` con `mode`; solo el dueño del código; conecta solo ese modo) | - | `RedeemResult` | NOT_FOUND, VALIDATION (sin modo y varios canjes de esa persona) |
 | GET `/v1/notifications` | - | `NotificationsDto{today: List<NotificationDto>, week: List<NotificationDto>, older}` | - |
 | POST `/v1/notifications/read` | `MarkRead{ids?: List<String>}` (vacío = todas) | 204 | - |
 | POST `/v1/reports` | `ReportRequest{kind: USER\|AI_CONTENT, targetUserId?, anonId?, chatId?, messageId?, simulationId?, turnIndex?, reason, details?}` (exactamente un objetivo) | 201 `ReportCreated{id, helpResources?: List<HelpResource>}` | VALIDATION, NOT_FOUND |
