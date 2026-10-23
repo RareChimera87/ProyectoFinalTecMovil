@@ -1,0 +1,35 @@
+name: revision-agente
+
+# PLAN.md §5. La revisión en busca de errores la hace un agente revisor del workflow de
+# implementación ANTES de mezclar (lee el diff, corre los tests, publica el veredicto como
+# comentario del PR). Cuando el veredicto es favorable, el integrador pone la etiqueta
+# `revisado-agente`. Este check solo verifica que esa etiqueta exista: no llama a ninguna API
+# ni necesita secretos. Sin la etiqueta, el PR no se considera revisado y el check falla.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: revision-agente-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  revision-agente:
+    name: revision-agente
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Exige la etiqueta revisado-agente
+        env:
+          ETIQUETAS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          if [[ ",$ETIQUETAS," == *",revisado-agente,"* ]]; then
+            echo "El PR tiene la etiqueta revisado-agente: revisión registrada."
+          else
+            echo "::error::Falta la etiqueta revisado-agente: el agente revisor del workflow debe revisar el PR y el integrador poner la etiqueta (PLAN.md §5)."
+            exit 1
+          fi

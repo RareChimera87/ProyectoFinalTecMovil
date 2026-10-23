@@ -1,0 +1,72 @@
+package me.santiagoreina.parcheu.navigation
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
+import me.santiagoreina.parcheu.ParcheUApp
+import me.santiagoreina.parcheu.core.ui.stubTag
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.annotation.Config
+
+/**
+ * Cada ruta del inventario que sigue siendo stub (B0..H3, lista de chats, confirmaciones) se puede navegar
+ * y muestra su stub. Las rutas ya implementadas ([implementedRoutes]) tienen sus propias pruebas.
+ */
+@RunWith(ParameterizedRobolectricTestRunner::class)
+@Config(sdk = [35])
+class AllRoutesNavigationTest(private val entry: RouteEntry) {
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    @Test
+    fun navigatesToRouteAndShowsItsStub() {
+        lateinit var navController: NavHostController
+        composeRule.setContent {
+            navController = rememberNavController()
+            // Se arranca en Home (stub): el Splash real (E2.2) navegaría solo según la sesión.
+            ParcheUApp(navController = navController, startDestination = Home)
+        }
+        composeRule.onNodeWithTag(stubTag(Home)).assertIsDisplayed()
+
+        composeRule.runOnUiThread { navController.navigate(entry.route) }
+        composeRule.waitForIdle()
+
+        val tag = stubTag(entry.route)
+        composeRule.onNodeWithTag(tag).assertIsDisplayed()
+        composeRule.onAllNodes(
+            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag))
+        ).onFirst().assertIsDisplayed()
+        // Los argumentos llegan intactos a la pantalla (round-trip de la ruta tipada).
+        composeRule
+            .onAllNodes(hasText(entry.route.toString()) and hasAnyAncestor(hasTestTag(tag)))
+            .onFirst()
+            .assertIsDisplayed()
+        val shown = navController.currentBackStackEntry?.destination
+        assertEquals(
+            "NavBar solo en las raíces",
+            TopLevelDestination.entries.any { it.routeClass == entry.route::class },
+            shown.isTopLevel()
+        )
+    }
+
+    companion object {
+        @JvmStatic
+        @ParameterizedRobolectricTestRunner.Parameters(name = "{0}")
+        fun routes(): List<Array<Any>> = routeCatalog
+            .filterNot { it.route::class in implementedRoutes }
+            .map { arrayOf<Any>(it) }
+
+        /** Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest). */
+        val implementedRoutes = setOf(Splash::class, Onboarding::class)
+    }
+}

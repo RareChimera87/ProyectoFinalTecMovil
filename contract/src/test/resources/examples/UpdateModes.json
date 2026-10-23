@@ -1,0 +1,8 @@
+{
+  "modes": {
+    "AMISTAD": true,
+    "PAREJA": true,
+    "ESTUDIO": false
+  },
+  "parejaConfirmed": true
+}
