@@ -75,8 +75,9 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * MatchQueueViewModelTest), F4-F6 (E4.5, feature/simulation), F7-F8 e I3 (E4.6, feature/results),
          * lista de chats y F9 (E5.2), H2 con sus confirmaciones (E8.1, ReportScreenTest y
          * SafetyScreenshotTest), el borrado y 'Descargar mis datos' (E8.3, DeleteAccountScreenTest,
-         * ExportDataRouteTest y AccountScreenshotTest) C1/I1 (E4.7, HomeScreenTest y HomeScreenshotTest)
-         * y C2 (E5.4, NotificationsRouteTest y NotificationsScreenshotTest).
+         * ExportDataRouteTest y AccountScreenshotTest), C1/I1 (E4.7, HomeScreenTest y HomeScreenshotTest),
+         * C2 (E5.4, NotificationsRouteTest y NotificationsScreenshotTest), C5 (E6.1, InviteAppLinkTest,
+         * InvitesScreenTest e InvitesScreenshotTest) y D6/D7 (E6.3, FofScreenTest y FofScreenshotTest).
          */
         val implementedRoutes =
             setOf(
@@ -89,6 +90,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 Consent::class,
                 TwinReady::class,
                 Parche::class,
+                FriendsOfFriends::class,
                 MatchQueue::class,
                 MatchFound::class,
                 Simulation::class,
@@ -100,7 +102,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 DeleteAccount::class,
                 ExportData::class,
                 Home::class,
-                Notifications::class
+                Notifications::class,
+                AddFriends::class
             )
     }
 }

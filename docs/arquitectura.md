@@ -295,6 +295,9 @@ chat_messages(id uuid pk, chat_id uuid fk, sender_id uuid /* null = sistema */, 
 
 -- Social
 invites(code text pk /* XXXX-0000 */, user_id uuid unique fk)
+invite_redemptions(owner_id uuid fk, redeemer_id uuid fk, mode text, status text check (status in ('PENDING','CONNECTED')),
+                   created_at timestamptz, accepted_at timestamptz, primary key (owner_id, redeemer_id, mode)) /* E6.1: quién canjeó a quién; la arista no lo dice */
+invite_redeem_attempts(id uuid pk, user_id uuid fk on delete cascade, created_at timestamptz) /* E6.1: límite diario de canjes; se borran al pasar 24 h */
 introductions(id uuid pk, introducer_id uuid, mode text check (mode in ('AMISTAD','ESTUDIO')),
               user_a uuid, user_b uuid, simulation_id uuid, a_response text, b_response text,
               status text, created_at timestamptz)
@@ -406,7 +409,7 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | POST `/v1/chats/{id}/read` · `/mute` | `Mute{muted}` | 204 | - |
 | GET `/v1/graph` | `?mode=&minAffinity=&community=` | `GraphDto{me: NodeDto, nodes: List<NodeDto{id, label, initials, photoUrl?, affinity, mode, state, anonymous, isDemo}>, edges: List<EdgeDto{otherId, mode, state, affinity}>, stats: GraphStats{connections, simulated, pending, avgAffinity}}` | - |
 | GET `/v1/graph/nodes/{id}` | - | `NodeDetail{node, lastSimulation?: SimulationSummary, sharedModes}` | NOT_FOUND |
-| GET `/v1/graph/fof` | - | `FofDto{count, items?: List<FofCandidate{anonId, label, estimatedAffinity, mutuals, mode}>}` | - |
+| GET `/v1/graph/fof` | - | `FofDto{count, items?: List<FofCandidate{anonId, label, estimatedAffinity, mutuals, mode, viaId?}>}` | - |
 | GET `/v1/graph/history` | - | `HistoryDto{months: List<MonthSnapshot{month, connections, newConnections, nodes}>, moments: List<Moment>}` | PLUS_REQUIRED |
 | GET `/v1/communities` | - | `CommunitiesDto{count, items?: List<CommunityDto{id, name, members: List<PersonRef>, size, traits}>}` | - |
 | GET `/v1/connect-requests` | - | `ConnectRequestsDto{count, items?: List<ConnectRequest{simulationId, other, affinity}>}` | - |
@@ -414,9 +417,9 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | GET `/v1/introductions/{id}` | - | `IntroductionDto{..., report: ReportDto?, myResponse?}` | NOT_FOUND |
 | POST `/v1/introductions/{id}/response` | `IntroResponse{interested}` | `IntroductionDto` | CONFLICT |
 | POST `/v1/introductions/request` | `IntroRequest{anonId}` | 202 | PLUS_REQUIRED |
-| GET `/v1/invites/me` | - | `InviteDto{code, link}` | - |
-| POST `/v1/invites/redeem` | `Redeem{code, mode}` | `RedeemResult{status: PENDING\|CONNECTED, other: PersonRef}` | VALIDATION, BLOCKED, NOT_FOUND |
-| POST `/v1/invites/{userId}/accept` | - | `RedeemResult` | NOT_FOUND |
+| GET `/v1/invites/me` | - | `InviteDto{code /* XXXX-0000 todo al azar */, link, pending: List<PendingInvite{id /* anonId:MODO, un canje por persona y modo */, other: PersonRef, mode, createdAt}>}` (E6.1: `pending` son los canjes de mi código por aceptar; el dueño ve el nombre de quien canjeó, sin `id` ni foto) | - |
+| POST `/v1/invites/redeem` | `Redeem{code, mode}` (modo activo para los dos; idempotente; si el dueño ya había canjeado el código de quien canjea en ese modo, CONNECTED directo; si el dueño no tiene el modo se responde PENDING sin crear nada, para no revelar sus modos; 20 intentos por persona en 24 h, existan o no los códigos, en `invite_redeem_attempts`) | `RedeemResult{status: PENDING\|CONNECTED, other: PersonRef}` | VALIDATION (formato, propio código, modo inactivo para quien canjea), BLOCKED, NOT_FOUND, FORBIDDEN (límite diario) |
+| POST `/v1/invites/{id}/accept?mode=` (`id` = `PendingInvite.id` `anonId:MODO`, o `anonId`/`users.id` con `mode`; solo el dueño del código; conecta solo ese modo) | - | `RedeemResult` | NOT_FOUND, VALIDATION (sin modo y varios canjes de esa persona) |
 | GET `/v1/notifications` | - | `NotificationsDto{today: List<NotificationDto>, week: List<NotificationDto>, older}` | - |
 | POST `/v1/notifications/read` | `MarkRead{ids?: List<String>}` (vacío = todas) | 204 | - |
 | POST `/v1/reports` | `ReportRequest{kind: USER\|AI_CONTENT, targetUserId?, anonId?, chatId?, messageId?, simulationId?, turnIndex?, reason, details?}` (exactamente un objetivo) | 201 `ReportCreated{id, helpResources?: List<HelpResource>}` | VALIDATION, NOT_FOUND |
@@ -468,6 +471,8 @@ LIMIT 30;
 ```
 
 La afinidad mostrada es una **estimación** (similitud de rasgos, sección 7.3) y se rotula así. Gratis recibe solo `count`.
+
+Implementación (E6.3, `backend/.../graph/fof/`): `ExposedFofRepository` ejecuta esta consulta con tres ajustes para que coincida con lo que muestra el ego-grafo: `mine` va sin duplicados y solo con amigos visibles en segundo grado (no borrados, no HIDDEN, sin bloqueo con el observador; un amigo HIDDEN no genera sugerencias ni se cuenta), se excluye un bloqueo entre el amigo en común y el candidato, y se devuelven las aristas que conectan (`array_agg(DISTINCT me:mode)`) y los rasgos del candidato. Se leen hasta 200 filas (techo de costo); `FofService` (vista de terceros registrada en `ThirdPartyViews`) vuelve a filtrar con la policy, ordena por amigos en común, luego por la estimación (`SimulationScoring.traitSimilarity`, 50 si falta un gemelo) y devuelve `count` = todos y `items` = los 30 primeros solo a ParcheU+. El modo del candidato es el de la mayoría de sus aristas (Amistad si empatan). `viaId` es el `users.id` de uno de los amigos en común (el mismo `NodeDto.id` del ego-grafo): `FofService.viaOf` lo toma solo de las aristas de la misma fila que ya pasaron `canSeeEdge`, prefiere una del modo del candidato y desempata por id; nunca sale de otra consulta, que podría revelar una Pareja ajena. `InMemoryFofRepository` replica la semántica y una prueba de paridad la compara con el SQL en mundos al azar. En Android (`feature/parche/fof/`), D6 dibuja G0 con la capa fof (máximo 8 en el grafo, todos en la lista) y "Pedir presentación" llama a `POST /v1/introductions/request` (E6.4); el plan se deduce de la respuesta (`items` presente). Cada fof cuelga de su `viaId` con la línea punteada y la tarjeta dice "Amigo de …". **Desvío de ADR-0023:** D6 no ofrece 'Simular' porque `POST /v1/simulations` solo acepta `users.id` y fof solo entrega `anonId`; el hueco y su dueño están en la ficha de E6.3 del backlog y en `pendientes-humanos.md`.
 
 ### 6.3 Comunidades
 - Job semanal (lunes 03:00 Bogotá) sobre aristas CONNECTED de Amistad y Estudio entre usuarios no HIDDEN ni borrados.

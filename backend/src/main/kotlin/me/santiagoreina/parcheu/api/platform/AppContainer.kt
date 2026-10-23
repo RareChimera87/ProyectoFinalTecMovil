@@ -23,6 +23,9 @@ import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
+import me.santiagoreina.parcheu.api.graph.fof.ExposedFofRepository
+import me.santiagoreina.parcheu.api.graph.fof.FofService
+import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.home.HomeService
@@ -76,6 +79,10 @@ import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
 import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.api.social.SocialRoutes
+import me.santiagoreina.parcheu.api.social.invites.InviteLinks
+import me.santiagoreina.parcheu.api.social.invites.InviteModule
+import me.santiagoreina.parcheu.api.social.invites.exposedInviteModule
+import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.platform.tasks.CloudTasksQueue
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.twin.TwinModule
@@ -136,6 +143,8 @@ class AppContainer(
      * con [fromConfig]): 'Marcar leídas' deja la campana en 0 y los avisos de bloqueados no cuentan.
      */
     val unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
+    /** Invitaciones por QR y código (E6.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
     /**
      * Billing (E7.1): verify, derecho vigente y RTDN. Por defecto en memoria y sin API de Play: solo
      * [fromConfig] cablea Postgres (la misma tabla `entitlements` que lee [quota]) y Google Play.
@@ -145,7 +154,7 @@ class AppContainer(
     val domains: List<DomainRoutes> =
         allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
-            billing, config.env,
+            invites, billing, config.env,
         ),
 ) {
     companion object {
@@ -177,7 +186,9 @@ class AppContainer(
             val ai = aiGateway(config, vars, clock) { database }
             val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
             val twin = twinModule(config.env, database, clock, ai, tasks)
-            val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
+            val graph = GraphModule(
+                ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock, ExposedFofRepository(database),
+            )
             // En local no hay credenciales de FCM: se guarda el aviso y el envío es un Fake (E5.3).
             val fcm = if (local) FakeFcmClient() else FirebaseFcmClient(requireNotNull(config.firebaseProjectId))
             val notifier = FcmNotifier(ExposedPushStore(database), fcm, clock)
@@ -206,6 +217,8 @@ class AppContainer(
                 config.env, database, identity, graph, twin, tasks, config.firebaseProjectId, clock,
                 closedMatches = matching.service::onMatchesClosedByDeletion,
             )
+            // Invitaciones (E6.1): aristas por EdgeService, modos de user_modes y enlace https://<hosting>/i/{codigo}.
+            val invites = exposedInviteModule(database, graph, simulation, notifier, InviteLinks.fromConfig(config, vars), clock)
             // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.
             val billing = billingModule(config.env, database, clock, vars)
             return AppContainer(
@@ -214,6 +227,7 @@ class AppContainer(
                 matching = matching, safety = safety, account = account,
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
                 billing = billing,
+                invites = invites,
             )
         }
 
@@ -259,6 +273,7 @@ fun allDomains(
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
     unread: UnreadCounter = UnreadCounter.NONE,
     notifications: NotificationCenterModule = inMemoryNotificationCenter(systemClock(), quota, graph),
+    invites: InviteModule = inMemoryInviteModule(systemClock(), graph, simulation, NoopNotifier),
     billing: BillingModule = inMemoryBillingModule(systemClock()),
     /** Con `PROD` no se registra `POST /internal/dev/grant-plus` (404), aunque [quota] traiga concesión. */
     env: Env = Env.LOCAL,
@@ -269,8 +284,10 @@ fun allDomains(
     MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
-    GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
-    SocialRoutes(),
+    GraphRoutes(graph.service, fofService(graph, twin, quota, matching.flags.demoUsersEnabled)) { firebase ->
+        identity.requireUser(firebase).id
+    },
+    SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     // Centro de notificaciones C2 (E5.4): bandeja agrupada por fecha de Bogotá y 'Marcar leídas'.
     NotificationsRoutes(notifications.service) { firebase -> identity.requireUser(firebase).id },
@@ -286,6 +303,15 @@ fun allDomains(
         identity.requireUser(firebase).id
     },
 )
+
+/**
+ * Amigos de amigos (E6.3): la consulta de Postgres si el módulo del grafo la trae; si no, la versión en
+ * memoria con los rasgos del gemelo en memoria. ParcheU+ decide si viajan los `items`.
+ */
+private fun fofService(graph: GraphModule, twin: TwinModule, quota: QuotaModule, demoUsersEnabled: Boolean): FofService {
+    val repository = graph.fofRepository ?: InMemoryFofRepository(graph.repository) { twin.repository.state(it)?.traits }
+    return FofService(repository, graph.repository, graph.policy, { quota.service.isPlus(it) }, demoUsersEnabled)
+}
 
 /**
  * Sugerencias de Inicio con los modos activos leídos de `user_modes` (vía el repositorio de simulaciones).

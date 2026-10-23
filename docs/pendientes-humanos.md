@@ -656,10 +656,20 @@ El código y las pruebas están completos: 31 pruebas nuevas con FakeLlm y la AP
 No hay pasos humanos en consolas externas. Quedan decisiones de contrato para I1 y la dueña de E3.1/E6.3:
 
 - **`NodeDetail.chatId` sin llenar en el servidor.** El contrato ya trae `chatId?` y D2 solo muestra "Chatear" cuando viene con valor. I1 debe devolverlo en `GET /v1/graph/nodes/{id}` para nodos `CONNECTED` (E4.6/E5.1); mientras tanto el botón permanece oculto.
-- **`GraphFof.parentId`.** D1 no pinta la capa de amigos de amigos (es de D6, ParcheU+); el hueco `viaId` de `FofCandidate` sigue abierto para E3.1/E6.3.
+- ~~**`GraphFof.parentId`.**~~ Cerrado en E6.3: `FofCandidate.viaId` llega en `GET /v1/graph/fof` y D6 lo mapea a `parentId` (D1 no pinta la capa fof).
 - **Comunidades.** `GraphDto` no trae la lista de comunidades: el chip "Comunidad" abre D8 (ParcheU+) o el paywall (gratis) y D8 vuelve a D1 con `Parche(community)`, que pasa `?community=` a la API.
 - **Iconos.** D1-D5 usan iconos vectoriales propios (`ParcheIcons.kt`) hasta que exista la biblioteca de Material Symbols del sistema de diseño (E1.4).
 - **Cierre de sesión (E8.2).** Debe llamar `GraphCache.clear()` para borrar el último grafo guardado.
+
+## E6.3 · Amigos de amigos
+
+No hay pasos en consolas externas. Queda una decisión de contrato:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **'Simular' desde D6 (ADR-0023, flujo 11 D6 → F4).** `POST /v1/simulations` solo acepta `otherUserId` = `users.id` y fof solo entrega `anonId`, así que D6 salió sin 'Simular' (la nota al pie remite a la presentación). Decidir entre (a) aceptar `anonId` en `SimulationRequest` y resolverlo en el servidor contra `FofService.candidates` del observador (cambio compatible del contrato + botón en D6 → F4), o (b) enmendar ADR-0023 para quitar 'Simular' de D6. Ver la ficha de E6.3 en `docs/backlog.md`. | I1 (API) + I3 (UI) | Antes de la ventana de E7.4 (18 nov) |
+| 2 | **Aprobación del revisor par** del PR (feature major, check `major-gate`) según `docs/equipo.md`. | Par de E6.3 | Ventana de la ola 10 (12 nov) |
+
 ## E0.8 · Configuración de Firebase
 
 Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,
@@ -904,3 +914,16 @@ Lo automatizable ya quedó hecho: `POST /v1/billing/verify` (`subscriptionsv2.ge
 | 6 | **Aprobación del revisor par** (feature major, check `major-gate`): según `docs/equipo.md` el par de E7.1 es I3. | I3 | Ventana de revisión de la ola 10 (12 nov) |
 
 En dev no hay `sa-play` ni RTDN (`rtdn_push_enabled = false`): allí Plus se prueba con `POST /internal/dev/grant-plus`, y `verify` falla con 500 mientras `play-sa` no tenga una llave (no hace falta cargarla).
+
+## E6.1 · Invitaciones por QR y código
+
+Lo automatizable ya quedó hecho: `GET /v1/invites/me`, `POST /v1/invites/redeem` y `POST /v1/invites/{id}/accept` (un canje por persona y modo; migraciones `V20261023_1200__canjes_de_invitaciones.sql` y `V20261023_1300__intentos_de_canje.sql`, límite de 20 canjes por persona en 24 h), C5 con 'Mi código' (QR de ZXing, copiar, compartir, canjes por aceptar) y 'Escanear' (Google Code Scanner, sin permiso de cámara), el App Link `https://<hosting>/i/{codigo}` en el manifiesto (host por flavor con `manifestPlaceholders.inviteHost`, `autoVerify`), y en Hosting `/.well-known/assetlinks.json` y el rewrite `/i/** -> /i/index.html` (`firebase.json`; `scripts/test/legal-pages.sh` ya los prueba en el emulador). El enlace del servidor sale de `INVITE_LINK_BASE` o, si falta, de `https://<FIREBASE_PROJECT_ID>.web.app`, que es el sitio por defecto de cada proyecto: no hace falta tocar Terraform. Lo que falta necesita Play Console, las llaves o un entorno vivo:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Huella SHA-256 de Play App Signing en `assetlinks.json`.** Tras la primera subida (E7.0), copiar de *Play Console > Integridad de la app > Firma de apps* el SHA-256 del **certificado de firma de la app** y agregarlo al arreglo `sha256_cert_fingerprints` del paquete `me.santiagoreina.parcheu` en `firebase/public/.well-known/assetlinks.json` (junto a la de subida, que ya está). Sin ella, la app instalada desde Play no verifica el App Link y el enlace abre el navegador (el respaldo `/i/{codigo}` muestra el código para escribirlo a mano). | I3 | Tras la subida de E7.0 |
+| 2 | **Huellas de debug de los demás desarrolladores.** `assetlinks.json` solo trae el SHA-256 de debug de la máquina de I3 para `me.santiagoreina.parcheu.dev`. Quien quiera probar el App Link en su teléfono: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android` y agregar su SHA-256 al arreglo del paquete `.dev`. | I1, I2 | Cuando lo necesiten |
+| 3 | **Desplegar Hosting de dev.** Se despliega solo al mezclar a `dev` (`firebase-deploy`). Comprobar: `curl -s https://parcheu-dev.web.app/.well-known/assetlinks.json` devuelve el JSON con `Content-Type: application/json`, y `curl -sI https://parcheu-dev.web.app/i/ABCD-1234` da 200. Validar con la herramienta de Google: `https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://parcheu-dev.web.app&relation=delegate_permission/common.handle_all_urls`. | I3 | Tras mezclar a `dev` |
+| 4 | **Probar en un teléfono (dev).** Instalar el `devDebug`, `adb shell pm verify-app-links --re-verify me.santiagoreina.parcheu.dev` y luego `adb shell pm get-app-links me.santiagoreina.parcheu.dev` debe mostrar `parcheu-dev.web.app: verified`. Abrir `https://parcheu-dev.web.app/i/<código de otra cuenta>` desde WhatsApp: debe abrir C5 con el código en el campo. Escanear con 'Escanear' el QR de otra cuenta (la primera vez Google Play services descarga el módulo del lector) y escanear un QR ajeno para ver 'Este código no es de ParcheU'. | I3 | Con el despliegue de dev |
+| 5 | **Prod.** Con el tag `v*` se despliega Hosting de `parcheu-prod`; repetir el paso 3 con `parcheu-prod.web.app` y el paso 4 con la app de la prueba cerrada (paquete `me.santiagoreina.parcheu`) una vez hecho el paso 1. | I3 | Con la 0.2 |
+| 6 | **Revisión visual** de `android/app/src/test/screenshots/invites/*.png` contra el mockup 07 (C5 'Mi código'); 'Escanear', el selector de modo ('¿Cómo se conocen?') y la lista 'Quieren agregarte' no tienen mockup y se armaron con componentes del sistema de diseño. Diferencia aceptada: el código es todo al azar (p. ej. `QZHT-4827`) y no `MARI-4827` como en el mockup, porque un prefijo con el nombre dejaba solo 10.000 códigos por nombre y facilitaba adivinarlos. | I2 | Ventana de revisión de la ola 10 |

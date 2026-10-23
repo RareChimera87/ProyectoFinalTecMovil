@@ -36,14 +36,13 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Simulation: E4.3 (SimulationApiTest) y E4.6 (ReportApiTest) implementaron todas sus rutas /v1.
     "scenario" to listOf(HttpMethod.Get to "/v1/scenarios", HttpMethod.Post to "/v1/scenario-sessions/c1/agreement"),
     "graph" to listOf(
-        // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest).
-        HttpMethod.Get to "/v1/graph/fof",
+        // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest) y /v1/graph/fof E6.3 (FofApiTest).
         HttpMethod.Get to "/v1/graph/history", HttpMethod.Get to "/v1/communities", HttpMethod.Get to "/v1/connect-requests",
     ),
     "social" to listOf(
         HttpMethod.Post to "/v1/introductions", HttpMethod.Get to "/v1/introductions/i1",
         HttpMethod.Post to "/v1/introductions/i1/response", HttpMethod.Post to "/v1/introductions/request",
-        HttpMethod.Get to "/v1/invites/me", HttpMethod.Post to "/v1/invites/redeem", HttpMethod.Post to "/v1/invites/u1/accept",
+        // Las invitaciones las implementa E6.1 (InviteApiTest).
     ),
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
     // Notifications: E5.4 implementa la bandeja y 'Marcar leídas' (NotificationsApiTest); ya no queda ningún stub.

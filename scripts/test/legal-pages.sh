@@ -88,9 +88,17 @@ verificar /borrar-cuenta 'desde la app' 'Opción 2' 'correo' 'Qué se borra'
 # configuración real no las tiene, se omiten de forma explícita (no se prueban contra una config inventada).
 omitir() { echo "OMITIDO $1: $2"; omitidos=$((omitidos + 1)); }
 omitidos=0
-if [[ "$TIENE_REWRITE_I" == "si" ]]; then verificar /i/ABC123 'ParcheU'
+if [[ "$TIENE_REWRITE_I" == "si" ]]; then verificar /i/ABCD-1234 'ParcheU' 'Código de invitación'
 else omitir /i/ABC123 "firebase.json no tiene el rewrite /i/** -> /i/index.html (pendiente en E0.8/E6.1)"; fi
-if [[ "$TIENE_WELLKNOWN" == "si" ]]; then verificar /.well-known/assetlinks.json '[]'
+if [[ "$TIENE_WELLKNOWN" == "si" ]]; then
+  # App Links de E6.1 (ADR-0018): los dos paquetes con su huella SHA-256.
+  verificar /.well-known/assetlinks.json 'delegate_permission/common.handle_all_urls' \
+    '"me.santiagoreina.parcheu.dev"' '"me.santiagoreina.parcheu"' 'sha256_cert_fingerprints'
+  if node -e 'const a=JSON.parse(require("fs").readFileSync(process.argv[1]));const ok=f=>/^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(f);if(!Array.isArray(a)||a.length===0||!a.every(s=>s.target&&(s.target.sha256_cert_fingerprints||[]).length>0&&s.target.sha256_cert_fingerprints.every(ok)))process.exit(1)' "$TMP/cuerpo"; then
+    echo "OK    assetlinks.json es JSON válido con huellas SHA-256"
+  else
+    echo "FALLA assetlinks.json no es JSON válido o tiene huellas mal formadas"; fallos=$((fallos + 1))
+  fi
 else omitir /.well-known/assetlinks.json "firebase.json ignora **/.* y no exceptúa !**/.well-known/** (pendiente en E0.8/E6.1)"; fi
 
 # La tabla de retención de arquitectura.md §10.2 debe estar en /privacidad: mismas filas, en el mismo

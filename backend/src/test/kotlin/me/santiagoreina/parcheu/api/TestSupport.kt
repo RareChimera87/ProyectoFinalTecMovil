@@ -17,6 +17,8 @@ import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.safety.SafetyModule
+import me.santiagoreina.parcheu.api.social.invites.InviteModule
+import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.home.UnreadCounter
@@ -84,6 +86,7 @@ fun testContainer(
     notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
     // Por defecto la campana de Inicio cuenta en la misma bandeja que C2 (E5.4).
     unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
+    invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
     // Billing (E7.1): para que `verify` dé Plus en el cupo, pasar también `quota` con `billing.entitlements`.
     billing: BillingModule = inMemoryBillingModule(clock),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
@@ -112,9 +115,10 @@ fun testContainer(
         notifications = notifications,
         unread = unread,
         billing = billing,
+        invites = invites,
         domains = allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
-            billing, config.env,
+            invites, billing, config.env,
         ) + extra,
     )
 }
