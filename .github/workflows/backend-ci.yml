@@ -61,7 +61,7 @@ jobs:
             17
             21
       - uses: gradle/actions/setup-gradle@v4
-      # E5.1: el espejo del chat se prueba contra el emulador de Firestore (necesita Java 21,
+      # E5.1 y E4.2: los espejos del chat y de matchTickets se prueban contra el emulador de Firestore (necesita Java 21,
       # que queda como JAVA_HOME). `emulators:exec` define FIRESTORE_EMULATOR_HOST para Gradle.
       - uses: actions/setup-node@v4
         with:

@@ -5,6 +5,7 @@ import me.santiagoreina.parcheu.contract.MatchStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
+import me.santiagoreina.parcheu.contract.TicketStatus
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
@@ -32,6 +33,11 @@ object MatchQueue : Table("match_queue") {
     val priority = short("priority").default(0)
     val enqueuedAt = timestampWithTimeZone("enqueued_at")
     val expiresAt = timestampWithTimeZone("expires_at")
+    /** Último ticket de la persona (E4.2): WAITING mientras espera, MATCHED con [matchId] o EXPIRED. */
+    val status = enumText<TicketStatus>("status").default(TicketStatus.WAITING)
+    val matchId = javaUUID("match_id").nullable()
+    /** Lo asigna un trigger de Postgres en cada insert o update (E4.2): ordena las publicaciones al espejo. */
+    val version = long("version").default(0)
     override val primaryKey = PrimaryKey(userId)
 }
 

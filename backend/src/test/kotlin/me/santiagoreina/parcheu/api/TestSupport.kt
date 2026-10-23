@@ -19,6 +19,10 @@ import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.simulation.SimulationModule
 import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.platform.AppContainer
+import me.santiagoreina.parcheu.api.matching.MatchingModule
+import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
@@ -65,6 +69,8 @@ fun testContainer(
     graph: GraphModule = inMemoryGraphModule(clock),
     chat: ChatModule = inMemoryChatModule(clock, graph.policy),
     simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
+    notifier: Notifier = NoopNotifier,
+    matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
 ): AppContainer {
     val identity = IdentityService(repo, clock, legalTextVersion)
     val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
@@ -81,7 +87,9 @@ fun testContainer(
         graph = graph,
         chat = chat,
         simulation = simulation,
-        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation) + extra,
+        notifier = notifier,
+        matching = matching,
+        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching) + extra,
     )
 }
 

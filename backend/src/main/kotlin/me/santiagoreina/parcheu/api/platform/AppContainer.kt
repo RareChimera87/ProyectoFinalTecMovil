@@ -25,7 +25,11 @@ import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
+import me.santiagoreina.parcheu.api.matching.MatchingFlags
+import me.santiagoreina.parcheu.api.matching.MatchingModule
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
+import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
+import me.santiagoreina.parcheu.api.matching.matchingModule
 import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
 import me.santiagoreina.parcheu.api.notifications.push.ExposedPushStore
 import me.santiagoreina.parcheu.api.notifications.push.FakeFcmClient
@@ -92,8 +96,10 @@ class AppContainer(
     /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
     val simulation: SimulationModule =
         inMemorySimulationModule(clock, ai, quota, graph, notifier = NotifierSimulationNotifier(notifier)),
+    /** Fila de match (E4.2). Por defecto en memoria: solo [fromConfig] cablea Postgres y Firestore. */
+    val matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching),
 ) {
     companion object {
         /**
@@ -137,9 +143,15 @@ class AppContainer(
                 config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId,
                 notifier = NotifierSimulationNotifier(notifier),
             )
+            // Fila de match (E4.2): misma base, cuotas, simulación, grafo y avisos; espejo matchTickets en Firestore fuera de local.
+            val matching = matchingModule(
+                config.env, database, clock, quota, simulation, graph, notifier, config.firebaseProjectId,
+                MatchingFlags.fromEnv(config.env, vars),
+            )
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
+                matching = matching,
             )
         }
 
@@ -180,11 +192,12 @@ fun allDomains(
     graph: GraphModule = inMemoryGraphModule(systemClock()),
     chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
     simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
+    matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile),
     TwinRoutes(twin),
     QuotaRoutes(quota),
-    MatchingRoutes(),
+    MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },

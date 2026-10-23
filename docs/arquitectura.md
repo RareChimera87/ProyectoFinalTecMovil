@@ -255,8 +255,9 @@ twin_learning_cursor(user_id uuid pk, last_message_at timestamptz)
 -- Conocer
 scenarios(id smallint pk, mode text, slug text unique, title text, prompt text, is_basic bool,
           timer_sec int, budget_cop int, rubric jsonb /* [{name, weight, description}] */)
-match_queue(user_id uuid pk, mode text, priority smallint, enqueued_at timestamptz, expires_at timestamptz)
-           -- índice (mode, priority desc, enqueued_at)
+match_queue(user_id uuid pk, mode text, priority smallint, enqueued_at timestamptz, expires_at timestamptz,
+            status text check (status in ('WAITING','MATCHED','EXPIRED')), match_id uuid)
+           -- el último ticket de cada persona; índice parcial (mode, priority desc, enqueued_at) where status = 'WAITING' (E4.2)
 matches(id uuid pk, mode text, user_a uuid, user_b uuid, choice_a text, choice_b text,
         status text check (status in ('PENDING_CHOICE','SIMULATION','SCENARIO','EXPIRED')),
         simulation_id uuid, chat_id uuid, created_at timestamptz, decide_by timestamptz)
@@ -423,7 +424,7 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | POST `/v1/billing/verify` | `VerifyPurchase{purchaseToken, productId}` | `EntitlementDto` | FORBIDDEN, VALIDATION |
 | GET `/v1/admin/reports` · POST `/v1/admin/reports/{id}/resolve` | `Resolve{action: DISMISS\|HIDE_MESSAGE\|SUSPEND_24H\|BAN, note?}` | `Page<AdminReport>` / `AdminReport` | FORBIDDEN |
 | POST `/internal/tasks/simulate` · `/judge-scenario` (cola `simulations`) · `/build-persona` · `/extract-memories` · `/moderate` · `/name-community` (cola `ai-light`) · `/purge-user` (cola `maintenance`) | `{id}` | 204 | (OIDC) |
-| POST `/internal/jobs/communities` · `/memories` · `/twin-accuracy` · `/retention` | - | 204 | (OIDC, Scheduler) |
+| POST `/internal/jobs/communities` · `/memories` · `/twin-accuracy` · `/retention` · `/match-sweep` | - | 204 | (OIDC, Scheduler) |
 | POST `/internal/billing/rtdn` | sobre Pub/Sub push | 204 | (OIDC) |
 | POST `/internal/dev/grant-plus` | `{userId, days}` | 204 (404 en prod) | - |
 
@@ -519,17 +520,22 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 - Colas Cloud Tasks con `max_dispatches_per_second` y `max_concurrent_dispatches` como techo de gasto.
 
 ### 7.4 Fila de match
-- `POST /v1/match/queue`: modo activo, Pareja exige edad, el usuario no puede estar ya en la fila. Al encolar se intenta emparejar en la misma transacción: `SELECT ... FROM match_queue WHERE mode = :m AND user_id <> :u AND <no bloqueados, no conectados, no demo si la bandera está apagada> ORDER BY priority DESC, enqueued_at FOR UPDATE SKIP LOCKED LIMIT 1`.
-- Los usuarios `is_demo` nunca entran a la fila de Pareja ni existen con Pareja activo (ADR-0027).
-- `MatchDto.scenarioAvailable = SCENARIO_MODE_ENABLED` (false hasta E4.8); con la bandera apagada, F2 solo ofrece Simulación.
-- Al emparejar: se cobra `RANDOM_MATCH` a ambos (`ref_id = matchId:userId`), se crea `matches`, se actualiza `matchTickets/{uid}` de ambos y se envía push. Cancelar antes no cobra nada.
-- Prioridad 1 para Plus, 0 para gratis. Vence a las 24 h (`EXPIRED`, push opcional).
+- `POST /v1/match/queue`: modo activo, Pareja exige edad, el usuario no puede estar ya en la fila (409). Antes comprueba que haya cupo diario (`QuotaService.ensureAvailable`, 402) sin cobrarlo. Entrar y emparejar es **una** transacción: `pg_advisory_xact_lock` por persona y por modo (sin él dos personas que entran a la vez no se ven y esperan para siempre), se guarda el ticket y `SELECT ... FROM match_queue JOIN users WHERE status = 'WAITING' AND mode = :m AND user_id <> :u AND expires_at > now() AND <modo activo, no bloqueados en ningún sentido, no conectados ya (cualquier modo), no borrados, no demo si la bandera está apagada ni en Pareja, Pareja con edad verificada y confirmada> ORDER BY priority DESC, enqueued_at FOR UPDATE OF match_queue SKIP LOCKED LIMIT 1`.
+- `match_queue` conserva el **último ticket** de cada persona con su `status` (WAITING, MATCHED con `match_id`, EXPIRED): `GET /v1/match/queue` responde ese estado (404 si nunca entró o canceló) y `DELETE` borra solo un ticket en espera (204, idempotente). Volver a entrar reemplaza el ticket anterior; con un match sin decidir no se puede volver a entrar (409).
+- Los usuarios `is_demo` nunca entran a la fila de Pareja ni existen con Pareja activo (ADR-0027); con `DEMO_USERS_ENABLED=false` nadie se empareja con ellos.
+- `MatchDto.scenarioAvailable = SCENARIO_MODE_ENABLED` (false hasta E4.8); con la bandera apagada, F2 solo ofrece Simulación y `POST .../choice` con SCENARIO responde 400.
+- Al emparejar: se cobra `RANDOM_MATCH` a ambos (`ref_id = matchId:userId`, idempotente), se crea `matches` (`user_a` = quien esperaba, `decide_by` = ahora + 10 min), se actualiza `matchTickets/{uid}` de ambos (WAITING -> MATCHED con `matchId`) y se avisa con `Notifier` (`MATCH_FOUND`, `parcheu://match/{id}`). Si a quien esperaba ya no le queda cupo, su ticket pasa a EXPIRED y quien llegó sigue buscando; si no le queda a quien llegó, se deshace el match, la otra persona vuelve a esperar con su turno y se responde 402. Cancelar o vencer antes no cobra nada.
+- Prioridad 1 para Plus, 0 para gratis. El ticket vence a las 24 h (`EXPIRED`, `MATCH_EXPIRED` por push y `matchTickets/{uid}` en EXPIRED; cancelar borra el documento).
+- El espejo publica siempre el estado actual: relee el ticket de Postgres justo antes de escribir y lo manda con su `version`; una transacción de Firestore solo escribe si la versión es mayor o igual a la guardada, así un WAITING atrasado no pisa a MATCHED.
+- Elegir SCENARIO vuelve a comprobar bloqueos (ambos sentidos), borrados y suspensión en la misma transacción que crea el chat; si falla, el match pasa a EXPIRED, se avisa a las dos personas y se devuelve el cupo **solo a quien no causó el cierre** (la persona bloqueada, o la que sigue activa si la otra se borró o fue suspendida; quien bloqueó no lo recupera, o bloquear tras emparejar saltaría el límite diario; si se bloquearon entre sí nadie lo recupera). `GET` y `choice` de un match pendiente con bloqueo responden 404 y lo cierran del mismo modo. Si el match vence por `decide_by` sin que nadie lo abra no se devuelve nada.
+- **Vencimientos:** el job `POST /internal/jobs/match-sweep` (Cloud Scheduler, cada minuto) vence tickets, resuelve matches cuyo `decide_by` pasó y reintenta las simulaciones que quedaron sin crear. Cada consulta de la API también resuelve lo vencido que toca, así que la API es correcta aunque el job tarde.
+- `AnonProfile` del match: `anonId` (HMAC del observador), `label` ("Alguien de la UIS"), rango de edad, universidad (nombre corto), intereses e `isDemo`; nunca nombre, foto, carrera ni id interno.
 
 ### 7.5 Elección tras el match (F2)
-- Cada persona elige SCENARIO o SIMULATION antes de `decide_by` (10 minutos).
-- Ambos SCENARIO → se crea el chat SCENARIO (sección 7.6).
-- Cualquiera elige SIMULATION, o vence el tiempo con una sola elección → simulación con origen RANDOM (no consume el cupo semanal de simulaciones: lo cubre el match del día).
-- Nadie elige → EXPIRED.
+- Cada persona elige SCENARIO o SIMULATION antes de `decide_by` (10 minutos). Elegir dos veces o después de `decide_by` es 409.
+- Ambos SCENARIO -> se crea el chat SCENARIO (sección 7.6) con un escenario básico del modo (cualquiera si los dos son Plus).
+- Cualquiera elige SIMULATION, o vence el tiempo con una sola elección -> simulación con origen RANDOM (no consume el cupo semanal de simulaciones: lo cubre el match del día). Si crearla falla de forma definitiva (bloqueo posterior, gemelo no listo) el match pasa a EXPIRED y se devuelve el cupo con la misma regla (bloqueo posterior: solo a quien no bloqueó; sin culpable, como gemelo no listo: a las dos personas); si falla de forma pasajera (presupuesto de IA) queda en SIMULATION sin simulación y `match-sweep` la reintenta.
+- Nadie elige -> EXPIRED.
 
 ### 7.6 Modo escenario (F3)
 - Chat SCENARIO con escenario del modo, `ends_at = now + timer_sec` y presupuesto (`budget_cop`) mostrados en la tarjeta fijada.
@@ -557,7 +563,7 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 | `chats/{chatId}` | backend | miembros | `members: [firebaseUid]`, `type`, `mode`, `status`, `endsAt` |
 | `chats/{chatId}/messages/{msgId}` | backend | miembros | `senderUid` (uid de Firebase; `null` si `system`), `system`, `text`, `createdAt`, `hidden` (nombre canónico; E0.8, E5.1 y E5.2 lo usan igual) |
 | `simulations/{simId}` | backend | participantes | `participants: [firebaseUid]`, `status`, `progress{scenarioIndex, turn, of}`, `score`, `updatedAt` |
-| `matchTickets/{firebaseUid}` | backend | dueño | `status: WAITING\|MATCHED\|EXPIRED`, `mode`, `matchId`, `expiresAt` |
+| `matchTickets/{firebaseUid}` | backend | dueño | `status: WAITING\|MATCHED\|EXPIRED`, `mode`, `matchId`, `expiresAt`, `version` (monótona, la asigna un trigger de Postgres; el espejo ignora escrituras más viejas) |
 
 ```
 rules_version = '2';
