@@ -31,7 +31,7 @@ class ChatScreenTest {
             "u2",
             Mode.AMISTAD,
             muted = false,
-            closed = false,
+            closed = false
         )
 
     private fun show(state: ChatUiState, actions: ChatActions = ChatActions()) {
@@ -47,9 +47,9 @@ class ChatScreenTest {
                 messages =
                 listOf(
                     ChatMessageUi("m1", "texto que no debe verse", mine = false, hidden = true),
-                    ChatMessageUi("m2", "Hola normal", mine = true),
-                ),
-            ),
+                    ChatMessageUi("m2", "Hola normal", mine = true)
+                )
+            )
         )
         composeRule.onNodeWithText("Mensaje oculto").assertIsDisplayed()
         composeRule.onNodeWithText("texto que no debe verse").assertDoesNotExist()
@@ -69,11 +69,11 @@ class ChatScreenTest {
                         "k1",
                         "No llegó",
                         mine = true,
-                        status = MessageStatus.Failed(AppError.Network),
-                    ),
-                ),
+                        status = MessageStatus.Failed(AppError.Network)
+                    )
+                )
             ),
-            ChatActions(onRetryMessage = { retried = it }),
+            ChatActions(onRetryMessage = { retried = it })
         )
         composeRule.onNodeWithTag(ChatTags.RETRY).performClick()
         assertEquals("k1", retried)
@@ -86,7 +86,7 @@ class ChatScreenTest {
             ChatUiState(loading = false, header = header),
             ChatActions(onReport = {
                 reported = true
-            }),
+            })
         )
         composeRule.onNodeWithTag(ChatTags.MENU).performClick()
         composeRule.onNodeWithTag(ChatTags.MENU_MUTE).assertIsDisplayed()
@@ -99,7 +99,7 @@ class ChatScreenTest {
         var dismissed = false
         show(
             ChatUiState(loading = false, header = header),
-            ChatActions(onDismissConsent = { dismissed = true }),
+            ChatActions(onDismissConsent = { dismissed = true })
         )
         composeRule.onNodeWithTag(ChatTags.CONSENT_BANNER).assertIsDisplayed()
         composeRule.onNodeWithText("Entendido").performClick()
@@ -111,7 +111,7 @@ class ChatScreenTest {
         var retried = false
         show(
             ChatUiState(loading = false, header = header, liveError = AppError.Forbidden),
-            ChatActions(onRetryLive = { retried = true }),
+            ChatActions(onRetryLive = { retried = true })
         )
         composeRule.onNodeWithText("Aún no hay mensajes. Rompe el hielo.").assertDoesNotExist()
         composeRule.onNodeWithText("Ya no tienes acceso a este chat.").assertIsDisplayed()
@@ -124,7 +124,7 @@ class ChatScreenTest {
         var reported = false
         show(
             ChatUiState(loading = false, header = header.copy(otherUserId = null)),
-            ChatActions(onReport = { reported = true }),
+            ChatActions(onReport = { reported = true })
         )
         composeRule.onNodeWithTag(ChatTags.MENU).performClick()
         composeRule.onNodeWithTag(ChatTags.MENU_REPORT).assertIsNotEnabled()

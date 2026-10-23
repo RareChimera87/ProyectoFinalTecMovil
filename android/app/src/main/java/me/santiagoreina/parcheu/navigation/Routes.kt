@@ -162,7 +162,7 @@ data class Report(
     val userId: String,
     val chatId: String? = null,
     val name: String? = null,
-    val anonymous: Boolean = false,
+    val anonymous: Boolean = false
 ) : AppRoute
 
 /** H3 · Ajustes de privacidad. */

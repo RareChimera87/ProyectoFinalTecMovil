@@ -30,7 +30,7 @@ data class ChatUiState(
     /** No se pudo cargar la cabecera (`GET /v1/chats`); los mensajes pueden seguir llegando. */
     val headerError: AppError? = null,
     /** El listener de Firestore falló (sin permiso o sin caché ni red). */
-    val liveError: AppError? = null,
+    val liveError: AppError? = null
 ) {
     val canSend: Boolean get() = draft.isNotBlank() && header?.closed != true
 }
@@ -48,7 +48,7 @@ private data class LocalMessage(
     val clientId: String,
     val text: String,
     val status: MessageStatus,
-    val sentId: String? = null,
+    val sentId: String? = null
 )
 
 private data class Meta(
@@ -57,7 +57,7 @@ private data class Meta(
     val draft: String = "",
     val consentBannerVisible: Boolean = true,
     val headerError: AppError? = null,
-    val liveError: AppError? = null,
+    val liveError: AppError? = null
 )
 
 /**
@@ -69,7 +69,7 @@ private data class Meta(
 class ChatViewModel(
     private val chatId: String,
     private val repository: ChatRepository,
-    private val newClientId: () -> String = { UUID.randomUUID().toString() },
+    private val newClientId: () -> String = { UUID.randomUUID().toString() }
 ) : ViewModel() {
     private val remote = MutableStateFlow<List<RemoteMessage>>(emptyList())
     private val local = MutableStateFlow<List<LocalMessage>>(emptyList())
@@ -87,7 +87,7 @@ class ChatViewModel(
                 draft = m.draft,
                 consentBannerVisible = m.consentBannerVisible,
                 headerError = m.headerError,
-                liveError = m.liveError,
+                liveError = m.liveError
             )
         }.stateIn(viewModelScope, SharingStarted.Eagerly, ChatUiState())
 
@@ -110,7 +110,7 @@ class ChatViewModel(
                         it.copy(
                             loading = false,
                             liveError =
-                            (e as? ChatLiveException)?.error ?: AppError.Network,
+                            (e as? ChatLiveException)?.error ?: AppError.Network
                         )
                     }
                 }.collect { messages ->
@@ -128,7 +128,7 @@ class ChatViewModel(
                     meta.update {
                         it.copy(
                             header = summary?.toHeader(),
-                            headerError = if (summary == null) AppError.NotFound else null,
+                            headerError = if (summary == null) AppError.NotFound else null
                         )
                     }
                 }
@@ -213,7 +213,13 @@ class ChatViewModel(
         val anonymous = header.otherUserId == null
         val id = header.otherUserId ?: header.otherAnonId ?: return
         val target =
-            SafetyTarget(id = id, name = header.name, anonymous = anonymous, chatId = chatId, muted = header.muted)
+            SafetyTarget(
+                id = id,
+                name = header.name,
+                anonymous = anonymous,
+                chatId = chatId,
+                muted = header.muted
+            )
         viewModelScope.launch { _effects.send(ChatEffect.OpenReport(target)) }
     }
 
@@ -222,7 +228,10 @@ class ChatViewModel(
         meta.update { m -> m.copy(header = m.header?.copy(muted = muted)) }
     }
 
-    private fun merge(remoteMessages: List<RemoteMessage>, localMessages: List<LocalMessage>): List<ChatMessageUi> {
+    private fun merge(
+        remoteMessages: List<RemoteMessage>,
+        localMessages: List<LocalMessage>
+    ): List<ChatMessageUi> {
         val myUid = repository.currentUid
         val remoteIds = remoteMessages.mapTo(HashSet()) { it.id }
         val fromRemote =
@@ -233,7 +242,7 @@ class ChatViewModel(
                     mine = !it.system && myUid != null && it.senderUid == myUid,
                     system = it.system,
                     hidden = it.hidden,
-                    createdAt = it.createdAt,
+                    createdAt = it.createdAt
                 )
             }
         val fromLocal =
@@ -244,7 +253,7 @@ class ChatViewModel(
                         key = it.clientId,
                         text = it.text,
                         mine = true,
-                        status = it.status,
+                        status = it.status
                     )
                 }
         return fromRemote + fromLocal

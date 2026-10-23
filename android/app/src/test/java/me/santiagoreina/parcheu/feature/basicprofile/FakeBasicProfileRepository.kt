@@ -18,7 +18,7 @@ object BasicProfileSamples {
                 University(1, "UIS", "Universidad Industrial de Santander"),
                 University(2, "UNAB", "Universidad Autónoma de Bucaramanga"),
                 University(12, "UNIPAZ", "Instituto Universitario de la Paz (UNIPAZ)"),
-                University(99, "Otra", "Otra institución"),
+                University(99, "Otra", "Otra institución")
             ),
             interests =
             listOf(
@@ -31,8 +31,8 @@ object BasicProfileSamples {
                 Interest("viajes", "Viajes", "flight"),
                 Interest("programacion", "Programación", "code"),
                 Interest("senderismo", "Senderismo", "hiking"),
-                Interest("anime", "Anime", "animation"),
-            ),
+                Interest("anime", "Anime", "animation")
+            )
         )
 
     val newUser = MeDto(id = "u-ana", displayName = "Ana", createdAt = Instant.fromEpochSeconds(0))
@@ -43,7 +43,7 @@ object BasicProfileSamples {
             ageVerified = true,
             universityId = 1,
             career = "Ingeniería Industrial",
-            interests = listOf("musica", "cine", "cafe"),
+            interests = listOf("musica", "cine", "cafe")
         )
 
     val complete =
@@ -51,14 +51,14 @@ object BasicProfileSamples {
             birthDate = IsoDate("2004-05-17"),
             universityId = 1,
             career = "Ingeniería Industrial",
-            interests = listOf("musica", "cine", "cafe"),
+            interests = listOf("musica", "cine", "cafe")
         )
 }
 
 /** [BasicProfileRepository] en memoria; [calls] registra el orden ("catalog", "me", "age:<fecha>", "update"). */
 class FakeBasicProfileRepository(
     var catalogResult: ApiResult<CatalogDto> = ApiResult.Success(BasicProfileSamples.catalog),
-    var meResult: ApiResult<MeDto> = ApiResult.Success(BasicProfileSamples.newUser),
+    var meResult: ApiResult<MeDto> = ApiResult.Success(BasicProfileSamples.newUser)
 ) : BasicProfileRepository {
     var verifyResult: ApiResult<MeDto> = ApiResult.Success(BasicProfileSamples.savedUser)
     var updateResult: ApiResult<MeDto> = ApiResult.Success(BasicProfileSamples.savedUser)

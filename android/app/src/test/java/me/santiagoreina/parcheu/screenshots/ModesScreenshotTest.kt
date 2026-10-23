@@ -37,11 +37,15 @@ class ModesScreenshotTest(private val dark: Boolean) {
 
     private val theme = if (dark) "dark" else "light"
 
-    private fun capture(name: String, wholeScreen: Boolean = false, content: @Composable () -> Unit) {
+    private fun capture(
+        name: String,
+        wholeScreen: Boolean = false,
+        content: @Composable () -> Unit
+    ) {
         composeRule.setContent { ParcheUTheme(darkTheme = dark) { content() } }
         val path = "src/test/screenshots/modes/${name}_$theme.png"
         val options = RoborazziOptions(
-            compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
+            compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
         )
         // B3 vive en un Dialog (ventana propia): solo captureScreenRoboImage lo incluye junto a B2.
         if (wholeScreen) {
@@ -63,7 +67,7 @@ class ModesScreenshotTest(private val dark: Boolean) {
             onDialogConfirmedChange = {},
             onDialogConfirm = {},
             onDialogCancel = {},
-            animateLoading = false,
+            animateLoading = false
         )
     }
 
@@ -74,7 +78,15 @@ class ModesScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun b2Selected() = capture("b2_selected") {
-        Modes(loaded.copy(modes = mapOf(Mode.AMISTAD to true, Mode.PAREJA to true, Mode.ESTUDIO to false)))
+        Modes(
+            loaded.copy(
+                modes = mapOf(
+                    Mode.AMISTAD to true,
+                    Mode.PAREJA to true,
+                    Mode.ESTUDIO to false
+                )
+            )
+        )
     }
 
     @Test
@@ -82,8 +94,12 @@ class ModesScreenshotTest(private val dark: Boolean) {
         Modes(
             loaded.copy(
                 modes = mapOf(Mode.AMISTAD to true, Mode.PAREJA to false, Mode.ESTUDIO to false),
-                dialog = ParejaDialogState(birthDate = "14 / 03 / 2005", age = 21, confirmed = true),
-            ),
+                dialog = ParejaDialogState(
+                    birthDate = "14 / 03 / 2005",
+                    age = 21,
+                    confirmed = true
+                )
+            )
         )
     }
 
@@ -98,7 +114,7 @@ class ModesScreenshotTest(private val dark: Boolean) {
         TwinReadyScreen(
             TwinReadyUiState(listOf(Mode.AMISTAD, Mode.PAREJA, Mode.ESTUDIO)),
             onViewParche = {},
-            onGoHome = {},
+            onGoHome = {}
         )
     }
 

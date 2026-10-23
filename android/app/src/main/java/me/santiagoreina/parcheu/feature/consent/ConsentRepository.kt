@@ -50,7 +50,7 @@ interface ConsentRepository {
 class ApiConsentRepository(
     private val api: ConsentApi,
     private val sessionApi: SessionApi,
-    private val errorMapper: ApiErrorMapper,
+    private val errorMapper: ApiErrorMapper
 ) : ConsentRepository {
     private val mutex = Mutex()
     private val granted = linkedSetOf<ConsentKind>()
@@ -79,7 +79,9 @@ class ApiConsentRepository(
         var failure: ApiResult.Failure? = null
         granted.toList().forEach { kind ->
             val revoked =
-                apiCall(errorMapper) { api.change(ConsentChange(kind, granted = false, textVersion = legalVersion)) }
+                apiCall(errorMapper) {
+                    api.change(ConsentChange(kind, granted = false, textVersion = legalVersion))
+                }
             when (revoked) {
                 is ApiResult.Success -> granted -= kind
                 is ApiResult.Failure -> if (failure == null) failure = revoked

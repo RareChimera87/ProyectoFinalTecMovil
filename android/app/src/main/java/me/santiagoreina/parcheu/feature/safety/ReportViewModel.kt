@@ -17,7 +17,7 @@ data class ReportSent(
     val helpResources: List<HelpResource>,
     val blocked: Boolean,
     /** Se pidió bloquear y el bloqueo falló (el reporte sí llegó). */
-    val blockFailed: Boolean = false,
+    val blockFailed: Boolean = false
 )
 
 data class ReportUiState(
@@ -31,7 +31,7 @@ data class ReportUiState(
     val alsoBlockTouched: Boolean = false,
     val submitting: Boolean = false,
     val error: AppError? = null,
-    val sent: ReportSent? = null,
+    val sent: ReportSent? = null
 ) {
     val canAttach: Boolean get() = target.chatId != null
     val canSubmit: Boolean get() = reason != null && !submitting && sent == null
@@ -42,16 +42,23 @@ data class ReportUiState(
  * `POST /v1/reports` (con `chatId` solo si se adjuntan los mensajes: el servidor guarda los últimos 20) y,
  * si se pidió, `POST /v1/blocks/{id}`. Ninguna de las dos depende del plan ni del cupo.
  */
-class ReportViewModel(target: SafetyTarget, private val repository: SafetyRepository) : ViewModel() {
+class ReportViewModel(target: SafetyTarget, private val repository: SafetyRepository) :
+    ViewModel() {
     private val _state = MutableStateFlow(ReportUiState(target))
     val state: StateFlow<ReportUiState> = _state.asStateFlow()
 
     fun selectReason(reason: ReportReason) {
-        _state.update { it.copy(
+        _state.update {
+            it.copy(
                 reason = reason,
                 error = null,
                 // Autolesión: no se bloquea por defecto a quien puede estar en riesgo (se corta el contacto).
-                alsoBlock = if (it.alsoBlockTouched) it.alsoBlock else reason != ReportReason.SELF_HARM,
+                alsoBlock = if (it.alsoBlockTouched) {
+                    it.alsoBlock
+                } else {
+                    reason !=
+                        ReportReason.SELF_HARM
+                }
             )
         }
     }
@@ -76,11 +83,13 @@ class ReportViewModel(target: SafetyTarget, private val repository: SafetyReposi
         viewModelScope.launch {
             val chatId = current.target.chatId.takeIf { current.attachMessages }
             when (val report = repository.report(current.target, reason, current.details, chatId)) {
-                is ApiResult.Failure -> _state.update { it.copy(submitting = false, error = report.error) }
+                is ApiResult.Failure -> _state.update {
+                    it.copy(submitting = false, error = report.error)
+                }
                 is ApiResult.Success -> {
                     val blockOk = if (current.alsoBlock) {
                         repository.block(
-                            current.target,
+                            current.target
                         ) is ApiResult.Success
                     } else {
                         false
@@ -92,8 +101,8 @@ class ReportViewModel(target: SafetyTarget, private val repository: SafetyReposi
                             ReportSent(
                                 helpResources = report.value.helpResources.orEmpty(),
                                 blocked = blockOk,
-                                blockFailed = current.alsoBlock && !blockOk,
-                            ),
+                                blockFailed = current.alsoBlock && !blockOk
+                            )
                         )
                     }
                 }

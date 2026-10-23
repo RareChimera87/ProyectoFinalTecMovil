@@ -54,7 +54,7 @@ data class SafetySheetActions(
     val onBlock: () -> Unit = {},
     val onConfirmBlock: () -> Unit = {},
     val onCancelBlock: () -> Unit = {},
-    val onDismiss: () -> Unit = {},
+    val onDismiss: () -> Unit = {}
 )
 
 /**
@@ -81,8 +81,8 @@ fun SafetySheetHost(target: SafetyTarget, onClosed: (CloseReason, SafetySheetSta
             onBlock = viewModel::requestBlock,
             onConfirmBlock = viewModel::confirmBlock,
             onCancelBlock = viewModel::cancelBlock,
-            onDismiss = viewModel::dismiss,
-        ),
+            onDismiss = viewModel::dismiss
+        )
     )
 }
 
@@ -91,11 +91,17 @@ fun SafetySheetHost(target: SafetyTarget, onClosed: (CloseReason, SafetySheetSta
 fun SafetySheet(state: SafetySheetState, actions: SafetySheetActions) {
     when (state.step) {
         SheetStep.Menu ->
-            ParcheUBottomSheet(onDismissRequest = actions.onDismiss, modifier = Modifier.testTag(SafetyTags.SHEET)) {
+            ParcheUBottomSheet(
+                onDismissRequest = actions.onDismiss,
+                modifier = Modifier.testTag(SafetyTags.SHEET)
+            ) {
                 SafetySheetBody(state, actions)
             }
         SheetStep.ConfirmBlock ->
-            ParcheUModalDialog(onDismissRequest = actions.onCancelBlock, dismissOnScrimClick = !state.busy) {
+            ParcheUModalDialog(
+                onDismissRequest = actions.onCancelBlock,
+                dismissOnScrimClick = !state.busy
+            ) {
                 BlockConfirmBody(state, actions)
             }
         SheetStep.Blocked ->
@@ -124,7 +130,7 @@ fun SafetySheetBody(state: SafetySheetState, actions: SafetySheetActions) {
                 icon = rememberVectorPainter(if (state.muted) UnmuteIcon else MuteIcon),
                 onClick = actions.onMute,
                 enabled = !state.busy,
-                modifier = Modifier.testTag(SafetyTags.MUTE),
+                modifier = Modifier.testTag(SafetyTags.MUTE)
             )
             HorizontalDivider(color = ParcheUTheme.colors.ln)
         }
@@ -140,7 +146,7 @@ fun SafetySheetBody(state: SafetySheetState, actions: SafetySheetActions) {
             onClick = actions.onReport,
             destructive = true,
             enabled = !state.busy,
-            modifier = Modifier.testTag(SafetyTags.REPORT),
+            modifier = Modifier.testTag(SafetyTags.REPORT)
         )
         HorizontalDivider(color = ParcheUTheme.colors.ln)
         SettingsRow(
@@ -150,13 +156,13 @@ fun SafetySheetBody(state: SafetySheetState, actions: SafetySheetActions) {
             onClick = actions.onBlock,
             destructive = true,
             enabled = !state.busy,
-            modifier = Modifier.testTag(SafetyTags.BLOCK),
+            modifier = Modifier.testTag(SafetyTags.BLOCK)
         )
         state.error?.let { ErrorText(it) }
         InfoNote(
             text = "Reportar y bloquear es gratis, siempre.",
             icon = rememberVectorPainter(ShieldIcon),
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 8.dp)
         )
     }
 }
@@ -165,26 +171,30 @@ fun SafetySheetBody(state: SafetySheetState, actions: SafetySheetActions) {
 @Composable
 fun BlockConfirmBody(state: SafetySheetState, actions: SafetySheetActions) {
     val name = state.target.shortName
-    Text("¿Bloquear a $name?", style = MaterialTheme.typography.titleLarge, color = ParcheUTheme.colors.tx)
+    Text(
+        "¿Bloquear a $name?",
+        style = MaterialTheme.typography.titleLarge,
+        color = ParcheUTheme.colors.tx
+    )
     Text(
         text =
         "No podrá escribirte, verte en su parche ni encontrarte en la fila. " +
             "Se cierran sus chats y no le avisamos.",
         style = MaterialTheme.typography.bodyMedium,
-        color = ParcheUTheme.colors.mu,
+        color = ParcheUTheme.colors.mu
     )
     state.error?.let { ErrorText(it) }
     PrimaryButton(
         text = if (state.busy) "Bloqueando…" else "Bloquear",
         onClick = actions.onConfirmBlock,
         enabled = !state.busy,
-        modifier = Modifier.fillMaxWidth().testTag(SafetyTags.CONFIRM_BLOCK),
+        modifier = Modifier.fillMaxWidth().testTag(SafetyTags.CONFIRM_BLOCK)
     )
     OutlineButton(
         text = "Cancelar",
         onClick = actions.onCancelBlock,
         enabled = !state.busy,
-        modifier = Modifier.fillMaxWidth().testTag(SafetyTags.CANCEL_BLOCK),
+        modifier = Modifier.fillMaxWidth().testTag(SafetyTags.CANCEL_BLOCK)
     )
 }
 
@@ -195,21 +205,22 @@ fun BlockedBody(target: SafetyTarget, onDone: () -> Unit) {
         rememberVectorPainter(CheckCircleIcon),
         contentDescription = null,
         tint = ParcheUTheme.colors.prt,
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(40.dp)
     )
     Text(
         "Bloqueaste a ${target.shortName}",
         style = MaterialTheme.typography.titleLarge,
-        color = ParcheUTheme.colors.tx,
+        color = ParcheUTheme.colors.tx
     )
     Text(
-        text = "Ya no podrá escribirte ni verte. Si quieres contarnos qué pasó, también puedes reportar.",
+        text = "Ya no podrá escribirte ni verte. Si quieres contarnos qué pasó, también " +
+            "puedes reportar.",
         style = MaterialTheme.typography.bodyMedium,
-        color = ParcheUTheme.colors.mu,
+        color = ParcheUTheme.colors.mu
     )
     PrimaryButton(
         text = "Entendido",
         onClick = onDone,
-        modifier = Modifier.fillMaxWidth().testTag(SafetyTags.BLOCKED_DONE),
+        modifier = Modifier.fillMaxWidth().testTag(SafetyTags.BLOCKED_DONE)
     )
 }

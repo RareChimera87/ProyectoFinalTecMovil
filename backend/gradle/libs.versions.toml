@@ -23,6 +23,8 @@ kotest = "6.2.6"
 testcontainers = "2.0.5"
 # E0.9: JUnit Jupiter (misma versión que trae Kotest) para el humo @Tag("vertex").
 junit = "5.13.4"
+# E3.5: ASM para leer los .class en el test de delegación (misma versión que ya llega transitiva).
+asm = "9.10.1"
 jib = "3.5.4"
 
 [libraries]
@@ -56,6 +58,7 @@ anthropic-java-vertex = { group = "com.anthropic", name = "anthropic-java-vertex
 anthropic-java-client-okhttp = { group = "com.anthropic", name = "anthropic-java-client-okhttp", version.ref = "anthropic" }
 google-cloud-tasks = { group = "com.google.cloud", name = "google-cloud-tasks", version.ref = "cloudTasks" }
 google-androidpublisher = { group = "com.google.apis", name = "google-api-services-androidpublisher", version.ref = "androidPublisher" }
+asm = { group = "org.ow2.asm", name = "asm", version.ref = "asm" }
 logback-classic = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
 logstash-logback-encoder = { group = "net.logstash.logback", name = "logstash-logback-encoder", version.ref = "logstashEncoder" }
 kotest-runner-junit5 = { group = "io.kotest", name = "kotest-runner-junit5", version.ref = "kotest" }

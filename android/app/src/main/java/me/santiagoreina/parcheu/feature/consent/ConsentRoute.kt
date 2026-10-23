@@ -16,7 +16,7 @@ fun ConsentRoute(
     @Suppress("UNUSED_PARAMETER") route: Consent,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: ConsentViewModel = koinViewModel(),
+    viewModel: ConsentViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) {
@@ -32,6 +32,6 @@ fun ConsentRoute(
         onBack = { navigator.back() },
         onAccept = viewModel::onAccept,
         onNotNow = viewModel::onNotNow,
-        modifier = modifier,
+        modifier = modifier
     )
 }

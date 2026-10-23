@@ -40,7 +40,7 @@ class ConsentTest {
 
     private class FakeConsentRepository(
         var result: ApiResult<Unit> = ApiResult.Success(Unit),
-        var revokeResult: ApiResult<Unit> = ApiResult.Success(Unit),
+        var revokeResult: ApiResult<Unit> = ApiResult.Success(Unit)
     ) : ConsentRepository {
         var grants = 0
         var revocations = 0
@@ -61,15 +61,19 @@ class ConsentTest {
         return ApiConsentRepository(
             retrofit.create(ConsentApi::class.java),
             retrofit.create(SessionApi::class.java),
-            ApiErrorMapper(),
+            ApiErrorMapper()
         )
     }
 
     private fun bodyOf(request: mockwebserver3.RecordedRequest) =
         Json.parseToJsonElement(request.body!!.utf8()).jsonObject
 
-    private fun enqueueSession() =
-        server.enqueue(MockResponse(code = 200, body = ContractJson.encodeToString(sessionDto(OnboardingStep.DONE))))
+    private fun enqueueSession() = server.enqueue(
+        MockResponse(
+            code = 200,
+            body = ContractJson.encodeToString(sessionDto(OnboardingStep.DONE))
+        )
+    )
 
     @Test
     fun acceptSendsAmistadAndEstudioWithTheCurrentLegalVersionAndNoPareja() = runTest {
@@ -77,9 +81,14 @@ class ConsentTest {
         val repo = ApiConsentRepository(
             retrofit.create(ConsentApi::class.java),
             retrofit.create(SessionApi::class.java),
-            ApiErrorMapper(),
+            ApiErrorMapper()
         )
-        server.enqueue(MockResponse(code = 200, body = ContractJson.encodeToString(sessionDto(OnboardingStep.DONE))))
+        server.enqueue(
+            MockResponse(
+                code = 200,
+                body = ContractJson.encodeToString(sessionDto(OnboardingStep.DONE))
+            )
+        )
         repeat(2) { server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) }
 
         assertEquals(ApiResult.Success(Unit), repo.grantOnboardingLearning())
@@ -92,10 +101,15 @@ class ConsentTest {
         }
         assertEquals(
             listOf(ConsentKind.CHAT_LEARNING_AMISTAD.name, ConsentKind.CHAT_LEARNING_ESTUDIO.name),
-            bodies.map { it.getValue("kind").jsonPrimitive.content },
+            bodies.map { it.getValue("kind").jsonPrimitive.content }
         )
         assertTrue(bodies.all { it.getValue("granted").jsonPrimitive.content == "true" })
-        assertTrue(bodies.all { it.getValue("textVersion").jsonPrimitive.content == TEST_LEGAL_VERSION })
+        assertTrue(
+            bodies.all {
+                it.getValue("textVersion").jsonPrimitive.content ==
+                    TEST_LEGAL_VERSION
+            }
+        )
         assertEquals(3, server.requestCount)
     }
 
@@ -106,7 +120,8 @@ class ConsentTest {
         server.enqueue(MockResponse(code = 200, body = """{"items":[]}"""))
         server.enqueue(MockResponse(code = 500, body = "{}"))
         server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) // revoca AMISTAD
-        server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) // revoca ESTUDIO (inocuo)
+        // revoca ESTUDIO (inocuo)
+        server.enqueue(MockResponse(code = 200, body = """{"items":[]}"""))
 
         assertTrue(repo.grantOnboardingLearning() is ApiResult.Failure)
 
@@ -115,10 +130,16 @@ class ConsentTest {
         assertEquals("true", amistad.getValue("granted").jsonPrimitive.content)
         server.takeRequest(1, TimeUnit.SECONDS) // ESTUDIO falla
         val revoke = bodyOf(server.takeRequest(1, TimeUnit.SECONDS)!!)
-        assertEquals(ConsentKind.CHAT_LEARNING_AMISTAD.name, revoke.getValue("kind").jsonPrimitive.content)
+        assertEquals(
+            ConsentKind.CHAT_LEARNING_AMISTAD.name,
+            revoke.getValue("kind").jsonPrimitive.content
+        )
         assertEquals("false", revoke.getValue("granted").jsonPrimitive.content)
         val revokeEstudio = bodyOf(server.takeRequest(1, TimeUnit.SECONDS)!!)
-        assertEquals(ConsentKind.CHAT_LEARNING_ESTUDIO.name, revokeEstudio.getValue("kind").jsonPrimitive.content)
+        assertEquals(
+            ConsentKind.CHAT_LEARNING_ESTUDIO.name,
+            revokeEstudio.getValue("kind").jsonPrimitive.content
+        )
         assertEquals(5, server.requestCount)
 
         // Ya no queda nada por revocar: 'Ahora no' no envía nada más.
@@ -143,7 +164,10 @@ class ConsentTest {
         assertEquals(ApiResult.Success(Unit), repo.revokePartialGrants())
 
         val revoke = bodyOf(server.takeRequest(1, TimeUnit.SECONDS)!!)
-        assertEquals(ConsentKind.CHAT_LEARNING_AMISTAD.name, revoke.getValue("kind").jsonPrimitive.content)
+        assertEquals(
+            ConsentKind.CHAT_LEARNING_AMISTAD.name,
+            revoke.getValue("kind").jsonPrimitive.content
+        )
         assertEquals("false", revoke.getValue("granted").jsonPrimitive.content)
         assertEquals(7, server.requestCount)
     }
@@ -152,18 +176,20 @@ class ConsentTest {
     fun grantConfirmedByServerButLostToTimeoutIsStillRevoked() = runTest {
         val retrofit = createRetrofit(
             server.url("/").toString(),
-            OkHttpClient.Builder().readTimeout(300, TimeUnit.MILLISECONDS).build(),
+            OkHttpClient.Builder().readTimeout(300, TimeUnit.MILLISECONDS).build()
         )
         val repo = ApiConsentRepository(
             retrofit.create(ConsentApi::class.java),
             retrofit.create(SessionApi::class.java),
-            ApiErrorMapper(),
+            ApiErrorMapper()
         )
         enqueueSession()
         server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) // AMISTAD
         // ESTUDIO: el servidor lo guarda pero la respuesta no llega a tiempo.
         server.enqueue(
-            MockResponse.Builder().code(200).body("""{"items":[]}""").headersDelay(2, TimeUnit.SECONDS).build(),
+            MockResponse.Builder().code(
+                200
+            ).body("""{"items":[]}""").headersDelay(2, TimeUnit.SECONDS).build()
         )
         server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) // revoca AMISTAD
         server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) // revoca ESTUDIO
@@ -174,7 +200,7 @@ class ConsentTest {
         val revoked = (1..2).map { bodyOf(server.takeRequest(2, TimeUnit.SECONDS)!!) }
         assertEquals(
             setOf(ConsentKind.CHAT_LEARNING_AMISTAD.name, ConsentKind.CHAT_LEARNING_ESTUDIO.name),
-            revoked.map { it.getValue("kind").jsonPrimitive.content }.toSet(),
+            revoked.map { it.getValue("kind").jsonPrimitive.content }.toSet()
         )
         assertTrue(revoked.all { it.getValue("granted").jsonPrimitive.content == "false" })
     }
@@ -185,8 +211,10 @@ class ConsentTest {
         enqueueSession()
         server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) // AMISTAD
         server.enqueue(MockResponse(code = 500, body = "{}")) // ESTUDIO falla
-        repeat(4) { server.enqueue(MockResponse(code = 500, body = "{}")) } // compensación y primer 'Ahora no'
-        repeat(2) { server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) } // reintento
+        // compensación y primer 'Ahora no'
+        repeat(4) { server.enqueue(MockResponse(code = 500, body = "{}")) }
+        // reintento
+        repeat(2) { server.enqueue(MockResponse(code = 200, body = """{"items":[]}""")) }
 
         assertTrue(repo.grantOnboardingLearning() is ApiResult.Failure)
         assertTrue(repo.revokePartialGrants() is ApiResult.Failure)

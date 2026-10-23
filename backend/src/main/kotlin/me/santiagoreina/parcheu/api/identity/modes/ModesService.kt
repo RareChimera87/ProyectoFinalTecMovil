@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.identity.modes
 
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.NewConsent
+import me.santiagoreina.parcheu.api.identity.consent.LearningConsentPolicy
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.AgeRequired
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
@@ -14,8 +15,8 @@ import me.santiagoreina.parcheu.contract.UpdateModes
  * `PUT /v1/me/modes` (E2.5, B2/B3 y H3). Reemplaza el estado de los tres modos: un modo ausente en
  * el mapa queda apagado. Reglas:
  * - Debe quedar al menos un modo activo (400 VALIDATION), igual que el botón Continuar de B2.
- * - Encender Pareja (pasar de apagado a encendido) exige `age_verified_at` (lo fija E2.6 en B0;
- *   si falta, 403 AGE_REQUIRED) y la confirmación explícita de B3 en la misma petición
+ * - Encender Pareja (pasar de apagado a encendido) exige `age_verified_at` (lo fija E2.6 en B0) y
+ *   18 años cumplidos según la `birth_date` guardada en el servidor; si no, 403 AGE_REQUIRED y la confirmación explícita de B3 en la misma petición
  *   (`parejaConfirmed = true`; si falta, 400 VALIDATION). La confirmación queda en
  *   `users.pareja_confirmed_at`. Mantener Pareja encendido no vuelve a pedirla.
  * - Apagar Pareja revoca `CHAT_LEARNING_PAREJA` (si estaba concedido) en la misma transacción: ese
@@ -32,7 +33,7 @@ class ModesService(private val identity: IdentityService, private val repo: Mode
         val now = identity.clock.instant()
         val turningOnPareja = target.getValue(Mode.PAREJA) && current[Mode.PAREJA] != true
         if (turningOnPareja) {
-            if (user.ageVerifiedAt == null || user.underageAt != null) {
+            if (!LearningConsentPolicy.isVerifiedAdult(user, now)) {
                 throw AgeRequired("Verifica tu fecha de nacimiento antes de activar Pareja")
             }
             if (!request.parejaConfirmed) {

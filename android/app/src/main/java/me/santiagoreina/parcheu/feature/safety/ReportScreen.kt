@@ -45,7 +45,7 @@ data class ReportActions(
     val onAlsoBlockChange: (Boolean) -> Unit = {},
     val onSubmit: () -> Unit = {},
     val onDone: () -> Unit = {},
-    val onCall: (String) -> Unit = {},
+    val onCall: (String) -> Unit = {}
 )
 
 /** H2 (mockup 22b) o, ya enviado, la confirmación con las líneas de ayuda si corresponde. */
@@ -68,14 +68,14 @@ private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modif
             title = "Reportar a $name",
             navigationIcon = rememberVectorPainter(CloseIcon),
             navigationContentDescription = "Cerrar",
-            onNavigationClick = actions.onClose,
+            onNavigationClick = actions.onClose
         )
         Column(
             Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(REPORT_PROMISE, style = MaterialTheme.typography.bodyMedium, color = colors.mu)
             val shape = RoundedCornerShape(20.dp)
@@ -84,7 +84,7 @@ private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modif
                     .fillMaxWidth()
                     .clip(shape)
                     .background(colors.s1, shape)
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
             ) {
                 ReportReasons.forEachIndexed { index, option ->
                     if (index > 0) HorizontalDivider(color = colors.ln)
@@ -93,7 +93,7 @@ private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modif
                         selected = state.reason == option.reason,
                         onClick = { actions.onReason(option.reason) },
                         enabled = !state.submitting,
-                        modifier = Modifier.testTag(SafetyTags.REASON_PREFIX + option.reason.name),
+                        modifier = Modifier.testTag(SafetyTags.REASON_PREFIX + option.reason.name)
                     )
                 }
             }
@@ -104,7 +104,7 @@ private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modif
                 style = ParcheUTextFieldStyle.TextArea,
                 enabled = !state.submitting,
                 supportingText = "${state.details.length} / $MAX_REPORT_DETAILS",
-                modifier = Modifier.testTag(SafetyTags.DETAILS),
+                modifier = Modifier.testTag(SafetyTags.DETAILS)
             )
             if (state.canAttach) {
                 CheckRow(
@@ -112,7 +112,7 @@ private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modif
                     checked = state.attachMessages,
                     onChange = actions.onAttachChange,
                     enabled = !state.submitting,
-                    tag = SafetyTags.ATTACH,
+                    tag = SafetyTags.ATTACH
                 )
             }
             CheckRow(
@@ -120,7 +120,7 @@ private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modif
                 checked = state.alsoBlock,
                 onChange = actions.onAlsoBlockChange,
                 enabled = !state.submitting,
-                tag = SafetyTags.ALSO_BLOCK,
+                tag = SafetyTags.ALSO_BLOCK
             )
             state.error?.let { ErrorText(it) }
         }
@@ -132,27 +132,41 @@ private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modif
             Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp)
-                .testTag(SafetyTags.SUBMIT),
+                .testTag(SafetyTags.SUBMIT)
         )
     }
 }
 
 @Composable
-private fun CheckRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean, tag: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun CheckRow(
+    label: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    enabled: Boolean,
+    tag: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         ParcheUCheckbox(
             checked = checked,
             onCheckedChange = onChange,
             contentDescription = label,
             enabled = enabled,
-            modifier = Modifier.testTag(tag),
+            modifier = Modifier.testTag(tag)
         )
         Text(label, style = MaterialTheme.typography.bodyMedium, color = ParcheUTheme.colors.tx)
     }
 }
 
 @Composable
-private fun ReportSentScreen(target: SafetyTarget, sent: ReportSent, actions: ReportActions, modifier: Modifier) {
+private fun ReportSentScreen(
+    target: SafetyTarget,
+    sent: ReportSent,
+    actions: ReportActions,
+    modifier: Modifier
+) {
     val colors = ParcheUTheme.colors
     Column(modifier.fillMaxSize().background(colors.bg)) {
         Column(
@@ -160,35 +174,46 @@ private fun ReportSentScreen(target: SafetyTarget, sent: ReportSent, actions: Re
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Icon(
                 rememberVectorPainter(CheckCircleIcon),
                 contentDescription = null,
                 tint = colors.prt,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(48.dp)
             )
-            Text("Recibimos tu reporte", style = MaterialTheme.typography.headlineSmall, color = colors.tx)
             Text(
-                "Gracias por avisarnos. Lo revisamos lo antes posible y no le diremos quién lo envió.",
+                "Recibimos tu reporte",
+                style = MaterialTheme.typography.headlineSmall,
+                color = colors.tx
+            )
+            Text(
+                "Gracias por avisarnos. Lo revisamos lo antes posible y no le diremos quién " +
+                    "lo envió.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = colors.mu,
+                color = colors.mu
             )
             when {
                 sent.blocked ->
                     Text(
                         "Bloqueaste a ${target.shortName}: ya no podrá escribirte ni verte.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = colors.tx,
+                        color = colors.tx
                     )
                 sent.blockFailed ->
                     Text(
-                        "No pudimos bloquear a ${target.shortName}. Inténtalo de nuevo desde el menú del chat.",
+                        "No pudimos bloquear a ${target.shortName}. Inténtalo de nuevo " +
+                            "desde el menú del chat.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = colors.coralt,
+                        color = colors.coralt
                     )
             }
-            if (sent.helpResources.isNotEmpty()) HelpResourcesCard(sent.helpResources, actions.onCall)
+            if (sent.helpResources.isNotEmpty()) {
+                HelpResourcesCard(
+                    sent.helpResources,
+                    actions.onCall
+                )
+            }
         }
         PrimaryButton(
             text = "Listo",
@@ -197,14 +222,18 @@ private fun ReportSentScreen(target: SafetyTarget, sent: ReportSent, actions: Re
             Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp)
-                .testTag(SafetyTags.SENT_DONE),
+                .testTag(SafetyTags.SENT_DONE)
         )
     }
 }
 
 /** Líneas de ayuda (ADR-0026): tocar una abre el marcador con el número, nunca llama sola. */
 @Composable
-fun HelpResourcesCard(resources: List<HelpResource>, onCall: (String) -> Unit, modifier: Modifier = Modifier) {
+fun HelpResourcesCard(
+    resources: List<HelpResource>,
+    onCall: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val colors = ParcheUTheme.colors
     val shape = RoundedCornerShape(16.dp)
     Column(
@@ -214,12 +243,13 @@ fun HelpResourcesCard(resources: List<HelpResource>, onCall: (String) -> Unit, m
             .background(colors.prc, shape)
             .padding(16.dp)
             .testTag(SafetyTags.HELP),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
-            "No estás solo. Si piensas en hacerte daño o alguien corre peligro, habla ahora con alguien:",
+            "No estás solo. Si piensas en hacerte daño o alguien corre peligro, habla ahora " +
+                "con alguien:",
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-            color = colors.onprc,
+            color = colors.onprc
         )
         resources.forEach { resource ->
             Row(
@@ -231,19 +261,21 @@ fun HelpResourcesCard(resources: List<HelpResource>, onCall: (String) -> Unit, m
                     }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Icon(
                     rememberVectorPainter(CallIcon),
                     contentDescription = null,
                     tint = colors.onprc,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(22.dp)
                 )
                 Column(Modifier.weight(1f)) {
                     Text(
                         "${resource.name} · ${resource.phone}",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = colors.onprc,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = colors.onprc
                     )
                     resource.description?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onprc)

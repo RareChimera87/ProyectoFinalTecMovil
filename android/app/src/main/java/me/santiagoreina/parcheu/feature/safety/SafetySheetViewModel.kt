@@ -22,7 +22,7 @@ enum class SheetStep {
     Blocked,
 
     /** La hoja se cerró; [SafetySheetState.closedBy] dice por qué. */
-    Closed,
+    Closed
 }
 
 /** Por qué se cerró la hoja: la anfitriona reacciona (abrir H2, salir del chat, actualizar el silencio). */
@@ -34,7 +34,7 @@ data class SafetySheetState(
     val muted: Boolean = target.muted,
     val busy: Boolean = false,
     val error: AppError? = null,
-    val closedBy: CloseReason? = null,
+    val closedBy: CloseReason? = null
 )
 
 /**
@@ -42,7 +42,8 @@ data class SafetySheetState(
  * y cierra la hoja sin bloquear; bloquear pide confirmación y luego llama `POST /v1/blocks/{id}`. Reportar
  * solo cierra la hoja: la pantalla anfitriona abre H2 (ruta `Report`).
  */
-class SafetySheetViewModel(target: SafetyTarget, private val repository: SafetyRepository) : ViewModel() {
+class SafetySheetViewModel(target: SafetyTarget, private val repository: SafetyRepository) :
+    ViewModel() {
     private val _state = MutableStateFlow(SafetySheetState(target))
     val state: StateFlow<SafetySheetState> = _state.asStateFlow()
 
@@ -56,16 +57,25 @@ class SafetySheetViewModel(target: SafetyTarget, private val repository: SafetyR
         viewModelScope.launch {
             when (val result = repository.setMuted(chatId, target)) {
                 is ApiResult.Success -> _state.update {
-                    it.copy(busy = false, muted = target, step = SheetStep.Closed, closedBy = CloseReason.Muted)
+                    it.copy(
+                        busy = false,
+                        muted = target,
+                        step = SheetStep.Closed,
+                        closedBy = CloseReason.Muted
+                    )
                 }
-                is ApiResult.Failure -> _state.update { it.copy(busy = false, error = result.error) }
+                is ApiResult.Failure -> _state.update {
+                    it.copy(busy = false, error = result.error)
+                }
             }
         }
     }
 
     /** "Reportar a …": la hoja se cierra y la anfitriona navega a H2. */
     fun report() {
-        _state.update { it.copy(step = SheetStep.Closed, error = null, closedBy = CloseReason.Report) }
+        _state.update {
+            it.copy(step = SheetStep.Closed, error = null, closedBy = CloseReason.Report)
+        }
     }
 
     fun requestBlock() {
@@ -82,8 +92,12 @@ class SafetySheetViewModel(target: SafetyTarget, private val repository: SafetyR
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             when (val result = repository.block(current.target)) {
-                is ApiResult.Success -> _state.update { it.copy(busy = false, step = SheetStep.Blocked) }
-                is ApiResult.Failure -> _state.update { it.copy(busy = false, error = result.error) }
+                is ApiResult.Success -> _state.update {
+                    it.copy(busy = false, step = SheetStep.Blocked)
+                }
+                is ApiResult.Failure -> _state.update {
+                    it.copy(busy = false, error = result.error)
+                }
             }
         }
     }
@@ -91,7 +105,13 @@ class SafetySheetViewModel(target: SafetyTarget, private val repository: SafetyR
     /** Cerrar la hoja (scrim, atrás) o, tras bloquear, "Entendido". */
     fun dismiss() {
         _state.update {
-            val reason = if (it.step == SheetStep.Blocked) CloseReason.Blocked else CloseReason.Dismissed
+            val reason = if (it.step ==
+                SheetStep.Blocked
+            ) {
+                CloseReason.Blocked
+            } else {
+                CloseReason.Dismissed
+            }
             it.copy(step = SheetStep.Closed, busy = false, closedBy = reason)
         }
     }

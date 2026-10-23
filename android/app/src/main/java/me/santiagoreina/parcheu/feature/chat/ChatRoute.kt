@@ -48,7 +48,7 @@ fun ChatRoute(route: Chat, navigator: AppNavigator, modifier: Modifier = Modifie
                 onRetryLive = viewModel::retryLive,
                 onPrivacy = { navigator.navigate(PrivacySettings) },
                 onDismissConsent = viewModel::dismissConsentBanner,
-                onRetryLoad = viewModel::retryLoad,
+                onRetryLoad = viewModel::retryLoad
             )
         }
     ChatScreen(state = state, actions = actions, modifier = modifier)

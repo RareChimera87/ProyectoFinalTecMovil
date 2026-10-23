@@ -29,7 +29,7 @@ fun ChatListRoute(route: ChatList, navigator: AppNavigator, modifier: Modifier =
             navigator.navigate(routeForChat(chatId, type))
         },
         onRetry = viewModel::retry,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 

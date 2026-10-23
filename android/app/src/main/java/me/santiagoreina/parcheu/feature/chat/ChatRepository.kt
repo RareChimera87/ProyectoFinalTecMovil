@@ -42,7 +42,7 @@ interface ChatRepository {
 class FirestoreChatRepository(
     private val api: ChatApi,
     private val authSource: FirebaseAuthSource,
-    private val errorMapper: ApiErrorMapper,
+    private val errorMapper: ApiErrorMapper
 ) : ChatRepository {
     override val currentUid: String?
         get() = authSource.authOrNull()?.currentUser?.uid
@@ -86,7 +86,7 @@ internal fun DocumentSnapshot.toRemoteMessage(): RemoteMessage = RemoteMessage(
     system = getBoolean("system") ?: false,
     text = getString("text").orEmpty(),
     createdAt = getTimestamp("createdAt")?.toKotlinInstant(),
-    hidden = getBoolean("hidden") ?: false,
+    hidden = getBoolean("hidden") ?: false
 )
 
 private fun Timestamp.toKotlinInstant(): Instant = Instant.fromEpochSeconds(seconds, nanoseconds)

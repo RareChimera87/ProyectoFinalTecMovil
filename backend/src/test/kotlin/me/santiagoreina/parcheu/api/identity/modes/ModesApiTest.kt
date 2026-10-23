@@ -61,7 +61,7 @@ class ModesApiTest : FunSpec({
     fun repoWithAna(ageVerified: Boolean): InMemoryIdentityRepository = InMemoryIdentityRepository().apply {
         seedAcceptedUser("ana", TEST_LEGAL_VERSION)
         if (ageVerified) {
-            replace(user("ana").copy(birthDate = LocalDate.of(2005, 3, 14), ageVerifiedAt = FIXED_CLOCK.instant(), displayName = "Ana", universityId = 1))
+            replace(user("ana").copy(birthDate = LocalDate.of(2005, 3, 14), ageVerifiedAt = FIXED_CLOCK.instant()))
         }
     }
 
@@ -69,6 +69,22 @@ class ModesApiTest : FunSpec({
 
     test("activar Pareja sin age_verified_at responde 403 AGE_REQUIRED y no cambia nada") {
         val repo = repoWithAna(ageVerified = false)
+        testApplication {
+            val client = startApp(testContainer(repo = repo))
+            val response = client.putModes("ana", UpdateModes(pareja, parejaConfirmed = true))
+            response.status shouldBe HttpStatusCode.Forbidden
+            response.error() shouldBe ErrorCode.AGE_REQUIRED
+            repo.enabledModes[repo.user("ana").id].orEmpty().shouldBeEmpty()
+            repo.user("ana").parejaConfirmedAt.shouldBeNull()
+        }
+    }
+
+    test("activar Pareja con age_verified_at pero una birth_date de menos de 18 años responde 403 AGE_REQUIRED") {
+        val repo = InMemoryIdentityRepository().apply {
+            seedAcceptedUser("ana", TEST_LEGAL_VERSION)
+            // Cumple 18 mañana (2026-10-26) según el reloj fijo: el servidor no debe dejarla activar Pareja.
+            replace(user("ana").copy(birthDate = LocalDate.of(2008, 10, 26), ageVerifiedAt = FIXED_CLOCK.instant()))
+        }
         testApplication {
             val client = startApp(testContainer(repo = repo))
             val response = client.putModes("ana", UpdateModes(pareja, parejaConfirmed = true))
@@ -123,7 +139,11 @@ class ModesApiTest : FunSpec({
     }
 
     test("guardar modos completa el paso NEEDS_MODES del onboarding") {
-        val repo = repoWithAna(ageVerified = true).apply { twins += user("ana").id }
+        // B0 completo (E2.6): edad verificada y universidad.
+        val repo = repoWithAna(ageVerified = true).apply {
+            replace(user("ana").copy(universityId = 1))
+            twins += user("ana").id
+        }
         testApplication {
             val client = startApp(testContainer(repo = repo))
             client.post("/v1/session") { auth("ana") }.body<SessionDto>().onboarding shouldBe OnboardingStep.NEEDS_MODES

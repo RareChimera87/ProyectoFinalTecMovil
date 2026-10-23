@@ -59,9 +59,9 @@ class ReportScreenTest {
             ReportUiState(
                 FakeSafetyRepository.laura,
                 reason = ReportReason.SELF_HARM,
-                sent = ReportSent(FakeSafetyRepository.HELP, blocked = true),
+                sent = ReportSent(FakeSafetyRepository.HELP, blocked = true)
             ),
-            ReportActions(onCall = { dialed = it }),
+            ReportActions(onCall = { dialed = it })
         )
         composeRule.onNodeWithText("Recibimos tu reporte").assertIsDisplayed()
         composeRule.onNodeWithTag(SafetyTags.HELP).assertIsDisplayed()
@@ -71,7 +71,12 @@ class ReportScreenTest {
 
     @Test
     fun sentWithoutHelpResourcesHasNoHelpCard() {
-        show(ReportUiState(FakeSafetyRepository.laura, sent = ReportSent(emptyList(), blocked = false)))
+        show(
+            ReportUiState(
+                FakeSafetyRepository.laura,
+                sent = ReportSent(emptyList(), blocked = false)
+            )
+        )
         composeRule.onNodeWithText("Recibimos tu reporte").assertIsDisplayed()
         composeRule.onNodeWithTag(SafetyTags.HELP).assertDoesNotExist()
     }

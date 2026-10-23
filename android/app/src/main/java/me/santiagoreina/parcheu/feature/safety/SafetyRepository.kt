@@ -20,7 +20,7 @@ interface SafetyRepository {
         target: SafetyTarget,
         reason: ReportReason,
         details: String?,
-        chatId: String?,
+        chatId: String?
     ): ApiResult<ReportCreated>
 
     suspend fun block(target: SafetyTarget): ApiResult<Unit>
@@ -32,9 +32,14 @@ interface SafetyRepository {
     suspend fun setMuted(chatId: String, muted: Boolean): ApiResult<Unit>
 }
 
-class SafetyRepositoryImpl(private val api: SafetyApi, private val errorMapper: ApiErrorMapper) : SafetyRepository {
-    override suspend fun report(target: SafetyTarget, reason: ReportReason, details: String?, chatId: String?) =
-        apiCall(errorMapper) { api.report(target.toRequest(reason, details, chatId)) }
+class SafetyRepositoryImpl(private val api: SafetyApi, private val errorMapper: ApiErrorMapper) :
+    SafetyRepository {
+    override suspend fun report(
+        target: SafetyTarget,
+        reason: ReportReason,
+        details: String?,
+        chatId: String?
+    ) = apiCall(errorMapper) { api.report(target.toRequest(reason, details, chatId)) }
 
     override suspend fun block(target: SafetyTarget) = apiCall(errorMapper) { api.block(target.id) }
 
@@ -47,11 +52,12 @@ class SafetyRepositoryImpl(private val api: SafetyApi, private val errorMapper: 
 }
 
 /** Cuerpo de `POST /v1/reports`: un solo objetivo, el uuid o el `anonId` según cómo se ve a la persona. */
-internal fun SafetyTarget.toRequest(reason: ReportReason, details: String?, chatId: String?) = ReportRequest(
-    kind = ReportKind.USER,
-    targetUserId = id.takeUnless { anonymous },
-    anonId = id.takeIf { anonymous },
-    chatId = chatId,
-    reason = reason,
-    details = details?.trim()?.takeIf { it.isNotEmpty() },
-)
+internal fun SafetyTarget.toRequest(reason: ReportReason, details: String?, chatId: String?) =
+    ReportRequest(
+        kind = ReportKind.USER,
+        targetUserId = id.takeUnless { anonymous },
+        anonId = id.takeIf { anonymous },
+        chatId = chatId,
+        reason = reason,
+        details = details?.trim()?.takeIf { it.isNotEmpty() }
+    )

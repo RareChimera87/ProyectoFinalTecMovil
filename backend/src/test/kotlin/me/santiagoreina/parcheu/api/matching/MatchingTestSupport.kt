@@ -74,5 +74,11 @@ class MatchFixture(
         return id
     }
 
+    /** Bloqueo visible para la fila y para el motor de simulación, como en Postgres (una sola tabla `blocks`). */
+    fun block(blocker: UUID, blocked: UUID) {
+        matchRepo.block(blocker, blocked)
+        simRepo.block(blocker, blocked)
+    }
+
     fun plus(userId: UUID) = entitlements.grantPlus(userId, 30, clock.instant())
 }

@@ -83,7 +83,13 @@ internal fun rememberTimeLabel(instant: Instant?): String {
 
 /** Avatar de F9 y de la lista: iniciales sobre violeta (como G0) o silueta si la persona es anónima. */
 @Composable
-internal fun ChatAvatar(initials: String, name: String, anonymous: Boolean, size: Dp, modifier: Modifier = Modifier) {
+internal fun ChatAvatar(
+    initials: String,
+    name: String,
+    anonymous: Boolean,
+    size: Dp,
+    modifier: Modifier = Modifier
+) {
     val colors = ParcheUTheme.colors
     if (anonymous) {
         Box(
@@ -94,13 +100,13 @@ internal fun ChatAvatar(initials: String, name: String, anonymous: Boolean, size
                 .background(colors.s2, CircleShape)
                 .border(1.5.dp, colors.prt, CircleShape)
                 .clearAndSetSemantics { contentDescription = "Alguien" },
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 painter = rememberVectorPainter(PersonIcon),
                 contentDescription = null,
                 tint = colors.prt,
-                modifier = Modifier.size(size * 0.55f),
+                modifier = Modifier.size(size * 0.55f)
             )
         }
     } else {
@@ -113,14 +119,14 @@ internal fun ChatAvatar(initials: String, name: String, anonymous: Boolean, size
                 .clip(CircleShape)
                 .background(palette.fill, CircleShape)
                 .clearAndSetSemantics { contentDescription = name },
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = initials,
                 color = onAvatarColor(alpha, colors.isDark),
                 fontSize = (size.value * 0.38f).sp,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
+                maxLines = 1
             )
         }
     }
@@ -131,7 +137,11 @@ internal fun ChatAvatar(initials: String, name: String, anonymous: Boolean, size
  * atenúa; si falló muestra "No se envió" y "Reintentar". Un mensaje oculto muestra [HIDDEN_MESSAGE_TEXT].
  */
 @Composable
-internal fun ChatBubble(message: ChatMessageUi, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ChatBubble(
+    message: ChatMessageUi,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val colors = ParcheUTheme.colors
     val mine = message.mine
     val container = if (mine) colors.primary else colors.s2
@@ -141,13 +151,13 @@ internal fun ChatBubble(message: ChatMessageUi, onRetry: () -> Unit, modifier: M
             topStart = 20.dp,
             topEnd = 20.dp,
             bottomEnd = if (mine) 6.dp else 20.dp,
-            bottomStart = if (mine) 20.dp else 6.dp,
+            bottomStart = if (mine) 20.dp else 6.dp
         )
     val pending = message.status is MessageStatus.Pending
     val time = rememberTimeLabel(message.createdAt)
     Row(
         modifier = modifier.fillMaxWidth().testTag(ChatTags.bubble(message.key)),
-        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
+        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start
     ) {
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
             Column(
@@ -158,13 +168,13 @@ internal fun ChatBubble(message: ChatMessageUi, onRetry: () -> Unit, modifier: M
                     .clip(shape)
                     .background(container, shape)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = message.displayText,
                     style = MaterialTheme.typography.bodyMedium,
                     fontStyle = if (message.hidden) FontStyle.Italic else FontStyle.Normal,
-                    color = if (message.hidden) content.copy(alpha = 0.8f) else content,
+                    color = if (message.hidden) content.copy(alpha = 0.8f) else content
                 )
                 val caption =
                     when {
@@ -175,7 +185,7 @@ internal fun ChatBubble(message: ChatMessageUi, onRetry: () -> Unit, modifier: M
                     Text(
                         text = caption,
                         style = MaterialTheme.typography.labelSmall,
-                        color = content.copy(alpha = 0.72f),
+                        color = content.copy(alpha = 0.72f)
                     )
                 }
             }
@@ -185,13 +195,13 @@ internal fun ChatBubble(message: ChatMessageUi, onRetry: () -> Unit, modifier: M
                     Text(
                         text = "No se envió",
                         style = MaterialTheme.typography.labelSmall,
-                        color = colors.coralt,
+                        color = colors.coralt
                     )
                     ParcheUTextButton(
                         text = "Reintentar",
                         onClick = onRetry,
                         size = ParcheUButtonSize.Small,
-                        modifier = Modifier.testTag(ChatTags.RETRY),
+                        modifier = Modifier.testTag(ChatTags.RETRY)
                     )
                 }
             }
@@ -207,13 +217,17 @@ internal fun SystemMessage(text: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.bodySmall,
         color = ParcheUTheme.colors.mu,
         modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp),
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center
     )
 }
 
 /** Banner de consentimiento (F9): tonal prc / onprc, radio 16, con enlace a los ajustes de privacidad. */
 @Composable
-internal fun ConsentBanner(onSettings: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ConsentBanner(
+    onSettings: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val colors = ParcheUTheme.colors
     val shape = RoundedCornerShape(16.dp)
     Column(
@@ -224,7 +238,7 @@ internal fun ConsentBanner(onSettings: () -> Unit, onDismiss: () -> Unit, modifi
             .clip(shape)
             .background(colors.prc, shape)
             .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 4.dp)
-            .testTag(ChatTags.CONSENT_BANNER),
+            .testTag(ChatTags.CONSENT_BANNER)
     ) {
         Text(
             text =
@@ -232,18 +246,18 @@ internal fun ConsentBanner(onSettings: () -> Unit, onDismiss: () -> Unit, modifi
                 "Puedes cambiarlo cuando quieras en Privacidad.",
             style = MaterialTheme.typography.bodySmall,
             color = colors.onprc,
-            modifier = Modifier.padding(end = 8.dp),
+            modifier = Modifier.padding(end = 8.dp)
         )
         Row {
             ParcheUTextButton(
                 text = "Ir a Privacidad",
                 onClick = onSettings,
-                size = ParcheUButtonSize.Small,
+                size = ParcheUButtonSize.Small
             )
             ParcheUTextButton(
                 text = "Entendido",
                 onClick = onDismiss,
-                size = ParcheUButtonSize.Small,
+                size = ParcheUButtonSize.Small
             )
         }
     }
@@ -258,13 +272,13 @@ internal fun ChatInputBar(
     canSend: Boolean,
     enabled: Boolean,
     placeholder: String,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     val colors = ParcheUTheme.colors
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
             modifier =
@@ -274,7 +288,7 @@ internal fun ChatInputBar(
                 .background(colors.s2, CircleShape)
                 .border(1.dp, colors.ln, CircleShape)
                 .padding(horizontal = 18.dp),
-            contentAlignment = Alignment.CenterStart,
+            contentAlignment = Alignment.CenterStart
         ) {
             BasicTextField(
                 value = value,
@@ -293,18 +307,18 @@ internal fun ChatInputBar(
                 decorationBox = { inner ->
                     Box(
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
-                        contentAlignment = Alignment.CenterStart,
+                        contentAlignment = Alignment.CenterStart
                     ) {
                         if (value.isEmpty()) {
                             Text(
                                 text = placeholder,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = colors.mu,
+                                color = colors.mu
                             )
                         }
                         inner()
                     }
-                },
+                }
             )
         }
         Box(
@@ -316,13 +330,13 @@ internal fun ChatInputBar(
                 .alpha(if (canSend) 1f else 0.38f)
                 .testTag(ChatTags.SEND)
                 .clickable(enabled = canSend, role = Role.Button, onClick = onSend),
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 painter = rememberVectorPainter(SendIcon),
                 contentDescription = "Enviar",
                 tint = colors.onPrimary,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(22.dp)
             )
         }
     }

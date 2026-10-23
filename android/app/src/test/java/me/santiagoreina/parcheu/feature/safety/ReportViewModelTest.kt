@@ -37,10 +37,10 @@ class ReportViewModelTest {
                     FakeSafetyRepository.laura,
                     ReportReason.HARASSMENT,
                     "  me insultó  ",
-                    "chat-1",
-                ),
+                    "chat-1"
+                )
             ),
-            repo.reports,
+            repo.reports
         )
         assertEquals(listOf(FakeSafetyRepository.laura), repo.blocks)
         val sent = vm.state.value.sent!!
@@ -81,7 +81,12 @@ class ReportViewModelTest {
         val vm = ReportViewModel(FakeSafetyRepository.laura, repo)
         vm.selectReason(ReportReason.SELF_HARM)
         vm.submit()
-        assertEquals(listOf("192", "106", "123"), vm.state.value.sent!!.helpResources.map { it.phone })
+        assertEquals(
+            listOf("192", "106", "123"),
+            vm.state.value.sent!!.helpResources.map {
+                it.phone
+            }
+        )
     }
 
     @Test
@@ -119,7 +124,7 @@ class ReportViewModelTest {
         val request = SafetyTarget(
             "a_xyz",
             "Alguien de la UIS",
-            anonymous = true,
+            anonymous = true
         ).toRequest(ReportReason.OTHER, " ", "c1")
         assertEquals("a_xyz", request.anonId)
         assertNull(request.targetUserId)

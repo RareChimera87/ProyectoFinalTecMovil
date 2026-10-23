@@ -20,7 +20,8 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * (E4.1, probadas en `QuotaApiTest`).
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
-    // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest y E2.6 ProfileApiTest.
+    // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest
+    // y E2.6 (catálogo y edad) ProfileApiTest.
     "identity" to listOf(
         HttpMethod.Delete to "/v1/me", HttpMethod.Get to "/v1/me/export",
         HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",

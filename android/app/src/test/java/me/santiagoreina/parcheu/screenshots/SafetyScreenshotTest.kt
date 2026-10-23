@@ -52,10 +52,15 @@ class SafetyScreenshotTest(private val dark: Boolean) {
             HelpResource(
                 "Línea 192, opción 4",
                 "192",
-                "Línea nacional de salud mental del Ministerio de Salud. Marca 192 y elige la opción 4.",
+                "Línea nacional de salud mental del Ministerio de Salud. Marca 192 y elige " +
+                    "la opción 4."
             ),
             HelpResource("Línea 106", "106", "Línea de escucha y orientación en crisis emocional."),
-            HelpResource("Emergencias 123", "123", "Si tú o alguien más está en peligro inmediato."),
+            HelpResource(
+                "Emergencias 123",
+                "123",
+                "Si tú o alguien más está en peligro inmediato."
+            )
         )
 
     private fun capture(name: String, content: @Composable () -> Unit) {
@@ -63,8 +68,8 @@ class SafetyScreenshotTest(private val dark: Boolean) {
         composeRule.onRoot().captureRoboImage(
             filePath = "src/test/screenshots/safety/${name}_$theme.png",
             roborazziOptions = RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
-            ),
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+            )
         )
     }
 
@@ -72,30 +77,45 @@ class SafetyScreenshotTest(private val dark: Boolean) {
     @Composable
     private fun OverScrim(alignment: Alignment, content: @Composable () -> Unit) {
         Box(
-            Modifier.fillMaxSize().background(ParcheUTheme.colors.bg).background(ParcheUTheme.colors.scrim),
-            contentAlignment = alignment,
+            Modifier.fillMaxSize().background(
+                ParcheUTheme.colors.bg
+            ).background(ParcheUTheme.colors.scrim),
+            contentAlignment = alignment
         ) { content() }
     }
 
     @Test
     fun h1Sheet() = capture("h1_hoja") {
         OverScrim(Alignment.BottomCenter) {
-            ParcheUBottomSheetContent { SafetySheetBody(SafetySheetState(laura), SafetySheetActions()) }
+            ParcheUBottomSheetContent {
+                SafetySheetBody(SafetySheetState(laura), SafetySheetActions())
+            }
         }
     }
 
     @Test
     fun h1SheetAnonymousMuted() = capture("h1_hoja_anonima_silenciada") {
         OverScrim(Alignment.BottomCenter) {
-            val anon = SafetyTarget("a_x", "Alguien de la UIS", anonymous = true, chatId = "c2", muted = true)
-            ParcheUBottomSheetContent { SafetySheetBody(SafetySheetState(anon), SafetySheetActions()) }
+            val anon =
+                SafetyTarget(
+                    "a_x",
+                    "Alguien de la UIS",
+                    anonymous = true,
+                    chatId = "c2",
+                    muted = true
+                )
+            ParcheUBottomSheetContent {
+                SafetySheetBody(SafetySheetState(anon), SafetySheetActions())
+            }
         }
     }
 
     @Test
     fun blockConfirmation() = capture("confirmar_bloqueo") {
         OverScrim(Alignment.Center) {
-            ParcheUModalDialogContent { BlockConfirmBody(SafetySheetState(laura), SafetySheetActions()) }
+            ParcheUModalDialogContent {
+                BlockConfirmBody(SafetySheetState(laura), SafetySheetActions())
+            }
         }
     }
 
@@ -112,16 +132,24 @@ class SafetyScreenshotTest(private val dark: Boolean) {
     @Test
     fun reportSent() = capture("reporte_enviado") {
         ReportScreen(
-            ReportUiState(laura, reason = ReportReason.HARASSMENT, sent = ReportSent(emptyList(), blocked = true)),
-            ReportActions(),
+            ReportUiState(
+                laura,
+                reason = ReportReason.HARASSMENT,
+                sent = ReportSent(emptyList(), blocked = true)
+            ),
+            ReportActions()
         )
     }
 
     @Test
     fun reportSentWithHelpResources() = capture("reporte_enviado_recursos_de_ayuda") {
         ReportScreen(
-            ReportUiState(laura, reason = ReportReason.SELF_HARM, sent = ReportSent(help, blocked = false)),
-            ReportActions(),
+            ReportUiState(
+                laura,
+                reason = ReportReason.SELF_HARM,
+                sent = ReportSent(help, blocked = false)
+            ),
+            ReportActions()
         )
     }
 

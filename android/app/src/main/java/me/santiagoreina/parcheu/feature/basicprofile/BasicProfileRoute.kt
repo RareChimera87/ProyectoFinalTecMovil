@@ -34,7 +34,8 @@ fun BasicProfileRoute(
     route: BasicProfile,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: BasicProfileViewModel = koinViewModel(key = "basicProfile:${route.edit}") { parametersOf(route.edit) },
+    viewModel: BasicProfileViewModel =
+        koinViewModel(key = "basicProfile:${route.edit}") { parametersOf(route.edit) }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var datePickerOpen by rememberSaveable { mutableStateOf(false) }
@@ -59,7 +60,7 @@ fun BasicProfileRoute(
         onSubmit = viewModel::onSubmit,
         onRetryLoad = viewModel::onRetryLoad,
         onBack = { navigator.back() },
-        modifier = modifier,
+        modifier = modifier
     )
 
     val form = (state as? BasicProfileUiState.Form)
@@ -70,7 +71,7 @@ fun BasicProfileRoute(
                 datePickerOpen = false
                 if (millis != null) viewModel.onBirthDateSelected(BirthDates.fromUtcMillis(millis))
             },
-            onDismiss = { datePickerOpen = false },
+            onDismiss = { datePickerOpen = false }
         )
     }
     if (universitySheetOpen && form != null) {
@@ -81,7 +82,7 @@ fun BasicProfileRoute(
                 onSelect = {
                     viewModel.onUniversitySelected(it)
                     universitySheetOpen = false
-                },
+                }
             )
         }
     }
@@ -90,28 +91,37 @@ fun BasicProfileRoute(
 /** Selector de fecha: no deja elegir días futuros y abre en un año de alguien de 18 a 20 años. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BirthDatePickerDialog(initialMillis: Long?, onConfirm: (Long?) -> Unit, onDismiss: () -> Unit) {
+private fun BirthDatePickerDialog(
+    initialMillis: Long?,
+    onConfirm: (Long?) -> Unit,
+    onDismiss: () -> Unit
+) {
     val now = remember { System.currentTimeMillis() }
     val pickerState =
         rememberDatePickerState(
             initialSelectedDateMillis = initialMillis,
-            initialDisplayedMonthMillis = initialMillis ?: BirthDates.yearsAgoUtcMillis(now, years = 19),
+            initialDisplayedMonthMillis =
+            initialMillis ?: BirthDates.yearsAgoUtcMillis(now, years = 19),
             yearRange = 1900..BirthDates.fromUtcMillis(now).year,
             selectableDates =
             object : SelectableDates {
                 override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis <= now
-            },
+            }
         )
     val colors = ParcheUTheme.colors
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onConfirm(pickerState.selectedDateMillis) }) { Text("Aceptar", color = colors.prt) }
+            TextButton(onClick = {
+                onConfirm(pickerState.selectedDateMillis)
+            }) { Text("Aceptar", color = colors.prt) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancelar", color = colors.prt) }
-        },
+        }
     ) {
-        DatePicker(state = pickerState, title = { Text("Fecha de nacimiento", modifier = Modifier) })
+        DatePicker(state = pickerState, title = {
+            Text("Fecha de nacimiento", modifier = Modifier)
+        })
     }
 }

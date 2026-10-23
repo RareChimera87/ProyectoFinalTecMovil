@@ -66,7 +66,7 @@ class SplashViewModelTest {
             FakeAuthRepository(signedIn = true).apply {
                 nextSessions(
                     ApiResult.Failure(AppError.Network),
-                    ApiResult.Success(sessionDto(OnboardingStep.DONE)),
+                    ApiResult.Success(sessionDto(OnboardingStep.DONE))
                 )
             }
         val viewModel = SplashViewModel(repository)

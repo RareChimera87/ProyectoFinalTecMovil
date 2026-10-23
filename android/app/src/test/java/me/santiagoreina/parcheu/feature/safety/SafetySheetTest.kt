@@ -42,8 +42,8 @@ class SafetySheetTest {
                         onBlock = vm::requestBlock,
                         onConfirmBlock = vm::confirmBlock,
                         onCancelBlock = vm::cancelBlock,
-                        onDismiss = vm::dismiss,
-                    ),
+                        onDismiss = vm::dismiss
+                    )
                 )
             }
         }

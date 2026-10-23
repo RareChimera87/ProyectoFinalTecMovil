@@ -33,7 +33,7 @@ class MatchTicketFirestoreEmulatorTest : FunSpec({
                 getTimestamp("expiresAt") shouldBe Timestamp.ofTimeSecondsAndNanos(
                     f.clock.now.plus(MatchingRules.TICKET_TTL).epochSecond, 0,
                 )
-                data!!.keys shouldBe setOf("status", "mode", "matchId", "expiresAt")
+                data!!.keys shouldBe setOf("status", "mode", "matchId", "expiresAt", "version")
             }
             waiting.status shouldBe TicketStatus.WAITING
 

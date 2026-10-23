@@ -19,6 +19,6 @@ internal fun ErrorText(error: AppError) {
     Text(
         text = safetyErrorMessage(error),
         style = MaterialTheme.typography.bodySmall,
-        color = ParcheUTheme.colors.coralt,
+        color = ParcheUTheme.colors.coralt
     )
 }

@@ -20,11 +20,12 @@ fun Report.toTarget(): SafetyTarget = SafetyTarget(
     id = userId,
     name = name ?: if (anonymous) "Alguien" else "esta persona",
     anonymous = anonymous,
-    chatId = chatId,
+    chatId = chatId
 )
 
 /** Ruta para la anfitriona: abrir H2 para [target]. */
-fun SafetyTarget.toReportRoute(): Report = Report(userId = id, chatId = chatId, name = name, anonymous = anonymous)
+fun SafetyTarget.toReportRoute(): Report =
+    Report(userId = id, chatId = chatId, name = name, anonymous = anonymous)
 
 /**
  * H2 y la confirmación. Al terminar vuelve atrás; si además se bloqueó a la persona de un chat, sale
@@ -60,8 +61,8 @@ fun ReportFlowRoute(route: Report, navigator: AppNavigator, modifier: Modifier =
                 } catch (_: ActivityNotFoundException) {
                     // Sin marcador (tablet sin teléfono): el número sigue visible en pantalla.
                 }
-            },
+            }
         ),
-        modifier = modifier,
+        modifier = modifier
     )
 }

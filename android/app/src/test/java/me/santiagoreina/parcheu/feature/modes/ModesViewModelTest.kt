@@ -19,7 +19,10 @@ class ModesViewModelTest {
     @get:Rule
     val mainRule = MainDispatcherRule()
 
-    private fun viewModel(repo: FakeModesRepository = FakeModesRepository()) = ModesViewModel(repo) { TODAY }
+    private fun viewModel(repo: FakeModesRepository = FakeModesRepository()) =
+        ModesViewModel(repo) {
+            TODAY
+        }
 
     @Test
     fun startsWithEveryModeOffAndContinueDisabled() {
@@ -70,8 +73,10 @@ class ModesViewModelTest {
             assertTrue(awaitItem() is ModesEffect.Saved)
         }
         assertEquals(
-            listOf(mapOf(Mode.AMISTAD to false, Mode.PAREJA to true, Mode.ESTUDIO to false) to true),
-            repo.updates,
+            listOf(
+                mapOf(Mode.AMISTAD to false, Mode.PAREJA to true, Mode.ESTUDIO to false) to true
+            ),
+            repo.updates
         )
     }
 

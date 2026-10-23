@@ -52,8 +52,8 @@ class LockedOverlayTest {
         composeRule.onRoot().captureRoboImage(
             filePath = "src/test/screenshots/compound/locked_overlay_${name}_$suffix.png",
             roborazziOptions = RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
-            ),
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+            )
         )
     }
 
@@ -95,7 +95,7 @@ class LockedOverlayTest {
             if (blur.exists() && scrim.exists()) {
                 assertFalse(
                     "Las capturas $theme de sdk30 y sdk35 son idénticas",
-                    blur.readBytes().contentEquals(scrim.readBytes()),
+                    blur.readBytes().contentEquals(scrim.readBytes())
                 )
             }
         }
@@ -112,7 +112,7 @@ class LockedOverlayTest {
     @Test
     fun laApiSoloAceptaUnPlaceholderDecorativo() {
         val method = Class.forName(
-            "me.santiagoreina.parcheu.designsystem.components.compound.LockedKt",
+            "me.santiagoreina.parcheu.designsystem.components.compound.LockedKt"
         )
             .declaredMethods
             .single { it.name == "LockedOverlay" && it.parameterTypes.size >= 6 }
@@ -123,7 +123,7 @@ class LockedOverlayTest {
             androidx.compose.ui.Modifier::class.java,
             LockedPlaceholder::class.java,
             androidx.compose.runtime.Composer::class.java,
-            Int::class.javaPrimitiveType!!,
+            Int::class.javaPrimitiveType!!
         )
         method.parameterTypes.forEach {
             assertTrue("LockedOverlay no debe aceptar ${it.name}", it in allowed)

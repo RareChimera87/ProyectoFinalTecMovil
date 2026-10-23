@@ -23,7 +23,7 @@ data class RemoteMessage(
     val system: Boolean,
     val text: String,
     val createdAt: Instant?,
-    val hidden: Boolean,
+    val hidden: Boolean
 )
 
 /** Estado de envío de un mensaje propio. */
@@ -46,7 +46,7 @@ data class ChatMessageUi(
     val system: Boolean = false,
     val hidden: Boolean = false,
     val createdAt: Instant? = null,
-    val status: MessageStatus = MessageStatus.Sent,
+    val status: MessageStatus = MessageStatus.Sent
 ) {
     /** Lo que ve la persona: los mensajes ocultos nunca exponen su texto. */
     val displayText: String get() = if (hidden) HIDDEN_MESSAGE_TEXT else text
@@ -63,11 +63,11 @@ data class ChatHeader(
     val muted: Boolean,
     val closed: Boolean,
     /** `anonId` con el que se ve a la otra persona en un chat anónimo (escenario, F3). */
-    val otherAnonId: String? = null,
+    val otherAnonId: String? = null
 ) {
     /**
-     * H1 necesita un objetivo: el uuid de la otra persona o, si es anónima, su `anonId` (el servidor lo
-     * resuelve entre las personas del chat, E8.1). Nunca se manda un `anonId` como si fuera un uuid.
+     * H1 necesita un objetivo: el uuid de la otra persona o, si es anónima, su `anonId` (el servidor
+     * lo resuelve entre las personas del chat, E8.1). Nunca se manda un `anonId` como si fuera un uuid.
      */
     val canReport: Boolean get() = otherUserId != null || otherAnonId != null
 }
@@ -82,7 +82,7 @@ internal fun ChatSummary.toHeader(): ChatHeader = ChatHeader(
     mode = mode,
     muted = muted,
     closed = status == ChatStatus.CLOSED,
-    otherAnonId = other.anonId.takeIf { other.id == null },
+    otherAnonId = other.anonId.takeIf { other.id == null }
 )
 
 /** Falla del listener de Firestore ya traducida a [error]; la lanza el repositorio y la lee el ViewModel. */

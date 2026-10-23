@@ -9,7 +9,12 @@ import me.santiagoreina.parcheu.core.network.ApiResult
 
 /** Repositorio de seguridad en memoria que registra cada llamada. */
 class FakeSafetyRepository : SafetyRepository {
-    data class ReportCall(val target: SafetyTarget, val reason: ReportReason, val details: String?, val chatId: String?)
+    data class ReportCall(
+        val target: SafetyTarget,
+        val reason: ReportReason,
+        val details: String?,
+        val chatId: String?
+    )
 
     val reports = mutableListOf<ReportCall>()
     val blocks = mutableListOf<SafetyTarget>()
@@ -24,11 +29,20 @@ class FakeSafetyRepository : SafetyRepository {
         target: SafetyTarget,
         reason: ReportReason,
         details: String?,
-        chatId: String?,
+        chatId: String?
     ): ApiResult<ReportCreated> {
         reports += ReportCall(target, reason, details, chatId)
         return reportResult ?: ApiResult.Success(
-            ReportCreated("r-${reports.size}", if (reason == ReportReason.SELF_HARM) HELP else emptyList()),
+            ReportCreated(
+                "r-${reports.size}",
+                if (reason ==
+                    ReportReason.SELF_HARM
+                ) {
+                    HELP
+                } else {
+                    emptyList()
+                }
+            )
         )
     }
 
@@ -55,10 +69,18 @@ class FakeSafetyRepository : SafetyRepository {
                 HelpResource(
                     "Línea 192, opción 4",
                     "192",
-                    "Línea nacional de salud mental. Marca 192 y elige la opción 4.",
+                    "Línea nacional de salud mental. Marca 192 y elige la opción 4."
                 ),
-                HelpResource("Línea 106", "106", "Línea de escucha y orientación en crisis emocional."),
-                HelpResource("Emergencias 123", "123", "Si tú o alguien más está en peligro inmediato."),
+                HelpResource(
+                    "Línea 106",
+                    "106",
+                    "Línea de escucha y orientación en crisis emocional."
+                ),
+                HelpResource(
+                    "Emergencias 123",
+                    "123",
+                    "Si tú o alguien más está en peligro inmediato."
+                )
             )
 
         val failure = ApiResult.Failure(AppError.Network)

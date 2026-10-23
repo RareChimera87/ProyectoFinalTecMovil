@@ -40,14 +40,18 @@ object UnderageTags {
  * ofrece 'Borrar mi cuenta'. No tiene botón atrás: no hay a dónde volver.
  */
 @Composable
-fun UnderageScreen(onDeleteAccount: () -> Unit, onSignOut: () -> Unit, modifier: Modifier = Modifier) {
+fun UnderageScreen(
+    onDeleteAccount: () -> Unit,
+    onSignOut: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val colors = ParcheUTheme.colors
     val spacing = ParcheUTheme.spacing
     Column(
         modifier
             .fillMaxSize()
             .background(colors.bg)
-            .testTag(UnderageTags.SCREEN),
+            .testTag(UnderageTags.SCREEN)
     ) {
         Column(
             modifier = Modifier
@@ -55,7 +59,10 @@ fun UnderageScreen(onDeleteAccount: () -> Unit, onSignOut: () -> Unit, modifier:
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = spacing.gutterWide),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(spacing.blockGap, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(
+                spacing.blockGap,
+                Alignment.CenterVertically
+            )
         ) {
             Spacer(Modifier.height(48.dp))
             Box(
@@ -63,7 +70,7 @@ fun UnderageScreen(onDeleteAccount: () -> Unit, onSignOut: () -> Unit, modifier:
                     .size(72.dp)
                     .clip(CircleShape)
                     .background(colors.prc),
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.Center
             ) {
                 Text("18+", style = MaterialTheme.typography.titleLarge, color = colors.onprc)
             }
@@ -72,34 +79,35 @@ fun UnderageScreen(onDeleteAccount: () -> Unit, onSignOut: () -> Unit, modifier:
                 style = MaterialTheme.typography.headlineSmall,
                 color = colors.tx,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.semantics { heading() },
+                modifier = Modifier.semantics { heading() }
             )
             Text(
-                text = "Según la fecha de nacimiento que registraste, todavía no tienes 18 años. Por eso tu cuenta " +
-                    "quedó bloqueada: no puedes crear tu gemelo, ver tu parche ni conocer gente.",
+                text = "Según la fecha de nacimiento que registraste, todavía no tienes 18 años. " +
+                    "Por eso tu cuenta quedó bloqueada: no puedes crear tu gemelo, ver tu parche " +
+                    "ni conocer gente.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.mu,
-                textAlign = TextAlign.Center,
+                textAlign = TextAlign.Center
             )
             InfoNote(
-                text = "La fecha de nacimiento no se puede cambiar. Puedes borrar tu cuenta y todos tus datos " +
-                    "cuando quieras.",
+                text = "La fecha de nacimiento no se puede cambiar. Puedes borrar tu cuenta y " +
+                    "todos tus datos cuando quieras."
             )
         }
         Column(
             modifier = Modifier.fillMaxWidth().padding(spacing.footer),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlineButton(
                 text = "Borrar mi cuenta",
                 onClick = onDeleteAccount,
-                modifier = Modifier.fillMaxWidth().testTag(UnderageTags.DELETE),
+                modifier = Modifier.fillMaxWidth().testTag(UnderageTags.DELETE)
             )
             ParcheUTextButton(
                 text = "Cerrar sesión",
                 onClick = onSignOut,
-                modifier = Modifier.testTag(UnderageTags.SIGN_OUT),
+                modifier = Modifier.testTag(UnderageTags.SIGN_OUT)
             )
         }
     }

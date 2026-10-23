@@ -13,7 +13,7 @@ import me.santiagoreina.parcheu.core.network.ApiResult
 /** Repositorio de chat en memoria. Los envíos esperan a [completeSend] para poder ver el estado pendiente. */
 class FakeChatRepository(
     override val currentUid: String? = ME,
-    var chats: ApiResult<List<ChatSummary>> = ApiResult.Success(emptyList()),
+    var chats: ApiResult<List<ChatSummary>> = ApiResult.Success(emptyList())
 ) : ChatRepository {
     val messages = MutableStateFlow<List<RemoteMessage>>(emptyList())
     val sent = mutableListOf<Triple<String, String, String>>()
@@ -34,7 +34,11 @@ class FakeChatRepository(
 
     override suspend fun chats() = chats
 
-    override suspend fun send(chatId: String, clientId: String, text: String): ApiResult<MessageDto> {
+    override suspend fun send(
+        chatId: String,
+        clientId: String,
+        text: String
+    ): ApiResult<MessageDto> {
         sent += Triple(chatId, clientId, text)
         autoComplete?.let { return it }
         return nextSend.await().also { nextSend = CompletableDeferred() }
@@ -58,7 +62,7 @@ class FakeChatRepository(
             id = id,
             senderId = "internal",
             text = text,
-            createdAt = Instant.fromEpochSeconds(1_000),
+            createdAt = Instant.fromEpochSeconds(1_000)
         )
 
         val failure = ApiResult.Failure(AppError.Network)

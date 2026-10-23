@@ -18,6 +18,7 @@ import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
+import me.santiagoreina.parcheu.api.simulation.TwinProfile
 import me.santiagoreina.parcheu.contract.AnonProfile
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.MatchChoice
@@ -288,6 +289,115 @@ class MatchingServiceTest : FunSpec({
         f.matchRepo.match(UUID.fromString(id))!!.chatId shouldBe chat.id
     }
 
+    test("un bloqueo posterior al match impide el chat SCENARIO: el match vence, se devuelve el cupo y se avisa") {
+        val f = MatchFixture(flags = MatchingFlags(demoUsersEnabled = true, scenarioModeEnabled = true))
+        val (ana, beto, id) = f.pair()
+        f.service.choose(ana, id, MatchChoice.SCENARIO)
+        f.matchRepo.block(ana, beto)
+        // Beto ya no puede ni ver ni elegir el match bloqueado: se cierra sin crear chat.
+        shouldThrow<NotFound> { f.service.choose(beto, id, MatchChoice.SCENARIO) }
+        f.matchRepo.scenarioChats().shouldBeEmpty()
+        f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
+        // Ana bloqueó: no recupera el cupo; Beto, que no causó el cierre, sí.
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe true
+        f.notifier.sent.count { it.notification.kind == NotificationKinds.MATCH_EXPIRED } shouldBe 2
+    }
+
+    test("el bloqueo justo antes de crear el chat SCENARIO (carrera con la elección) deja EXPIRED y sin chat") {
+        val f = MatchFixture(flags = MatchingFlags(demoUsersEnabled = true, scenarioModeEnabled = true))
+        val (ana, beto, id) = f.pair()
+        f.service.choose(ana, id, MatchChoice.SCENARIO)
+        // El bloqueo ocurre entre la lectura del match y la resolución: no pasa por `visible`.
+        val record = f.matchRepo.match(UUID.fromString(id))!!
+        f.matchRepo.block(beto, ana)
+        f.matchRepo.updateMatch(record.id) { it.copy(choiceB = MatchChoice.SCENARIO, status = MatchStatus.SCENARIO) }
+        f.matchRepo.createScenarioChat(record.id, f.clock.instant(), allowPremium = false) shouldBe ScenarioChatOutcome.Unavailable(setOf(beto))
+        f.matchRepo.scenarioChats().shouldBeEmpty()
+        f.matchRepo.match(record.id)!!.status shouldBe MatchStatus.EXPIRED
+    }
+
+    test("GET de un match pendiente con bloqueo posterior responde 404, lo cierra y devuelve el cupo solo a quien fue bloqueado") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.matchRepo.block(ana, beto)
+        shouldThrow<NotFound> { f.service.match(beto, id) }
+        f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe true
+        // Una segunda lectura ve el match ya cerrado y no vuelve a avisar ni a devolver cupo.
+        f.service.match(ana, id).status shouldBe MatchStatus.EXPIRED
+        f.notifier.sent.count { it.notification.kind == NotificationKinds.MATCH_EXPIRED } shouldBe 2
+    }
+
+    test("quien bloquea y abre el match no recupera el cupo: no se puede saltar el límite diario") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.matchRepo.block(ana, beto)
+        // Quien bloqueó es quien abre el match: 404, se cierra y su cupo sigue gastado.
+        shouldThrow<NotFound> { f.service.match(ana, id) }
+        f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe true
+    }
+
+    test("si se bloquean entre sí nadie recupera el cupo") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.matchRepo.block(ana, beto)
+        f.matchRepo.block(beto, ana)
+        shouldThrow<NotFound> { f.service.match(ana, id) }
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe false
+    }
+
+    test("si una persona se borra o la suspenden el cupo vuelve solo a la otra") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.matchRepo.addPerson(f.matchRepo.person(beto)!!.copy(suspendedUntil = f.clock.instant().plusSeconds(3600)))
+        shouldThrow<NotFound> { f.service.match(ana, id) }
+        f.usage.refunded("$id:$ana") shouldBe true
+        f.usage.refunded("$id:$beto") shouldBe false
+    }
+
+    test("una publicación WAITING atrasada no pisa a MATCHED en matchTickets (versión monótona)") {
+        val f = MatchFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        f.service.enqueue(ana, Mode.AMISTAD)
+        val staleWaiting = f.mirror.last("uid-ana")!!
+        staleWaiting.status shouldBe TicketStatus.WAITING
+        f.service.enqueue(beto, Mode.AMISTAD).status shouldBe TicketStatus.MATCHED
+        f.mirror.last("uid-ana")!!.status shouldBe TicketStatus.MATCHED
+        // La escritura WAITING de Ana llega tarde: el espejo la descarta.
+        f.mirror.publish(staleWaiting)
+        f.mirror.last("uid-ana")!!.status shouldBe TicketStatus.MATCHED
+    }
+
+    test("publicar relee el ticket: si el emparejamiento ocurre mientras se escribe WAITING, lo último que queda es MATCHED") {
+        lateinit var f: MatchFixture
+        var anaId: UUID? = null
+        var betoId: UUID? = null
+        var racing = false
+        val inner = RecordingMatchTicketMirror()
+        // Al publicar WAITING de Ana, Beto entra y se empareja antes de que la escritura de Ana termine.
+        val racy = object : MatchTicketMirror by inner {
+            override suspend fun publish(doc: TicketMirrorDoc) {
+                if (doc.firebaseUid == "uid-ana" && doc.status == TicketStatus.WAITING && !racing) {
+                    racing = true
+                    f.service.enqueue(betoId!!, Mode.AMISTAD)
+                }
+                inner.publish(doc)
+            }
+        }
+        f = MatchFixture(mirrorOverride = racy)
+        anaId = f.person("ana")
+        betoId = f.person("beto")
+        f.service.enqueue(anaId, Mode.AMISTAD)
+        inner.last("uid-ana")!!.status shouldBe TicketStatus.MATCHED
+        inner.last("uid-beto")!!.status shouldBe TicketStatus.MATCHED
+    }
+
     test("con la bandera apagada elegir SCENARIO es 400 VALIDATION y la tarjeta no está disponible") {
         val f = MatchFixture()
         val (ana, _, id) = f.pair()
@@ -377,15 +487,43 @@ class MatchingServiceTest : FunSpec({
         shouldThrow<Conflict> { f.service.enqueue(ana, Mode.ESTUDIO) }
     }
 
-    test("si la simulación no se puede crear por un error definitivo el match se cierra y se devuelve el cupo") {
+    test("un bloqueo posterior hace fallar la SIMULATION: el match se cierra y el cupo vuelve solo a quien no bloqueó") {
+        val f = MatchFixture(flags = MatchingFlags(demoUsersEnabled = true, scenarioModeEnabled = true))
+        val (ana, beto, id) = f.pair()
+        // Beto elige SCENARIO; Ana bloquea a Beto y nadie más abre el match. Al vencer decide_by el barrido
+        // lo resuelve como SIMULATION y crearla falla (BLOCKED) sin pasar por la comprobación de `visible`.
+        f.service.choose(beto, id, MatchChoice.SCENARIO)
+        f.block(ana, beto)
+        f.clock.now = f.clock.now.plus(MatchingRules.DECIDE_WINDOW).plusSeconds(1)
+        f.service.sweep()
+        f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
+        f.simRepo.all().shouldBeEmpty()
+        // Ana bloqueó: no recupera el cupo; Beto, que no causó el cierre, sí.
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe true
+    }
+
+    test("si la simulación falla sin culpable (gemelo no listo) el match se cierra y el cupo vuelve a las dos") {
         val f = MatchFixture()
         val (ana, beto, id) = f.pair()
-        // Un bloqueo posterior al match hace fallar la creación de la simulación (BLOCKED).
-        f.simRepo.block(ana, beto)
+        f.simRepo.putTwin(TwinProfile(beto, 1, List(6) { 0.5 }, "Persona de beto", personaReady = false))
         f.service.choose(ana, id, MatchChoice.SIMULATION)
         f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
         f.usage.refunded("$id:$ana") shouldBe true
         f.usage.refunded("$id:$beto") shouldBe true
+    }
+
+    test("si vence sin que nadie lo abra no se devuelve nada, aunque después haya un bloqueo y se consulte") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.clock.now = f.clock.now.plus(MatchingRules.DECIDE_WINDOW).plusSeconds(1)
+        // El bloqueo llega después del vencimiento pero antes de que alguien consulte (o pase el barrido).
+        f.block(ana, beto)
+        f.service.match(beto, id).status shouldBe MatchStatus.EXPIRED
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe false
+        f.service.match(ana, id).status shouldBe MatchStatus.EXPIRED
+        f.usage.refunded("$id:$beto") shouldBe false
     }
 
     test("AnonProfile no contiene nombre, foto, carrera ni id interno") {
