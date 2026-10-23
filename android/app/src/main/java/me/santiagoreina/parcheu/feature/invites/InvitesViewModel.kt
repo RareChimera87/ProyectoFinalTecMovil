@@ -152,9 +152,11 @@ class InvitesViewModel(
                         val other = result.value.other.label
                         val mode = current.mode.label()
                         val text = when (result.value.status) {
+                            // El servidor responde PENDING también cuando el dueño no tiene ese modo
+                            // (no revela sus modos) y entonces no le avisa: el texto no promete el aviso.
                             RedeemStatus.PENDING ->
-                                "Listo: le avisamos a $other. Cuando acepte, quedan " +
-                                    "conectados en $mode."
+                                "Listo: si $other también tiene $mode activo, le llega tu " +
+                                    "solicitud y quedan conectados cuando acepte."
                             RedeemStatus.CONNECTED -> "Ya estás conectado con $other en $mode."
                         }
                         state.copy(

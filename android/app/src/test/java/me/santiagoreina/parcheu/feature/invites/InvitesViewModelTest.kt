@@ -99,6 +99,8 @@ class InvitesViewModelTest {
         assertFalse(state.message!!.isError)
         assertTrue(state.message!!.text.contains("Sebastián"))
         assertTrue(state.message!!.text.contains("Estudio"))
+        // No promete un aviso: si el dueño no tiene el modo, el servidor no le avisa.
+        assertFalse(state.message!!.text.contains("avisamos"))
     }
 
     @Test
