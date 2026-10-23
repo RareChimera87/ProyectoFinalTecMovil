@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.graph
 
+import me.santiagoreina.parcheu.api.home.HomeSuggestions
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
 import java.util.UUID
@@ -112,7 +113,10 @@ interface ThirdPartyView {
  * [registered], o está pero no tiene sonda en la suite de invariantes, el build falla.
  */
 object ThirdPartyViews {
-    val registered: Set<KClass<out ThirdPartyView>> = setOf()
+    val registered: Set<KClass<out ThirdPartyView>> = setOf(
+        // Sugerencias de Inicio (E4.7): el conteo de amigos en común lee aristas del candidato.
+        HomeSuggestions::class,
+    )
 
     fun names(): Set<String> = registered.mapNotNull { it.simpleName }.toSet()
 }

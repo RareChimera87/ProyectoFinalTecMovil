@@ -19,7 +19,11 @@ import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
+import me.santiagoreina.parcheu.api.home.ExposedUnreadCounter
 import me.santiagoreina.parcheu.api.home.HomeRoutes
+import me.santiagoreina.parcheu.api.home.HomeService
+import me.santiagoreina.parcheu.api.home.HomeSuggestions
+import me.santiagoreina.parcheu.api.home.UnreadCounter
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
@@ -110,8 +114,10 @@ class AppContainer(
      * solo [fromConfig] cablea Postgres.
      */
     val safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
+    /** No leídas de la campana de Inicio (E4.7). Por defecto sin base: 0; [fromConfig] cuenta en Postgres. */
+    val unread: UnreadCounter = UnreadCounter.NONE,
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, unread),
 ) {
     companion object {
         /**
@@ -166,7 +172,7 @@ class AppContainer(
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
-                matching = matching, safety = safety,
+                matching = matching, safety = safety, unread = ExposedUnreadCounter(database),
             )
         }
 
@@ -209,6 +215,7 @@ fun allDomains(
     simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
     matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
     safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
+    unread: UnreadCounter = UnreadCounter.NONE,
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile),
     TwinRoutes(twin),
@@ -223,5 +230,15 @@ fun allDomains(
     BillingRoutes(),
     SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
     AdminRoutes(),
-    HomeRoutes(),
+    // Inicio (E4.7): agregador de cupos, simulaciones, sugerencias del grafo y no leídas.
+    // Las sugerencias solo ofrecen modos activos para los dos, como exige SimulationService.create.
+    HomeRoutes(HomeService(quota.service, simulation.service, homeSuggestions(graph, simulation), unread)) { firebase ->
+        identity.requireUser(firebase).id
+    },
 )
+
+/** Sugerencias de Inicio con los modos activos leídos de `user_modes` (vía el repositorio de simulaciones). */
+private fun homeSuggestions(graph: GraphModule, simulation: SimulationModule) =
+    HomeSuggestions(graph.repository, graph.policy) { userId ->
+        simulation.repository.participant(userId)?.takeIf { !it.deleted }?.activeModes.orEmpty()
+    }
