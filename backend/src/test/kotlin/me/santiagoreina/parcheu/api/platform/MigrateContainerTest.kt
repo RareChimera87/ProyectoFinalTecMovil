@@ -11,7 +11,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer
 class MigrateContainerTest : FunSpec({
     val enabled = System.getProperty("sinContenedores") == null
 
-    test("migrate conecta a Postgres 16 y no falla sin migraciones").config(enabled = enabled) {
+    test("migrate conecta a Postgres 16 y aplica las migraciones del classpath (V1 y V2, E0.4)").config(enabled = enabled) {
         PostgreSQLContainer("postgres:16-alpine").use { postgres ->
             postgres.start()
             val config = DbConfig(
@@ -22,6 +22,8 @@ class MigrateContainerTest : FunSpec({
                 jdbcUrl = postgres.jdbcUrl,
             )
             createDataSource(config, maxPoolSize = 2).use { ds ->
+                // E0.4 trae V1__esquema.sql y V2__semillas.sql; una segunda corrida no aplica nada.
+                runMigrations(ds) shouldBe 2
                 runMigrations(ds) shouldBe 0
                 ds.connection.use { it.createStatement().executeQuery("select 1").next() shouldBe true }
             }

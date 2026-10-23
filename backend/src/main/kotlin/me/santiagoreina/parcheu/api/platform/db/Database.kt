@@ -3,7 +3,9 @@ package me.santiagoreina.parcheu.api.platform.db
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import me.santiagoreina.parcheu.api.platform.config.DbConfig
+import me.santiagoreina.parcheu.api.platform.config.Env
 import org.flywaydb.core.Flyway
+import org.jetbrains.exposed.v1.jdbc.Database
 import javax.sql.DataSource
 
 /**
@@ -29,17 +31,28 @@ fun createDataSource(config: DbConfig, maxPoolSize: Int = 10): HikariDataSource 
     return HikariDataSource(hikari)
 }
 
+/** Ubicación de las migraciones: `V1__esquema.sql`, `V2__semillas.sql` y luego `V<yyyyMMdd>_<HHmm>__<descripcion>.sql`. */
+const val MIGRATIONS_LOCATION = "classpath:db/migration"
+
 /**
- * Aplica las migraciones Flyway de `classpath:db/migration` (las agrega E0.4). `outOfOrder` está
- * activo según la arquitectura (§3.2); sin migraciones no hace nada.
+ * Aplica las migraciones Flyway (ADR-0011). [outOfOrder] va activo en todos los entornos, prod
+ * incluido: el check de orden solo corre al abrir o actualizar un PR hacia dev, y con auto-merge
+ * dos PR paralelos pueden mezclarse en orden inverso. Con `outOfOrder=false` esa migración tardía
+ * haría fallar la validación de Flyway y cortaría el despliegue; con `true` se aplica igual que en dev.
  */
-fun runMigrations(dataSource: DataSource): Int {
+fun runMigrations(
+    dataSource: DataSource,
+    outOfOrder: Boolean = true,
+    location: String = MIGRATIONS_LOCATION,
+): Int {
     val result = Flyway.configure()
         .dataSource(dataSource)
-        .locations("classpath:db/migration")
-        .failOnMissingLocations(false)
-        .outOfOrder(true)
+        .locations(location)
+        .outOfOrder(outOfOrder)
         .load()
         .migrate()
     return result.migrationsExecuted
 }
+
+/** Conecta Exposed al pool. Las transacciones se abren explícitamente en los servicios (§3.2). */
+fun connectExposed(dataSource: DataSource): Database = Database.connect(dataSource)

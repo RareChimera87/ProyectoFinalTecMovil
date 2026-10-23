@@ -9,7 +9,7 @@ Migrar al arrancar la API provoca una carrera si arrancan varias instancias a la
 ## Decisión
 - El contenedor tiene un modo `migrate`; `deploy-dev` y `deploy-prod` ejecutan el Cloud Run Job `migrate` **antes** de desplegar la API; si falla, no se despliega.
 - `V1__esquema.sql` y `V2__semillas.sql`; después `V<yyyyMMdd>_<HHmm>__<descripcion>.sql`.
-- `outOfOrder=true` en dev y CI; un check en cada PR rechaza versiones menores que la última de `dev`, así prod siempre recibe las migraciones en orden.
+- `outOfOrder=true` en **todos** los entornos, prod incluido. Un check en cada PR rechaza versiones menores que la última de `dev`, pero solo corre al abrir o actualizar el PR: con auto-merge, dos PR paralelos pueden mezclarse en orden inverso y, con `outOfOrder=false`, Flyway fallaría la validación en prod y cortaría el despliegue. Con `true` la migración tardía se aplica igual que en dev (donde ya se probó). El check sigue siendo útil para mantener el historial ordenado y detectar nombres mal formados.
 
 ## Alternativas consideradas
 - **Migrar al arrancar:** carrera entre instancias y arranque lento.

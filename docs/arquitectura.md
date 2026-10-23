@@ -207,14 +207,14 @@ backend/src/main/kotlin/me/santiagoreina/parcheu/api/
 - **Entorno (`ENV`):** variable obligatoria (`local|dev|prod`) sin valor por defecto; si falta, el proceso no arranca. Solo `local` cablea `FakeTokenVerifier`/`FakeOidcVerifier` y se rechaza si Cloud Run define `K_SERVICE` o `CLOUD_RUN_JOB`. E0.5 (Terraform) y E0.6 (CD) deben fijar `ENV=dev|prod` en servicios y jobs.
 - **Modos de arranque:** `serve` (API), `migrate` (Flyway y salir), `seed-demo` y `purge-demo`. El mismo contenedor sirve para los tres Cloud Run Jobs.
 - **JDK:** el backend compila con toolchain 21 y el contrato con 17. Gradle resuelve los toolchains con el plugin foojay y, en la máquina del equipo, con `org.gradle.java.installations.paths=/opt/android-studio/jbr` (JBR 21). Detalle en `docs/desarrollo-local.md` (E0.1, E0.3).
-- **Migraciones:** `V1__esquema.sql`, `V2__semillas.sql`, luego `V<yyyyMMdd>_<HHmm>__<descripcion>.sql`. `outOfOrder=true` en dev/CI; check de orden en PR (E0.4). En prod se aplican en lote al desplegar el tag.
+- **Migraciones:** `V1__esquema.sql`, `V2__semillas.sql`, luego `V<yyyyMMdd>_<HHmm>__<descripcion>.sql`. `outOfOrder=true` en todos los entornos (también prod, ADR-0011); check de orden en PR (E0.4). En prod se aplican en lote al desplegar el tag.
 - **Pruebas:** `testApplication`, Testcontainers Postgres 16 (solo en CI; `-PsinContenedores` en local), emulador de Firestore, `FakeLlmClient`, `FakeTokenVerifier`, `FakeNotifier`, Kotest property testing para privacidad.
 
 ---
 
 ## 4. Modelo de datos
 
-Postgres 16 es la única fuente de verdad. Convenciones: `uuid` con `gen_random_uuid()`, `timestamptz`, enums como `text` con `CHECK`. La cuenta de servicio de la API tiene solo `INSERT, SELECT` sobre `consents` (la tabla solo agrega filas).
+Postgres 16 es la única fuente de verdad. Convenciones: `uuid` con `gen_random_uuid()`, `timestamptz`, enums como `text` con `CHECK`. `consents` solo agrega filas: como la API y el job `migrate` usan el mismo usuario IAM (`sa-api`, dueño de las tablas) un `GRANT` no basta, así que un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE`; la única excepción es la purga por retención (E8.8), que activa `set local parcheu.consents_purge = 'on'` (E0.4). Las tablas que solo contienen datos de un usuario usan `ON DELETE CASCADE`; las que deben sobrevivirle (`consents`, `simulations`, `reports`, `entitlements`, `purchase_events`) no. Las tablas Exposed viven en `platform/db/tables/` (un archivo por dominio) y los enums sin equivalente en el contrato en `DbEnums.kt`.
 
 ```sql
 -- Identidad
@@ -723,6 +723,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Turbine | 1.2.1 (verificar) | Tests de Flow |
 | Spotless + ktlint | 7.x / 1.7.x (verificar) | Estilo |
 | Ktor (server, client para tests) | 3.5.2 (fijada en E0.3, vía `ktor-bom`) | Backend |
+| Exposed (`exposed-core`, `exposed-jdbc`, `exposed-java-time`, `exposed-json`) | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`; java-time y json desde E0.4) | SQL |
 | Exposed | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`) | SQL |
 | HikariCP | 7.1.0 (fijada en E0.3) | Pool |
 | PostgreSQL JDBC | 42.7.14 (fijada en E0.3) | Driver |

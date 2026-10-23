@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.platform
 
+import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
@@ -113,6 +114,15 @@ class PlatformTest : FunSpec({
         val c = AppContainer.fromConfig(config)
         (c.tokenVerifier is FakeTokenVerifier) shouldBe false
         (c.oidcVerifier is FakeOidcVerifier) shouldBe false
+    }
+
+    test("FirebaseTokenVerifier no resuelve credenciales al construirse (ADC diferido)") {
+        var llamadas = 0
+        FirebaseTokenVerifier("parcheu-prod") {
+            llamadas++
+            error("sin ADC")
+        }
+        llamadas shouldBe 0
     }
 
     test("Mode.parse reconoce los cuatro modos y usa serve por defecto") {
