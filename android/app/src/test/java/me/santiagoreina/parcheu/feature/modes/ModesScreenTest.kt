@@ -56,7 +56,7 @@ class ModesScreenTest {
                     onDialogConfirmedChange = viewModel::onDialogConfirmedChange,
                     onDialogConfirm = viewModel::onDialogConfirm,
                     onDialogCancel = viewModel::onDialogCancel,
-                    animateLoading = false,
+                    animateLoading = false
                 )
             }
         }
@@ -79,7 +79,7 @@ class ModesScreenTest {
         composeRule.onNodeWithTag(ModesTags.DIALOG, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(
             ModesTags.DIALOG_DATE,
-            useUnmergedTree = true,
+            useUnmergedTree = true
         ).assertTextContains("14 / 03 / 2005", substring = true)
         composeRule.onNodeWithTag(ModesTags.DIALOG_CONFIRM).assertIsNotEnabled()
 
@@ -100,7 +100,10 @@ class ModesScreenTest {
             .assertIsOff()
         // La frase se lee una sola vez (sin contentDescription duplicada) y tocarla marca la casilla.
         composeRule.onAllNodesWithText(PAREJA_CONFIRM_TEXT).assertCountEquals(1)
-        composeRule.onAllNodesWithContentDescription(PAREJA_CONFIRM_TEXT, useUnmergedTree = true).assertCountEquals(0)
+        composeRule.onAllNodesWithContentDescription(
+            PAREJA_CONFIRM_TEXT,
+            useUnmergedTree = true
+        ).assertCountEquals(0)
         composeRule.onNodeWithText(PAREJA_CONFIRM_TEXT).performClick()
         composeRule.onNodeWithTag(ModesTags.DIALOG_CHECK).assertIsOn()
         composeRule.onNodeWithTag(ModesTags.DIALOG_CONFIRM).assertIsEnabled()

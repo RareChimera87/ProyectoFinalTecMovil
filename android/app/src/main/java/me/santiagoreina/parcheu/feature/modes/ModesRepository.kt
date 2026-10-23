@@ -32,9 +32,13 @@ interface ModesRepository {
     suspend fun updateModes(modes: Map<Mode, Boolean>, parejaConfirmed: Boolean): ApiResult<MeDto>
 }
 
-class ApiModesRepository(private val api: ModesApi, private val errorMapper: ApiErrorMapper) : ModesRepository {
+class ApiModesRepository(private val api: ModesApi, private val errorMapper: ApiErrorMapper) :
+    ModesRepository {
     override suspend fun me(): ApiResult<MeDto> = apiCall(errorMapper) { api.me() }
 
-    override suspend fun updateModes(modes: Map<Mode, Boolean>, parejaConfirmed: Boolean): ApiResult<MeDto> =
+    override suspend fun updateModes(
+        modes: Map<Mode, Boolean>,
+        parejaConfirmed: Boolean
+    ): ApiResult<MeDto> =
         apiCall(errorMapper) { api.updateModes(UpdateModes(modes, parejaConfirmed)) }
 }

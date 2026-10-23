@@ -27,7 +27,11 @@ class BasicProfileScreenTest {
         composeRule.setContent {
             ParcheUTheme {
                 BasicProfileScreen(
-                    state = BasicProfileUiState.Form(BasicProfileSamples.catalog, form, edit = false),
+                    state = BasicProfileUiState.Form(
+                        BasicProfileSamples.catalog,
+                        form,
+                        edit = false
+                    ),
                     onPickBirthDate = {},
                     onPickUniversity = {},
                     onCareerChange = {},
@@ -36,7 +40,7 @@ class BasicProfileScreenTest {
                     onSubmit = onSubmit,
                     onRetryLoad = {},
                     onBack = {},
-                    animateLoading = false,
+                    animateLoading = false
                 )
             }
         }
@@ -67,7 +71,9 @@ class BasicProfileScreenTest {
     @Test
     fun underageLockOffersDeleteAccount() {
         var deleted = 0
-        composeRule.setContent { ParcheUTheme { UnderageScreen(onDeleteAccount = { deleted++ }, onSignOut = {}) } }
+        composeRule.setContent {
+            ParcheUTheme { UnderageScreen(onDeleteAccount = { deleted++ }, onSignOut = {}) }
+        }
         composeRule.onNodeWithText("ParcheU es solo para mayores de 18").assertExists()
         composeRule.onNodeWithTag(UnderageTags.DELETE).assertIsEnabled().performClick()
         composeRule.onNodeWithText("Borrar mi cuenta").assertExists()

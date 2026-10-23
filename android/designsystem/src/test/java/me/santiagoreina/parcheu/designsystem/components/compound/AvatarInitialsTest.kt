@@ -30,7 +30,7 @@ class AvatarInitialsTest {
             ParcheUTheme { AvatarInitials(name = "Camila Rojas", affinity = 90, anonymous = true) }
         }
         composeRule.onNodeWithContentDescription(
-            "Alguien",
+            "Alguien"
         ).assertContentDescriptionEquals("Alguien")
         // Ni el nombre ni sus iniciales aparecen en ninguna parte del árbol de semántica.
         val nodes = composeRule.onRoot(useUnmergedTree = true).fetchSemanticsNode().let {
@@ -41,7 +41,7 @@ class AvatarInitialsTest {
             val texts = node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
             assertTrue("El avatar anónimo no debe tener texto, tiene $texts", texts.isEmpty())
             val description = node.config.getOrNull(
-                SemanticsProperties.ContentDescription,
+                SemanticsProperties.ContentDescription
             ).orEmpty()
             assertTrue(description.none { it.contains("Camila") || it.contains("CR") })
         }

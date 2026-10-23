@@ -48,14 +48,17 @@ import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
  * confeti fijas (determinista, sin partículas). Es decorativo: no aporta semántica.
  */
 @Composable
-fun CelebrationBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit = {}) {
+fun CelebrationBackground(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit = {}
+) {
     val colors = ParcheUTheme.colors
     Box(modifier = modifier.fillMaxSize()) {
         Box(
             Modifier
                 .fillMaxSize()
                 .background(colors.celebrationGradient.brush())
-                .clearAndSetSemantics { },
+                .clearAndSetSemantics { }
         )
         Confetti()
         content()
@@ -68,7 +71,7 @@ private data class ConfettiPiece(
     val width: Float,
     val height: Float,
     val degrees: Float,
-    val color: Color,
+    val color: Color
 )
 
 private val ConfettiPieces = listOf(
@@ -77,7 +80,7 @@ private val ConfettiPieces = listOf(
     ConfettiPiece(0.28f, 0.30f, 8f, 16f, -38f, ParcheUPalette.Mint),
     ConfettiPiece(0.90f, 0.38f, 10f, 20f, 52f, ParcheUPalette.Coral),
     ConfettiPiece(0.08f, 0.52f, 12f, 12f, 0f, ParcheUPalette.ElectricBlue),
-    ConfettiPiece(0.70f, 0.60f, 9f, 18f, -20f, ParcheUPalette.OrangeTint),
+    ConfettiPiece(0.70f, 0.60f, 9f, 18f, -20f, ParcheUPalette.OrangeTint)
 )
 
 @Composable
@@ -92,7 +95,7 @@ private fun Confetti() {
                     color = piece.color,
                     topLeft = Offset(center.x - w / 2, center.y - h / 2),
                     size = Size(w, h),
-                    cornerRadius = CornerRadius(2.dp.toPx()),
+                    cornerRadius = CornerRadius(2.dp.toPx())
                 )
             }
         }
@@ -110,7 +113,7 @@ fun DecisionFooter(
     primaryLabel: String,
     onPrimaryClick: () -> Unit,
     modifier: Modifier = Modifier,
-    note: String? = null,
+    note: String? = null
 ) {
     val colors = ParcheUTheme.colors
     Column(
@@ -118,14 +121,14 @@ fun DecisionFooter(
             .fillMaxWidth()
             .background(colors.bg)
             .padding(ParcheUTheme.spacing.footer),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlineButton(text = secondaryLabel, onClick = onSecondaryClick)
             PrimaryButton(
                 text = primaryLabel,
                 onClick = onPrimaryClick,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
         }
         if (note != null) {
@@ -134,7 +137,7 @@ fun DecisionFooter(
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.mu,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -142,13 +145,17 @@ fun DecisionFooter(
 
 /** Tres puntos de 8dp que se encienden en secuencia (A1, carga). Con [animated] falso quedan fijos. */
 @Composable
-fun LoadingDots(modifier: Modifier = Modifier, animated: Boolean = true, contentDescription: String = "Cargando") {
+fun LoadingDots(
+    modifier: Modifier = Modifier,
+    animated: Boolean = true,
+    contentDescription: String = "Cargando"
+) {
     val colors = ParcheUTheme.colors
     val transition = if (animated) rememberInfiniteTransition(label = "loadingDots") else null
     Row(
         modifier = modifier.semantics { this.contentDescription = contentDescription },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         repeat(3) { index ->
             val alpha by (
@@ -162,9 +169,9 @@ fun LoadingDots(modifier: Modifier = Modifier, animated: Boolean = true, content
                             1f at (index * 200 + 300)
                             0.3f at (index * 200 + 600)
                         },
-                        repeatMode = RepeatMode.Restart,
+                        repeatMode = RepeatMode.Restart
                     ),
-                    label = "dot$index",
+                    label = "dot$index"
                 ) ?: rememberUpdatedState(if (index == 0) 1f else 0.5f)
                 )
             Box(
@@ -172,7 +179,7 @@ fun LoadingDots(modifier: Modifier = Modifier, animated: Boolean = true, content
                     .size(8.dp)
                     .alpha(alpha)
                     .background(colors.prt, CircleShape)
-                    .clearAndSetSemantics { },
+                    .clearAndSetSemantics { }
             )
         }
     }
@@ -187,7 +194,7 @@ fun PageIndicator(
     count: Int,
     current: Int,
     modifier: Modifier = Modifier,
-    pageLabel: (current: Int, count: Int) -> String = { c, n -> "Página $c de $n" },
+    pageLabel: (current: Int, count: Int) -> String = { c, n -> "Página $c de $n" }
 ) {
     require(count > 0) { "count debe ser positivo" }
     val colors = ParcheUTheme.colors
@@ -195,7 +202,7 @@ fun PageIndicator(
     Row(
         modifier = modifier.semantics { contentDescription = pageLabel(active + 1, count) },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         repeat(count) { index ->
             val selected = index == active
@@ -205,7 +212,7 @@ fun PageIndicator(
                     .width(if (selected) 22.dp else 8.dp)
                     .clip(CircleShape)
                     .background(if (selected) colors.prt else colors.ln, CircleShape)
-                    .clearAndSetSemantics { },
+                    .clearAndSetSemantics { }
             )
         }
     }

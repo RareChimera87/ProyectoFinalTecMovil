@@ -36,6 +36,7 @@ import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.quota.MovableClock
 import me.santiagoreina.parcheu.api.quota.quotaModule
+import me.santiagoreina.parcheu.api.simulation.NoopSimulationNotifier
 import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.contract.ChatType
 import me.santiagoreina.parcheu.contract.EdgeState
@@ -122,7 +123,7 @@ class MatchingDbTest : FunSpec({
     class World(val db: Database, val clock: MovableClock = MovableClock(start), flags: MatchingFlags = MatchingFlags(true, false)) {
         val quota = quotaModule(Env.DEV, db, clock)
         val graph = GraphModule(ExposedGraphRepository(db), AnonIdSigner.forTests(), clock)
-        val simulation = simulationModule(Env.DEV, db, clock, testGateway(), quota, graph, FakeTaskQueue(), firebaseProjectId = null)
+        val simulation = simulationModule(Env.DEV, db, clock, testGateway(), quota, graph, FakeTaskQueue(), firebaseProjectId = null, notifier = NoopSimulationNotifier)
         val repo = ExposedMatchingRepository(db)
         val mirror = RecordingMatchTicketMirror()
         val notifier = FakeNotifier()

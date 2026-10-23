@@ -19,13 +19,14 @@ fun ModesRoute(
     route: Modes,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: ModesViewModel = koinViewModel(),
+    viewModel: ModesViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is ModesEffect.Saved -> if (route.fromSettings) navigator.back() else navigator.navigate(Consent)
+                is ModesEffect.Saved ->
+                    if (route.fromSettings) navigator.back() else navigator.navigate(Consent)
             }
         }
     }
@@ -39,6 +40,6 @@ fun ModesRoute(
         onDialogConfirmedChange = viewModel::onDialogConfirmedChange,
         onDialogConfirm = viewModel::onDialogConfirm,
         onDialogCancel = viewModel::onDialogCancel,
-        modifier = modifier,
+        modifier = modifier
     )
 }

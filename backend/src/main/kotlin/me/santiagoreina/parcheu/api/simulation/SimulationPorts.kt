@@ -1,5 +1,8 @@
 package me.santiagoreina.parcheu.api.simulation
 
+import me.santiagoreina.parcheu.api.platform.notifier.Notification
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
+import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.PersonRef
 import me.santiagoreina.parcheu.contract.Progress
 import me.santiagoreina.parcheu.contract.SimulationStatus
@@ -44,12 +47,36 @@ class RecordingSimulationMirror : SimulationMirror {
 }
 
 /**
- * Aviso al terminar (DONE o FAILED) a cada participante. El puerto general `Notifier` llega con
- * E5.3; mientras tanto el contenedor cablea [NoopSimulationNotifier] y, al mezclar E5.3, un
- * adaptador que llama a `Notifier.notify` con `kind = simulation_done | simulation_failed`.
+ * Aviso al terminar (DONE o FAILED) a cada participante. El contenedor cablea
+ * [NotifierSimulationNotifier], que lo entrega al puerto general `Notifier` (E5.3).
  */
 fun interface SimulationNotifier {
     suspend fun finished(userId: UUID, simulationId: UUID, status: SimulationStatus, score: Int?)
+}
+
+/**
+ * Adaptador al puerto general de avisos (E5.3, arquitectura.md §8.4): `SIMULATION_READY` lleva a
+ * `parcheu://results/{id}` y `SIMULATION_FAILED` a `parcheu://simulation/{id}`.
+ */
+class NotifierSimulationNotifier(private val notifier: Notifier) : SimulationNotifier {
+    override suspend fun finished(userId: UUID, simulationId: UUID, status: SimulationStatus, score: Int?) {
+        val notification = if (status == SimulationStatus.FAILED) {
+            Notification(
+                kind = NotificationKinds.SIMULATION_FAILED,
+                title = "La simulación no se pudo completar",
+                body = "No se gastó tu cupo. Puedes intentarlo de nuevo.",
+                route = "parcheu://simulation/$simulationId",
+            )
+        } else {
+            Notification(
+                kind = NotificationKinds.SIMULATION_READY,
+                title = "Tu simulación está lista",
+                body = score?.let { "Afinidad: $it/100. Mira cómo les fue." } ?: "Mira cómo les fue.",
+                route = "parcheu://results/$simulationId",
+            )
+        }
+        notifier.notify(userId, notification)
+    }
 }
 
 object NoopSimulationNotifier : SimulationNotifier {

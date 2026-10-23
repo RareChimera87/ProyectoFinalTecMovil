@@ -13,7 +13,7 @@ fun UnderageRoute(
     @Suppress("UNUSED_PARAMETER") route: Underage,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: UnderageViewModel = koinViewModel(),
+    viewModel: UnderageViewModel = koinViewModel()
 ) {
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -23,5 +23,9 @@ fun UnderageRoute(
             }
         }
     }
-    UnderageScreen(onDeleteAccount = viewModel::onDeleteAccount, onSignOut = viewModel::onSignOut, modifier = modifier)
+    UnderageScreen(
+        onDeleteAccount = viewModel::onDeleteAccount,
+        onSignOut = viewModel::onSignOut,
+        modifier = modifier
+    )
 }

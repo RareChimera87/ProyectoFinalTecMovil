@@ -10,7 +10,8 @@
       "photoUrl": "https://lh3.googleusercontent.com/a/laura",
       "isDemo": false
     },
-    "createdAt": "2026-10-23T15:30:00Z"
+    "createdAt": "2026-10-23T15:30:00Z",
+    "refunded": false
   },
   "progress": {
     "scenarioIndex": 1,

@@ -91,7 +91,7 @@ fun BasicProfileScreen(
     onRetryLoad: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    animateLoading: Boolean = true,
+    animateLoading: Boolean = true
 ) {
     val colors = ParcheUTheme.colors
     Column(modifier.fillMaxSize().background(colors.bg).testTag(BasicProfileTags.SCREEN)) {
@@ -101,12 +101,15 @@ fun BasicProfileScreen(
                 title = "Editar perfil",
                 navigationIcon = rememberVectorPainter(ArrowBack),
                 navigationContentDescription = "Volver",
-                onNavigationClick = onBack,
+                onNavigationClick = onBack
             )
         }
         when (state) {
             BasicProfileUiState.Loading ->
-                Box(Modifier.fillMaxSize().testTag(BasicProfileTags.LOADING), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.fillMaxSize().testTag(BasicProfileTags.LOADING),
+                    contentAlignment = Alignment.Center
+                ) {
                     LoadingDots(animated = animateLoading)
                 }
             is BasicProfileUiState.LoadError ->
@@ -115,7 +118,7 @@ fun BasicProfileScreen(
                         title = "No pudimos cargar tu perfil",
                         message = basicProfileErrorMessage(state.error),
                         retryLabel = "Reintentar",
-                        onRetryClick = onRetryLoad,
+                        onRetryClick = onRetryLoad
                     )
                 }
             is BasicProfileUiState.Form ->
@@ -126,7 +129,7 @@ fun BasicProfileScreen(
                     onCareerChange = onCareerChange,
                     onDisplayNameChange = onDisplayNameChange,
                     onInterestToggle = onInterestToggle,
-                    onSubmit = onSubmit,
+                    onSubmit = onSubmit
                 )
         }
     }
@@ -141,7 +144,7 @@ private fun FormContent(
     onCareerChange: (String) -> Unit,
     onDisplayNameChange: (String) -> Unit,
     onInterestToggle: (String) -> Unit,
-    onSubmit: () -> Unit,
+    onSubmit: () -> Unit
 ) {
     val colors = ParcheUTheme.colors
     val spacing = ParcheUTheme.spacing
@@ -152,7 +155,7 @@ private fun FormContent(
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = spacing.gutterWide),
-            verticalArrangement = Arrangement.spacedBy(spacing.blockGap),
+            verticalArrangement = Arrangement.spacedBy(spacing.blockGap)
         ) {
             if (!state.edit) {
                 Spacer(Modifier.height(24.dp))
@@ -160,13 +163,13 @@ private fun FormContent(
                     text = "Tu perfil",
                     style = MaterialTheme.typography.headlineMedium,
                     color = colors.tx,
-                    modifier = Modifier.semantics { heading() },
+                    modifier = Modifier.semantics { heading() }
                 )
                 Text(
-                    text = "En un match al azar la otra persona solo ve tu rango de edad, tu universidad y tus " +
-                        "intereses. Nunca tu nombre ni tu fecha exacta.",
+                    text = "En un match al azar la otra persona solo ve tu rango de edad, " +
+                        "tu universidad y tus intereses. Nunca tu nombre ni tu fecha exacta.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = colors.mu,
+                    color = colors.mu
                 )
             } else {
                 Spacer(Modifier.height(8.dp))
@@ -178,8 +181,10 @@ private fun FormContent(
                     onValueChange = onDisplayNameChange,
                     label = "Tu nombre",
                     supportingText = "Así te verán tus amigos en ParcheU.",
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                    modifier = Modifier.testTag(BasicProfileTags.NAME),
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words
+                    ),
+                    modifier = Modifier.testTag(BasicProfileTags.NAME)
                 )
             }
 
@@ -194,7 +199,7 @@ private fun FormContent(
                 },
                 enabled = !form.birthDateLocked,
                 onClick = onPickBirthDate,
-                modifier = Modifier.testTag(BasicProfileTags.BIRTH_DATE),
+                modifier = Modifier.testTag(BasicProfileTags.BIRTH_DATE)
             )
 
             val university = state.catalog.universities.firstOrNull { it.id == form.universityId }
@@ -205,7 +210,7 @@ private fun FormContent(
                 supportingText = university?.name?.takeIf { it != university.shortName },
                 enabled = true,
                 onClick = onPickUniversity,
-                modifier = Modifier.testTag(BasicProfileTags.UNIVERSITY),
+                modifier = Modifier.testTag(BasicProfileTags.UNIVERSITY)
             )
 
             ParcheUTextField(
@@ -219,8 +224,10 @@ private fun FormContent(
                     "${form.career.trim().length}/${BasicProfileLimits.MAX_CAREER}"
                 },
                 isError = form.careerTooLong,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                modifier = Modifier.testTag(BasicProfileTags.CAREER),
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences
+                ),
+                modifier = Modifier.testTag(BasicProfileTags.CAREER)
             )
 
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -228,23 +235,24 @@ private fun FormContent(
                     text = "Intereses",
                     style = MaterialTheme.typography.titleMedium,
                     color = colors.tx,
-                    modifier = Modifier.weight(1f).semantics { heading() },
+                    modifier = Modifier.weight(1f).semantics { heading() }
                 )
                 Text(
                     text = "${form.interests.size}/${BasicProfileLimits.MAX_INTERESTS}",
                     style = MaterialTheme.typography.labelLarge,
-                    color = colors.mu,
+                    color = colors.mu
                 )
             }
             Text(
-                text = "Elige de ${BasicProfileLimits.MIN_INTERESTS} a ${BasicProfileLimits.MAX_INTERESTS}.",
+                text = "Elige de ${BasicProfileLimits.MIN_INTERESTS} a " +
+                    "${BasicProfileLimits.MAX_INTERESTS}.",
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.mu,
+                color = colors.mu
             )
             FlowRow(
                 modifier = Modifier.fillMaxWidth().testTag(BasicProfileTags.INTERESTS),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 val full = form.interests.size >= BasicProfileLimits.MAX_INTERESTS
                 state.catalog.interests.forEach { interest ->
@@ -254,7 +262,7 @@ private fun FormContent(
                         selected = selected,
                         onSelectedChange = { onInterestToggle(interest.slug) },
                         enabled = selected || !full,
-                        modifier = Modifier.testTag(BasicProfileTags.interest(interest.slug)),
+                        modifier = Modifier.testTag(BasicProfileTags.interest(interest.slug))
                     )
                 }
             }
@@ -263,7 +271,7 @@ private fun FormContent(
 
         Column(
             modifier = Modifier.fillMaxWidth().padding(ParcheUTheme.spacing.footer),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             state.error?.let { error ->
                 Text(
@@ -273,11 +281,13 @@ private fun FormContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(BasicProfileTags.ERROR)
-                        .semantics { liveRegion = LiveRegionMode.Polite },
+                        .semantics { liveRegion = LiveRegionMode.Polite }
                 )
             }
             if (!state.edit && !form.birthDateLocked) {
-                InfoNote(text = "Tu fecha de nacimiento se verifica una sola vez y no la ve nadie más.")
+                InfoNote(
+                    text = "Tu fecha de nacimiento se verifica una sola vez y no la ve nadie más."
+                )
             }
             PrimaryButton(
                 text = when {
@@ -287,7 +297,7 @@ private fun FormContent(
                 },
                 onClick = onSubmit,
                 enabled = state.canSubmit,
-                modifier = Modifier.fillMaxWidth().testTag(BasicProfileTags.SUBMIT),
+                modifier = Modifier.fillMaxWidth().testTag(BasicProfileTags.SUBMIT)
             )
         }
     }
@@ -302,7 +312,7 @@ private fun PickerField(
     supportingText: String?,
     enabled: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     Box(modifier) {
         ParcheUTextField(
@@ -311,13 +321,18 @@ private fun PickerField(
             label = label,
             placeholder = placeholder,
             supportingText = supportingText,
-            enabled = enabled,
+            enabled = enabled
         )
         // Capa encima del campo: toma el toque (sin teclado) y lo anuncia como botón.
         Box(
             Modifier
                 .matchParentSize()
-                .clickable(enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick),
+                .clickable(
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClickLabel = label,
+                    onClick = onClick
+                )
         )
     }
 }
@@ -328,14 +343,14 @@ fun UniversityOptions(
     universities: List<University>,
     selectedId: Int?,
     onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         Text(
             text = "Tu universidad",
             style = MaterialTheme.typography.titleLarge,
             color = ParcheUTheme.colors.tx,
-            modifier = Modifier.padding(bottom = 8.dp).semantics { heading() },
+            modifier = Modifier.padding(bottom = 8.dp).semantics { heading() }
         )
         universities.forEach { university ->
             ParcheURadioRow(
@@ -343,7 +358,7 @@ fun UniversityOptions(
                 supportingText = university.name.takeIf { it != university.shortName },
                 selected = university.id == selectedId,
                 onClick = { onSelect(university.id) },
-                modifier = Modifier.testTag(BasicProfileTags.university(university.id)),
+                modifier = Modifier.testTag(BasicProfileTags.university(university.id))
             )
         }
     }

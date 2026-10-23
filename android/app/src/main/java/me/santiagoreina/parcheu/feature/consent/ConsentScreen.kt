@@ -56,7 +56,7 @@ fun ConsentScreen(
     onAccept: () -> Unit,
     onNotNow: () -> Unit,
     modifier: Modifier = Modifier,
-    animateMascot: Boolean = true,
+    animateMascot: Boolean = true
 ) {
     val colors = ParcheUTheme.colors
     Column(modifier.fillMaxSize().background(colors.bg).testTag(ConsentTags.SCREEN)) {
@@ -65,29 +65,38 @@ fun ConsentScreen(
                 title = "",
                 navigationIcon = rememberVectorPainter(FlowIcons.Back),
                 navigationContentDescription = "Volver",
-                onNavigationClick = onBack,
+                onNavigationClick = onBack
             )
         } else {
             Spacer(Modifier.height(56.dp))
         }
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.weight(
+                1f
+            ).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 TwinMascot(size = TwinMascotSize.L, animationsEnabled = animateMascot)
             }
             Text(
                 "Tus chats ayudan a que tu gemelo te conozca mejor",
                 style = MaterialTheme.typography.headlineSmall,
                 color = colors.tx,
-                modifier = Modifier.semantics { heading() },
+                modifier = Modifier.semantics { heading() }
             )
             Text(
-                "Cuando chateas en ParcheU, tu gemelo aprende de cómo conversas para simular mejor. " +
-                    "Aplica a tus chats de Amistad y Estudio; los de Pareja quedan fuera hasta que lo actives en Ajustes de privacidad.",
+                "Cuando chateas en ParcheU, tu gemelo " +
+                    "aprende de cómo conversas " +
+                    "para simular mejor. " +
+                    "Aplica a tus chats de Amistad y Estudio; " +
+                    "los de Pareja quedan fuera hasta que " +
+                    "lo actives en Ajustes de privacidad.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = colors.mu,
+                color = colors.mu
             )
             ListCard(
                 "Qué aprende",
@@ -95,41 +104,48 @@ fun ConsentScreen(
                 listOf(
                     FlowIcons.Edit to "Tu forma de escribir",
                     FlowIcons.Star to "Temas y gustos",
-                    FlowIcons.Handshake to "Cómo llegas a acuerdos",
-                ),
+                    FlowIcons.Handshake to "Cómo llegas a acuerdos"
+                )
             )
             ListCard(
                 "Qué nunca hace",
                 colors.mu,
                 listOf(
                     FlowIcons.Block to "Mostrar tus mensajes a otras personas",
-                    FlowIcons.Block to "Escribir por ti en un chat real",
-                ),
+                    FlowIcons.Block to "Escribir por ti en un chat real"
+                )
             )
-            state.error?.let { InfoNote(consentErrorMessage(it), Modifier.testTag(ConsentTags.ERROR)) }
+            state.error?.let {
+                InfoNote(consentErrorMessage(it), Modifier.testTag(ConsentTags.ERROR))
+            }
         }
         Column(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
+            Modifier.fillMaxWidth().padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = 12.dp,
+                bottom = 28.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             PrimaryButton(
                 text = if (state.submitting) "Guardando…" else "Acepto",
                 onClick = onAccept,
                 enabled = !state.submitting,
-                modifier = Modifier.fillMaxWidth().testTag(ConsentTags.ACCEPT),
+                modifier = Modifier.fillMaxWidth().testTag(ConsentTags.ACCEPT)
             )
             ParcheUTextButton(
                 text = "Ahora no",
                 onClick = onNotNow,
                 enabled = !state.submitting,
-                modifier = Modifier.fillMaxWidth().testTag(ConsentTags.NOT_NOW),
+                modifier = Modifier.fillMaxWidth().testTag(ConsentTags.NOT_NOW)
             )
             Text(
                 "Lo puedes apagar o borrar en Ajustes de privacidad.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.mu,
-                textAlign = TextAlign.Center,
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -141,12 +157,15 @@ private fun ListCard(title: String, tint: Color, items: List<Pair<ImageVector, S
     ParcheUCard(Modifier.fillMaxWidth()) {
         Text(title.uppercase(), style = ParcheUTheme.textStyles.overline, color = colors.mu)
         items.forEach { (icon, text) ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Icon(
                     rememberVectorPainter(icon),
                     contentDescription = null,
                     tint = tint,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp)
                 )
                 Text(text, style = MaterialTheme.typography.bodyMedium, color = colors.tx)
             }

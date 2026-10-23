@@ -1,12 +1,13 @@
 name: major-gate
 
-# Pasa si el PR no lleva la etiqueta `major` o si la última revisión de al menos un
-# usuario distinto del autor es una aprobación (PLAN.md §5, equipo.md "Revisores par").
+# PLAN.md §5. En este repo hay una sola cuenta de GitHub (la del usuario, que también usan los
+# agentes), así que no puede exigirse la aprobación de "otro usuario". La puerta de las features
+# major es la misma revisión adversarial del agente, registrada con la etiqueta `revisado-agente`
+# (ver revision-agente.yml); el revisor par humano queda como práctica del equipo (equipo.md),
+# no como check. Pasa si el PR no es major o si ya está revisado.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
-  pull_request_review:
-    types: [submitted, dismissed]
 
 permissions:
   contents: read
@@ -16,28 +17,17 @@ jobs:
   major-gate:
     name: major-gate
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      REPO: ${{ github.repository }}
-      PR: ${{ github.event.pull_request.number }}
+    timeout-minutes: 5
     steps:
       - name: Evalúa la puerta
+        env:
+          ETIQUETAS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          set -euo pipefail
-          pr="$(gh api "repos/$REPO/pulls/$PR")"
-          if ! jq -e '.labels | map(.name) | index("major")' <<<"$pr" >/dev/null; then
+          if [[ ",$ETIQUETAS," != *",major,"* ]]; then
             echo "El PR no es major: la puerta pasa."
-            exit 0
-          fi
-          autor="$(jq -r '.user.login' <<<"$pr")"
-          aprobaciones="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
-            | jq -s --arg autor "$autor" '
-                add | map(select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or .state == "DISMISSED"))
-                | group_by(.user.login) | map(last)
-                | map(select(.state == "APPROVED" and .user.login != $autor)) | length')"
-          if (( aprobaciones >= 1 )); then
-            echo "PR major con $aprobaciones aprobación(es) de un revisor distinto del autor."
+          elif [[ ",$ETIQUETAS," == *",revisado-agente,"* ]]; then
+            echo "PR major con revisión del agente registrada: la puerta pasa."
           else
-            echo "::error::PR major: falta la aprobación de un revisor par distinto de $autor."
+            echo "::error::PR major sin la etiqueta revisado-agente: falta la revisión del agente."
             exit 1
           fi

@@ -42,7 +42,7 @@ data class BasicProfileForm(
     val career: String = "",
     val interests: List<String> = emptyList(),
     val askName: Boolean = false,
-    val displayName: String = "",
+    val displayName: String = ""
 ) {
     val careerTooLong: Boolean get() = career.trim().length > BasicProfileLimits.MAX_CAREER
 
@@ -52,7 +52,11 @@ data class BasicProfileForm(
             universityId != null &&
             interests.size in BasicProfileLimits.MIN_INTERESTS..BasicProfileLimits.MAX_INTERESTS &&
             !careerTooLong &&
-            (!askName || displayName.isNotBlank() && displayName.trim().length <= BasicProfileLimits.MAX_NAME)
+            (
+                !askName ||
+                    displayName.isNotBlank() &&
+                    displayName.trim().length <= BasicProfileLimits.MAX_NAME
+                )
 }
 
 sealed interface BasicProfileUiState {
@@ -70,7 +74,7 @@ sealed interface BasicProfileUiState {
         val form: BasicProfileForm,
         val edit: Boolean,
         val saving: Boolean = false,
-        val error: AppError? = null,
+        val error: AppError? = null
     ) : BasicProfileUiState {
         val canSubmit: Boolean get() = form.isComplete && !saving
     }
@@ -92,7 +96,7 @@ sealed interface BasicProfileEffect {
 class BasicProfileViewModel(
     private val edit: Boolean,
     private val repository: BasicProfileRepository,
-    private val auth: AuthRepository,
+    private val auth: AuthRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow<BasicProfileUiState>(BasicProfileUiState.Loading)
     val state: StateFlow<BasicProfileUiState> = _state.asStateFlow()
@@ -108,7 +112,9 @@ class BasicProfileViewModel(
         if (_state.value is BasicProfileUiState.LoadError) load()
     }
 
-    fun onBirthDateSelected(date: IsoDate) = updateForm { if (it.birthDateLocked) it else it.copy(birthDate = date) }
+    fun onBirthDateSelected(date: IsoDate) = updateForm {
+        if (it.birthDateLocked) it else it.copy(birthDate = date)
+    }
 
     fun onUniversitySelected(id: Int) = updateForm { it.copy(universityId = id) }
 
@@ -150,7 +156,7 @@ class BasicProfileViewModel(
                 displayName = form.displayName.trim().takeIf { form.askName },
                 career = form.career.trim(),
                 universityId = form.universityId,
-                interests = form.interests,
+                interests = form.interests
             )
         when (val saved = repository.update(request)) {
             is ApiResult.Failure -> return failSave(saved.error)
@@ -170,7 +176,13 @@ class BasicProfileViewModel(
             is ApiResult.Success -> {
                 val step = session.value.onboarding
                 // Si el servidor aún pide el perfil (no debería) se sigue a B1 en lugar de quedar en bucle.
-                val next = if (step == OnboardingStep.NEEDS_PROFILE) TwinQuestions else step.destination()
+                val next = if (step ==
+                    OnboardingStep.NEEDS_PROFILE
+                ) {
+                    TwinQuestions
+                } else {
+                    step.destination()
+                }
                 _effects.send(BasicProfileEffect.ReplaceAll(next))
             }
         }
@@ -217,12 +229,21 @@ class BasicProfileViewModel(
     }
 
     private fun failSave(error: AppError) {
-        _state.update { (it as? BasicProfileUiState.Form)?.copy(saving = false, error = error) ?: it }
+        _state.update {
+            (it as? BasicProfileUiState.Form)?.copy(saving = false, error = error) ?: it
+        }
     }
 
     private fun updateForm(transform: (BasicProfileForm) -> BasicProfileForm) {
         _state.update {
-            if (it is BasicProfileUiState.Form) it.copy(form = transform(it.form), error = null) else it
+            if (it is BasicProfileUiState.Form) {
+                it.copy(
+                    form = transform(it.form),
+                    error = null
+                )
+            } else {
+                it
+            }
         }
     }
 }
@@ -237,6 +258,6 @@ internal fun MeDto.toForm(catalog: CatalogDto): BasicProfileForm {
         career = career.orEmpty(),
         interests = interests.filter { it in known }.take(BasicProfileLimits.MAX_INTERESTS),
         askName = displayName.isNullOrBlank(),
-        displayName = displayName.orEmpty(),
+        displayName = displayName.orEmpty()
     )
 }

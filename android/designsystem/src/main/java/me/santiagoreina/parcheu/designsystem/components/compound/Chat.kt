@@ -44,7 +44,12 @@ enum class ChatBubbleKind { Other, Own, Twin }
  * máximo es 280dp para que quede aire en pantallas pequeñas.
  */
 @Composable
-fun ChatBubble(text: String, kind: ChatBubbleKind, modifier: Modifier = Modifier, timestamp: String? = null) {
+fun ChatBubble(
+    text: String,
+    kind: ChatBubbleKind,
+    modifier: Modifier = Modifier,
+    timestamp: String? = null
+) {
     val colors = ParcheUTheme.colors
     val (container, content, shape) = when (kind) {
         ChatBubbleKind.Other -> Triple(
@@ -54,8 +59,8 @@ fun ChatBubble(text: String, kind: ChatBubbleKind, modifier: Modifier = Modifier
                 topStart = 20.dp,
                 topEnd = 20.dp,
                 bottomEnd = 20.dp,
-                bottomStart = 6.dp,
-            ),
+                bottomStart = 6.dp
+            )
         )
         ChatBubbleKind.Own -> Triple(
             colors.primary,
@@ -64,8 +69,8 @@ fun ChatBubble(text: String, kind: ChatBubbleKind, modifier: Modifier = Modifier
                 topStart = 20.dp,
                 topEnd = 20.dp,
                 bottomEnd = 6.dp,
-                bottomStart = 20.dp,
-            ),
+                bottomStart = 20.dp
+            )
         )
         ChatBubbleKind.Twin -> Triple(
             colors.prc,
@@ -74,8 +79,8 @@ fun ChatBubble(text: String, kind: ChatBubbleKind, modifier: Modifier = Modifier
                 topStart = 18.dp,
                 topEnd = 18.dp,
                 bottomEnd = 18.dp,
-                bottomStart = 6.dp,
-            ),
+                bottomStart = 6.dp
+            )
         )
     }
     Row(
@@ -86,7 +91,7 @@ fun ChatBubble(text: String, kind: ChatBubbleKind, modifier: Modifier = Modifier
             Arrangement.End
         } else {
             Arrangement.Start
-        },
+        }
     ) {
         Column(
             modifier = Modifier
@@ -94,14 +99,14 @@ fun ChatBubble(text: String, kind: ChatBubbleKind, modifier: Modifier = Modifier
                 .clip(shape)
                 .background(container, shape)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(text = text, style = MaterialTheme.typography.bodyMedium, color = content)
             if (timestamp != null) {
                 Text(
                     text = timestamp,
                     style = MaterialTheme.typography.labelSmall,
-                    color = content.copy(alpha = 0.72f),
+                    color = content.copy(alpha = 0.72f)
                 )
             }
         }
@@ -121,14 +126,14 @@ fun ChatInputBar(
     sendIcon: Painter,
     modifier: Modifier = Modifier,
     sendContentDescription: String = "Enviar",
-    enabled: Boolean = true,
+    enabled: Boolean = true
 ) {
     val colors = ParcheUTheme.colors
     val canSend = enabled && value.isNotBlank()
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
             modifier = Modifier
@@ -137,7 +142,7 @@ fun ChatInputBar(
                 .background(colors.s2, CircleShape)
                 .border(1.dp, colors.ln, CircleShape)
                 .padding(horizontal = 18.dp),
-            contentAlignment = Alignment.CenterStart,
+            contentAlignment = Alignment.CenterStart
         ) {
             BasicTextField(
                 value = value,
@@ -155,18 +160,18 @@ fun ChatInputBar(
                     // El nodo del campo mide lo que mide su decoración: 48dp mínimo de área táctil.
                     Box(
                         modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp),
-                        contentAlignment = Alignment.CenterStart,
+                        contentAlignment = Alignment.CenterStart
                     ) {
                         if (value.isEmpty()) {
                             Text(
                                 text = placeholder,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = colors.mu,
+                                color = colors.mu
                             )
                         }
                         inner()
                     }
-                },
+                }
             )
         }
         Box(
@@ -176,13 +181,13 @@ fun ChatInputBar(
                 .background(if (canSend) colors.primary else colors.primary.disabled(), CircleShape)
                 .touchTarget()
                 .clickable(enabled = canSend, role = Role.Button, onClick = onSend),
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 painter = sendIcon,
                 contentDescription = sendContentDescription,
                 tint = if (canSend) colors.onPrimary else colors.onPrimary.disabled(),
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(22.dp)
             )
         }
     }

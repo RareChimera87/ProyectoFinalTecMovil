@@ -34,7 +34,7 @@ class BasicProfileViewModelTest {
     private fun BasicProfileViewModel.fill(
         date: String? = "2004-05-17",
         university: Int? = 1,
-        interests: List<String> = listOf("musica"),
+        interests: List<String> = listOf("musica")
     ) {
         date?.let { onBirthDateSelected(IsoDate(it)) }
         university?.let { onUniversitySelected(it) }
@@ -43,7 +43,9 @@ class BasicProfileViewModelTest {
 
     @Test
     fun continueIsDisabledWithoutBirthDateOrUniversity() = runTest {
-        val noDate = BasicProfileViewModel(false, FakeBasicProfileRepository(), auth).apply { fill(date = null) }
+        val noDate = BasicProfileViewModel(false, FakeBasicProfileRepository(), auth).apply {
+            fill(date = null)
+        }
         assertFalse(noDate.form().canSubmit)
         val noUniversity = BasicProfileViewModel(false, FakeBasicProfileRepository(), auth).apply {
             fill(university = null)
@@ -53,7 +55,9 @@ class BasicProfileViewModelTest {
             fill(interests = emptyList())
         }
         assertFalse(noInterests.form().canSubmit)
-        val complete = BasicProfileViewModel(false, FakeBasicProfileRepository(), auth).apply { fill() }
+        val complete = BasicProfileViewModel(false, FakeBasicProfileRepository(), auth).apply {
+            fill()
+        }
         assertTrue(complete.form().canSubmit)
 
         // 'Continuar' deshabilitado no hace nada.
@@ -65,8 +69,13 @@ class BasicProfileViewModelTest {
     @Test
     fun interestsStopAtFiveAndCareerOverSixtyBlocksContinue() = runTest {
         val viewModel = BasicProfileViewModel(false, FakeBasicProfileRepository(), auth)
-        viewModel.fill(interests = listOf("musica", "futbol", "cine", "lectura", "videojuegos", "cafe"))
-        assertEquals(listOf("musica", "futbol", "cine", "lectura", "videojuegos"), viewModel.form().form.interests)
+        viewModel.fill(
+            interests = listOf("musica", "futbol", "cine", "lectura", "videojuegos", "cafe")
+        )
+        assertEquals(
+            listOf("musica", "futbol", "cine", "lectura", "videojuegos"),
+            viewModel.form().form.interests
+        )
         viewModel.onInterestToggle("musica")
         assertEquals(4, viewModel.form().form.interests.size)
 
@@ -93,16 +102,19 @@ class BasicProfileViewModelTest {
                 displayName = null,
                 career = "Ing. Industrial",
                 universityId = 1,
-                interests = listOf("musica", "cine"),
+                interests = listOf("musica", "cine")
             ),
-            repository.updates.single(),
+            repository.updates.single()
         )
         assertEquals(listOf("session"), auth.calls)
     }
 
     @Test
     fun underageGoesToAgeLockAndNeverSavesTheProfile() = runTest {
-        val repository = FakeBasicProfileRepository().apply { verifyResult = ApiResult.Failure(AppError.Underage) }
+        val repository = FakeBasicProfileRepository().apply {
+            verifyResult =
+                ApiResult.Failure(AppError.Underage)
+        }
         val viewModel = BasicProfileViewModel(false, repository, auth)
         viewModel.fill(date = "2010-01-01")
         viewModel.effects.test {
@@ -116,12 +128,17 @@ class BasicProfileViewModelTest {
     fun underageAccountOpeningB0GoesStraightToAgeLock() = runTest {
         val repository = FakeBasicProfileRepository(meResult = ApiResult.Failure(AppError.Underage))
         val viewModel = BasicProfileViewModel(false, repository, auth)
-        viewModel.effects.test { assertEquals(BasicProfileEffect.ReplaceAll(Underage), awaitItem()) }
+        viewModel.effects.test {
+            assertEquals(BasicProfileEffect.ReplaceAll(Underage), awaitItem())
+        }
     }
 
     @Test
     fun failedPatchKeepsDateLockedSoRetryDoesNotVerifyAgain() = runTest {
-        val repository = FakeBasicProfileRepository().apply { updateResult = ApiResult.Failure(AppError.Network) }
+        val repository = FakeBasicProfileRepository().apply {
+            updateResult =
+                ApiResult.Failure(AppError.Network)
+        }
         val viewModel = BasicProfileViewModel(false, repository, auth)
         viewModel.fill()
         viewModel.onSubmit()
@@ -139,7 +156,10 @@ class BasicProfileViewModelTest {
 
     @Test
     fun conflictReloadsTheSavedDateAndLocksIt() = runTest {
-        val repository = FakeBasicProfileRepository().apply { verifyResult = ApiResult.Failure(AppError.Conflict) }
+        val repository = FakeBasicProfileRepository().apply {
+            verifyResult =
+                ApiResult.Failure(AppError.Conflict)
+        }
         val viewModel = BasicProfileViewModel(false, repository, auth)
         viewModel.fill(date = "2001-01-01")
         repository.meResult = ApiResult.Success(BasicProfileSamples.savedUser)
@@ -155,11 +175,15 @@ class BasicProfileViewModelTest {
 
     @Test
     fun editModePrefillsLocksDateAndOnlyPatches() = runTest {
-        val repository = FakeBasicProfileRepository(meResult = ApiResult.Success(BasicProfileSamples.savedUser))
+        val repository =
+            FakeBasicProfileRepository(meResult = ApiResult.Success(BasicProfileSamples.savedUser))
         val viewModel = BasicProfileViewModel(true, repository, auth)
         val form = viewModel.form()
         assertTrue(form.edit)
-        assertEquals(BasicProfileSamples.complete.copy(birthDateLocked = true, displayName = "Ana"), form.form)
+        assertEquals(
+            BasicProfileSamples.complete.copy(birthDateLocked = true, displayName = "Ana"),
+            form.form
+        )
         viewModel.onCareerChange("")
         viewModel.effects.test {
             viewModel.onSubmit()
@@ -174,7 +198,7 @@ class BasicProfileViewModelTest {
     fun missingGoogleNameAsksForIt() = runTest {
         val repository =
             FakeBasicProfileRepository(
-                meResult = ApiResult.Success(BasicProfileSamples.newUser.copy(displayName = null)),
+                meResult = ApiResult.Success(BasicProfileSamples.newUser.copy(displayName = null))
             )
         val viewModel = BasicProfileViewModel(false, repository, auth)
         viewModel.fill()
@@ -190,7 +214,8 @@ class BasicProfileViewModelTest {
 
     @Test
     fun loadErrorOffersRetry() = runTest {
-        val repository = FakeBasicProfileRepository(catalogResult = ApiResult.Failure(AppError.Network))
+        val repository =
+            FakeBasicProfileRepository(catalogResult = ApiResult.Failure(AppError.Network))
         val viewModel = BasicProfileViewModel(false, repository, auth)
         assertEquals(BasicProfileUiState.LoadError(AppError.Network), viewModel.state.value)
         repository.catalogResult = ApiResult.Success(BasicProfileSamples.catalog)

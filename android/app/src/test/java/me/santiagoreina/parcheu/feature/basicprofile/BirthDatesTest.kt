@@ -11,7 +11,10 @@ class BirthDatesTest {
         val millis = BirthDates.toUtcMillis(date)
         assertEquals(1084752000000L, millis)
         assertEquals(date, BirthDates.fromUtcMillis(millis))
-        assertEquals(IsoDate("2008-02-29"), BirthDates.fromUtcMillis(BirthDates.toUtcMillis(IsoDate("2008-02-29"))))
+        assertEquals(
+            IsoDate("2008-02-29"),
+            BirthDates.fromUtcMillis(BirthDates.toUtcMillis(IsoDate("2008-02-29")))
+        )
     }
 
     @Test
@@ -23,6 +26,9 @@ class BirthDatesTest {
     @Test
     fun yearsAgoKeepsTheDay() {
         val now = BirthDates.toUtcMillis(IsoDate("2026-10-22"))
-        assertEquals(IsoDate("2007-10-22"), BirthDates.fromUtcMillis(BirthDates.yearsAgoUtcMillis(now, 19)))
+        assertEquals(
+            IsoDate("2007-10-22"),
+            BirthDates.fromUtcMillis(BirthDates.yearsAgoUtcMillis(now, 19))
+        )
     }
 }

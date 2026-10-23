@@ -13,7 +13,11 @@ import kotlinx.serialization.json.JsonPrimitive
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.JsonSchemaCheck
 import me.santiagoreina.parcheu.contract.Dimension
+import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.NotificationKinds
+import me.santiagoreina.parcheu.contract.SimulationStatus
+import kotlinx.coroutines.runBlocking
 import java.time.Instant
 import java.util.UUID
 
@@ -50,6 +54,24 @@ class SimulationUnitTest : FunSpec({
         TwinPromptBuilder.build(input(Mode.AMISTAD, emptyList(), turn = 4)).prompt shouldContain END_MARK
         val p = TwinPromptBuilder.build(input(Mode.AMISTAD, emptyList(), 3, listOf(AgentLine(true, "hola"), AgentLine(false, "qué más")))).prompt
         p shouldContain "Tú: hola\nLa otra persona: qué más\n"
+    }
+
+    test("NotifierSimulationNotifier avisa por el Notifier de E5.3 con el tipo y la ruta de arquitectura.md §8.4") {
+        val notifier = FakeNotifier()
+        val adapter = NotifierSimulationNotifier(notifier)
+        val user = UUID.randomUUID()
+        val sim = UUID.randomUUID()
+        runBlocking {
+            adapter.finished(user, sim, SimulationStatus.DONE, 82)
+            adapter.finished(user, sim, SimulationStatus.FAILED, null)
+        }
+        notifier.sent.map { it.userId } shouldContainExactly listOf(user, user)
+        val (done, failed) = notifier.sent.map { it.notification }
+        done.kind shouldBe NotificationKinds.SIMULATION_READY
+        done.route shouldBe "parcheu://results/$sim"
+        done.body shouldContain "82"
+        failed.kind shouldBe NotificationKinds.SIMULATION_FAILED
+        failed.route shouldBe "parcheu://simulation/$sim"
     }
 
     test("clipTurn deja el turno en 120 tokens como máximo (~480 caracteres)") {

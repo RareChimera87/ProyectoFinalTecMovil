@@ -40,8 +40,8 @@ class BasicProfileScreenshotTest(private val dark: Boolean) {
             filePath = "src/test/screenshots/basicprofile/${name}_$theme.png",
             roborazziOptions =
             RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
-            ),
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+            )
         )
     }
 
@@ -57,7 +57,7 @@ class BasicProfileScreenshotTest(private val dark: Boolean) {
             onSubmit = {},
             onRetryLoad = {},
             onBack = {},
-            animateLoading = false,
+            animateLoading = false
         )
     }
 
@@ -68,7 +68,13 @@ class BasicProfileScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun b0Complete() = capture("b0_completo") {
-        B0(BasicProfileUiState.Form(BasicProfileSamples.catalog, BasicProfileSamples.complete, edit = false))
+        B0(
+            BasicProfileUiState.Form(
+                BasicProfileSamples.catalog,
+                BasicProfileSamples.complete,
+                edit = false
+            )
+        )
     }
 
     @Test
@@ -77,8 +83,8 @@ class BasicProfileScreenshotTest(private val dark: Boolean) {
             BasicProfileUiState.Form(
                 BasicProfileSamples.catalog,
                 BasicProfileSamples.complete.copy(birthDateLocked = true),
-                edit = true,
-            ),
+                edit = true
+            )
         )
     }
 
@@ -89,8 +95,8 @@ class BasicProfileScreenshotTest(private val dark: Boolean) {
                 BasicProfileSamples.catalog,
                 BasicProfileSamples.complete.copy(birthDate = IsoDate("2003-01-09")),
                 edit = false,
-                error = AppError.Network,
-            ),
+                error = AppError.Network
+            )
         )
     }
 

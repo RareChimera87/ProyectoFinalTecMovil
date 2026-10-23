@@ -20,12 +20,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import me.santiagoreina.parcheu.api.inMemoryDomains
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.platform.AppContainer
-import me.santiagoreina.parcheu.api.platform.allDomains
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.db.TestDatabase
@@ -70,7 +68,7 @@ class ProfileDbTest : FunSpec({
                 val profile = ProfileService(identity, ExposedProfileRepository(db), clock)
                 val container = AppContainer(
                     testConfig(), clock, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"),
-                    identity, profile, domains = inMemoryDomains(identity, profile),
+                    identity, profile,
                 )
                 testApplication {
                     val client = startApp(container)

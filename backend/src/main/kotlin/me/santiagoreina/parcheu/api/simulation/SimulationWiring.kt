@@ -53,9 +53,10 @@ fun simulationModule(
     graph: GraphModule,
     tasks: TaskQueue,
     firebaseProjectId: String?,
+    notifier: SimulationNotifier,
 ): SimulationModule {
     val mirror = if (env == Env.LOCAL || firebaseProjectId == null) NoopSimulationMirror else FirestoreSimulationMirror(firebaseProjectId)
-    return assemble(ExposedSimulationRepository(db), clock, ai, quota, graph, tasks, mirror, NoopSimulationNotifier)
+    return assemble(ExposedSimulationRepository(db), clock, ai, quota, graph, tasks, mirror, notifier)
 }
 
 /**

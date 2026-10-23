@@ -60,12 +60,13 @@ jobs:
           else
             echo "::notice::Sin GOOGLE_SERVICES_JSON_DEV: el build sigue sin Firebase (missingGoogleServicesStrategy=WARN)."
           fi
-      - name: ktlint, lint, tests JVM y verificación de Roborazzi
+      - name: ktlint, lint, tests JVM, Roborazzi y permiso BILLING de prodRelease (E7.0)
         working-directory: android
         run: >-
           ./gradlew --stacktrace
           spotlessCheck
           :app:lintDevDebug :app:testDevDebugUnitTest
+          :app:verifyProdReleaseBillingPermission
           :designsystem:lintDebug :designsystem:testDebugUnitTest
           -Proborazzi.test.verify=true
       - name: Reportes y diferencias de capturas

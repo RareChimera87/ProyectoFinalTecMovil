@@ -4,15 +4,23 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
-import me.santiagoreina.parcheu.api.ai.AiGateway
-import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.identity.profile.InMemoryProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
+import me.santiagoreina.parcheu.api.quota.QuotaModule
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
+import me.santiagoreina.parcheu.api.ai.AiGateway
+import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.graph.GraphModule
+import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
+import me.santiagoreina.parcheu.api.chat.ChatModule
+import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
+import me.santiagoreina.parcheu.api.simulation.SimulationModule
+import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
+import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.matching.MatchingModule
 import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
-import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.twin.TwinModule
@@ -23,12 +31,6 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
-import me.santiagoreina.parcheu.api.quota.QuotaModule
-import me.santiagoreina.parcheu.api.graph.GraphModule
-import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
-import me.santiagoreina.parcheu.api.simulation.SimulationModule
-import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
-import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.contract.ContractJson
 import java.time.Clock
 import java.time.Instant
@@ -59,13 +61,14 @@ fun testContainer(
     extra: List<DomainRoutes> = emptyList(),
     repo: InMemoryIdentityRepository = InMemoryIdentityRepository().also { it.seedAcceptedUser("ana", TEST_LEGAL_VERSION) },
     legalTextVersion: String = TEST_LEGAL_VERSION,
-    ai: AiGateway = testGateway(),
-    twin: TwinModule = inMemoryTwinModule(FIXED_CLOCK, ai),
-    quota: QuotaModule = inMemoryQuotaModule(FIXED_CLOCK),
-    config: AppConfig = testConfig(),
-    graph: GraphModule = inMemoryGraphModule(FIXED_CLOCK),
-    simulation: SimulationModule = inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph),
     clock: Clock = FIXED_CLOCK,
+    quota: QuotaModule = inMemoryQuotaModule(clock),
+    config: AppConfig = testConfig(),
+    ai: AiGateway = testGateway(),
+    twin: TwinModule = inMemoryTwinModule(clock, ai),
+    graph: GraphModule = inMemoryGraphModule(clock),
+    chat: ChatModule = inMemoryChatModule(clock, graph.policy),
+    simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
 ): AppContainer {
@@ -78,14 +81,15 @@ fun testContainer(
         oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
         identity = identity,
         profile = profile,
+        quota = quota,
         ai = ai,
         twin = twin,
-        quota = quota,
         graph = graph,
+        chat = chat,
         simulation = simulation,
         notifier = notifier,
         matching = matching,
-        domains = allDomains(identity, profile, twin, quota, graph, simulation, matching) + extra,
+        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching) + extra,
     )
 }
 
@@ -93,16 +97,4 @@ fun testContainer(
 fun ApplicationTestBuilder.startApp(container: AppContainer = testContainer()): HttpClient {
     application { module(container) }
     return createClient { install(ContentNegotiation) { json(ContractJson) } }
-}
-
-/** Dominios con todos los módulos en memoria salvo identidad: para pruebas que cablean su propio `AppContainer`. */
-fun inMemoryDomains(identity: IdentityService, profile: ProfileService): List<DomainRoutes> {
-    val ai = testGateway()
-    val quota = inMemoryQuotaModule(FIXED_CLOCK)
-    val graph = inMemoryGraphModule(FIXED_CLOCK)
-    val simulation = inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph)
-    return allDomains(
-        identity, profile, inMemoryTwinModule(FIXED_CLOCK, ai), quota, graph, simulation,
-        inMemoryMatchingModule(FIXED_CLOCK, quota, simulation, graph, NoopNotifier),
-    )
 }

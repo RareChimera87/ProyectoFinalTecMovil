@@ -51,4 +51,6 @@ public data class NodeDetail(
     val node: NodeDto,
     val lastSimulation: SimulationSummary? = null,
     val sharedModes: List<Mode> = emptyList(),
+    /** Id del chat con este nodo cuando la conexión es `CONNECTED`; `null` si no hay chat. */
+    val chatId: String? = null,
 )
