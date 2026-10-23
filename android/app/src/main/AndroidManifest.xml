@@ -35,6 +35,21 @@
 
                 <data android:scheme="parcheu" />
             </intent-filter>
+            <!--
+                App Link de invitaciones (E6.1, ADR-0018): https://<hosting>/i/{codigo} abre C5 con el código
+                precargado. El host es el sitio de Firebase Hosting del flavor (manifestPlaceholders.inviteHost)
+                y se verifica con /.well-known/assetlinks.json (firebase/public).
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" />
+                <data android:host="${inviteHost}" />
+                <data android:pathPrefix="/i/" />
+            </intent-filter>
         </activity>
 
         <!-- Compartir el JSON de 'Descargar mis datos' (E8.3) sin exponer otros archivos. -->
