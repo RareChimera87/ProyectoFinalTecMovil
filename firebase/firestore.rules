@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// Firestore es un canal de solo lectura para los clientes (ADR-0004).
+// Todas las escrituras las hace el backend con Admin SDK, que ignora estas reglas.
+service cloud.firestore {
+  match /databases/{db}/documents {
+    // Todo denegado por defecto, incluida cualquier escritura de cliente.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /chats/{chatId} {
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.members;
+
+      match /messages/{msgId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(db)/documents/chats/$(chatId)).data.members;
+      }
+    }
+
+    match /simulations/{simId} {
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.participants;
+    }
+
+    match /matchTickets/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
