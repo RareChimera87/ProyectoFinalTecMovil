@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.push
 
 import java.net.URI
 import me.santiagoreina.parcheu.contract.NotificationKinds
+import me.santiagoreina.parcheu.feature.invites.InviteLinks
 import me.santiagoreina.parcheu.navigation.AddFriends
 import me.santiagoreina.parcheu.navigation.AppRoute
 import me.santiagoreina.parcheu.navigation.Chat
@@ -31,9 +32,18 @@ import me.santiagoreina.parcheu.navigation.TrainTwin
 object DeepLinks {
     const val SCHEME = "parcheu"
 
-    /** Ruta de un deep link; `null` si no es `parcheu://` o no corresponde a ninguna pantalla. */
-    fun fromUri(raw: String?): AppRoute? {
+    /**
+     * Ruta de un deep link; `null` si no es `parcheu://` ni el App Link de invitación
+     * `https://<hosting>/i/{codigo}` de este entorno (E6.1, que abre C5 con el código precargado), o si no
+     * corresponde a ninguna pantalla.
+     */
+    fun fromUri(raw: String?, inviteHost: String = InviteLinks.defaultHost): AppRoute? {
         val uri = raw?.let { runCatching { URI(it.trim()) }.getOrNull() } ?: return null
+        if (uri.scheme ==
+            "https"
+        ) {
+            return InviteLinks.codeFromLink(raw, inviteHost)?.let { AddFriends(code = it) }
+        }
         if (uri.scheme != SCHEME) return null
         val host = uri.host ?: return null
         val segments = uri.path.orEmpty().split('/').filter { it.isNotEmpty() }

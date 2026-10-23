@@ -1,6 +1,7 @@
 import com.android.build.api.artifact.SingleArtifact
 import com.github.triplet.gradle.androidpublisher.ReleaseStatus
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.net.URI
 import javax.xml.parsers.DocumentBuilderFactory
 
 plugins {
@@ -16,6 +17,9 @@ plugins {
 // sin tocar este archivo. La URL de Cloud Run es determinista: https://<servicio>-<número de proyecto>.<región>.run.app
 fun urlProperty(name: String, default: String): String =
     providers.gradleProperty(name).getOrElse(default)
+
+// Host de una URL https (sin esquema, puerto ni camino), para el App Link de invitaciones (E6.1).
+fun hostOf(url: String): String = URI(url).host ?: error("URL de Hosting sin host: $url")
 
 // Versión (E10.2). El pipeline android-release pasa -Pparcheu.versionCode (scripts/version-code.sh,
 // derivado del número de ejecución) y -Pparcheu.versionName (del tag v*). En local quedan 1 y 0.0.1.
@@ -90,6 +94,8 @@ android {
             buildConfigField("String", "HOSTING_URL", "\"$hosting\"")
             buildConfigField("String", "TERMS_URL", "\"$hosting/terminos\"")
             buildConfigField("String", "PRIVACY_URL", "\"$hosting/privacidad\"")
+            // App Link de invitaciones (E6.1): https://<host>/i/{codigo}.
+            manifestPlaceholders["inviteHost"] = hostOf(hosting)
             resValue("string", "app_name", "ParcheU dev")
         }
         create("prod") {
@@ -103,6 +109,7 @@ android {
             buildConfigField("String", "HOSTING_URL", "\"$hosting\"")
             buildConfigField("String", "TERMS_URL", "\"$hosting/terminos\"")
             buildConfigField("String", "PRIVACY_URL", "\"$hosting/privacidad\"")
+            manifestPlaceholders["inviteHost"] = hostOf(hosting)
             resValue("string", "app_name", "ParcheU")
         }
     }
@@ -269,6 +276,9 @@ dependencies {
     // E7.0: Play Billing. Su manifiesto agrega com.android.vending.BILLING por fusión (lo verifica
     // verifyProdReleaseBillingPermission).
     implementation(libs.billing.ktx)
+    // E6.1 (ADR-0018): ZXing core genera el QR; Google Code Scanner lo lee sin permiso de cámara.
+    implementation(libs.zxing.core)
+    implementation(libs.play.services.code.scanner)
 
     testImplementation(libs.junit)
     testImplementation(libs.androidx.test.core)

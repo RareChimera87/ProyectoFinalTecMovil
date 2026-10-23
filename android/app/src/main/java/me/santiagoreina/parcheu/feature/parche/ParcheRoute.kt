@@ -10,6 +10,7 @@ import me.santiagoreina.parcheu.navigation.AddFriends
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Communities
 import me.santiagoreina.parcheu.navigation.Evolution
+import me.santiagoreina.parcheu.navigation.FriendsOfFriends
 import me.santiagoreina.parcheu.navigation.Introduce
 import me.santiagoreina.parcheu.navigation.MatchQueue
 import me.santiagoreina.parcheu.navigation.Parche
@@ -20,8 +21,9 @@ import org.koin.compose.viewmodel.koinViewModel
 const val PAYWALL_SOURCE_PARCHE = "parche"
 
 /**
- * D1-D5 (E3.4). [Parche.community] llega de D8 y filtra el grafo; el candado y las funciones de ParcheU+
- * (comunidades, evolución) llevan al paywall G1 cuando la persona no tiene el plan.
+ * D1-D5 (E3.4). [Parche.community] llega de D8 y filtra el grafo; las funciones de ParcheU+
+ * (comunidades, evolución) llevan al paywall G1 cuando la persona no tiene el plan. El banner de
+ * bloqueo y la entrada de ParcheU+ abren amigos de amigos (D7 o D6, E6.3).
  */
 @Composable
 fun ParcheRoute(
@@ -64,7 +66,9 @@ fun ParcheRoute(
                 },
                 onAddFriends = { navigator.navigate(AddFriends()) },
                 onRandomMatch = { navigator.navigate(MatchQueue()) },
-                onUnlock = { navigator.navigate(Paywall(PAYWALL_SOURCE_PARCHE)) },
+                // Flujo 11 del inventario: el banner de D1 lleva a D7 (gratis), que ofrece G1.
+                onUnlock = { navigator.navigate(FriendsOfFriends) },
+                onFriendsOfFriends = { navigator.navigate(FriendsOfFriends) },
                 onIntroduce = { navigator.navigate(Introduce) }
             )
         }

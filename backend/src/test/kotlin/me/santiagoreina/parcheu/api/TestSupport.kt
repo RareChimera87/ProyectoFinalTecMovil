@@ -4,6 +4,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
+import me.santiagoreina.parcheu.api.billing.BillingModule
+import me.santiagoreina.parcheu.api.billing.inMemoryBillingModule
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.deletion.AccountModule
 import me.santiagoreina.parcheu.api.identity.deletion.inMemoryAccountModule
@@ -15,6 +17,8 @@ import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.safety.SafetyModule
+import me.santiagoreina.parcheu.api.social.invites.InviteModule
+import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.home.UnreadCounter
@@ -90,6 +94,9 @@ fun testContainer(
     // usar un `IntroductionSimulationNotifier` sobre este mismo [introductionStore] (IntroductionApiTest).
     introductionStore: IntroductionRepository = InMemoryIntroductionRepository(),
     introductions: IntroductionModule = introductionModule(introductionStore, simulation, graph, chat, quota, notifier, clock),
+    invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
+    // Billing (E7.1): para que `verify` dé Plus en el cupo, pasar también `quota` con `billing.entitlements`.
+    billing: BillingModule = inMemoryBillingModule(clock),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
@@ -117,7 +124,12 @@ fun testContainer(
         notifications = notifications,
         introductions = introductions,
         unread = unread,
-        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications, introductions) + extra,
+        billing = billing,
+        invites = invites,
+        domains = allDomains(
+            identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
+            invites, billing, config.env, introductions,
+        ) + extra,
     )
 }
 

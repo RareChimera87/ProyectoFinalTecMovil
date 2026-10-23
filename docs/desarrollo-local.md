@@ -125,6 +125,21 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
 
 - Clave de `anonId` del grafo: `HMAC_ANON_KEY` (valor directo) o `SECRET_HMAC_ANON_KEY` (nombre del secreto `projects/<p>/secrets/hmac-anon-key`, que define el Terraform de E0.5; se lee la versión `latest` en el primer uso). Con `ENV=local` y sin ninguna de las dos se usa una clave fija de desarrollo; en dev y prod, sin clave, `GET /v1/graph` falla con 500 en vez de usar una clave débil.
 
+## Billing en el servidor (E7.1)
+
+- API de Google Play Developer, en orden de preferencia: `PLAY_SA_JSON` (una llave directa, solo local; nunca en el repo), `PLAY_SERVICE_ACCOUNT` (correo de `sa-play`; la API la suplanta con sus credenciales por defecto, sin llaves; lo define el Terraform de prod) o `SECRET_PLAY_SA` (nombre del secreto `play-sa`, con una llave JSON como respaldo; se lee la versión `latest` en el primer uso). La cuenta debe estar invitada en Play Console con **Ver datos financieros** y **Administrar pedidos y suscripciones**. `PLAY_PACKAGE_NAME` es el paquete en Play (por defecto `me.santiagoreina.parcheu`, el flavor `prod`; el flavor `dev` no está en Play).
+- Con `ENV=local` y sin llave, `POST /v1/billing/verify` responde 500 con un mensaje claro: para probar Plus en local usa `POST /internal/dev/grant-plus` (`{"userId": "<uuid>", "days": 7}` con `Authorization: Bearer oidc-tasks-fake`, el token OIDC Fake de `ENV=local`). En dev y prod, sin llave, `verify` falla al primer uso (el servicio arranca igual).
+- Probar una RTDN a mano en local (sobre de Pub/Sub con la notificación en base64):
+
+```bash
+OIDC_FAKE=oidc-tasks-fake  # token OIDC Fake de ENV=local (ver «Arranque local»)
+DATA=$(printf '{"version":"1.0","packageName":"me.santiagoreina.parcheu","eventTimeMillis":"1","subscriptionNotification":{"version":"1.0","notificationType":2,"purchaseToken":"<token>","subscriptionId":"parcheu_plus"}}' | base64 -w0)
+curl -X POST localhost:8080/internal/billing/rtdn -H "Authorization: Bearer $OIDC_FAKE" \
+  -H 'Content-Type: application/json' -d "{\"message\":{\"data\":\"$DATA\",\"messageId\":\"m-1\"}}"
+```
+
+- Los tests (`billing.*`) no llaman a Play: `FakePlayApi` sirve las respuestas grabadas de `src/test/resources/billing/play/` al cliente real. `BillingDbTest` necesita Docker o `PARCHEU_TEST_DB_URL`.
+
 ## Suite de invariantes de privacidad (E3.5)
 
 ```bash

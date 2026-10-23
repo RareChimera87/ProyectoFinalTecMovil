@@ -627,7 +627,7 @@ API del grafo, layout radial, componente G0, pantalla D1-D5 y suite de invariant
 
 **Descripción.** D1 con grafo, chips de filtro funcionales (modo, afinidad 70 %+, comunidad), StatCards, banner bloqueado para gratis, D2 bottom sheet con variantes conectados, simularon y pendiente ('Simular de nuevo' → F4, 'Chatear' → F9), D3 vacío, D4 skeleton, D5 error con reintentar, I2 claro. Pinta al instante el último grafo guardado en DataStore.
 
-**Hueco de contrato (E3.3, ronda 2).** `GraphFof.parentId` (la conexión por la que se llega al amigo de amigo) es nulo porque `FofCandidate` y la consulta de arquitectura §6.2 no lo devuelven. Sin él, el fof conserva la posición radial y no dibuja la línea punteada. Coordinar con E3.1/E6.3 un campo `viaId` (uno de los mutuals) en `FofCandidate` y en la consulta SQL; mientras tanto, mapear `parentId = null`. `viaId` debe salir de la misma fila `e.me` de la consulta §6.2, que ya filtra `e.mode <> 'PAREJA'` y `e.state = 'CONNECTED'`, y nunca de una subconsulta aparte: 'mine' solo excluye la arista Pareja entre el observador y X, no las aristas Pareja de X con el candidato, y una subconsulta sin ese filtro revelaría una arista de Pareja que no involucra al observador (regla 1 de `GraphVisibilityPolicy`).
+**Hueco de contrato (E3.3, ronda 2).** `GraphFof.parentId` (la conexión por la que se llega al amigo de amigo) es nulo porque `FofCandidate` y la consulta de arquitectura §6.2 no lo devuelven. Sin él, el fof conserva la posición radial y no dibuja la línea punteada. Coordinar con E3.1/E6.3 un campo `viaId` (uno de los mutuals) en `FofCandidate` y en la consulta SQL; mientras tanto, mapear `parentId = null`. **Cerrado en E6.3:** `FofCandidate.viaId` (opcional) sale de `FofService.viaOf` sobre las aristas de la misma fila y D6 mapea `parentId = viaId`. `viaId` debe salir de la misma fila `e.me` de la consulta §6.2, que ya filtra `e.mode <> 'PAREJA'` y `e.state = 'CONNECTED'`, y nunca de una subconsulta aparte: 'mine' solo excluye la arista Pareja entre el observador y X, no las aristas Pareja de X con el candidato, y una subconsulta sin ese filtro revelaría una arista de Pareja que no involucra al observador (regla 1 de `GraphVisibilityPolicy`).
 
 **Criterios de aceptación (verificables):**
 
@@ -987,6 +987,10 @@ QR y código, presentar a dos amigos, amigos de amigos, comunidades, evolución 
 - [ ] Test: tras un bloqueo en cualquier sentido, el bloqueado desaparece de fof del observador (criterio trasladado desde E8.1).
 - [ ] Roborazzi de D6 y D7.
 
+**Cerrado en E6.3: hueco `viaId` de E3.4.** `FofCandidate.viaId?` es el amigo en común por el que se llega (su `users.id`, el mismo `NodeDto.id` del ego-grafo). Sale solo de las aristas de la fila `e.me` de §6.2 que además pasaron `canSeeEdge` (prefiere una del modo del candidato y desempata por id); D6 lo usa como `GraphFof.parentId` (línea punteada prt "2 4") y como "Amigo de Valentina" en la tarjeta. La propiedad `viaId` de E3.5 la cubre `FofViaIdPropertyTest` (1.000 mundos) y `FofDbTest` lo prueba en SQL.
+
+**Hueco de contrato: 'Simular' desde D6 (E6.3, ronda 1).** ADR-0023, el mockup 09a y el flujo 11 del inventario (D6 → F4) piden un botón 'Simular' en cada candidato, pero `POST /v1/simulations` solo acepta `otherUserId` = `users.id` y un `anonId` da 404 (arquitectura §7.2, E4.3); el `anonId` es una HMAC no invertible y fof nunca entrega el uuid de alguien sin conexión mutua (ADR-0012). Por eso D6 sale sin 'Simular': la única acción es 'Pedir presentación' (E6.4), cuya simulación calcula la afinidad real, y la nota al pie lo dice así. **Dueño: I1 (API, decide antes de la ventana de E7.4, 18 nov) + I3 (UI).** Opciones: (a) `SimulationRequest{otherUserId?, anonId?}` con exactamente uno, resuelto en el servidor contra los candidatos fof del observador (`FofService.candidates` y comparar `anonId`), con cupo normal y la otra persona enmascarada en F4/F5 hasta la conexión mutua; o (b) enmendar ADR-0023 para quitar 'Simular' de D6 y dejar la presentación como único camino. Con (a), D6 agrega 'Simular' → F4 y E7.4 lo audita.
+
 #### E6.4 · Comunidades
 
 - **Rama:** `feature/communities`
@@ -1197,6 +1201,7 @@ Reportar y bloquear desde todas partes (incluido contenido de IA), ajustes de pr
 - **Depende de:** E5.1, E3.1
 - **En paralelo con:** E4.9
 - **Pantallas del inventario:** H3 (borrado y descarga de datos; pantallas nuevas)
+- Mockup: H4 Exportar mis datos y H5 Borrar cuenta (inventario §1.1)
 - **Archivos y módulos:** backend/.../identity/deletion/**, backend/.../identity/export/**, android/app/.../feature/settings/delete/**, android/app/.../feature/settings/export/**
 
 **Descripción.** `DELETE /v1/me`: borrado lógico inmediato (`deleted_at`, invisible en todo) y tarea `purge-user` (cola `maintenance`) que sigue la tabla de arquitectura.md §10.2: filas personales en Postgres; mensajes en chats compartidos anonimizados ('Usuario eliminado') en Postgres y Firestore; **simulaciones compartidas**: se conserva para el otro solo el puntaje y la fecha, con `transcript` y `report` puestos en `null` y el participante como 'Usuario eliminado'; documentos Firestore `simulations/{id}` y `matchTickets/{uid}` borrados; datos personales en **jsonb** limpiados según el registro `PersonalJsonPaths` (`reports.snapshot`, `simulations.transcript/report`, `notifications.payload`, `purchase_events.payload`); tokens FCM y usuario de Firebase Auth. Se conserva lo que exige la ley (consentimientos y eventos de compra sin datos de contacto, ADR-0025). Aviso de que la suscripción se cancela en Play. `GET /v1/me/export` (JSON con perfil, respuestas, memorias, consentimientos, conexiones y mensajes propios). En la app: confirmación de borrado y **'Descargar mis datos'** (descarga el JSON y lo guarda con `ACTION_CREATE_DOCUMENT` o lo comparte con la hoja del sistema).
@@ -1209,6 +1214,13 @@ Reportar y bloquear desde todas partes (incluido contenido de IA), ajustes de pr
 - [ ] Test: la exportación no incluye datos privados de otros usuarios (solo su id anónimo).
 - [ ] Test UI (Fakes): 'Descargar mis datos' pide el JSON y lanza el intent de crear documento con nombre `parcheu-datos-<fecha>.json`.
 - [ ] Roborazzi de la confirmación de borrado y de 'Descargar mis datos'.
+
+**Implementación futura (decisión 2026-10-23):** lo vigente para E8.3 es lo implementado en #59 y #62 (exportación como JSON local guardado con `ACTION_CREATE_DOCUMENT` o compartido con la hoja del sistema; borrado lógico inmediato con purga en cola, confirmado con una casilla). Los criterios de aceptación de arriba no cambian. El mockup H4 'Exportar mis datos' y H5 'Borrar cuenta' (inventario §1.1 y §6.3) queda como pendiente post-1.0:
+
+- (a) Exportación por correo con enlace válido 7 días (requiere un servicio de envío de correo que hoy no existe en la arquitectura) y formato PDF legible además de JSON.
+- (b) Selección de categorías a exportar: perfil y modos, gemelo, parche, simulaciones y chats (chats desmarcado por defecto).
+- (c) Confirmación del borrado escribiendo "BORRAR" y botón destructivo coral pleno (#FF5C7A con texto #14111F) con lista de consecuencias (`DestructiveButton`, `ConsequenceList` y `DestructiveHeroIcon` del inventario).
+- (d) Periodo de gracia de 14 días recuperable al iniciar sesión (hoy el borrado es inmediato; cambiarlo implica revisar la purga de arquitectura.md §10.2 y la declaración de Play).
 
 #### E8.4 · Páginas web legales
 

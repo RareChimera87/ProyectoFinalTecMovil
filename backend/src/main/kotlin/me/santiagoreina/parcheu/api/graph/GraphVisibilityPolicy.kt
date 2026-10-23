@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.graph
 
+import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
 import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
 import me.santiagoreina.parcheu.contract.Mode
@@ -119,6 +120,8 @@ object ThirdPartyViews {
         HomeSuggestions::class,
         // Presentaciones (E6.2): la otra persona presentada (E3) y los amigos de amigos de 'Pedir presentación'.
         IntroductionPeople::class,
+        // Amigos de amigos (E6.3): candidatos a dos saltos y las aristas que los conectan.
+        FofService::class,
     )
 
     fun names(): Set<String> = registered.mapNotNull { it.simpleName }.toSet()

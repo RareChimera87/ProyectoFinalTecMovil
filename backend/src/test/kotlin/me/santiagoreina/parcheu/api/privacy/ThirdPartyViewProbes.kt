@@ -6,6 +6,8 @@ import me.santiagoreina.parcheu.api.graph.GraphService
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.ThirdPartyView
 import me.santiagoreina.parcheu.api.graph.ViewContext
+import me.santiagoreina.parcheu.api.graph.fof.FofService
+import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
 import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
 import me.santiagoreina.parcheu.contract.Mode
@@ -34,6 +36,7 @@ object ThirdPartyViewProbes {
     val byView: Map<KClass<out ThirdPartyView>, ThirdPartyViewProbe> = mapOf(
         HomeSuggestions::class to HomeSuggestionsProbe,
         IntroductionPeople::class to IntroductionsProbe,
+        FofService::class to FofProbe,
     )
 
     val reference: List<ThirdPartyViewProbe> = listOf(ThirdPartyNodesProbe, EgoGraphProbe)
@@ -132,5 +135,35 @@ object IntroductionsProbe : ThirdPartyViewProbe {
             .map { checkNotNull(it.id ?: it.anonId) { "Una persona presentada sin id público" } }
         val fof = view.friendsOfFriends(viewer).keys.map { signer.anonId(viewer, it) }
         return Exposure(personIds = others + fof, edges = emptyList())
+    }
+}
+
+/**
+ * Amigos de amigos (E6.3) con ParcheU+ (el caso que entrega la lista). Expone a cada candidato por su
+ * id público, las aristas amigo en común–candidato que entran en `mutuals` y la arista `viaId`–candidato
+ * que la UI dibuja, en segundo grado: nunca Pareja ajena, HIDDEN, bloqueados ni borrados, y el
+ * candidato siempre con su `anonId` (nunca hay conexión mutua con él). Que `viaId` además salga de
+ * una arista CONNECTED que no es de Pareja lo prueba `FofViaIdPropertyTest`.
+ */
+object FofProbe : ThirdPartyViewProbe {
+    override val name = "amigos de amigos"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val graph = world.toGraphRepository()
+        val view = FofService(InMemoryFofRepository(graph), graph, GraphVisibilityPolicy(signer), isPlus = { true })
+        val candidates = view.candidates(viewer)
+        val dto = view.fof(viewer)
+        val edges = candidates.flatMap { it.edges }.map { ExposedEdge(it.candidateId, it.mutualId, it.mode) }
+        val byId = candidates.associateBy { it.person.id }
+        val viaEdges = dto.items.orEmpty().mapNotNull { item ->
+            val via = item.viaId ?: return@mapNotNull null
+            // El DTO no lleva el modo de la arista viaId–candidato: se expone con el modo del candidato.
+            ExposedEdge(item.anonId, via, byId[item.anonId]?.mode ?: item.mode)
+        }
+        return Exposure(
+            personIds = candidates.map { it.person.id } + dto.items.orEmpty().map { it.anonId },
+            edges = edges + viaEdges,
+        )
     }
 }

@@ -48,6 +48,8 @@ dependencies {
     // Cloud Tasks (E2.3, ADR-0019): encolar trabajo asíncrono hacia /internal/tasks/*.
     implementation(libs.google.cloud.tasks)
     implementation(libs.google.api.client)
+    // Billing en el servidor (E7.1, ADR-0013): subscriptionsv2.get y acknowledge de la API de Play.
+    implementation(libs.google.androidpublisher)
 
     // Pasarela de IA (E0.9, ADR-0008): Gemini (Gen AI SDK en modo Vertex) y Claude en Vertex.
     implementation(libs.google.genai)

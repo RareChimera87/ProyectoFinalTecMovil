@@ -3,6 +3,9 @@
 locals {
   apis = [
     "aiplatform.googleapis.com",
+    # Google Play Developer API (E7.1): la cuota y la habilitación van en el
+    # proyecto de la cuenta que llama (sa-play en prod).
+    "androidpublisher.googleapis.com",
     "artifactregistry.googleapis.com",
     "billingbudgets.googleapis.com",
     "cloudscheduler.googleapis.com",

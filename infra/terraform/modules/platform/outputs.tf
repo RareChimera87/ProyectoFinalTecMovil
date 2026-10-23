@@ -26,3 +26,8 @@ output "internal_oidc_audience" {
 output "queues" {
   value = { for k, q in google_cloud_tasks_queue.this : k => q.id }
 }
+
+output "play_service_account" {
+  description = "Correo de sa-play (solo prod; null en dev)."
+  value       = var.play_service_account_enabled ? google_service_account.play[0].email : null
+}

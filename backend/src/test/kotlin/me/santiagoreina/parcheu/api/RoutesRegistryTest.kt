@@ -17,7 +17,8 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * Rutas de arquitectura.md §5.2, agrupadas por dominio. Mientras el dominio sea un stub todas
  * responden 501; cuando una feature implementa su dominio, ajusta el estado esperado de sus rutas
  * (o las quita de esta lista) en su propio PR. Quitadas: `GET /v1/quota` y `POST /internal/dev/grant-plus`
- * (E4.1, probadas en `QuotaApiTest`).
+ * (E4.1, probadas en `QuotaApiTest`; desde E7.1 la segunda la registra `BillingRoutes`) y las de billing
+ * (E7.1, probadas en `BillingApiTest`).
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
@@ -35,17 +36,13 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Simulation: E4.3 (SimulationApiTest) y E4.6 (ReportApiTest) implementaron todas sus rutas /v1.
     "scenario" to listOf(HttpMethod.Get to "/v1/scenarios", HttpMethod.Post to "/v1/scenario-sessions/c1/agreement"),
     "graph" to listOf(
-        // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest).
-        HttpMethod.Get to "/v1/graph/fof",
+        // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest) y /v1/graph/fof E6.3 (FofApiTest).
         HttpMethod.Get to "/v1/graph/history", HttpMethod.Get to "/v1/communities", HttpMethod.Get to "/v1/connect-requests",
     ),
-    // Social: E6.2 implementa las presentaciones (IntroductionApiTest); quedan las invitaciones (E6.1).
-    "social" to listOf(
-        HttpMethod.Get to "/v1/invites/me", HttpMethod.Post to "/v1/invites/redeem", HttpMethod.Post to "/v1/invites/u1/accept",
-    ),
+    // Social: E6.1 implementa las invitaciones (InviteApiTest) y E6.2 las presentaciones (IntroductionApiTest); ya no queda ningún stub.
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
     // Notifications: E5.4 implementa la bandeja y 'Marcar leídas' (NotificationsApiTest); ya no queda ningún stub.
-    "billing" to listOf(HttpMethod.Get to "/v1/billing/entitlement", HttpMethod.Post to "/v1/billing/verify"),
+    // Billing: E7.1 implementa entitlement, verify y la RTDN (BillingApiTest); ya no queda ningún stub.
     // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` sigue en 501 (E8.6).
     "admin" to listOf(HttpMethod.Get to "/v1/admin/reports", HttpMethod.Post to "/v1/admin/reports/r1/resolve"),
     // Home: E4.7 implementa GET /v1/home (HomeApiTest); ya no queda ningún stub.
@@ -57,7 +54,7 @@ private val internalRoutes = listOf(
     "/internal/tasks/judge-scenario",
     "/internal/tasks/extract-memories", "/internal/tasks/moderate", "/internal/tasks/name-community",
     "/internal/jobs/communities", "/internal/jobs/memories",
-    "/internal/jobs/twin-accuracy", "/internal/jobs/retention", "/internal/billing/rtdn",
+    "/internal/jobs/twin-accuracy", "/internal/jobs/retention",
 )
 
 class RoutesRegistryTest : FunSpec({

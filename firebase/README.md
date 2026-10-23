@@ -9,7 +9,7 @@ Reglas, índices y Hosting de Firebase. Decisiones: [ADR-0004](../docs/adr/0004-
 | `.firebaserc` | Alias `dev` (`parcheu-dev`) y `prod` (`parcheu-prod`) |
 | `firestore.rules` | Todo denegado; lectura solo de miembros, participantes o dueño; ninguna escritura de clientes |
 | `firestore.indexes.json` | Índices compuestos (vacío: la 1.0 aún no tiene consultas compuestas; las agregan E5.2 y E4.x si las necesitan) |
-| `public/` | Hosting vacío (E8.4 agrega `/privacidad`, `/terminos`, `/borrar-cuenta`; E6.1 `assetlinks.json` e `/i/*`) |
+| `public/` | Hosting: `/privacidad`, `/terminos`, `/borrar-cuenta` (E8.4), `/.well-known/assetlinks.json` y el respaldo web de `/i/{codigo}` (E6.1, rewrite `/i/**` en `firebase.json`) |
 | `test/` | Pruebas de las reglas con `@firebase/rules-unit-testing` en el emulador |
 
 ## Documentos de Firestore (arquitectura.md §8.2)
@@ -44,6 +44,20 @@ Huellas de debug registradas en dev: SHA-1 `66:39:6A:60:45:47:1C:72:AA:E4:68:37:
 SHA-256 `A3:5E:13:90:B5:65:FC:11:00:74:A1:37:B3:8E:E7:C4:0F:62:56:57:FC:F7:03:39:36:85:84:46:3A:85:7B:DB`
 (keystore de debug de la máquina de I3; cada desarrollador agrega la suya con
 `firebase apps:android:sha:create <APP_ID> <SHA> --project parcheu-dev`).
+
+## App Links de invitaciones (E6.1)
+
+`public/.well-known/assetlinks.json` autoriza a la app a abrir `https://<hosting>/i/{codigo}` sin preguntar. Se
+publica el mismo archivo en los dos sitios con los dos paquetes:
+
+| Paquete | Huellas SHA-256 |
+|---|---|
+| `me.santiagoreina.parcheu.dev` | debug de la máquina de I3 (cada desarrollador que quiera probar el App Link en su teléfono agrega la suya) |
+| `me.santiagoreina.parcheu` | llave de subida (`docs/play-console.md` §2); falta la de **Play App Signing** (ver `docs/pendientes-humanos.md`, E6.1) |
+
+Para agregar una huella: `keytool -list -v -keystore <keystore>` (o Play Console > Integridad de la app) y
+agregarla en mayúsculas con `:` al arreglo del paquete. `scripts/test/legal-pages.sh` valida el formato. En el
+teléfono se comprueba con `adb shell pm get-app-links me.santiagoreina.parcheu.dev` (debe decir `verified`).
 
 ## google-services.json
 

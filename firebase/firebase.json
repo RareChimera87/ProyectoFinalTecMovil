@@ -5,12 +5,42 @@
   },
   "hosting": {
     "public": "public",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "cleanUrls": true
+    "ignore": [
+      "firebase.json",
+      "**/node_modules/**",
+      "**/.!(well-known)",
+      "**/.!(well-known)/**"
+    ],
+    "cleanUrls": true,
+    "rewrites": [
+      {
+        "source": "/i/**",
+        "destination": "/i/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300"
+          }
+        ]
+      }
+    ]
   },
   "emulators": {
-    "firestore": { "port": 8080 },
-    "ui": { "enabled": false },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    },
     "singleProjectMode": true
   }
 }

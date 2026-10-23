@@ -49,7 +49,8 @@ data class ParcheCallbacks(
     val onRandomMatch: () -> Unit = {},
     val onUnlock: () -> Unit = {},
     /** E1 · Presentar a dos amigos (E6.2). */
-    val onIntroduce: () -> Unit = {}
+    val onIntroduce: () -> Unit = {},
+    val onFriendsOfFriends: () -> Unit = {}
 )
 
 /** D1-D5 e I2 (según el tema). La NavBar la pone `ParcheUApp`. */
@@ -197,6 +198,9 @@ private fun LoadedContent(state: ParcheUiState.Loaded, callbacks: ParcheCallback
                 }
                 if (!state.content.plus) {
                     LockedFeatureBanner("Amigos de amigos y comunidades", callbacks.onUnlock)
+                } else {
+                    // D6 no tiene entrada en el mockup para ParcheU+ (inventario §6.2): fila propia (E6.3).
+                    FriendsOfFriendsEntry(callbacks.onFriendsOfFriends)
                 }
             }
         }
