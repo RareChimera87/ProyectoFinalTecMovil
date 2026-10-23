@@ -158,7 +158,7 @@ JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
 ## Perfil básico y edad (E2.6)
 
 - La edad se verifica solo en el servidor: `POST /v1/me/age-verification` guarda `birth_date` una sola vez (inmutable) y calcula los 18 años con la fecha de hoy en America/Bogota. La app nunca decide la edad.
-- Una cuenta de menor queda con `underage_at` y la puerta de `identity/TermsGate.kt` le responde 403 `UNDERAGE` en toda ruta, incluidas `session` y `terms`, salvo `GET` y `DELETE /v1/me`. Para probarlo en local, envía una fecha de menos de 18 años desde B0 o con `curl`.
+- Una cuenta de menor queda con `underage_at` y la puerta de `identity/TermsGate.kt` le responde 403 `UNDERAGE` en toda ruta, incluidas `session` y `terms`, salvo `GET` y `DELETE /v1/me` y `GET /v1/me/export` (E8.3). Para probarlo en local, envía una fecha de menos de 18 años desde B0 o con `curl`.
 - El catálogo de B0 (`GET /v1/catalog`) sale de las semillas de V2 más `V20261022_0745__universidad_unipaz.sql`; `universityId` se valida en `1..32767` (la columna es `smallint`).
 ## Simulación (E4.3)
 
@@ -188,11 +188,12 @@ JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
 
 ## Borrado y exportación de cuenta (E8.3)
 
-- `DELETE /v1/me` (exenta de términos y permitida a cuentas de menor de edad) fija `deleted_at` y encola `purge-user` en la cola `maintenance` (`TASKS_QUEUE_MAINT`). Con `ENV=local` la cola es Fake y no ejecuta en línea: para purgar en local llama `POST /internal/tasks/purge-user` con `{"id":"<uuid>"}` y el token Fake de tareas (`oidc-tasks-fake`).
+- `DELETE /v1/me` (exenta de términos y permitida a cuentas de menor de edad) fija `deleted_at` y encola `purge-user` en la cola `maintenance` (`TASKS_QUEUE_MAINT`). Con `ENV=local` la cola es Fake y no ejecuta en línea: para purgar en local llama `POST /internal/tasks/purge-user` con `{"id":"<uuid>"}` y el token Fake de tareas (`oidc-tasks-fake`). Repetir `DELETE /v1/me` sobre una cuenta ya borrada encola una tarea con nombre propio (`purge-user-<uuid>-retry-<minuto>`) y el job `POST /internal/jobs/purge-sweep` (Cloud Scheduler, cada hora) reencola las cuentas borradas hace más de 1 h que siguen sin purgar (`purge-user-<uuid>-sweep-<hora>`).
+- Una simulación QUEUED o RUNNING de la persona queda FAILED en la misma transacción de la purga y se devuelve el cupo; el motor revisa la elegibilidad antes de guardar y de publicar cada turno, y la purga borra `simulations/{id}` otra vez al final. `POST /v1/session` responde 401 si existe la lápida del uid (un ID token anterior al borrado no recrea la cuenta).
 - La purga está en `identity/deletion/`: arma el plan desde Postgres, limpia Firestore (`FirestoreAccountMirrorCleaner`), borra el usuario de Firebase Auth (`FirebaseAuthAccountRemover`) y purga Postgres en una transacción (`ExposedAccountPurgeRepository`). Con `ENV=local` (o sin `FIREBASE_PROJECT_ID`) Firestore y Auth son Fakes.
 - Lo que la ley obliga a conservar (consentimientos, compras, reportes y las simulaciones que el otro sigue viendo) pasa a una **lápida** de la cuenta (`users.firebase_uid = deleted:<sha256 del uid>`, sin datos, borrada y oculta). Para mover los consentimientos la purga usa la misma excepción del trigger que E8.8 (`set local parcheu.consents_purge = 'on'`): copia las filas a la lápida y borra las originales.
 - **Columnas jsonb:** si agregas una columna jsonb personal a `PersonalJsonPaths.personal`, agrega también su regla en `identity/deletion/JsonbPurgeRules.kt` o falla `JsonbPurgeRulesTest`. `AccountPurgeDbTest` compara además el registro con el catálogo real de Postgres.
-- `GET /v1/me/export` arma el `ExportDto` con los datos propios; de otras personas solo sale su `anonId` (los avisos de la bandeja no se exportan porque citan nombres y mensajes ajenos).
+- `GET /v1/me/export` (exenta de términos, de suspensión y del bloqueo por edad: derecho de acceso) arma el `ExportDto` con los datos propios; de otras personas solo sale su `anonId` (los avisos de la bandeja no se exportan porque citan nombres y mensajes ajenos).
 - Pruebas con Postgres y el emulador (en CI corren solas):
 
   ```bash
