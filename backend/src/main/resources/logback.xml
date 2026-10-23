@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Logs JSON a stdout (Cloud Logging los interpreta). traceId y route vienen del MDC. -->
+<configuration>
+  <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <fieldNames>
+        <level>severity</level>
+        <timestamp>time</timestamp>
+        <version>[ignore]</version>
+        <levelValue>[ignore]</levelValue>
+      </fieldNames>
+      <includeMdcKeyName>traceId</includeMdcKeyName>
+      <includeMdcKeyName>route</includeMdcKeyName>
+      <includeMdcKeyName>userId</includeMdcKeyName>
+    </encoder>
+  </appender>
+  <root level="INFO">
+    <appender-ref ref="JSON"/>
+  </root>
+  <logger name="io.netty" level="WARN"/>
+  <logger name="org.eclipse.jetty" level="WARN"/>
+  <logger name="com.zaxxer.hikari" level="WARN"/>
+</configuration>

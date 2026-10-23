@@ -19,15 +19,26 @@ import me.santiagoreina.parcheu.core.network.TokenProvider
  * - Sesión inválida (usuario borrado o deshabilitado, credencial revocada) o sin usuario: devuelve `null`;
  *   la petición sale sin token, la API responde 401 y la app cierra la sesión.
  */
-class FirebaseTokenProvider(private val idToken: suspend (forceRefresh: Boolean) -> String?) :
-    TokenProvider {
-    constructor(source: FirebaseAuthSource) : this({ forceRefresh ->
-        source.authOrNull()?.currentUser?.getIdToken(forceRefresh)?.await()?.token
-    })
+class FirebaseTokenProvider(
+    private val uid: suspend () -> String? = { null },
+    private val idToken: suspend (forceRefresh: Boolean) -> String?
+) : TokenProvider {
+    companion object {
+        /** Proveedor real sobre [FirebaseAuthSource] (token y UID de la sesión). */
+        fun fromSource(source: FirebaseAuthSource): FirebaseTokenProvider = FirebaseTokenProvider(
+            uid = { source.authOrNull()?.currentUser?.uid },
+            idToken = { forceRefresh ->
+                source.authOrNull()?.currentUser?.getIdToken(forceRefresh)?.await()?.token
+            }
+        )
+    }
 
     override suspend fun currentToken(): String? = token(forceRefresh = false)
 
     override suspend fun refreshToken(): String? = token(forceRefresh = true)
+
+    /** UID de la sesión: lo exige el registro del token FCM (E5.3). */
+    override suspend fun currentUserId(): String? = uid()
 
     private suspend fun token(forceRefresh: Boolean): String? = try {
         idToken(forceRefresh)

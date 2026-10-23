@@ -19,6 +19,8 @@ class TokenNetworkFailureTest {
         override suspend fun currentToken(): String? = throw IOException("sin red")
 
         override suspend fun refreshToken(): String? = throw IOException("sin red")
+
+        override suspend fun currentUserId(): String? = null
     }
 
     @After

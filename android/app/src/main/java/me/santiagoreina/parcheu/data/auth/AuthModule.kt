@@ -12,7 +12,7 @@ import retrofit2.Retrofit
 val authModule =
     module {
         single { FirebaseAuthSource(androidContext()) }
-        single<TokenProvider> { FirebaseTokenProvider(get<FirebaseAuthSource>()) }
+        single<TokenProvider> { FirebaseTokenProvider.fromSource(get<FirebaseAuthSource>()) }
         single<SessionApi> { get<Retrofit>().create(SessionApi::class.java) }
         single<AuthRepository> { FirebaseAuthRepository(get(), get(), get()) }
     }

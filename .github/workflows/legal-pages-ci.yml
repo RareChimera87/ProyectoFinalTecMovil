@@ -1,0 +1,66 @@
+name: legal-pages-ci
+
+# E8.4. Verifica con el emulador de Hosting que las páginas legales (firebase/public) responden 200
+# y contienen sus secciones obligatorias. Sigue la convención de E0.6 (cambios, verificar, resultado):
+# el check `legal-pages-ci` siempre se reporta, y las pruebas solo corren si el PR toca esas páginas.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: legal-pages-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cambios:
+    name: legal-cambios
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      legal: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filtro.outputs.legal }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filtro
+        with:
+          filters: |
+            legal:
+              - 'firebase/public/**'
+              - 'firebase/firebase.json'
+              - 'scripts/test/legal-*'
+              - 'docs/arquitectura.md'
+              - '.github/workflows/legal-pages-ci.yml'
+
+  verificar:
+    name: legal-verificar
+    needs: cambios
+    if: needs.cambios.outputs.legal == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Páginas legales en el emulador de Hosting
+        run: scripts/test/legal-pages.sh
+
+  legal-pages-ci:
+    name: legal-pages-ci
+    needs: [cambios, verificar]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resultado
+        env:
+          CAMBIOS: ${{ needs.cambios.result }}
+          VERIFICAR: ${{ needs.verificar.result }}
+        run: |
+          echo "cambios=$CAMBIOS verificar=$VERIFICAR"
+          [[ "$CAMBIOS" == success ]] || exit 1
+          [[ "$VERIFICAR" == success || "$VERIFICAR" == skipped ]] || exit 1
