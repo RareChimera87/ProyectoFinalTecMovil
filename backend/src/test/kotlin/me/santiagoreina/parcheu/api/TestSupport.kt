@@ -34,6 +34,10 @@ import me.santiagoreina.parcheu.api.matching.MatchingModule
 import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
 import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.platform.notifier.Notifier
+import me.santiagoreina.parcheu.api.social.introductions.InMemoryIntroductionRepository
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionModule
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionRepository
+import me.santiagoreina.parcheu.api.social.introductions.introductionModule
 import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
@@ -86,6 +90,10 @@ fun testContainer(
     notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
     // Por defecto la campana de Inicio cuenta en la misma bandeja que C2 (E5.4).
     unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
+    // Presentaciones (E6.2): para que el fin de simulación avise solo a quien presenta, [simulation] debe
+    // usar un `IntroductionSimulationNotifier` sobre este mismo [introductionStore] (IntroductionApiTest).
+    introductionStore: IntroductionRepository = InMemoryIntroductionRepository(),
+    introductions: IntroductionModule = introductionModule(introductionStore, simulation, graph, chat, quota, notifier, clock),
     invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
     // Billing (E7.1): para que `verify` dé Plus en el cupo, pasar también `quota` con `billing.entitlements`.
     billing: BillingModule = inMemoryBillingModule(clock),
@@ -107,18 +115,20 @@ fun testContainer(
         twin = twin,
         graph = graph,
         chat = chat,
+        introductionStore = introductionStore,
         simulation = simulation,
         notifier = notifier,
         matching = matching,
         safety = safety,
         account = accountModule,
         notifications = notifications,
+        introductions = introductions,
         unread = unread,
         billing = billing,
         invites = invites,
         domains = allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
-            invites, billing, config.env,
+            invites, billing, config.env, introductions,
         ) + extra,
     )
 }

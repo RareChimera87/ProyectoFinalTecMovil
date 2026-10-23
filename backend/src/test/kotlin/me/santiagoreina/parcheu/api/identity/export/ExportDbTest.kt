@@ -46,6 +46,8 @@ class ExportDbTest : FunSpec({
             val lauraSecret = "secreto-de-laura-${UUID.randomUUID()}"
             val chat = UUID.randomUUID()
             val sim = UUID.randomUUID()
+            val mari = UUID.randomUUID()
+            val introSim = UUID.randomUUID()
             ds.connection.use { c ->
                 c.exec(
                     "insert into users (id, firebase_uid, email, display_name, photo_url, visibility, created_at, updated_at) " +
@@ -66,6 +68,16 @@ class ExportDbTest : FunSpec({
                     "insert into simulations (id, mode, user_a, user_b, requested_by, origin, status, score, transcript, created_at) " +
                         "values (?, 'AMISTAD', ?, ?, ?, 'PARCHE', 'DONE', 81, ?::jsonb, ?)",
                     sim, laura, ana, laura, """{"turns":[{"text":"$lauraSecret"}]}""", now,
+                )
+                c.exec(
+                    "insert into users (id, firebase_uid, display_name, created_at, updated_at) values (?, ?, 'Mari', ?, ?)",
+                    mari, "uid-mari-${UUID.randomUUID()}", now, now,
+                )
+                // Mari presentó a Ana y Laura y la simulación terminó: Ana no debe verla en su exportación.
+                c.exec(
+                    "insert into simulations (id, mode, user_a, user_b, requested_by, origin, status, score, created_at) " +
+                        "values (?, 'AMISTAD', ?, ?, ?, 'INTRODUCTION', 'DONE', 87, ?)",
+                    introSim, ana, laura, mari, now,
                 )
                 c.exec(
                     "insert into edges (user_low, user_high, mode, state, affinity, created_at, updated_at, connected_at) " +
@@ -97,6 +109,8 @@ class ExportDbTest : FunSpec({
             dto.memories.single().text shouldBe "Ama el café"
             dto.chats.single().messages.map { it.text } shouldContainExactly listOf("Nos vemos a las 3")
             dto.simulations.single().score shouldBe 81
+            json shouldNotContain introSim.toString()
+            json shouldNotContain "INTRODUCTION"
             dto.connections.size shouldBe 1
 
             // De Laura, solo su anonId.

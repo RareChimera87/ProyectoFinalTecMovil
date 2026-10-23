@@ -47,10 +47,14 @@ object JsonbPurgeRules {
             "delete from notifications where user_id = ? or payload->>'actorId' = ? or payload::text like ? " +
                 "or (?::text is not null and kind in ('${NotificationKinds.CHAT_MESSAGE}', '${NotificationKinds.CONNECT_REQUEST}') " +
                 "and payload->>'title' = ?::text and user_id = any(?::uuid[])) " +
-                "or (kind = '${NotificationKinds.CHAT_MESSAGE}' and payload->>'route' = any(?::text[]))",
+                "or (kind = '${NotificationKinds.CHAT_MESSAGE}' and payload->>'route' = any(?::text[])) " +
+                // INTRODUCTION_REQUEST (E6.2) cita en el cuerpo a la persona candidata, que no es actor ni destino:
+                // se identifica por la solicitud (aún existe, el CASCADE de users viene después), no por el nombre.
+                "or (kind = '${NotificationKinds.INTRODUCTION_REQUEST}' and exists (select 1 from intro_requests r " +
+                "where r.target_user_id = ? and r.via_user_id = notifications.user_id and r.requester_id::text = payload->>'actorId'))",
             listOf(
                 PurgeParam.USER, PurgeParam.USER_TEXT, PurgeParam.PATTERN,
-                PurgeParam.NAME, PurgeParam.NAME, PurgeParam.COUNTERPARTS, PurgeParam.CHAT_ROUTES,
+                PurgeParam.NAME, PurgeParam.NAME, PurgeParam.COUNTERPARTS, PurgeParam.CHAT_ROUTES, PurgeParam.USER,
             ),
         ),
         JsonbPurgeRule(

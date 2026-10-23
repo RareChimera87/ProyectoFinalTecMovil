@@ -38,7 +38,9 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
             .singleOrNull() ?: return@tx null
         if (user[Users.deletedAt] == null) return@tx null
         val simulations = Simulations.select(Simulations.id)
-            .where { (Simulations.userA eq userId) or (Simulations.userB eq userId) }
+            // `requestedBy`: la simulación de una presentación (E6.2) solo espeja el uid de quien presenta
+            // (`mirrorReaders`), que no es user_a ni user_b; sin esto su `simulations/{id}` quedaría huérfano.
+            .where { (Simulations.userA eq userId) or (Simulations.userB eq userId) or (Simulations.requestedBy eq userId) }
             .map { it[Simulations.id] }
         val memberOf = ChatMembers.select(ChatMembers.chatId).where { ChatMembers.userId eq userId }.map { it[ChatMembers.chatId] }
         val own = ChatMessages.select(ChatMessages.id, ChatMessages.chatId)

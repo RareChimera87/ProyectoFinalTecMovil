@@ -16,10 +16,13 @@ import me.santiagoreina.parcheu.api.platform.db.tables.TwinMemories
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.contract.Answer
 import me.santiagoreina.parcheu.contract.MemoryDto
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.api.identity.toKotlin
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.select
@@ -53,7 +56,12 @@ class ExposedExportRepository(private val db: Database) : ExportRepository {
                 }
 
             val simRows = Simulations.selectAll()
-                .where { (Simulations.userA eq userId) or (Simulations.userB eq userId) }
+                // La simulación de una presentación (E6.2) es de quien presenta: las personas presentadas no la
+                // ven en ningún endpoint, así que tampoco en su exportación (revelaría el 'No por ahora').
+                .where {
+                    ((Simulations.userA eq userId) or (Simulations.userB eq userId)) and
+                        (Simulations.origin neq SimulationOrigin.INTRODUCTION)
+                }
                 .orderBy(Simulations.createdAt to SortOrder.ASC)
                 .toList()
             val others = simRows.map { if (it[Simulations.userA] == userId) it[Simulations.userB] else it[Simulations.userA] }.toSet()

@@ -40,12 +40,14 @@ import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Progress
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import me.santiagoreina.parcheu.contract.StartSimulation
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -160,6 +162,22 @@ class SimulationDbTest : FunSpec({
                 repo.acceptedMemories(ana, Mode.PAREJA) shouldBe listOf(TwinMemory(Mode.PAREJA, "pareja no"))
                 repo.acceptedMemories(ana, Mode.ESTUDIO) shouldBe emptyList()
             }
+        }
+    }
+
+    test("Postgres: la caché de 7 días no reutiliza una simulación INTRODUCTION (E6.2)").config(enabled = TestDatabase.enabled) {
+        withDb { db ->
+            val ana = db.user("ana")
+            val beto = db.user("beto")
+            val intro = Db(db).start(ana, beto)
+            transaction(db) {
+                Simulations.update({ Simulations.id eq intro.id }) { it[origin] = SimulationOrigin.INTRODUCTION }
+            }
+            val w = Db(db)
+            val own = w.start(beto, ana)
+            // No sale de la presentación oculta: corre de verdad (llama al LLM) y no apunta a ella.
+            own.cachedFrom shouldBe null
+            (w.fake.calls > 0) shouldBe true
         }
     }
 

@@ -77,7 +77,9 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * SafetyScreenshotTest), el borrado y 'Descargar mis datos' (E8.3, DeleteAccountScreenTest,
          * ExportDataRouteTest y AccountScreenshotTest), C1/I1 (E4.7, HomeScreenTest y HomeScreenshotTest),
          * C2 (E5.4, NotificationsRouteTest y NotificationsScreenshotTest), C5 (E6.1, InviteAppLinkTest,
-         * InvitesScreenTest e InvitesScreenshotTest) y D6/D7 (E6.3, FofScreenTest y FofScreenshotTest).
+         * InvitesScreenTest e InvitesScreenshotTest), D6/D7 (E6.3, FofScreenTest y FofScreenshotTest) y
+         * E1-E3 (E6.2, feature/presentar: IntroduceViewModelTest, IntroResultViewModelTest,
+         * IntroProposalViewModelTest y PresentarScreenshotTest).
          */
         val implementedRoutes =
             setOf(
@@ -103,6 +105,9 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 ExportData::class,
                 Home::class,
                 Notifications::class,
+                Introduce::class,
+                IntroResult::class,
+                IntroProposal::class,
                 AddFriends::class
             )
     }

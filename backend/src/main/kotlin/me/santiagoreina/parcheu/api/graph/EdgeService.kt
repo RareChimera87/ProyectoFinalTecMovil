@@ -17,7 +17,7 @@ sealed interface EdgeEvent {
     val mode: Mode
     val source: EdgeSource
 
-    /** Terminó una simulación (aleatoria, del parche o de una presentación) con su afinidad 0-100. */
+    /** Terminó una simulación aleatoria o del parche con su afinidad 0-100 (la de una presentación no crea arista, E6.2). */
     data class Simulated(
         override val a: UUID,
         override val b: UUID,

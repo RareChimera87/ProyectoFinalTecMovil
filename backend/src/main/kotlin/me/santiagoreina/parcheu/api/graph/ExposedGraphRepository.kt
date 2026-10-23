@@ -11,6 +11,7 @@ import me.santiagoreina.parcheu.api.platform.db.tables.Universities
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -21,6 +22,7 @@ import org.jetbrains.exposed.v1.core.exists
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.notExists
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -111,7 +113,8 @@ class ExposedGraphRepository(private val db: Database) : GraphRepository {
         Simulations
             .select(Simulations.id, Simulations.status, Simulations.mode, Simulations.origin, Simulations.score, Simulations.createdAt)
             .where {
-                ((Simulations.userA eq a) and (Simulations.userB eq b)) or ((Simulations.userA eq b) and (Simulations.userB eq a))
+                (((Simulations.userA eq a) and (Simulations.userB eq b)) or ((Simulations.userA eq b) and (Simulations.userB eq a))) and
+                    (Simulations.origin neq SimulationOrigin.INTRODUCTION)
             }
             .orderBy(Simulations.createdAt to SortOrder.DESC, Simulations.id to SortOrder.DESC)
             .limit(1)

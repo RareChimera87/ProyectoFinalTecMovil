@@ -423,6 +423,92 @@ class AccountPurgeDbTest : FunSpec({
             }
         }
 
+    test("al borrar a quien presenta (E6.2) su simulación INTRODUCTION entra al plan y se borra su documento")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { ds ->
+                val db = connectExposed(ds)
+                val s = ds.connection.use { seed(it) }
+                val intro = UUID.randomUUID()
+                val other = UUID.randomUUID()
+                ds.connection.use { c ->
+                    val now = Timestamp.from(FIXED_CLOCK.instant())
+                    c.exec(
+                        "insert into users (id, firebase_uid, display_name, created_at, updated_at) values (?, ?, 'Vale', ?, ?)",
+                        other, "uid-vale-${UUID.randomUUID()}", now, now,
+                    )
+                    // Zoraida presenta a Bruno y a Vale: no es user_a ni user_b, solo requested_by.
+                    c.exec(
+                        "insert into simulations (id, mode, user_a, user_b, requested_by, origin, status, score, created_at, finished_at) " +
+                            "values (?, 'AMISTAD', ?, ?, ?, 'INTRODUCTION', 'DONE', 80, ?, ?)",
+                        intro, s.bruno, other, s.zoraida, now, now,
+                    )
+                }
+                val mirror = RecordingAccountMirrorCleaner()
+                val service = AccountDeletionService(
+                    ExposedIdentityRepository(db), ExposedAccountPurgeRepository(db), mirror, FakeAuthAccountRemover(), FakeTaskQueue(), FIXED_CLOCK,
+                )
+                service.requestDeletion(FirebaseUser(s.zoraidaUid, null, null))
+                service.purge(s.zoraida) shouldBe PurgeOutcome.PURGED
+
+                mirror.plans.single().simulationIds.toSet() shouldBe setOf(s.shared, intro)
+                mirror.removedSimulations.single().toSet() shouldBe setOf(s.shared, intro)
+                ds.connection.use { c ->
+                    // La fila sobrevive para las personas presentadas, pero ya sin el uuid de quien presentó.
+                    c.count("select count(*) from simulations where requested_by = ?", s.zoraida) shouldBe 0
+                }
+            }
+        }
+
+    test("el aviso INTRODUCTION_REQUEST que cita a la persona candidata se borra al purgarla (E6.2), sin tocar otros")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { ds ->
+                val db = connectExposed(ds)
+                val s = ds.connection.use { seed(it) }
+                val now = Timestamp.from(FIXED_CLOCK.instant())
+                val carla = UUID.randomUUID()
+                val diego = UUID.randomUUID()
+                val vale = UUID.randomUUID()
+                val noticeAboutZoraida = UUID.randomUUID()
+                val noticeAboutVale = UUID.randomUUID()
+                ds.connection.use { c ->
+                    listOf(carla to "Carla Ruiz", diego to "Diego", vale to "Vale").forEach { (id, n) ->
+                        c.exec("insert into users (id, firebase_uid, display_name, created_at, updated_at) values (?, ?, ?, ?, ?)", id, "uid-$id", n, now, now)
+                    }
+                    // Carla (Plus) le pide a Bruno, amigo en común, que le presente a Zoraida: el aviso lleva su nombre.
+                    c.exec(
+                        "insert into intro_requests (id, requester_id, via_user_id, target_user_id, status, created_at) values (?, ?, ?, ?, 'PENDING', ?)",
+                        UUID.randomUUID(), carla, s.bruno, s.zoraida, now,
+                    )
+                    c.exec(
+                        "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'INTRODUCTION_REQUEST', ?::jsonb, ?)",
+                        noticeAboutZoraida, s.bruno,
+                        """{"title":"Te piden una presentación","body":"Carla Ruiz quiere conocer a $name. ¿Los presentas?","route":"parcheu://introduce","actorId":"$carla"}""", now,
+                    )
+                    // Control: otra solicitud de Diego, por Vale, no tiene relación con Zoraida.
+                    c.exec(
+                        "insert into intro_requests (id, requester_id, via_user_id, target_user_id, status, created_at) values (?, ?, ?, ?, 'PENDING', ?)",
+                        UUID.randomUUID(), diego, s.bruno, vale, now,
+                    )
+                    c.exec(
+                        "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'INTRODUCTION_REQUEST', ?::jsonb, ?)",
+                        noticeAboutVale, s.bruno,
+                        """{"title":"Te piden una presentación","body":"Diego quiere conocer a Vale. ¿Los presentas?","route":"parcheu://introduce","actorId":"$diego"}""", now,
+                    )
+                }
+                val service = AccountDeletionService(
+                    ExposedIdentityRepository(db), ExposedAccountPurgeRepository(db), RecordingAccountMirrorCleaner(), FakeAuthAccountRemover(), FakeTaskQueue(), FIXED_CLOCK,
+                )
+                service.requestDeletion(FirebaseUser(s.zoraidaUid, null, null))
+                service.purge(s.zoraida) shouldBe PurgeOutcome.PURGED
+
+                ds.connection.use { c ->
+                    c.count("select count(*) from notifications where id = ?", noticeAboutZoraida) shouldBe 0
+                    c.count("select count(*) from notifications where payload::text like ?", "%$name%") shouldBe 0
+                    c.count("select count(*) from notifications where id = ?", noticeAboutVale) shouldBe 1
+                }
+            }
+        }
+
     test("una simulación en curso queda FAILED con el cupo devuelto y el motor ya no puede guardar turnos en ella")
         .config(enabled = TestDatabase.enabled) {
             withDb { ds ->

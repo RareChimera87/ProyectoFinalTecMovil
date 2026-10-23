@@ -25,6 +25,8 @@ enum class PushChannel(val id: String) {
             NotificationKinds.CONNECT_REQUEST,
             NotificationKinds.NEW_CONNECTION,
             NotificationKinds.INTRODUCTION_PROPOSAL,
+            NotificationKinds.INTRODUCTION_READY,
+            NotificationKinds.INTRODUCTION_REQUEST,
             NotificationKinds.INVITE_PENDING,
             NotificationKinds.COMMUNITY,
             -> SOCIAL

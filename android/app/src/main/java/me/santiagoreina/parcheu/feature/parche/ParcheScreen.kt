@@ -30,6 +30,8 @@ import me.santiagoreina.parcheu.designsystem.components.base.StatCard
 import me.santiagoreina.parcheu.designsystem.graph.PU_GRAPH_DEFAULT_SIZE
 import me.santiagoreina.parcheu.designsystem.graph.PuGraph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.feature.presentar.PresentarIcons
+import me.santiagoreina.parcheu.feature.presentar.rememberPresentarIcon
 
 /** Acciones que D1-D5 le pide al ViewModel y a la navegación. */
 data class ParcheCallbacks(
@@ -46,6 +48,8 @@ data class ParcheCallbacks(
     val onAddFriends: () -> Unit = {},
     val onRandomMatch: () -> Unit = {},
     val onUnlock: () -> Unit = {},
+    /** E1 · Presentar a dos amigos (E6.2). */
+    val onIntroduce: () -> Unit = {},
     val onFriendsOfFriends: () -> Unit = {}
 )
 
@@ -63,6 +67,11 @@ fun ParcheScreen(
     Box(modifier = modifier.fillMaxSize().background(colors.bg)) {
         Column(Modifier.fillMaxSize()) {
             ParcheURootTopBar(title = "Tu parche") {
+                ParcheUIconButton(
+                    icon = rememberPresentarIcon(PresentarIcons.People),
+                    contentDescription = "Presentar a dos amigos",
+                    onClick = callbacks.onIntroduce
+                )
                 ParcheUIconButton(
                     icon = parcheIconPainter(ParcheIcon.Timeline),
                     contentDescription = "Evolución de tu red",

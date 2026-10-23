@@ -93,6 +93,8 @@ class FcmNotifierTest : FunSpec({
             NotificationKinds.CONNECT_REQUEST to "social",
             NotificationKinds.NEW_CONNECTION to "social",
             NotificationKinds.INTRODUCTION_PROPOSAL to "social",
+            NotificationKinds.INTRODUCTION_READY to "social",
+            NotificationKinds.INTRODUCTION_REQUEST to "social",
             NotificationKinds.INVITE_PENDING to "social",
             NotificationKinds.COMMUNITY to "social",
             NotificationKinds.TWIN_MEMORIES to "cuenta",

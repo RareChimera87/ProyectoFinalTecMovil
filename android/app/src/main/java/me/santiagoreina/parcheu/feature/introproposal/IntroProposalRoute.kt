@@ -2,19 +2,16 @@ package me.santiagoreina.parcheu.feature.introproposal
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import me.santiagoreina.parcheu.core.ui.StubScreen
+import me.santiagoreina.parcheu.feature.presentar.IntroProposalEntry
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.IntroProposal
 
-/**
- * Punto de entrada de la ruta [IntroProposal] (stub de E0.7). La feature dueña reemplaza solo este archivo y
- * [introProposalModule]; AppNavHost.kt no cambia.
- */
+/** Punto de entrada de la ruta [IntroProposal] (E3, E6.2): la pantalla vive en `feature/presentar`. */
 @Composable
 fun IntroProposalRoute(
     route: IntroProposal,
     navigator: AppNavigator,
     modifier: Modifier = Modifier
 ) {
-    StubScreen(route = route, navigator = navigator, modifier = modifier)
+    IntroProposalEntry(id = route.id, navigator = navigator, modifier = modifier)
 }

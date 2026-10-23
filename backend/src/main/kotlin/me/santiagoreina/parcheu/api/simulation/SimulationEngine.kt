@@ -9,6 +9,7 @@ import me.santiagoreina.parcheu.api.quota.QuotaService
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Progress
 import me.santiagoreina.parcheu.contract.QuotaKind
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import org.slf4j.LoggerFactory
 import java.time.Clock
@@ -189,7 +190,11 @@ class SimulationEngine(
     ) {
         ineligibility(record)?.let { throw it }
         // La arista va antes de DONE: si algo falla después, el reintento la vuelve a aplicar (idempotente).
-        edges.apply(EdgeEvent.Simulated(record.userA, record.userB, record.mode, record.id, report.score))
+        // La simulación de una presentación (E6.2) no crea arista: las personas presentadas no deben saber
+        // que se simularon ni con qué puntaje; la arista nace solo con Connected(INTRODUCTION) si ambas aceptan.
+        if (record.origin != SimulationOrigin.INTRODUCTION) {
+            edges.apply(EdgeEvent.Simulated(record.userA, record.userB, record.mode, record.id, report.score))
+        }
         val done = repo.markDone(record.id, report.score, report, transcript, progress, cachedFrom, provider, UsageTotals(), clock.instant())
         if (!done) return
         log.info("simulate: {} DONE con puntaje {}", record.id, report.score)
@@ -242,8 +247,8 @@ class SimulationEngine(
         throw StepFailed("Falló el $what tras $LLM_ATTEMPTS intentos: ${last?.message}")
     }
 
-    private suspend fun participantsOf(record: SimulationRecord): List<String> =
-        listOf(record.userA, record.userB).mapNotNull { repo.participant(it)?.firebaseUid }
+    /** Lectores de `simulations/{id}` (en una presentación, solo quien presenta: [mirrorReaders]). */
+    private suspend fun participantsOf(record: SimulationRecord): List<String> = repo.mirrorReaders(record)
 
     private suspend fun publish(record: SimulationRecord, participants: List<String>, status: SimulationStatus, progress: Progress, score: Int?) {
         try {

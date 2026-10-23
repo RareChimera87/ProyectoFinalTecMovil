@@ -1,7 +1,9 @@
 package me.santiagoreina.parcheu.feature.introduce
 
+import me.santiagoreina.parcheu.feature.presentar.presentarModule
 import org.koin.dsl.module
 
-/** Dependencias de la feature de [IntroduceRoute]. Vacío en E0.7; ya está registrado en AppModules.kt. */
+/** Dependencias de E1-E3 (E6.2, `feature/presentar`). Ya está registrado en AppModules.kt. */
 val introduceModule = module {
+    includes(presentarModule)
 }

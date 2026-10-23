@@ -20,18 +20,14 @@ import me.santiagoreina.parcheu.contract.Redeem
 import java.util.UUID
 
 /**
- * Rutas del dominio social. Las invitaciones (E6.1) ya están; las presentaciones siguen como stubs 501
- * de E0.3 hasta E6.2. [currentUserId] traduce el usuario de Firebase a `users.id`.
+ * Rutas del dominio social. Las invitaciones (E6.1) viven aquí; las presentaciones (E6.2) en
+ * `introductions/IntroductionRoutes`. [currentUserId] traduce el usuario de Firebase a `users.id`.
  */
 class SocialRoutes(
     private val invites: InviteService,
     private val currentUserId: suspend (FirebaseUser) -> UUID,
 ) : DomainRoutes {
     override fun Route.v1() {
-        stubPost("/introductions")
-        stubGet("/introductions/{id}")
-        stubPost("/introductions/{id}/response")
-        stubPost("/introductions/request")
         get("/invites/me") {
             call.respond(invites.me(call.userId()))
         }

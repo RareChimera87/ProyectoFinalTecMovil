@@ -5,6 +5,7 @@ import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.PersonRef
 import me.santiagoreina.parcheu.contract.Progress
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import java.time.Instant
 import java.util.UUID
@@ -13,13 +14,25 @@ import java.util.concurrent.CopyOnWriteArrayList
 /** Documento `simulations/{id}` de Firestore (arquitectura.md §8.2): solo lectura para los participantes. */
 data class SimulationMirrorDoc(
     val id: UUID,
-    /** UID de Firebase de los dos participantes (las reglas leen `participants`). */
+    /** UID de Firebase de quienes leen el documento (las reglas leen `participants`; ver [mirrorReaders]). */
     val participants: List<String>,
     val status: SimulationStatus,
     val progress: Progress,
     val score: Int?,
     val updatedAt: Instant,
 )
+
+/**
+ * UID de Firebase que pueden leer `simulations/{id}`: los dos participantes. En una presentación
+ * (`INTRODUCTION`, E6.2) solo quien presenta: las personas presentadas se enteran por la propuesta
+ * (`GET /v1/introductions/{id}`) y nunca si quien presenta eligió 'No por ahora'.
+ */
+suspend fun SimulationRepository.mirrorReaders(record: SimulationRecord): List<String> =
+    if (record.origin == SimulationOrigin.INTRODUCTION) {
+        listOfNotNull(record.requestedBy?.let { participant(it) }?.takeIf { !it.deleted }?.firebaseUid)
+    } else {
+        listOf(record.userA, record.userB).mapNotNull { participant(it)?.firebaseUid }
+    }
 
 /**
  * Espejo del progreso en Firestore (ADR-0004). Postgres es la fuente de verdad: si el espejo falla,

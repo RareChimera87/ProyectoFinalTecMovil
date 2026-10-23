@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.simulation
 
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Progress
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import java.time.Instant
 import java.util.UUID
@@ -52,7 +53,7 @@ class InMemorySimulationRepository(scenarios: List<ScenarioDef> = DefaultScenari
 
     override suspend fun listFor(userId: UUID, before: SimulationCursor?, limit: Int): List<SimulationRecord> = synchronized(lock) {
         simulations.values
-            .filter { it.userA == userId || it.userB == userId }
+            .filter { (it.userA == userId || it.userB == userId) && it.origin != SimulationOrigin.INTRODUCTION }
             .sortedWith(compareByDescending<SimulationRecord> { it.createdAt }.thenByDescending { it.id })
             .filter { before == null || it.createdAt < before.createdAt || (it.createdAt == before.createdAt && it.id < before.id) }
             .take(limit)
@@ -69,6 +70,7 @@ class InMemorySimulationRepository(scenarios: List<ScenarioDef> = DefaultScenari
     ): SimulationRecord? = synchronized(lock) {
         simulations.values
             .filter { it.id != excluding && it.mode == mode && it.status == SimulationStatus.DONE && it.score != null }
+            .filter { it.origin != SimulationOrigin.INTRODUCTION }
             .filter { it.finishedAt != null && it.finishedAt > since }
             .filter {
                 (it.userA == userA && it.twinVersionA == versionA && it.userB == userB && it.twinVersionB == versionB) ||

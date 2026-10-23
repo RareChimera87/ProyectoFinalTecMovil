@@ -11,6 +11,7 @@ import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Communities
 import me.santiagoreina.parcheu.navigation.Evolution
 import me.santiagoreina.parcheu.navigation.FriendsOfFriends
+import me.santiagoreina.parcheu.navigation.Introduce
 import me.santiagoreina.parcheu.navigation.MatchQueue
 import me.santiagoreina.parcheu.navigation.Parche
 import me.santiagoreina.parcheu.navigation.Paywall
@@ -67,7 +68,8 @@ fun ParcheRoute(
                 onRandomMatch = { navigator.navigate(MatchQueue()) },
                 // Flujo 11 del inventario: el banner de D1 lleva a D7 (gratis), que ofrece G1.
                 onUnlock = { navigator.navigate(FriendsOfFriends) },
-                onFriendsOfFriends = { navigator.navigate(FriendsOfFriends) }
+                onFriendsOfFriends = { navigator.navigate(FriendsOfFriends) },
+                onIntroduce = { navigator.navigate(Introduce) }
             )
         }
     ParcheScreen(state = state, callbacks = callbacks, modifier = modifier)

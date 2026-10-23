@@ -7,6 +7,8 @@ import me.santiagoreina.parcheu.navigation.Chat
 import me.santiagoreina.parcheu.navigation.ChatList
 import me.santiagoreina.parcheu.navigation.Communities
 import me.santiagoreina.parcheu.navigation.IntroProposal
+import me.santiagoreina.parcheu.navigation.IntroResult
+import me.santiagoreina.parcheu.navigation.Introduce
 import me.santiagoreina.parcheu.navigation.MatchFound
 import me.santiagoreina.parcheu.navigation.MatchQueue
 import me.santiagoreina.parcheu.navigation.Notifications
@@ -40,6 +42,12 @@ class DeepLinksTest {
                 "parcheu://intro/i-4",
                 IntroProposal("i-4")
             ),
+            Case(
+                NotificationKinds.INTRODUCTION_READY,
+                "parcheu://intro-result/i-6",
+                IntroResult("i-6")
+            ),
+            Case(NotificationKinds.INTRODUCTION_REQUEST, "parcheu://introduce", Introduce),
             Case(NotificationKinds.INVITE_PENDING, "parcheu://add-friends", AddFriends()),
             Case(NotificationKinds.CHAT_MESSAGE, "parcheu://chat/c-5", Chat("c-5")),
             Case(NotificationKinds.TWIN_MEMORIES, "parcheu://train-twin", TrainTwin),
@@ -75,6 +83,8 @@ class DeepLinksTest {
                 NotificationKinds.CONNECT_REQUEST to Notifications,
                 NotificationKinds.NEW_CONNECTION to Parche(),
                 NotificationKinds.INTRODUCTION_PROPOSAL to Notifications,
+                NotificationKinds.INTRODUCTION_READY to Notifications,
+                NotificationKinds.INTRODUCTION_REQUEST to Introduce,
                 NotificationKinds.INVITE_PENDING to AddFriends(),
                 NotificationKinds.CHAT_MESSAGE to ChatList,
                 NotificationKinds.TWIN_MEMORIES to TrainTwin,

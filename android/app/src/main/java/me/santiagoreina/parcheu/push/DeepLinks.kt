@@ -10,6 +10,8 @@ import me.santiagoreina.parcheu.navigation.ChatList
 import me.santiagoreina.parcheu.navigation.Communities
 import me.santiagoreina.parcheu.navigation.Home
 import me.santiagoreina.parcheu.navigation.IntroProposal
+import me.santiagoreina.parcheu.navigation.IntroResult
+import me.santiagoreina.parcheu.navigation.Introduce
 import me.santiagoreina.parcheu.navigation.MatchFound
 import me.santiagoreina.parcheu.navigation.MatchQueue
 import me.santiagoreina.parcheu.navigation.Notifications
@@ -53,6 +55,9 @@ object DeepLinks {
             "simulations" -> if (id == null) Simulations else null
             "match" -> if (id == null) MatchQueue() else MatchFound(id)
             "intro" -> id?.let(::IntroProposal)
+            // E6.2: E2 para quien presenta y E1 ('Te piden una presentación').
+            "intro-result" -> id?.let(::IntroResult)
+            "introduce" -> if (id == null) Introduce else null
             "chat" -> id?.let(::Chat)
             "chats" -> if (id == null) ChatList else null
             "parche" -> if (id == null) Parche() else null
@@ -79,6 +84,7 @@ object DeepLinks {
         NotificationKinds.CHAT_MESSAGE -> "parcheu://chats"
         NotificationKinds.TWIN_MEMORIES, NotificationKinds.TWIN_FEEDBACK -> "parcheu://train-twin"
         NotificationKinds.COMMUNITY -> "parcheu://communities"
+        NotificationKinds.INTRODUCTION_REQUEST -> "parcheu://introduce"
         // CONNECT_REQUEST, INTRODUCTION_PROPOSAL, ACCOUNT y tipos nuevos: la bandeja los muestra todos.
         else -> "parcheu://notifications"
     }

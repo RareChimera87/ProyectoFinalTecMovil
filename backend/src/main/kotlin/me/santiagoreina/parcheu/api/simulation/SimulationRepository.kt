@@ -31,7 +31,10 @@ interface SimulationRepository {
 
     suspend fun find(id: UUID): SimulationRecord?
 
-    /** Simulaciones donde participa [userId], más recientes primero, desde el cursor (exclusivo). */
+    /**
+     * Simulaciones donde participa [userId], más recientes primero, desde el cursor (exclusivo). No incluye
+     * las de una presentación (`INTRODUCTION`, E6.2): esas se ven solo por `/v1/introductions/{id}`.
+     */
     suspend fun listFor(userId: UUID, before: SimulationCursor?, limit: Int): List<SimulationRecord>
 
     /**
