@@ -238,8 +238,12 @@ class MatchingService(
 
     private suspend fun visible(viewer: UUID, rawId: String): MatchRecord {
         val id = runCatching { UUID.fromString(rawId) }.getOrNull() ?: throw NotFound()
-        val found = repo.match(id) ?: throw NotFound()
-        if (!found.involves(viewer)) throw NotFound()
+        val stored = repo.match(id) ?: throw NotFound()
+        if (!stored.involves(viewer)) throw NotFound()
+        // Primero lo que ya venció por tiempo: un match cuyo `decide_by` pasó se resuelve como si nadie lo
+        // hubiera abierto (sin elecciones queda EXPIRED y no se devuelve nada), sin depender de si alguien
+        // lo consulta antes o después de un bloqueo.
+        val found = settleIfDue(stored)
         val causedBy = if (found.status == MatchStatus.PENDING_CHOICE) repo.closedBy(found.userA, found.userB, clock.instant()) else null
         if (causedBy != null) {
             // Bloqueo, borrado o suspensión posterior al match: se cierra, se devuelve el cupo solo a quien

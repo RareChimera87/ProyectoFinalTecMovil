@@ -18,6 +18,7 @@ import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
+import me.santiagoreina.parcheu.api.simulation.TwinProfile
 import me.santiagoreina.parcheu.contract.AnonProfile
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.MatchChoice
@@ -486,16 +487,43 @@ class MatchingServiceTest : FunSpec({
         shouldThrow<Conflict> { f.service.enqueue(ana, Mode.ESTUDIO) }
     }
 
-    test("si la simulación no se puede crear por un error definitivo el match se cierra y se devuelve el cupo") {
+    test("un bloqueo posterior hace fallar la SIMULATION: el match se cierra y el cupo vuelve solo a quien no bloqueó") {
+        val f = MatchFixture(flags = MatchingFlags(demoUsersEnabled = true, scenarioModeEnabled = true))
+        val (ana, beto, id) = f.pair()
+        // Beto elige SCENARIO; Ana bloquea a Beto y nadie más abre el match. Al vencer decide_by el barrido
+        // lo resuelve como SIMULATION y crearla falla (BLOCKED) sin pasar por la comprobación de `visible`.
+        f.service.choose(beto, id, MatchChoice.SCENARIO)
+        f.block(ana, beto)
+        f.clock.now = f.clock.now.plus(MatchingRules.DECIDE_WINDOW).plusSeconds(1)
+        f.service.sweep()
+        f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
+        f.simRepo.all().shouldBeEmpty()
+        // Ana bloqueó: no recupera el cupo; Beto, que no causó el cierre, sí.
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe true
+    }
+
+    test("si la simulación falla sin culpable (gemelo no listo) el match se cierra y el cupo vuelve a las dos") {
         val f = MatchFixture()
         val (ana, beto, id) = f.pair()
-        // Un bloqueo posterior al match hace fallar la creación de la simulación (BLOCKED).
-        f.simRepo.block(ana, beto)
+        f.simRepo.putTwin(TwinProfile(beto, 1, List(6) { 0.5 }, "Persona de beto", personaReady = false))
         f.service.choose(ana, id, MatchChoice.SIMULATION)
         f.matchRepo.match(UUID.fromString(id))!!.status shouldBe MatchStatus.EXPIRED
-        // El repositorio de matches no conoce al culpable (el bloqueo vive en otro repositorio): vuelve a las dos.
         f.usage.refunded("$id:$ana") shouldBe true
         f.usage.refunded("$id:$beto") shouldBe true
+    }
+
+    test("si vence sin que nadie lo abra no se devuelve nada, aunque después haya un bloqueo y se consulte") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        f.clock.now = f.clock.now.plus(MatchingRules.DECIDE_WINDOW).plusSeconds(1)
+        // El bloqueo llega después del vencimiento pero antes de que alguien consulte (o pase el barrido).
+        f.block(ana, beto)
+        f.service.match(beto, id).status shouldBe MatchStatus.EXPIRED
+        f.usage.refunded("$id:$ana") shouldBe false
+        f.usage.refunded("$id:$beto") shouldBe false
+        f.service.match(ana, id).status shouldBe MatchStatus.EXPIRED
+        f.usage.refunded("$id:$beto") shouldBe false
     }
 
     test("AnonProfile no contiene nombre, foto, carrera ni id interno") {
