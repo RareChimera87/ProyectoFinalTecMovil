@@ -1,11 +1,5 @@
 package me.santiagoreina.parcheu.api.identity
 
-import me.santiagoreina.parcheu.api.ai.testGateway
-import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
-import me.santiagoreina.parcheu.api.platform.DomainRoutes
-import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
-import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
-import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import io.kotest.assertions.throwables.shouldThrow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -33,7 +27,12 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.platform.AppContainer
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
+import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.allDomains
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
@@ -77,7 +76,20 @@ class IdentityDbTest : FunSpec({
 
     fun container(db: Database, version: String): AppContainer {
         val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, version)
-        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"), identity, domains = testDomains(identity))
+        val profile = ProfileService(identity, ExposedProfileRepository(db), FIXED_CLOCK)
+        val quota = inMemoryQuotaModule(FIXED_CLOCK)
+        val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())
+        return AppContainer(
+            config = testConfig(),
+            clock = FIXED_CLOCK,
+            tokenVerifier = FakeTokenVerifier(),
+            oidcVerifier = FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"),
+            identity = identity,
+            profile = profile,
+            quota = quota,
+            twin = twin,
+            domains = allDomains(identity, profile, quota, twin),
+        )
     }
 
     suspend fun HttpClient.session(uid: String): SessionDto = post("/v1/session") { auth(uid) }.body()
@@ -134,7 +146,7 @@ class IdentityDbTest : FunSpec({
             }
         }
 
-    test("terms agrega dos filas con LEGAL_TEXT_VERSION, bloquea twin/answers antes y subir la versión devuelve NEEDS_TERMS")
+    test("terms agrega dos filas con LEGAL_TEXT_VERSION, bloquea twin/memories antes y subir la versión devuelve NEEDS_TERMS")
         .config(enabled = TestDatabase.enabled) {
             TestDatabase.withCleanDatabase { ds ->
                 runMigrations(ds)
@@ -142,7 +154,7 @@ class IdentityDbTest : FunSpec({
                 testApplication {
                     val client = startApp(container(db, TEST_LEGAL_VERSION))
                     client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_TERMS
-                    val blocked = client.post("/v1/chats/x/read") { auth("lucia") }
+                    val blocked = client.get("/v1/twin/memories") { auth("lucia") }
                     blocked.status shouldBe HttpStatusCode.Forbidden
                     blocked.body<ApiError>().code shouldBe ErrorCode.TERMS_REQUIRED
                     consentCount(db) shouldBe 0L
@@ -154,13 +166,13 @@ class IdentityDbTest : FunSpec({
                         ConsentKind.TERMS to TEST_LEGAL_VERSION,
                         ConsentKind.PRIVACY to TEST_LEGAL_VERSION,
                     )
-                    client.post("/v1/twin/feedback") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+                    client.get("/v1/twin/memories") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
                 }
                 // Se sube la versión: el mismo usuario vuelve a NEEDS_TERMS y a 403 TERMS_REQUIRED.
                 testApplication {
                     val client = startApp(container(db, "2026-12-01"))
                     client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_TERMS
-                    client.post("/v1/chats/x/read") { auth("lucia") }.body<ApiError>().code shouldBe ErrorCode.TERMS_REQUIRED
+                    client.get("/v1/twin/memories") { auth("lucia") }.body<ApiError>().code shouldBe ErrorCode.TERMS_REQUIRED
                     client.terms("lucia", "2026-12-01").status shouldBe HttpStatusCode.OK
                     consentCount(db) shouldBe 4L
                     client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_PROFILE
@@ -203,6 +215,9 @@ class IdentityDbTest : FunSpec({
                 val userId = UUID.fromString(client.session("lucia").me.id)
                 val now = OffsetDateTime.ofInstant(FIXED_CLOCK.instant(), ZoneOffset.UTC)
                 transaction(db) { Users.update({ Users.id eq userId }) { it[ageVerifiedAt] = now } }
+                // Sin universidad B0 no está completo (E2.6).
+                client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_PROFILE
+                transaction(db) { Users.update({ Users.id eq userId }) { it[universityId] = 1 } }
                 client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_TWIN
 
                 transaction(db) { Twins.insert { it[Twins.userId] = userId; it[updatedAt] = now } }
@@ -239,11 +254,3 @@ class IdentityDbTest : FunSpec({
             }
         }
 })
-
-/** Dominios con el resto de módulos en memoria: estas pruebas solo ejercitan identidad. */
-private fun testDomains(identity: IdentityService): List<DomainRoutes> {
-    val ai = testGateway()
-    val quota = inMemoryQuotaModule(FIXED_CLOCK)
-    val graph = inMemoryGraphModule(FIXED_CLOCK)
-    return allDomains(identity, inMemoryTwinModule(FIXED_CLOCK, ai), quota, graph, inMemorySimulationModule(FIXED_CLOCK, ai, quota, graph))
-}

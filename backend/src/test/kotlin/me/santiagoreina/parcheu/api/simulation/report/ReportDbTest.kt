@@ -33,6 +33,7 @@ import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.quota.quotaModule
+import me.santiagoreina.parcheu.api.simulation.NoopSimulationNotifier
 import me.santiagoreina.parcheu.api.simulation.judgeJson
 import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
@@ -97,7 +98,9 @@ class ReportDbTest : FunSpec({
         val push = FakeNotifier()
         val chat = ChatModule(ExposedChatRepository(db), InMemoryChatMirror(), push, graph.policy, FIXED_CLOCK)
         val queue = FakeTaskQueue()
-        val module = simulationModule(Env.DEV, db, FIXED_CLOCK, ai, quota, graph, queue, firebaseProjectId = null, chat = chat, push = push)
+        val module = simulationModule(Env.DEV, db, FIXED_CLOCK, ai, quota, graph, queue, firebaseProjectId = null,
+            notifier = NoopSimulationNotifier, chat = chat, push = push,
+        )
             .also { m -> queue.inline = { task -> m.engine.run(ContractJson.decodeFromString<TaskPayload>(task.body).uuid()) } }
 
         fun done(a: UUID, b: UUID): String = runBlocking { module.service.start(a, StartSimulation(b.toString(), Mode.AMISTAD)).id }

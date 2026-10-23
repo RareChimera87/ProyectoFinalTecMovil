@@ -16,6 +16,7 @@ import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
 import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
@@ -24,7 +25,6 @@ import me.santiagoreina.parcheu.api.platform.db.TestDatabase
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.runMigrations
 import me.santiagoreina.parcheu.api.platform.db.tables.Blocks
-import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.platform.db.tables.Edges
 import me.santiagoreina.parcheu.api.platform.db.tables.Simulations
 import me.santiagoreina.parcheu.api.platform.db.tables.TwinMemories
@@ -107,10 +107,8 @@ class SimulationDbTest : FunSpec({
         val quota = quotaModule(Env.DEV, db, FIXED_CLOCK)
         val graph = GraphModule(ExposedGraphRepository(db), AnonIdSigner.forTests(), FIXED_CLOCK)
         val queue = FakeTaskQueue()
-        val module = simulationModule(
-            Env.DEV, db, FIXED_CLOCK, ai, quota, graph, queue, firebaseProjectId = null,
-            chat = ChatModule(ExposedChatRepository(db), InMemoryChatMirror(), NoopNotifier, graph.policy, FIXED_CLOCK),
-            push = NoopNotifier,
+        val module = simulationModule(Env.DEV, db, FIXED_CLOCK, ai, quota, graph, queue, firebaseProjectId = null, notifier = NoopSimulationNotifier,
+            chat = ChatModule(ExposedChatRepository(db), InMemoryChatMirror(), NoopNotifier, graph.policy, FIXED_CLOCK), push = NoopNotifier,
         ).also { m ->
             queue.inline = { task -> m.engine.run(ContractJson.decodeFromString<TaskPayload>(task.body).uuid()) }
         }

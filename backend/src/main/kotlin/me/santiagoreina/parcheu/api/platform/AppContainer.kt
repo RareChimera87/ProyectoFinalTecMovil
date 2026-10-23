@@ -23,8 +23,20 @@ import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
+import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
+import me.santiagoreina.parcheu.api.identity.profile.ProfileService
+import me.santiagoreina.parcheu.api.matching.MatchingFlags
+import me.santiagoreina.parcheu.api.matching.MatchingModule
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
+import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
+import me.santiagoreina.parcheu.api.matching.matchingModule
 import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
+import me.santiagoreina.parcheu.api.notifications.push.ExposedPushStore
+import me.santiagoreina.parcheu.api.notifications.push.FakeFcmClient
+import me.santiagoreina.parcheu.api.notifications.push.FcmNotifier
+import me.santiagoreina.parcheu.api.notifications.push.FirebaseFcmClient
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
@@ -35,14 +47,13 @@ import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
-import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
-import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.quota.quotaModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
+import me.santiagoreina.parcheu.api.simulation.NotifierSimulationNotifier
 import me.santiagoreina.parcheu.api.simulation.SimulationModule
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
 import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
@@ -54,6 +65,7 @@ import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.TwinRoutes
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.twin.twinModule
+import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Clock
 
 /**
@@ -67,22 +79,31 @@ class AppContainer(
     val tokenVerifier: TokenVerifier,
     val oidcVerifier: OidcVerifier,
     val identity: IdentityService,
+    /** Perfil básico B0 y verificación de edad (E2.6). */
+    val profile: ProfileService,
+    /** Cuotas (E4.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Pasarela de IA (E0.9). Por defecto Fake con uso en memoria (tests y `ENV=local`). */
     val ai: AiGateway = localAiGateway(clock),
     /** Gemelo (E2.3). Por defecto en memoria: solo [fromConfig] cablea Postgres y Cloud Tasks. */
     val twin: TwinModule = inMemoryTwinModule(clock, ai),
-    /** Cuotas (E4.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
-    val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
     val graph: GraphModule = inMemoryGraphModule(clock),
-    /** Avisos (push + bandeja). Los tests de otros dominios pasan un `FakeNotifier`. */
+    /** Avisos (push + bandeja, E5.3). Los tests de otros dominios pasan un `FakeNotifier`. */
     val notifier: Notifier = NoopNotifier,
     /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
     val chat: ChatModule = inMemoryChatModule(clock, graph.policy, notifier),
-    /** Simulación (E4.3) e informe y decisión (E4.6). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
-    val simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph, chat = chat, push = notifier),
+    /**
+     * Simulación (E4.3) e informe y decisión mutua (E4.6, con [chat] y [notifier]). Por defecto en
+     * memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore.
+     */
+    val simulation: SimulationModule = inMemorySimulationModule(
+        clock, ai, quota, graph, notifier = NotifierSimulationNotifier(notifier), chat = chat, push = notifier,
+    ),
+    /** Fila de match (E4.2). Por defecto en memoria: solo [fromConfig] cablea Postgres y Firestore. */
+    val matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, twin, quota, graph, simulation, chat),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching),
 ) {
     companion object {
         /**
@@ -103,37 +124,56 @@ class AppContainer(
                 GoogleOidcVerifier(config.oidcAudience, config.tasksServiceAccount)
             }
             val clock = systemClock()
-            val ai = aiGateway(config, vars, clock)
             val dbConfig = requireNotNull(config.db) {
                 "El servicio necesita la base de datos: define DB_NAME y CLOUD_SQL_INSTANCE (o DB_URL en local)"
             }
-            // Pool perezoso (failFast = false): el servicio arranca aunque Cloud SQL tarde en responder.
             val database = connectExposed(createDataSource(dbConfig, failFast = false))
-            val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
             val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
-            val twin = twinModule(config.env, database, clock, ai, tasks)
+            val profile = ProfileService(identity, ExposedProfileRepository(database), clock)
             val quota = quotaModule(config.env, database, clock)
+            val ai = aiGateway(config, vars, clock) { database }
+            val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
+            val twin = twinModule(config.env, database, clock, ai, tasks)
             val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
-            // E5.3 (PR #30) cambia este valor por FcmNotifier; hasta entonces los avisos del chat no salen.
-            val notifier: Notifier = NoopNotifier
+            // En local no hay credenciales de FCM: se guarda el aviso y el envío es un Fake (E5.3).
+            val fcm = if (local) FakeFcmClient() else FirebaseFcmClient(requireNotNull(config.firebaseProjectId))
+            val notifier = FcmNotifier(ExposedPushStore(database), fcm, clock)
             // En local no hay Firestore: el espejo del chat queda en memoria (Postgres sigue siendo la verdad).
-            val chatMirror = if (local) InMemoryChatMirror() else FirestoreChatMirror.forProject(requireNotNull(config.firebaseProjectId))
+            val chatMirror =
+                if (local) InMemoryChatMirror() else FirestoreChatMirror.forProject(requireNotNull(config.firebaseProjectId))
             val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
+            // Simulación (E4.3): misma base, cola y avisos; el espejo de progreso va a Firestore fuera de local.
+            // El informe y la decisión mutua (E4.6) reutilizan el chat (DIRECT) y el notifier (NEW_CONNECTION).
             val simulation = simulationModule(
-                config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId, chat = chat, push = notifier,
+                config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId,
+                notifier = NotifierSimulationNotifier(notifier), chat = chat, push = notifier,
+            )
+            // Fila de match (E4.2): misma base, cuotas, simulación, grafo y avisos; espejo matchTickets en Firestore fuera de local.
+            val matching = matchingModule(
+                config.env, database, clock, quota, simulation, graph, notifier, config.firebaseProjectId,
+                MatchingFlags.fromEnv(config.env, vars),
             )
             return AppContainer(
-                config, clock, tokenVerifier, oidcVerifier, identity,
-                ai = ai, twin = twin, quota = quota, graph = graph, chat = chat, simulation = simulation,
-                notifier = notifier,
+                config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
+                ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
+                matching = matching,
             )
         }
 
-        /** Pasarela de IA: uso en Postgres si hay base configurada; en memoria solo con `ENV=local`. */
-        fun aiGateway(config: AppConfig, vars: Map<String, String>, clock: Clock): AiGateway {
+        /**
+         * Pasarela de IA: uso en Postgres si hay base configurada (reutiliza [database] si se pasa;
+         * si no, abre un pool perezoso propio); en memoria solo con `ENV=local`.
+         */
+        fun aiGateway(
+            config: AppConfig,
+            vars: Map<String, String>,
+            clock: Clock,
+            database: (() -> Database)? = null,
+        ): AiGateway {
             val aiConfig = AiConfig.fromEnv(vars, config.env)
             val db = config.db
             val usage = when {
+                database != null -> ExposedAiUsageStore(database)
                 db != null -> ExposedAiUsageStore { connectExposed(createDataSource(db, maxPoolSize = 2)) }
                 config.env == Env.LOCAL -> InMemoryAiUsageStore()
                 else -> error("La pasarela de IA necesita DB_NAME y la conexión a la base en ${config.env}")
@@ -141,7 +181,7 @@ class AppContainer(
             return AiModule.gateway(aiConfig, usage, clock)
         }
 
-        private fun localAiGateway(clock: Clock): AiGateway {
+        internal fun localAiGateway(clock: Clock): AiGateway {
             val config = AiConfig.fromEnv(emptyMap(), Env.LOCAL)
             return AiModule.gateway(config, InMemoryAiUsageStore(), clock, FakeLlmClient())
         }
@@ -151,16 +191,18 @@ class AppContainer(
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
 fun allDomains(
     identity: IdentityService,
-    twin: TwinModule,
+    profile: ProfileService,
     quota: QuotaModule,
-    graph: GraphModule,
-    simulation: SimulationModule,
+    twin: TwinModule,
+    graph: GraphModule = inMemoryGraphModule(systemClock()),
     chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
+    simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
+    matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
 ): List<DomainRoutes> = listOf(
-    IdentityRoutes(identity),
+    IdentityRoutes(identity, profile),
     TwinRoutes(twin),
     QuotaRoutes(quota),
-    MatchingRoutes(),
+    MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },

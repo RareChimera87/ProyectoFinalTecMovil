@@ -44,11 +44,11 @@ class NavBarTest {
                                 unread
                             } else {
                                 0
-                            },
+                            }
                         )
                     },
                     activeKey = active,
-                    onSelect = onSelect,
+                    onSelect = onSelect
                 )
             }
         }
@@ -72,7 +72,7 @@ class NavBarTest {
                 ParcheUNavBar(
                     items = keys.map { NavBarItem(it, "L-$it", icon) },
                     activeKey = active,
-                    onSelect = { active = it },
+                    onSelect = { active = it }
                 )
             }
         }
@@ -95,7 +95,7 @@ class NavBarTest {
         setBar("home", unread = 0)
         composeRule.onNodeWithTag(
             navBarBadgeTag("chats"),
-            useUnmergedTree = true,
+            useUnmergedTree = true
         ).assertDoesNotExist()
     }
 
@@ -104,11 +104,11 @@ class NavBarTest {
         setBar("home", unread = 3)
         composeRule.onNodeWithTag(
             navBarBadgeTag("chats"),
-            useUnmergedTree = true,
+            useUnmergedTree = true
         ).assertIsDisplayed()
         composeRule.onNodeWithTag(
             navBarBadgeTag("home"),
-            useUnmergedTree = true,
+            useUnmergedTree = true
         ).assertDoesNotExist()
         composeRule.onNodeWithText("3", useUnmergedTree = true).assertIsDisplayed()
     }

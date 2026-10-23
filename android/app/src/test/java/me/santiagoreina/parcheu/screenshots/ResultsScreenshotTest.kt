@@ -23,9 +23,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Capturas de F7 (informe del mes disponible y ya consumido), F8 (oscuro) / I3 (la misma pantalla en
- * claro), 'esperando a la otra persona', perfil demo y la conversación de los gemelos, en ambos temas
- * (ADR-0022) con `changeThreshold` 0,01. Grabar con `./gradlew :app:recordRoborazziDevDebug`.
+ * Capturas de F7 (informe del mes disponible y ya consumido), F8 (oscuro) / I3 (la misma pantalla
+ * en claro), 'esperando a la otra persona', perfil demo y la conversación de los gemelos, en ambos
+ * temas (ADR-0022) con `changeThreshold` 0,01. Grabar con `./gradlew :app:recordRoborazziDevDebug`.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -38,13 +38,15 @@ class ResultsScreenshotTest(private val dark: Boolean) {
 
     private fun capture(name: String, content: ResultsContent) {
         composeRule.setContent {
-            ParcheUTheme(darkTheme = dark) { ResultsScreen(ResultsUiState.Loaded(content), ResultsActions()) }
+            ParcheUTheme(darkTheme = dark) {
+                ResultsScreen(ResultsUiState.Loaded(content), ResultsActions())
+            }
         }
         composeRule.onRoot().captureRoboImage(
             filePath = "src/test/screenshots/results/${name}_$theme.png",
             roborazziOptions = RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
-            ),
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+            )
         )
     }
 
@@ -52,7 +54,7 @@ class ResultsScreenshotTest(private val dark: Boolean) {
         full: Boolean = false,
         unlockAvailable: Boolean = true,
         decision: DecisionState = DecisionState.PENDING,
-        isDemo: Boolean = false,
+        isDemo: Boolean = false
     ) = ResultsContent(
         otherLabel = "Alguien de la UIS",
         mode = Mode.ESTUDIO,
@@ -61,7 +63,7 @@ class ResultsScreenshotTest(private val dark: Boolean) {
         report = if (full) fullReport() else lockedReport(unlockAvailable),
         decision = decision,
         usedMonth = "octubre",
-        resetMonth = "noviembre",
+        resetMonth = "noviembre"
     )
 
     @Test
@@ -75,7 +77,8 @@ class ResultsScreenshotTest(private val dark: Boolean) {
     fun f8() = capture(if (dark) "f8" else "i3", content(full = true))
 
     @Test
-    fun waiting() = capture("waiting", content(unlockAvailable = false, decision = DecisionState.WAITING))
+    fun waiting() =
+        capture("waiting", content(unlockAvailable = false, decision = DecisionState.WAITING))
 
     @Test
     fun demo() = capture("f7_demo", content(isDemo = true))
@@ -83,7 +86,7 @@ class ResultsScreenshotTest(private val dark: Boolean) {
     @Test
     fun transcript() = capture(
         "transcript",
-        content(full = true).copy(transcript = TranscriptState.Loaded(sampleTranscript())),
+        content(full = true).copy(transcript = TranscriptState.Loaded(sampleTranscript()))
     )
 
     companion object {

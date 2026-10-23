@@ -50,29 +50,6 @@ createdb -h localhost -p 54329 -U postgres e04test
 cd backend && PARCHEU_TEST_DB_URL=jdbc:postgresql://localhost:54329/e04test ./gradlew test -PsinContenedores
 ```
 
-## Pasarela de IA (E0.9, ADR-0008)
-
-- Con `ENV=local` y sin `AI_PROVIDER` el backend usa `FakeLlmClient` y guarda el uso en memoria: no se llama a Vertex ni se gasta nada.
-- Para probar con Vertex real en local: `gcloud auth application-default login` y luego `ENV=local AI_PROVIDER=gemini AI_VERTEX_PROJECT=parcheu-dev ./gradlew run`.
-- Humo manual (no corre en CI ni en `./gradlew test`; consume unos centavos de USD):
-
-  ```bash
-  cd backend
-  ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'
-  AI_PROVIDER=claude ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'   # cuando Claude tenga cuota
-  ```
-
-- IDs de modelo, ubicación y precios: `backend/src/main/resources/ai/modelos.properties`. Un modelo nuevo necesita su fila `price.*` o el servicio no arranca.
-
-**Emulador de Firestore (E5.1).** Las pruebas del espejo del chat (`ChatFirestoreEmulatorTest`, y `ChatDbTest` cuando también hay Postgres) solo corren si existe `FIRESTORE_EMULATOR_HOST`. El emulador no necesita Docker, pero sí Java 21:
-
-```bash
-cd firebase && npm ci
-JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
-  npx firebase emulators:exec --only firestore --project demo-parcheu "cd ../backend && ./gradlew test -PsinContenedores"
-```
-
-
 ## Migraciones (E0.4, ADR-0011)
 
 - Viven en `backend/src/main/resources/db/migration/`. `V1__esquema.sql` y `V2__semillas.sql` son fijas: **nunca edites una migración ya mezclada** (Flyway valida el checksum); agrega una nueva.
@@ -117,7 +94,6 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
   - `serve` en dev/prod (obligatorias): `INTERNAL_OIDC_AUDIENCE` (audiencia OIDC de `/internal/*`, la custom audience de E0.5; respaldo `SERVICE_URL`, debe ser https), `TASKS_SERVICE_ACCOUNT`, y `FIREBASE_PROJECT_ID` (respaldo `GCP_PROJECT`).
   - `migrate` (obligatorias): `DB_NAME` y `CLOUD_SQL_INSTANCE` o `DB_URL`; opcionales `DB_USER`, `DB_PASSWORD`. `migrate`, `seed-demo` y `purge-demo` no exigen Firebase ni OIDC.
   - `serve` (E2.1) también necesita la base: `DB_NAME` y `CLOUD_SQL_INSTANCE` (o `DB_URL` en local), con las migraciones ya aplicadas. Opcional `LEGAL_TEXT_VERSION` (texto vigente de Términos y Política; por defecto `2026-10-29`, debe coincidir con las páginas web de E8.4).
-  - Clave de `anonId` del grafo (E3.1): `HMAC_ANON_KEY` (valor directo) o `SECRET_HMAC_ANON_KEY` (nombre del secreto `projects/<p>/secrets/hmac-anon-key`, que define el Terraform de E0.5; se lee la versión `latest` en el primer uso). Con `ENV=local` y sin ninguna de las dos se usa una clave fija de desarrollo; en dev y prod, sin clave, `GET /v1/graph` falla con 500 en vez de usar una clave débil.
   - Arranque local completo: Postgres propio + `ENV=local DB_NAME=parcheu DB_URL=jdbc:postgresql://localhost:5432/parcheu DB_USER=postgres ./gradlew run` tras correr el modo `migrate`. Prueba con `curl -XPOST -H 'Authorization: Bearer fake-ana' localhost:8080/v1/session`.
 - **Modos:** `serve`, `migrate`, `seed-demo`, `purge-demo` (primer argumento del proceso o de la imagen; sin argumento es `serve`).
 - **Tests.** `./gradlew test -PsinContenedores` omite los tests con Testcontainers (solo CI). Los demás usan `testApplication` con `FakeTokenVerifier` y `FakeOidcVerifier`.
@@ -125,16 +101,70 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
 - **Agregar un dominio o ruta.** Rellena el `XRoutes.kt` de tu dominio (reemplaza los `stubXxx`) y cablea sus dependencias en `platform/AppContainer.kt`; `Application.kt` no se toca.
 - **Logs.** JSON a stdout con `severity`, `traceId` (de `X-Cloud-Trace-Context`) y `route`.
 
+## Pasarela de IA (E0.9, ADR-0008)
+
+- Con `ENV=local` y sin `AI_PROVIDER` el backend usa `FakeLlmClient` y guarda el uso en memoria: no se llama a Vertex ni se gasta nada.
+- Para probar con Vertex real en local: `gcloud auth application-default login` y luego `ENV=local AI_PROVIDER=gemini AI_VERTEX_PROJECT=parcheu-dev ./gradlew run`.
+- Humo manual (no corre en CI ni en `./gradlew test`; consume unos centavos de USD):
+
+  ```bash
+  cd backend
+  ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'
+  AI_PROVIDER=claude ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'   # cuando Claude tenga cuota
+  ```
+
+- IDs de modelo, ubicación y precios: `backend/src/main/resources/ai/modelos.properties`. Un modelo nuevo necesita su fila `price.*` o el servicio no arranca.
+
 ## Gemelo (E2.3)
 
 - Con `ENV=local` sin base, el gemelo corre en memoria y la tarea `build-persona` se ejecuta en línea al enviar `POST /v1/twin/answers` (cola Fake) con el LLM Fake de la pasarela.
 - Con base (dev/prod) la tarea va a la cola `ai-light` de Cloud Tasks: necesita `TASKS_QUEUE_AI_LIGHT` (nombre corto `ai-light` o ruta completa; el nombre corto se completa con `GCP_PROJECT`/`GCP_REGION`, o con `CLOUD_SQL_INSTANCE` si faltan), `SERVICE_URL`, `TASKS_SERVICE_ACCOUNT` e `INTERNAL_OIDC_AUDIENCE`.
 - Para ejecutar `TwinDbTest` sin Docker, apunta `PARCHEU_TEST_DB_URL` a un Postgres 16 desechable (ver `TestDatabase`).
 
+## Grafo (E3.1)
+
+- Clave de `anonId` del grafo: `HMAC_ANON_KEY` (valor directo) o `SECRET_HMAC_ANON_KEY` (nombre del secreto `projects/<p>/secrets/hmac-anon-key`, que define el Terraform de E0.5; se lee la versión `latest` en el primer uso). Con `ENV=local` y sin ninguna de las dos se usa una clave fija de desarrollo; en dev y prod, sin clave, `GET /v1/graph` falla con 500 en vez de usar una clave débil.
+
+## Suite de invariantes de privacidad (E3.5)
+
+```bash
+# Solo la suite (≥ 1.000 casos por propiedad; la semilla queda en build/test-results)
+cd backend && ./gradlew test -PsinContenedores --tests 'me.santiagoreina.parcheu.api.privacy.*'
+# Reproducir una corrida concreta
+PRIVACY_SEED=-6985993149784619260 ./gradlew test -PsinContenedores --tests 'me.santiagoreina.parcheu.api.privacy.*'
+# Demo de mutación para la sustentación (sale ≠ 0 con mutación, 0 sin ella; deja el árbol limpio)
+scripts/demo-mutacion-privacidad.sh            # quita el filtro de Pareja de GraphVisibilityPolicy
+scripts/demo-mutacion-privacidad.sh memorias   # MemorySelection deja de filtrar memorias por modo
+scripts/demo-mutacion-privacidad.sh ninguna    # control: suite en verde
+scripts/test/demo-mutacion-privacidad.test.sh  # comprobación rápida de las anclas, sin Gradle
+```
+
+La mutación `memorias` se ancla en el filtro por modo de `MemorySelection.select`, que es la selección que usa el `TwinPromptBuilder` real de E4.3 (`memoriesFor` delega en `select` y `sanitize`; `TwinPromptBuilderDelegationTest` lo exige con ASM). El builder no repite ese filtro, así que la mutación llega a su prompt y la detecta también la propiedad "prompt del builder por modo" de `TwinPromptMemoryPropertyTest`, que arma el prompt con el builder real.
+
+La demo exige que el archivo a mutar no tenga cambios sin commit (lo restaura con `git checkout`).
+Una vista de terceros nueva se agrega en `ThirdPartyViews.registered` y con su sonda en
+`ThirdPartyViewProbes.byView`; sin ambas, `ThirdPartyViewRegistryTest` falla.
+
+## Chat (E5.1)
+
+**Emulador de Firestore (E5.1).** Las pruebas del espejo del chat (`ChatFirestoreEmulatorTest`, y `ChatDbTest` cuando también hay Postgres) solo corren si existe `FIRESTORE_EMULATOR_HOST`. El emulador no necesita Docker, pero sí Java 21:
+
+```bash
+cd firebase && npm ci
+JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
+  npx firebase emulators:exec --only firestore --project demo-parcheu "cd ../backend && ./gradlew test -PsinContenedores"
+```
+
+## Perfil básico y edad (E2.6)
+
+- La edad se verifica solo en el servidor: `POST /v1/me/age-verification` guarda `birth_date` una sola vez (inmutable) y calcula los 18 años con la fecha de hoy en America/Bogota. La app nunca decide la edad.
+- Una cuenta de menor queda con `underage_at` y la puerta de `identity/TermsGate.kt` le responde 403 `UNDERAGE` en toda ruta, incluidas `session` y `terms`, salvo `GET` y `DELETE /v1/me`. Para probarlo en local, envía una fecha de menos de 18 años desde B0 o con `curl`.
+- El catálogo de B0 (`GET /v1/catalog`) sale de las semillas de V2 más `V20261022_0745__universidad_unipaz.sql`; `universityId` se valida en `1..32767` (la columna es `smallint`).
 ## Simulación (E4.3)
 
 - La tarea `simulate` va a la cola `simulations` de Cloud Tasks: además de lo que pide el gemelo necesita `TASKS_QUEUE_SIM`. Con `ENV=local` la cola es Fake y no ejecuta en línea: para correr una simulación local llama `POST /internal/tasks/simulate` con `{"id":"<simulationId>"}` y el token Fake de tareas (`oidc-tasks-fake`).
 - El espejo `simulations/{id}` escribe en Firestore con Firebase Admin (ADC de `sa-api`) solo si hay `FIREBASE_PROJECT_ID` y `ENV` no es `local`.
+- Al terminar (DONE o FAILED) se avisa a los dos participantes por el `Notifier` de E5.3 (`SIMULATION_READY` → `parcheu://results/{id}`, `SIMULATION_FAILED` → `parcheu://simulation/{id}`).
 - Humos manuales contra GCP dev (no corren en CI; una simulación real cuesta 1-3 centavos de USD):
 
   ```bash
@@ -142,3 +172,16 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
   ```
 
 - `SimulationDbTest` usa Postgres real: en local, `PARCHEU_TEST_DB_URL` apuntando a un Postgres 16 desechable (ver `TestDatabase`).
+
+## Fila de match (E4.2)
+
+- Banderas del servicio `api`: `DEMO_USERS_ENABLED` (por defecto `true` en local y dev, `false` en prod) y `SCENARIO_MODE_ENABLED` (por defecto `false` hasta E4.8). El espejo `matchTickets/{uid}` escribe en Firestore solo si hay `FIREBASE_PROJECT_ID` y `ENV` no es `local`.
+- `MatchingDbTest` usa Postgres real (incluye la prueba de concurrencia y la de `SKIP LOCKED`): en local, `PARCHEU_TEST_DB_URL` apuntando a un Postgres 16 desechable (ver `TestDatabase`).
+- `MatchTicketFirestoreEmulatorTest` necesita el emulador de Firestore; sin `FIRESTORE_EMULATOR_HOST` se omite. En local, con Java 21 en el `PATH`:
+
+  ```bash
+  cd backend && firebase --config ../firebase/firebase.json emulators:exec --only firestore --project demo-parcheu \
+    "./gradlew test -PsinContenedores --tests '*FirestoreEmulatorTest*'"
+  ```
+
+  (`firebase` global o `npx firebase` tras `npm ci` en `firebase/`; CI lo hace en `backend-ci`.)

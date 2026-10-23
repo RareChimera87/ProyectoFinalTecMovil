@@ -18,7 +18,7 @@ class ApiErrorMapper(private val json: Json = ContractJson) {
         ErrorCode.QUOTA_EXCEEDED ->
             AppError.QuotaExceeded(
                 kind = QuotaKind.entries.firstOrNull { it.name == error.kind },
-                resetsAt = error.resetsAt,
+                resetsAt = error.resetsAt
             )
         ErrorCode.TERMS_REQUIRED -> AppError.TermsRequired
         ErrorCode.AGE_REQUIRED -> AppError.AgeRequired

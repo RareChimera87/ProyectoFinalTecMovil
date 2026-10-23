@@ -8,10 +8,7 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 
-[*.{kt,kts}]
-max_line_length = 120
-ij_kotlin_allow_trailing_comma = true
-ij_kotlin_allow_trailing_comma_on_call_site = true
+# Kotlin: ver android/.editorconfig (root=true): ktlint toma de allí el estilo de spotless.
 
 [*.{yml,yaml,json,tf,tfvars,md,xml,toml}]
 indent_size = 2

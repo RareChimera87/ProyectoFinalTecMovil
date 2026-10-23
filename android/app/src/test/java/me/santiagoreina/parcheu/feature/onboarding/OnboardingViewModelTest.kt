@@ -16,6 +16,7 @@ import me.santiagoreina.parcheu.navigation.BasicProfile
 import me.santiagoreina.parcheu.navigation.Home
 import me.santiagoreina.parcheu.navigation.Modes
 import me.santiagoreina.parcheu.navigation.TwinQuestions
+import me.santiagoreina.parcheu.navigation.Underage
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -44,7 +45,7 @@ class OnboardingViewModelTest {
                 OnboardingStep.NEEDS_PROFILE to BasicProfile(),
                 OnboardingStep.NEEDS_TWIN to TwinQuestions,
                 OnboardingStep.NEEDS_MODES to Modes(),
-                OnboardingStep.DONE to Home,
+                OnboardingStep.DONE to Home
             )
         expected.forEach { (step, route) ->
             val viewModel = OnboardingViewModel(loggedInWith(step))
@@ -81,7 +82,7 @@ class OnboardingViewModelTest {
         assertEquals(LoginState.Error(AppError.Network), viewModel.state.value.login)
         assertEquals(
             "No hay conexión. Revisa tu internet e inténtalo de nuevo.",
-            loginErrorMessage(AppError.Network),
+            loginErrorMessage(AppError.Network)
         )
 
         repository.signInResult = SignInResult.Success(sessionDto(OnboardingStep.NEEDS_TWIN))
@@ -153,7 +154,7 @@ class OnboardingViewModelTest {
             FakeAuthRepository(signedIn = true).apply {
                 nextSessions(
                     ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, newVersion)),
-                    ApiResult.Success(sessionDto(OnboardingStep.DONE, newVersion)),
+                    ApiResult.Success(sessionDto(OnboardingStep.DONE, newVersion))
                 )
             }
         val viewModel = OnboardingViewModel(repository)
@@ -174,7 +175,7 @@ class OnboardingViewModelTest {
             FakeAuthRepository(signedIn = true).apply {
                 nextSessions(
                     ApiResult.Failure(AppError.Network),
-                    ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, newVersion)),
+                    ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, newVersion))
                 )
             }
         val viewModel = OnboardingViewModel(repository)
@@ -191,7 +192,7 @@ class OnboardingViewModelTest {
         val repository =
             FakeAuthRepository(signedIn = true).apply {
                 nextSessions(
-                    ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, "2026-12-01")),
+                    ApiResult.Success(sessionDto(OnboardingStep.NEEDS_TERMS, "2026-12-01"))
                 )
             }
         val viewModel = OnboardingViewModel(repository)
@@ -215,5 +216,19 @@ class OnboardingViewModelTest {
 
         assertEquals(LoginState.Error(AppError.Unauthorized), viewModel.state.value.login)
         assertEquals(listOf("signIn", "signOut"), repository.calls)
+    }
+
+    @Test
+    fun underageAccountGoesToAgeLockInsteadOfShowingAnError() = runTest {
+        val repository =
+            FakeAuthRepository().apply {
+                signInResult = SignInResult.Failure(AppError.Underage)
+            }
+        val viewModel = OnboardingViewModel(repository)
+        viewModel.effects.test {
+            viewModel.onContinueWithGoogle(context)
+            assertEquals(OnboardingEffect.Navigate(Underage), awaitItem())
+        }
+        assertEquals(LoginState.Idle, viewModel.state.value.login)
     }
 }

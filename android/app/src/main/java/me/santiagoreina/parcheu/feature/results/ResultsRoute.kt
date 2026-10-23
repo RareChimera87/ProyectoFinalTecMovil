@@ -21,7 +21,8 @@ fun ResultsRoute(
     route: Results,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: ResultsViewModel = koinViewModel(key = route.simulationId) { parametersOf(route.simulationId) },
+    viewModel: ResultsViewModel =
+        koinViewModel(key = route.simulationId) { parametersOf(route.simulationId) }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -46,8 +47,8 @@ fun ResultsRoute(
             onOpenChat = viewModel::onOpenChat,
             onOpenTranscript = viewModel::onOpenTranscript,
             onCloseTranscript = viewModel::onCloseTranscript,
-            onDismissNotice = viewModel::onDismissNotice,
+            onDismissNotice = viewModel::onDismissNotice
         ),
-        modifier = modifier,
+        modifier = modifier
     )
 }

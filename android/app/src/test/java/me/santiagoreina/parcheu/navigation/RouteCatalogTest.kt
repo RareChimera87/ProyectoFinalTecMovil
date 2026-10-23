@@ -13,7 +13,7 @@ class RouteCatalogTest {
             declared.map {
                 it.simpleName.orEmpty()
             }.sorted(),
-            inCatalog.map { it.simpleName.orEmpty() }.sorted(),
+            inCatalog.map { it.simpleName.orEmpty() }.sorted()
         )
     }
 

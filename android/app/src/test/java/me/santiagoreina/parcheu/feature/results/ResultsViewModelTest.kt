@@ -49,7 +49,10 @@ class ResultsViewModelTest {
     @Test
     fun monthsUseBogotaTime() {
         // 1 de enero 00:00 en Bogotá = 05:00 UTC: el mes en curso es diciembre.
-        assertEquals("diciembre" to "enero", ResultsViewModel.monthsOf(Instant.parse("2027-01-01T05:00:00Z")))
+        assertEquals(
+            "diciembre" to "enero",
+            ResultsViewModel.monthsOf(Instant.parse("2027-01-01T05:00:00Z"))
+        )
     }
 
     @Test
@@ -78,7 +81,8 @@ class ResultsViewModelTest {
 
     @Test
     fun unlockWithoutQuotaMarksReportAsUsed() = runTest {
-        repository.unlockResult = ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.FULL_REPORT, null))
+        repository.unlockResult =
+            ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.FULL_REPORT, null))
         val viewModel = viewModel()
         viewModel.onUnlock()
         val content = viewModel.content()
@@ -107,10 +111,16 @@ class ResultsViewModelTest {
 
     @Test
     fun mutualConnectionOpensTheChatAndRevealsTheName() = runTest {
-        repository.decideResult = ApiResult.Success(DecisionResult(DecisionStatus.CONNECTED, chatId = "chat-9"))
+        repository.decideResult =
+            ApiResult.Success(DecisionResult(DecisionStatus.CONNECTED, chatId = "chat-9"))
         val viewModel = viewModel()
         repository.reportResult = ApiResult.Success(
-            lockedReport().copy(myDecision = true, otherDecided = true, otherName = "Laura", chatId = "chat-9"),
+            lockedReport().copy(
+                myDecision = true,
+                otherDecided = true,
+                otherName = "Laura",
+                chatId = "chat-9"
+            )
         )
         viewModel.effects.test {
             viewModel.onConnect()
@@ -142,7 +152,8 @@ class ResultsViewModelTest {
 
     @Test
     fun otherDecidedAloneNeverShowsDeclined() = runTest {
-        repository.reportResult = ApiResult.Success(lockedReport().copy(myDecision = true, otherDecided = true))
+        repository.reportResult =
+            ApiResult.Success(lockedReport().copy(myDecision = true, otherDecided = true))
         assertEquals(DecisionState.WAITING, viewModel().content().decision)
     }
 

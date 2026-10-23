@@ -35,7 +35,7 @@ enum class DecisionState {
     DECLINED,
 
     /** Las dos conectaron: hay chat DIRECT y nombre. */
-    CONNECTED,
+    CONNECTED
 }
 
 /** Lo que está en curso (deshabilita los botones). */
@@ -43,7 +43,10 @@ enum class Busy { UNLOCK, DECIDE }
 
 /** Avisos dentro de la pantalla. */
 sealed interface ResultsNotice {
-    /** El unlock respondió 402 FULL_REPORT: el informe del mes ya se usó (en otro dispositivo, p. ej.). */
+    /**
+     * El unlock respondió 402 FULL_REPORT: el informe del mes ya se usó (en otro dispositivo,
+     * p. ej.).
+     */
     data object ReportAlreadyUsed : ResultsNotice
 
     data class Failed(val error: AppError) : ResultsNotice
@@ -58,8 +61,8 @@ sealed interface TranscriptState {
 }
 
 /**
- * Datos de F7/F8. [usedMonth] y [resetMonth] ('octubre', 'noviembre') salen de `QuotaDto.fullReport.resetsAt`
- * en hora de Bogotá; son nulos si no se pudo consultar el cupo.
+ * Datos de F7/F8. [usedMonth] y [resetMonth] ('octubre', 'noviembre') salen de
+ * `QuotaDto.fullReport.resetsAt` en hora de Bogotá; son nulos si no se pudo consultar el cupo.
  */
 data class ResultsContent(
     val otherLabel: String,
@@ -74,7 +77,7 @@ data class ResultsContent(
     val busy: Busy? = null,
     val notice: ResultsNotice? = null,
     /** No nulo mientras se muestra la conversación de los gemelos. */
-    val transcript: TranscriptState? = null,
+    val transcript: TranscriptState? = null
 ) {
     /** F8 (completo) o F7 (bloqueado). */
     val full: Boolean get() = !report.locked
@@ -98,10 +101,14 @@ sealed interface ResultsEffect {
 }
 
 /**
- * F7, F8, I3 y 'esperando a la otra persona' (E4.6). Lee el resumen de la simulación (modo, con quién,
- * insignia demo), el informe redactado por el servidor y el cupo (Plus y mes del informe gratis).
+ * F7, F8, I3 y 'esperando a la otra persona' (E4.6). Lee el resumen de la simulación (modo, con
+ * quién, insignia demo), el informe redactado por el servidor y el cupo (Plus y mes del informe
+ * gratis).
  */
-class ResultsViewModel(private val simulationId: String, private val repository: ResultsRepository) : ViewModel() {
+class ResultsViewModel(
+    private val simulationId: String,
+    private val repository: ResultsRepository
+) : ViewModel() {
     private val _state = MutableStateFlow<ResultsUiState>(ResultsUiState.Loading)
     val state: StateFlow<ResultsUiState> = _state.asStateFlow()
 
@@ -146,8 +153,8 @@ class ResultsViewModel(private val simulationId: String, private val repository:
                     decision = decisionOf(dto),
                     chatId = dto.chatId,
                     usedMonth = months?.first,
-                    resetMonth = months?.second,
-                ),
+                    resetMonth = months?.second
+                )
             )
         }
     }
@@ -169,7 +176,7 @@ class ResultsViewModel(private val simulationId: String, private val repository:
                             it.copy(
                                 report = it.report.copy(unlockAvailable = false),
                                 busy = null,
-                                notice = ResultsNotice.ReportAlreadyUsed,
+                                notice = ResultsNotice.ReportAlreadyUsed
                             )
                         }
                     } else {
@@ -202,12 +209,17 @@ class ResultsViewModel(private val simulationId: String, private val repository:
                             decision = decision,
                             chatId = decided.chatId ?: it.chatId,
                             report = it.report.copy(myDecision = connect),
-                            busy = null,
+                            busy = null
                         )
                     }
                     if (decision == DecisionState.CONNECTED) {
-                        // Con la conexión mutua el servidor ya revela el nombre: se refresca el informe.
-                        (repository.report(simulationId) as? ApiResult.Success)?.value?.let { fresh ->
+                        // Con la conexión mutua el servidor ya revela el nombre: se refresca el
+                        // informe.
+                        (
+                            repository.report(
+                                simulationId
+                            ) as? ApiResult.Success
+                            )?.value?.let { fresh ->
                             update { it.copy(report = fresh) }
                         }
                         decided.chatId?.let { _effects.send(ResultsEffect.OpenChat(it)) }
@@ -232,10 +244,12 @@ class ResultsViewModel(private val simulationId: String, private val repository:
                     report = result.value,
                     decision = decisionOf(result.value),
                     chatId = result.value.chatId,
-                    busy = null,
+                    busy = null
                 )
             }
-            is ApiResult.Failure -> update { it.copy(busy = null, notice = ResultsNotice.Failed(result.error)) }
+            is ApiResult.Failure -> update {
+                it.copy(busy = null, notice = ResultsNotice.Failed(result.error))
+            }
         }
     }
 
@@ -270,14 +284,20 @@ class ResultsViewModel(private val simulationId: String, private val repository:
 
     private fun update(transform: (ResultsContent) -> ResultsContent) {
         _state.update { current ->
-            if (current is ResultsUiState.Loaded) ResultsUiState.Loaded(transform(current.content)) else current
+            if (current is ResultsUiState.Loaded) {
+                ResultsUiState.Loaded(
+                    transform(current.content)
+                )
+            } else {
+                current
+            }
         }
     }
 
     companion object {
         private val MONTHS = listOf(
             "enero", "febrero", "marzo", "abril", "mayo", "junio",
-            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
         )
 
         /** Estado de la decisión a partir del informe (al abrir la pantalla o al volver). */
@@ -291,12 +311,14 @@ class ResultsViewModel(private val simulationId: String, private val repository:
         }
 
         /**
-         * Mes en curso y mes en que vuelve el informe gratis, en hora de Bogotá. [resetsAt] es el inicio
-         * del mes siguiente (QuotaService, E4.1): un milisegundo antes cae en el mes en curso.
+         * Mes en curso y mes en que vuelve el informe gratis, en hora de Bogotá. [resetsAt] es el
+         * inicio del mes siguiente (QuotaService, E4.1): un milisegundo antes cae en el mes en
+         * curso.
          */
         fun monthsOf(resetsAt: Instant): Pair<String, String> {
             val zone = TimeZone.getTimeZone("America/Bogota")
-            fun month(millis: Long) = Calendar.getInstance(zone).apply { timeInMillis = millis }.get(Calendar.MONTH)
+            fun month(millis: Long) =
+                Calendar.getInstance(zone).apply { timeInMillis = millis }.get(Calendar.MONTH)
             val millis = resetsAt.toEpochMilliseconds()
             return MONTHS[month(millis - 1)] to MONTHS[month(millis)]
         }

@@ -11,8 +11,8 @@ import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.core.network.apiCall
 
 /**
- * Resultado de una simulación (E4.6). El servidor decide qué ve cada plan: la app pinta lo que llega y
- * nunca recibe las razones ni los choques de un informe bloqueado.
+ * Resultado de una simulación (E4.6). El servidor decide qué ve cada plan: la app pinta lo que
+ * llega y nunca recibe las razones ni los choques de un informe bloqueado.
  */
 interface ResultsRepository {
     /** `GET /v1/simulations/{id}`: modo y con quién (etiqueta, insignia demo). */
@@ -34,14 +34,17 @@ interface ResultsRepository {
     suspend fun quota(): ApiResult<QuotaDto>
 }
 
-class RemoteResultsRepository(private val api: ResultsApi, private val mapper: ApiErrorMapper) : ResultsRepository {
+class RemoteResultsRepository(private val api: ResultsApi, private val mapper: ApiErrorMapper) :
+    ResultsRepository {
     override suspend fun simulation(id: String) = apiCall(mapper) { api.simulation(id) }
 
     override suspend fun report(id: String) = apiCall(mapper) { api.report(id) }
 
     override suspend fun unlock(id: String) = apiCall(mapper) { api.unlock(id) }
 
-    override suspend fun decide(id: String, connect: Boolean) = apiCall(mapper) { api.decide(id, Decision(connect)) }
+    override suspend fun decide(id: String, connect: Boolean) = apiCall(mapper) {
+        api.decide(id, Decision(connect))
+    }
 
     override suspend fun transcript(id: String) = apiCall(mapper) { api.transcript(id) }
 

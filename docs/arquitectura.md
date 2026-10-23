@@ -149,7 +149,7 @@ G2 (límite) es un bottom sheet global controlado por el `ErrorRouter`. Deep lin
 - Login: Credential Manager (`androidx.credentials`) + `googleid` (`GetGoogleIdOption` con el client id web de Firebase) → `GoogleAuthProvider.getCredential` → `signInWithCredential` → `POST /v1/session`.
 - DataStore (Preferences): sesión, último grafo serializado (pintado instantáneo de D1), progreso de B1, preferencias de tema.
 - **Cerrar sesión** (E8.2): `DELETE /v1/me/fcm-token` → `FirebaseAuth.signOut()` → `CredentialManager.clearCredentialState()` → borrar DataStore de sesión, grafo y B1 (se conserva el tema) → `FirebaseFirestore.terminate()` + `clearPersistence()` → A4 sin historial.
-- Onboarding: `SessionDto.onboarding` decide el destino: `NEEDS_TERMS` (hoja de aceptación en A4), `NEEDS_PROFILE` (B0), `NEEDS_TWIN` (B1), `NEEDS_MODES` (B2), `DONE` (C1).
+- Onboarding: `SessionDto.onboarding` decide el destino: `NEEDS_TERMS` (hoja de aceptación en A4), `NEEDS_PROFILE` (B0), `NEEDS_TWIN` (B1), `NEEDS_MODES` (B2), `DONE` (C1). `NEEDS_PROFILE` dura hasta que haya fecha verificada y universidad (E2.6); una cuenta de menor recibe 403 `UNDERAGE` en `POST /v1/session` y la app abre `Underage`.
 - Firestore: caché offline del SDK para chats; listeners en `simulations/{id}` y `matchTickets/{uid}`.
 - Imágenes: Coil 3 (foto de Google).
 - QR: ZXing core para generar; Google Code Scanner (`play-services-code-scanner`) para leer, sin permiso de cámara.
@@ -201,7 +201,7 @@ backend/src/main/kotlin/me/santiagoreina/parcheu/api/
 - **Ktor 3 (Netty)**, JVM 21, Kotlin 2.2.10, kotlinx.serialization con el mismo `Json` que el contrato.
 - **DI manual** por constructores en `Application.kt` (sin framework): todo es explícito y fácil de leer para agentes.
 - **Exposed DSL** + HikariCP + Cloud SQL Java Connector (IAM, sin VPC connector); transacciones explícitas en servicios.
-- **Autenticación:** plugin `firebase` (verifica ID token con Firebase Admin y carga el usuario; `suspended_until` y `deleted_at` se comprueban aquí) y plugin `oidc-internal` (verifica tokens de Google emitidos para la cuenta `sa-tasks` con audiencia = URL del servicio).
+- **Autenticación:** plugin `firebase` (verifica ID token con Firebase Admin y carga el usuario; `suspended_until` y `deleted_at` se comprueban aquí) y plugin `oidc-internal` (verifica tokens de Google emitidos para la cuenta `sa-tasks` con audiencia = `INTERNAL_OIDC_AUDIENCE`, valor fijo `https://api.parcheu-<env>.internal` (custom audience de Cloud Run; no la URL del servicio) y email = `sa-tasks`. Es la misma audiencia en Cloud Tasks, Scheduler y el push de Pub/Sub (RTDN); la variable de entorno y su valor por entorno están en la tabla de `infra/terraform/README.md`).
 - **Errores:** `StatusPages` traduce excepciones de dominio a `ApiError` (sección 5.1).
 - **Reloj inyectable** (`Clock`) con zona `America/Bogota` para cuotas, edad y agrupaciones.
 - **Entorno (`ENV`):** variable obligatoria (`local|dev|prod`) sin valor por defecto; si falta, el proceso no arranca. Solo `local` cablea `FakeTokenVerifier`/`FakeOidcVerifier` y se rechaza si Cloud Run define `K_SERVICE` o `CLOUD_RUN_JOB`. E0.5 (Terraform) y E0.6 (CD) deben fijar `ENV=dev|prod` en servicios y jobs.
@@ -255,8 +255,9 @@ twin_learning_cursor(user_id uuid pk, last_message_at timestamptz)
 -- Conocer
 scenarios(id smallint pk, mode text, slug text unique, title text, prompt text, is_basic bool,
           timer_sec int, budget_cop int, rubric jsonb /* [{name, weight, description}] */)
-match_queue(user_id uuid pk, mode text, priority smallint, enqueued_at timestamptz, expires_at timestamptz)
-           -- índice (mode, priority desc, enqueued_at)
+match_queue(user_id uuid pk, mode text, priority smallint, enqueued_at timestamptz, expires_at timestamptz,
+            status text check (status in ('WAITING','MATCHED','EXPIRED')), match_id uuid)
+           -- el último ticket de cada persona; índice parcial (mode, priority desc, enqueued_at) where status = 'WAITING' (E4.2)
 matches(id uuid pk, mode text, user_a uuid, user_b uuid, choice_a text, choice_b text,
         status text check (status in ('PENDING_CHOICE','SIMULATION','SCENARIO','EXPIRED')),
         simulation_id uuid, chat_id uuid, created_at timestamptz, decide_by timestamptz)
@@ -423,9 +424,11 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | POST `/v1/billing/verify` | `VerifyPurchase{purchaseToken, productId}` | `EntitlementDto` | FORBIDDEN, VALIDATION |
 | GET `/v1/admin/reports` · POST `/v1/admin/reports/{id}/resolve` | `Resolve{action: DISMISS\|HIDE_MESSAGE\|SUSPEND_24H\|BAN, note?}` | `Page<AdminReport>` / `AdminReport` | FORBIDDEN |
 | POST `/internal/tasks/simulate` · `/judge-scenario` (cola `simulations`) · `/build-persona` · `/extract-memories` · `/moderate` · `/name-community` (cola `ai-light`) · `/purge-user` (cola `maintenance`) | `{id}` | 204 | (OIDC) |
-| POST `/internal/jobs/communities` · `/memories` · `/twin-accuracy` · `/retention` | - | 204 | (OIDC, Scheduler) |
+| POST `/internal/jobs/communities` · `/memories` · `/twin-accuracy` · `/retention` · `/match-sweep` | - | 204 | (OIDC, Scheduler) |
 | POST `/internal/billing/rtdn` | sobre Pub/Sub push | 204 | (OIDC) |
 | POST `/internal/dev/grant-plus` | `{userId, days}` | 204 (404 en prod) | - |
+
+Nota: tras un match, `GET /v1/match/queue` sigue devolviendo el ticket `MATCHED` (estado terminal de la fila, con `matchId`). El cliente solo lo reanuda si `GET /v1/matches/{id}` está en `PENDING_CHOICE` sin `myChoice`; si no, vuelve a encolar con POST.
 
 `PersonRef{id?, anonId?, label, initials, photoUrl?, isDemo}`: antes de la conexión mutua `id` y `photoUrl` son nulos y `label` = "Alguien de la UIS". Los usuarios gratis nunca reciben los campos marcados como premium (`reasons`, `frictions`, `dimensions`, `transcript`, `items` de fof, comunidades y connect-requests): el servidor los omite, el borroso de la UI es decorativo.
 
@@ -440,6 +443,7 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 - La visibilidad del usuario (NAME / ANONYMOUS / HIDDEN) aplica a contextos de segundo grado (fof, comunidades de otros, presentaciones, sugerencias). Una conexión directa mutua siempre ve el nombre.
 - Detalles de E3.1: un `NodeDto` por persona; su `id` es el `users.id` si hay CONNECTED en algún modo y el `anonId` (`a_` + 22 caracteres base64url de la HMAC-SHA256) si no, y `GET /v1/graph/nodes/{id}` solo acepta ese mismo id (el uuid de un anónimo da 404). El modo, estado y afinidad del nodo son los de su arista principal (CONNECTED > PENDING > SIMULATED, luego mayor afinidad). `stats` describe el subgrafo filtrado y cuenta personas (`connections` = personas con alguna arista CONNECTED; `avgAffinity` promedia las aristas con afinidad). `community` solo filtra si el observador es miembro (si no, grafo vacío).
 - `EdgeService` (E3.1) es la única puerta de escritura de `edges`: `Simulated` (crea SIMULATED o actualiza afinidad y `last_simulation_id`), `InterestShown` (decisión unilateral o invitación: PENDING), `Connected` (decisión mutua, invitación o presentación aceptada: CONNECTED con `connected_at`) y `Declined` (PENDING vuelve a SIMULATED, o se borra si nunca hubo simulación). CONNECTED nunca baja de estado por estos eventos y no se crean aristas entre usuarios con un bloqueo.
+- **Suite de invariantes (E3.5, ADR-0012):** `ThirdPartyViews.registered` es un conjunto declarativo de clases (`KClass<out ThirdPartyView>`). Cada feature de vista de terceros (fof E6.3, comunidades E6.2, presentaciones E6.4, sugerencias E4.7) agrega allí su clase **y** una sonda en `backend/src/test/.../privacy/ThirdPartyViewProbes.byView` que carga un mundo aleatorio en sus repositorios en memoria y traduce su respuesta a una `Exposure`. `ThirdPartyViewRegistryTest` escanea `build/classes/kotlin/main` y falla si una implementación no está registrada o no tiene sonda. `PrivacyInvariantsTest` corre 1.000 mundos por sonda (más la sonda de referencia "nodos de terceros" que solo filtra con la policy, y el ego-grafo) e imprime la semilla (`PRIVACY_SEED=<n>` la reproduce). `scripts/demo-mutacion-privacidad.sh [pareja|memorias|ninguna]` aplica una mutación, corre la suite y restaura el archivo.
 
 ### 6.2 Amigos de amigos (2 saltos)
 
@@ -521,17 +525,22 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 - Colas Cloud Tasks con `max_dispatches_per_second` y `max_concurrent_dispatches` como techo de gasto.
 
 ### 7.4 Fila de match
-- `POST /v1/match/queue`: modo activo, Pareja exige edad, el usuario no puede estar ya en la fila. Al encolar se intenta emparejar en la misma transacción: `SELECT ... FROM match_queue WHERE mode = :m AND user_id <> :u AND <no bloqueados, no conectados, no demo si la bandera está apagada> ORDER BY priority DESC, enqueued_at FOR UPDATE SKIP LOCKED LIMIT 1`.
-- Los usuarios `is_demo` nunca entran a la fila de Pareja ni existen con Pareja activo (ADR-0027).
-- `MatchDto.scenarioAvailable = SCENARIO_MODE_ENABLED` (false hasta E4.8); con la bandera apagada, F2 solo ofrece Simulación.
-- Al emparejar: se cobra `RANDOM_MATCH` a ambos (`ref_id = matchId:userId`), se crea `matches`, se actualiza `matchTickets/{uid}` de ambos y se envía push. Cancelar antes no cobra nada.
-- Prioridad 1 para Plus, 0 para gratis. Vence a las 24 h (`EXPIRED`, push opcional).
+- `POST /v1/match/queue`: modo activo, Pareja exige edad, el usuario no puede estar ya en la fila (409). Antes comprueba que haya cupo diario (`QuotaService.ensureAvailable`, 402) sin cobrarlo. Entrar y emparejar es **una** transacción: `pg_advisory_xact_lock` por persona y por modo (sin él dos personas que entran a la vez no se ven y esperan para siempre), se guarda el ticket y `SELECT ... FROM match_queue JOIN users WHERE status = 'WAITING' AND mode = :m AND user_id <> :u AND expires_at > now() AND <modo activo, no bloqueados en ningún sentido, no conectados ya (cualquier modo), no borrados, no demo si la bandera está apagada ni en Pareja, Pareja con edad verificada y confirmada> ORDER BY priority DESC, enqueued_at FOR UPDATE OF match_queue SKIP LOCKED LIMIT 1`.
+- `match_queue` conserva el **último ticket** de cada persona con su `status` (WAITING, MATCHED con `match_id`, EXPIRED): `GET /v1/match/queue` responde ese estado (404 si nunca entró o canceló) y `DELETE` borra solo un ticket en espera (204, idempotente). Volver a entrar reemplaza el ticket anterior; con un match sin decidir no se puede volver a entrar (409).
+- Los usuarios `is_demo` nunca entran a la fila de Pareja ni existen con Pareja activo (ADR-0027); con `DEMO_USERS_ENABLED=false` nadie se empareja con ellos.
+- `MatchDto.scenarioAvailable = SCENARIO_MODE_ENABLED` (false hasta E4.8); con la bandera apagada, F2 solo ofrece Simulación y `POST .../choice` con SCENARIO responde 400.
+- Al emparejar: se cobra `RANDOM_MATCH` a ambos (`ref_id = matchId:userId`, idempotente), se crea `matches` (`user_a` = quien esperaba, `decide_by` = ahora + 10 min), se actualiza `matchTickets/{uid}` de ambos (WAITING -> MATCHED con `matchId`) y se avisa con `Notifier` (`MATCH_FOUND`, `parcheu://match/{id}`). Si a quien esperaba ya no le queda cupo, su ticket pasa a EXPIRED y quien llegó sigue buscando; si no le queda a quien llegó, se deshace el match, la otra persona vuelve a esperar con su turno y se responde 402. Cancelar o vencer antes no cobra nada.
+- Prioridad 1 para Plus, 0 para gratis. El ticket vence a las 24 h (`EXPIRED`, `MATCH_EXPIRED` por push y `matchTickets/{uid}` en EXPIRED; cancelar borra el documento).
+- El espejo publica siempre el estado actual: relee el ticket de Postgres justo antes de escribir y lo manda con su `version`; una transacción de Firestore solo escribe si la versión es mayor o igual a la guardada, así un WAITING atrasado no pisa a MATCHED.
+- Elegir SCENARIO vuelve a comprobar bloqueos (ambos sentidos), borrados y suspensión en la misma transacción que crea el chat; si falla, el match pasa a EXPIRED, se avisa a las dos personas y se devuelve el cupo **solo a quien no causó el cierre** (la persona bloqueada, o la que sigue activa si la otra se borró o fue suspendida; quien bloqueó no lo recupera, o bloquear tras emparejar saltaría el límite diario; si se bloquearon entre sí nadie lo recupera). `GET` y `choice` de un match pendiente con bloqueo responden 404 y lo cierran del mismo modo. Si el match vence por `decide_by` sin que nadie lo abra no se devuelve nada.
+- **Vencimientos:** el job `POST /internal/jobs/match-sweep` (Cloud Scheduler, cada minuto) vence tickets, resuelve matches cuyo `decide_by` pasó y reintenta las simulaciones que quedaron sin crear. Cada consulta de la API también resuelve lo vencido que toca, así que la API es correcta aunque el job tarde.
+- `AnonProfile` del match: `anonId` (HMAC del observador), `label` ("Alguien de la UIS"), rango de edad, universidad (nombre corto), intereses e `isDemo`; nunca nombre, foto, carrera ni id interno.
 
 ### 7.5 Elección tras el match (F2)
-- Cada persona elige SCENARIO o SIMULATION antes de `decide_by` (10 minutos).
-- Ambos SCENARIO → se crea el chat SCENARIO (sección 7.6).
-- Cualquiera elige SIMULATION, o vence el tiempo con una sola elección → simulación con origen RANDOM (no consume el cupo semanal de simulaciones: lo cubre el match del día).
-- Nadie elige → EXPIRED.
+- Cada persona elige SCENARIO o SIMULATION antes de `decide_by` (10 minutos). Elegir dos veces o después de `decide_by` es 409.
+- Ambos SCENARIO -> se crea el chat SCENARIO (sección 7.6) con un escenario básico del modo (cualquiera si los dos son Plus).
+- Cualquiera elige SIMULATION, o vence el tiempo con una sola elección -> simulación con origen RANDOM (no consume el cupo semanal de simulaciones: lo cubre el match del día). Si crearla falla de forma definitiva (bloqueo posterior, gemelo no listo) el match pasa a EXPIRED y se devuelve el cupo con la misma regla (bloqueo posterior: solo a quien no bloqueó; sin culpable, como gemelo no listo: a las dos personas); si falla de forma pasajera (presupuesto de IA) queda en SIMULATION sin simulación y `match-sweep` la reintenta.
+- Nadie elige -> EXPIRED.
 
 ### 7.6 Modo escenario (F3)
 - Chat SCENARIO con escenario del modo, `ends_at = now + timer_sec` y presupuesto (`budget_cop`) mostrados en la tarjeta fijada.
@@ -559,7 +568,7 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 | `chats/{chatId}` | backend | miembros | `members: [firebaseUid]`, `type`, `mode`, `status`, `endsAt` |
 | `chats/{chatId}/messages/{msgId}` | backend | miembros | `senderUid` (uid de Firebase; `null` si `system`), `system`, `text`, `createdAt`, `hidden` (nombre canónico; E0.8, E5.1 y E5.2 lo usan igual) |
 | `simulations/{simId}` | backend | participantes | `participants: [firebaseUid]`, `status`, `progress{scenarioIndex, turn, of}`, `score`, `updatedAt` |
-| `matchTickets/{firebaseUid}` | backend | dueño | `status: WAITING\|MATCHED\|EXPIRED`, `mode`, `matchId`, `expiresAt` |
+| `matchTickets/{firebaseUid}` | backend | dueño | `status: WAITING\|MATCHED\|EXPIRED`, `mode`, `matchId`, `expiresAt`, `version` (monótona, la asigna un trigger de Postgres; el espejo ignora escrituras más viejas) |
 
 ```
 rules_version = '2';
@@ -590,6 +599,25 @@ No hay indicador de 'escribiendo' en la 1.0 (sería la única escritura de clien
 
 ### 8.4 Push (FCM)
 Mensajes de datos con `type` y `route`; canales Android `chat`, `resultados`, `social` y `cuenta`. Cada aviso también se guarda en `notifications` para C2.
+
+**Implementación (E5.3).** Backend: `platform/notifier/Notifier` (puerto), `notifications/push/FcmNotifier` (guarda la fila en `notifications` con `payload = {title, body, route, actorId, locked}`, manda un mensaje de datos `{id, type, channel, title, body, route?}` a cada token y borra los que FCM responde `UNREGISTERED`; un fallo de FCM no interrumpe la operación que originó el aviso). Android: `push/ParcheUMessagingService` arma la notificación en el canal de `channel`; al tocarla abre `MainActivity` con el deep link, que `ParcheUApp` entrega cuando ya pasó el Splash (`PendingDeepLink`). El permiso POST_NOTIFICATIONS (API 33+) se pide una vez al llegar a Inicio, que es el destino de B5.
+
+| `type` (NotificationKinds) | Canal | `route` que manda el backend | Pantalla | Sin `route` |
+|---|---|---|---|---|
+| `SIMULATION_READY` | resultados | `parcheu://results/{simulationId}` | Results (F7/F8) | Simulations (F6) |
+| `SIMULATION_FAILED` | resultados | `parcheu://simulation/{id}` | Simulation (F4/F5) | Simulations (F6) |
+| `MATCH_FOUND` | resultados | `parcheu://match/{matchId}` | MatchFound (F2) | MatchQueue (F1) |
+| `MATCH_EXPIRED` | resultados | `parcheu://match` | MatchQueue (F1) | MatchQueue (F1) |
+| `CONNECT_REQUEST` | social | `parcheu://notifications` | Notifications (C2) | Notifications (C2) |
+| `NEW_CONNECTION` | social | `parcheu://parche` | Parche (D1) | Parche (D1) |
+| `INTRODUCTION_PROPOSAL` | social | `parcheu://intro/{id}` | IntroProposal (E3) | Notifications (C2) |
+| `INVITE_PENDING` | social | `parcheu://add-friends` | AddFriends (C5) | AddFriends (C5) |
+| `COMMUNITY` | social | `parcheu://communities` | Communities (D8) | Communities (D8) |
+| `CHAT_MESSAGE` | chat | `parcheu://chat/{chatId}` | Chat (F9) | ChatList |
+| `TWIN_MEMORIES`, `TWIN_FEEDBACK` | cuenta | `parcheu://train-twin` | TrainTwin (C4) | TrainTwin (C4) |
+| `ACCOUNT` y tipos desconocidos | cuenta | `parcheu://notifications` | Notifications (C2) | Notifications (C2) |
+
+La tabla vive en `android/.../push/DeepLinks.kt` (con su test de casos) y la usa también C2 (E5.4). Los IDs de canal están en `PushChannel` (backend) y `PushChannelSpec` (Android) y no cambian sin tocar ambos.
 
 ---
 
@@ -691,30 +719,67 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 | Pub/Sub | `play-rtdn` (sin uso) | `play-rtdn` + push OIDC |
 | Firebase Hosting | sí | sí (`/privacidad`, `/terminos`, `/borrar-cuenta`, `/i/*`, assetlinks, `admin.html`) |
 | Secret Manager | contenedores `hmac-anon-key`, `play-sa` (si aplica) creados por Terraform **sin valor**; el valor lo carga `scripts/cargar-secretos.sh` (I1 en dev, el usuario en prod) | igual |
-| Proyecto y Firebase | creados por el usuario el 22-23 oct (`scripts/crear-proyectos.sh`); Firebase con `google_firebase_project` o, si pide aceptar términos, desde la consola e importado | igual |
+| Proyecto y Firebase | `parcheu-dev` (creado el 22 oct con `scripts/crear-proyectos.sh`, ID sin sufijo); Firebase con `google_firebase_project` o, si pide aceptar términos, desde la consola e importado | `parcheu-prod` (lo crea el usuario con el mismo script; si el ID está ocupado, el script usa un sufijo y hay que registrarlo aquí, en `infra/terraform/bootstrap/main.tf` y en `envs/prod/main.tf`) |
 | Android flavor | `dev` (`me.santiagoreina.parcheu.dev`) | `prod` (`me.santiagoreina.parcheu`, el de Play) |
 
 **Cuentas de servicio:**
 - `sa-api`: `cloudsql.client`, `cloudsql.instanceUser`, `aiplatform.user`, `cloudtasks.enqueuer`, `iam.serviceAccountUser` sobre `sa-tasks`, `secretmanager.secretAccessor` (secretos concretos), `datastore.user`, `firebaseauth.admin`, `firebasecloudmessaging.admin` (verificar nombres de rol).
 - `sa-tasks`: `run.invoker` sobre `api` (identidad OIDC de Tasks, Scheduler y Pub/Sub).
+- `sa-play` (solo en `parcheu-prod`; la crea E7.1 y la comparte E10.2): sin roles de IAM de GCP, invitada en Play Console con permisos mínimos. GitHub la suplanta por WIF (`roles/iam.workloadIdentityUser` para los environments `play` y `play-alpha`); el backend la usa en E7.1. No existe en `parcheu-dev`.
 - `sa-deployer` (GitHub vía WIF): `run.admin`, `artifactregistry.writer`, `iam.serviceAccountUser` sobre `sa-api`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin` (verificar nombres; los usa `firebase-deploy` de E0.8).
+- `sa-deployer` (GitHub vía WIF): `run.admin`, `artifactregistry.writer`, `iam.serviceAccountUser` sobre `sa-api`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin`, `serviceusage.serviceUsageConsumer` (nombres verificados en E0.5; los usa `firebase-deploy` de E0.8). En prod solo la puede usar un job del environment `production`.
+- `sa-terraform-plan` y `sa-terraform` (GitHub vía WIF, E0.5): `sa-terraform-plan` solo hace `plan`, con permisos de metadatos (sin `roles/viewer`, `securityReviewer` ni nada con `datastore.entities.*` o `logging.logEntries.list`; ADR-0012); en dev la usa cualquier PR del repo y en prod solo la rama `dev`. `sa-terraform` (solo dev) hace `apply` únicamente desde la rama `dev` y su `projectIamAdmin` tiene una condición que le impide otorgar `owner`/`editor`. Ninguna identidad de CI tiene roles sobre la cuenta de facturación: el presupuesto lo crea el bootstrap con el ADC del usuario.
 
-**Terraform:** `infra/terraform/bootstrap` (una vez, con el ADC del usuario), `modules/platform`, `envs/dev`, `envs/prod`; estado en GCS versionado. CI hace `plan` en PR y `apply` de dev al mezclar; el `apply` de prod lo ejecuta solo el usuario.
+**Terraform:** `infra/terraform/bootstrap` (una vez por proyecto, con el ADC del usuario; cada proyecto tiene su bucket, su pool WIF y sus cuentas de CI), `modules/platform`, `envs/dev`, `envs/prod`; estado en GCS versionado (`gs://<proyecto>-tfstate`). Detalle y comandos en `infra/terraform/README.md`. CI hace `plan` en PR y `apply` de dev al mezclar; el `apply` de prod lo ejecuta solo el usuario.
 
-**Secretos de GitHub:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
+**Secretos de GitHub:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `WIF_PROVIDER_PROD` para la publicación en Play (WIF suplantando a `sa-play` de parcheu-prod; la variable `PLAY_SERVICE_ACCOUNT` guarda su correo). `PLAY_SERVICE_ACCOUNT_JSON` (llave de `sa-play`) es una **excepción temporal** documentada en la enmienda de ADR-0014, solo hasta que exista el WIF de prod. Los secretos de firma y de Play viven **solo en los environments** `play` (pista interna; ramas `dev` y `main` y tags `v*`) y `play-alpha` (pista cerrada; tags `v*` y `main`, esta última porque la ref de `workflow_run` es `main`; aprobación obligatoria del usuario, y `release-params.sh` exige tag y commit desplegado), no en el repo (E10.2). Variable opcional `UPLOAD_CERT_SHA256` (huella esperada del certificado de subida).
+**Secretos de GitHub:** `WIF_PROVIDER` (dev), `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `TF_PLAN_SERVICE_ACCOUNT_{DEV,PROD}`, `TF_SERVICE_ACCOUNT_DEV` (apply de dev), `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
+**Secretos de GitHub:** `WIF_PROVIDER` (pool de dev), `WIF_PROVIDER_PROD` (pool de prod: el bootstrap crea un pool WIF por proyecto, ADR-0014), `WIF_SERVICE_ACCOUNT_{DEV,PROD}` (`sa-deployer`), `TF_PLAN_SERVICE_ACCOUNT_DEV` (`sa-terraform-plan`, solo lectura, para el `plan` de los PR), `TF_SERVICE_ACCOUNT_DEV` (`sa-terraform`, para el `apply` de dev; el de prod lo ejecuta solo el usuario), `AUTO_MERGE_TOKEN` (PAT del auto-merge, solo si se reactiva con `AUTO_MERGE_ENABLED`), `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
 
 ---
 
 ## 13. Versiones de librerías
 
 Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Las del backend las fijó E0.3 (22-oct-2026, contra Maven Central y el portal de plugins de Gradle); las que siguen marcadas '(verificar)' son de Android u otras partes y las fija su feature. Avisos para los agentes:
+Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Avisos para los agentes: Las del backend las fijó E0.3 (22-oct-2026, contra Maven Central y el portal de plugins de Gradle); las que siguen marcadas '(verificar)' son de Android u otras partes y las fija su feature. Avisos para los agentes:
+Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Las del backend las fijó E0.3 (22-oct-2026, contra Maven Central y el portal de plugins de Gradle); las que siguen marcadas '(verificar)' son de Android u otras partes y las fija su feature. Avisos para los agentes:
+Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Las del backend las fijó E0.3 (22-oct-2026, contra Maven Central y el portal de plugins de Gradle); las que siguen marcadas '(verificar)' son de Android u otras partes y las fija su feature. Avisos para los agentes:
+Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Avisos para los agentes:
 - **Testcontainers:** la serie 2.x cambió los nombres de artefacto (`org.testcontainers:testcontainers-postgresql`, `testcontainers-junit-jupiter`); no mezclar con los nombres 1.x.
 - **Exposed:** 1.0 cambió paquetes y API respecto de 0.x; E0.3 elige **una** serie y los agentes no copian ejemplos de la otra.
 - **Kotest:** existe la serie 6.x; E0.3 decide entre 5.9.x y 6.x según compatibilidad con Kotlin 2.2.
-- **Jib y Gradle Play Publisher:** confirmar compatibilidad con Gradle 9 y AGP 9; GPP tiene plan B (acción de subida).
+- **Jib y Gradle Play Publisher:** confirmar compatibilidad de Jib con Gradle 9. GPP quedó en 4.1.1, verificada con AGP 9.4.1 en E10.2.
 
 | Librería | Versión de referencia | Uso |
 |---|---|---|
+| kotlinx-serialization (plugin y json) | plugin 2.2.10; json 1.9.0 (fijada en contract/ y backend/) | DTOs |
+| kotlinx-coroutines | backend 1.11.0 (fijada en E0.3); Android: la fija E0.7 (verificar) | Concurrencia |
+| Koin (`koin-bom`, `koin-androidx-compose`) | 4.1.1 (verificar) | DI Android |
+| Navigation Compose | 2.9.5 (verificar) | Navegación |
+| Retrofit + converter kotlinx-serialization | 3.0.0 (verificar) | Red |
+| OkHttp | 5.1.0 (verificar) | Red |
+| DataStore Preferences | 1.1.7 (verificar) | Persistencia |
+| Coil 3 (`coil-compose`, `coil-network-okhttp`) | 3.3.0 (verificar) | Imágenes |
+| core-splashscreen | 1.0.1 (verificar) | Splash |
+| Credential Manager (`credentials`, `credentials-play-services-auth`) | 1.5.0 (verificar) | Login |
+| googleid | 1.1.1 (verificar) | Login |
+| Firebase BoM (auth, firestore, messaging, crashlytics) | 34.x (verificar) | Firebase |
+| Play Billing (`billing-ktx`) | 8.x (verificar; la agrega E7.0) | Suscripciones |
+| ZXing core | 3.5.3 (verificar) | Generar QR |
+| play-services-code-scanner | 16.1.0 (verificar) | Escanear QR |
+| Robolectric | 4.16 (verificar; `@Config(sdk=[35])`) | Tests JVM |
+| Roborazzi | 1.50.0 (verificar) | Capturas |
+| Turbine | 1.2.1 (verificar) | Tests de Flow |
+| Spotless + ktlint | 7.x / 1.7.x (verificar) | Estilo |
+| Ktor (server, client para tests) | 3.5.2 (fijada en E0.3, vía `ktor-bom`) | Backend |
+| Exposed (`exposed-core`, `exposed-jdbc`, `exposed-java-time`, `exposed-json`) | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`; java-time y json desde E0.4) | SQL |
+| Exposed | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`) | SQL |
+| HikariCP | 7.1.0 (fijada en E0.3) | Pool |
+| PostgreSQL JDBC | 42.7.14 (fijada en E0.3) | Driver |
+| Cloud SQL Java Connector (`postgres-socket-factory`) | 1.30.1 (fijada en E0.3) | Conexión IAM |
+| Flyway (`flyway-core`, `flyway-database-postgresql`) | 13.11.1 (fijada en E0.3) | Migraciones |
+| Firebase Admin Java | 9.11.0 (fijada en E0.3) | Auth, FCM, Firestore |
+| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
 | kotlinx-serialization (plugin y json) | plugin 2.2.10; json 1.9.0 (fijada en E0.7; el plugin funciona con el Kotlin integrado de AGP 9.4.1, ADR-0005) | DTOs |
 | kotlinx-coroutines | Android 1.10.2 (fijada en E0.7; core, android y test); backend 1.11.0 (fijada en E0.3) | Concurrencia |
 | Koin (`koin-bom`, `koin-android`, `koin-androidx-compose`, `koin-test`) | 4.1.1 (fijada en E0.7; 4.2.x se compila con Kotlin 2.3.20 y se deja para cuando suba Kotlin) | DI Android |
@@ -727,7 +792,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Credential Manager (`credentials`, `credentials-play-services-auth`) | 1.6.0 (fijada en E0.7) | Login |
 | googleid | 1.1.1 (fijada en E0.7; 1.2.x está compilada con Kotlin 2.4) | Login |
 | Firebase BoM (auth, firestore, messaging, crashlytics) + plugin `google-services` | BoM 34.19.0; plugin 4.5.0 (fijadas en E0.7; la BoM 35 trae firebase-auth 25, compilada con Kotlin 2.4) | Firebase |
-| Play Billing (`billing-ktx`) | 8.3.0 (fijada en E0.7, la agrega E7.0; existe 9.x, cambiar solo si Play lo exige) | Suscripciones |
+| Play Billing (`billing-ktx`) | 8.3.0 (fijada en E0.7, agregada en E7.0; compilada con Kotlin 2.2.10; existe 9.x, cambiar solo si Play lo exige) | Suscripciones |
 | ZXing core | 3.5.4 (fijada en E0.7) | Generar QR |
 | play-services-code-scanner | 16.1.0 (fijada en E0.7) | Escanear QR |
 | Robolectric | 4.16.1 (fijada en E0.7; `@Config(sdk=[35])`) | Tests JVM |
@@ -743,6 +808,24 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Firebase Admin Java | 9.11.0 (fijada en E0.3) | Auth, FCM, Firestore |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
 | Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
+| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
+| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
+| Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
+| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
+| google-cloud-tasks | 2.x (verificar) | Tareas |
+| Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev2025xxxx (verificar) | Billing |
+| logback + logstash-logback-encoder | 1.5.x / 8.x (verificar) | Logs JSON |
+| Kotest (runner, assertions, property) | 5.9.1 o 6.x (verificar compatibilidad con Kotlin 2.2) | Tests y propiedades |
+| Testcontainers (`testcontainers-postgresql`, `testcontainers-junit-jupiter`) | 2.x (verificar nombres y versión) | Tests de BD |
+| foojay-resolver-convention (plugin de settings) | 1.0.0 (verificar) | Toolchains JDK |
+| Jib Gradle plugin | 3.4.5 (verificar) | Imagen |
+| Gradle Play Publisher | 4.1.1 (fijada en E10.2; la serie 4.x funciona con AGP 9.4.1, sin plan B) | Subida a Play |
 | google-cloud-tasks | 2.99.0 (fijada en E0.3; la dependencia la agrega la primera feature que encola) | Tareas |
 | Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev20260924-2.0.0 (fijada en E0.3; la dependencia la agrega E7.2) | Billing |
 | logback + logstash-logback-encoder | 1.6.5 / 9.0 (fijadas en E0.3) | Logs JSON |
@@ -753,6 +836,8 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Gradle Play Publisher | 3.12.x (verificar compatibilidad con AGP 9) | Subida a Play |
 | Terraform / provider google, google-beta | 1.15 / 7.x (verificar) | Infra |
 | `@firebase/rules-unit-testing` | 6.0.0 (con `firebase` 13.1.0 y Node 24; el emulador pide Java 21) | Tests de reglas |
+| Terraform / provider google, google-beta | 1.15.9 / 7.46.1 (fijado en E0.5, `.terraform.lock.hcl`) | Infra |
+| `@firebase/rules-unit-testing` | 4.x (verificar) | Tests de reglas |
 
 ---
 

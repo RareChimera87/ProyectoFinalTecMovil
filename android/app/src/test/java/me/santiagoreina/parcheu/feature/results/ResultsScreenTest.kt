@@ -27,7 +27,7 @@ class ResultsScreenTest {
         full: Boolean = false,
         isDemo: Boolean = false,
         decision: DecisionState = DecisionState.PENDING,
-        unlockAvailable: Boolean = true,
+        unlockAvailable: Boolean = true
     ) = ResultsContent(
         otherLabel = "Alguien de la UIS",
         mode = Mode.ESTUDIO,
@@ -36,11 +36,13 @@ class ResultsScreenTest {
         report = if (full) fullReport() else lockedReport(unlockAvailable),
         decision = decision,
         usedMonth = "octubre",
-        resetMonth = "noviembre",
+        resetMonth = "noviembre"
     )
 
     private fun show(content: ResultsContent, actions: ResultsActions = ResultsActions()) {
-        composeRule.setContent { ParcheUTheme { ResultsScreen(ResultsUiState.Loaded(content), actions) } }
+        composeRule.setContent {
+            ParcheUTheme { ResultsScreen(ResultsUiState.Loaded(content), actions) }
+        }
     }
 
     @Test
@@ -51,7 +53,10 @@ class ResultsScreenTest {
         composeRule.onNodeWithTag(ResultsTags.SHARE).assertDoesNotExist()
         composeRule.onNodeWithTag(ResultsTags.UNLOCK).performScrollTo().performClick()
         assertEquals(1, unlocks)
-        composeRule.onNodeWithText("Tienes 1 informe completo gratis de octubre", substring = true).assertExists()
+        composeRule.onNodeWithText(
+            "Tienes 1 informe completo gratis de octubre",
+            substring = true
+        ).assertExists()
     }
 
     @Test
@@ -60,7 +65,7 @@ class ResultsScreenTest {
         composeRule.onNodeWithTag(ResultsTags.UNLOCK).assertDoesNotExist()
         composeRule.onNodeWithTag(ResultsTags.SEE_PLUS).assertExists()
         composeRule.onNodeWithText(
-            "Ya usaste tu informe gratis de octubre. Vuelve en noviembre o míralo con ParcheU+.",
+            "Ya usaste tu informe gratis de octubre. Vuelve en noviembre o míralo con ParcheU+."
         ).assertExists()
     }
 
@@ -83,7 +88,13 @@ class ResultsScreenTest {
     @Test
     fun footerSendsTheDecision() {
         val decisions = mutableListOf<Boolean>()
-        show(content(), ResultsActions(onConnect = { decisions += true }, onDecline = { decisions += false }))
+        show(
+            content(),
+            ResultsActions(onConnect = { decisions += true }, onDecline = {
+                decisions +=
+                    false
+            })
+        )
         composeRule.onNodeWithTag(ResultsTags.CONNECT).performClick()
         composeRule.onNodeWithTag(ResultsTags.DECLINE).performClick()
         assertEquals(listOf(true, false), decisions)

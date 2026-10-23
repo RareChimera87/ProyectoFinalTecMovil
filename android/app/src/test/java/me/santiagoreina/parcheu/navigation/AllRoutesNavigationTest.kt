@@ -44,7 +44,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         val tag = stubTag(entry.route)
         composeRule.onNodeWithTag(tag).assertIsDisplayed()
         composeRule.onAllNodes(
-            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag)),
+            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag))
         ).onFirst().assertIsDisplayed()
         // Los argumentos llegan intactos a la pantalla (round-trip de la ruta tipada).
         composeRule
@@ -55,7 +55,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         assertEquals(
             "NavBar solo en las raíces",
             TopLevelDestination.entries.any { it.routeClass == entry.route::class },
-            shown.isTopLevel(),
+            shown.isTopLevel()
         )
     }
 
@@ -66,13 +66,31 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
             .filterNot { it.route::class in implementedRoutes }
             .map { arrayOf<Any>(it) }
 
-        /** Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest) F4-F6 (E4.5, pruebas de feature/simulation y feature/simulations) y F7/F8 (E4.6, pruebas de feature/results). */
-        val implementedRoutes = setOf(
-            Splash::class,
-            Onboarding::class,
-            Simulation::class,
-            Simulations::class,
-            Results::class,
-        )
+        /**
+         * Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest), B0 y el bloqueo por
+         * edad (E2.6, BasicProfileScreenTest y UnderageViewModelTest), B1-B2 (E2.4, TwinQuestions), B3-B5
+         * (E2.5: Modes, Consent, TwinReady), D1-D5 (E3.4, ParcheViewModelTest), F1-F2 (E4.4,
+         * MatchQueueViewModelTest), F4-F6 (E4.5, feature/simulation), F7-F8 e I3 (E4.6,
+         * feature/results) y lista de chats y F9 (E5.2).
+         */
+        val implementedRoutes =
+            setOf(
+                Splash::class,
+                Onboarding::class,
+                BasicProfile::class,
+                Underage::class,
+                TwinQuestions::class,
+                Modes::class,
+                Consent::class,
+                TwinReady::class,
+                Parche::class,
+                MatchQueue::class,
+                MatchFound::class,
+                Simulation::class,
+                Simulations::class,
+                Results::class,
+                ChatList::class,
+                Chat::class
+            )
     }
 }

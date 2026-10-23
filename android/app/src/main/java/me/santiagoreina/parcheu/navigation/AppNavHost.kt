@@ -52,12 +52,12 @@ fun AppNavHost(
     navController: NavHostController,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    startDestination: AppRoute = Splash,
+    startDestination: AppRoute = Splash
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        modifier = modifier,
+        modifier = modifier
     ) {
         composable<Splash> { SplashRoute(it.toRoute(), navigator) }
         composable<Onboarding> { OnboardingRoute(it.toRoute(), navigator) }

@@ -29,7 +29,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
-import me.santiagoreina.parcheu.api.TASKS_ACCOUNT
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.chat.ChatDoc
 import me.santiagoreina.parcheu.api.chat.ChatMirror
@@ -39,18 +38,14 @@ import me.santiagoreina.parcheu.api.chat.InMemoryChatRepository
 import me.santiagoreina.parcheu.api.chat.MessageDoc
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.PersonRow
-import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
-import me.santiagoreina.parcheu.api.platform.AppContainer
-import me.santiagoreina.parcheu.api.platform.allDomains
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.api.simulation.SimFixture
 import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
+import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.startApp
-import me.santiagoreina.parcheu.api.testConfig
-import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
+import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.contract.ApiError
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.Decision
@@ -108,15 +103,9 @@ class ReportApiTest : FunSpec({
         fun done(a: String, b: String, mode: Mode = Mode.AMISTAD): String =
             runBlocking { module.service.start(id(a), StartSimulation(id(b).toString(), mode)).id }
 
-        fun container(): AppContainer {
-            val identityService = IdentityService(identity, FIXED_CLOCK, TEST_LEGAL_VERSION)
-            val twin = inMemoryTwinModule(FIXED_CLOCK, sim.ai)
-            return AppContainer(
-                testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identityService,
-                ai = sim.ai, twin = twin, quota = sim.quota, graph = sim.graph, notifier = push, chat = chat, simulation = module,
-                domains = allDomains(identityService, twin, sim.quota, sim.graph, module, chat),
-            )
-        }
+        fun container(): AppContainer = testContainer(
+            repo = identity, quota = sim.quota, ai = sim.ai, graph = sim.graph, chat = chat, simulation = module, notifier = push,
+        )
     }
 
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")

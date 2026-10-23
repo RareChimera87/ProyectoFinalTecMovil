@@ -61,7 +61,7 @@ class ChatService(
 
     /**
      * Como [createDirect], pero un fallo del espejo de Firestore no se propaga: el chat ya existe en Postgres
-     * (fuente de verdad) y aparece en `GET /v1/chats`. Lo usa la decisión mutua para no perder los avisos.
+     * (fuente de verdad) y aparece en `GET /v1/chats`. Lo usa la decisión mutua (E4.6) para no perder los avisos.
      */
     suspend fun createDirectTolerant(a: UUID, b: UUID, mode: Mode): ChatRecord {
         if (a == b) throw ValidationFailed("Un chat necesita dos personas distintas")

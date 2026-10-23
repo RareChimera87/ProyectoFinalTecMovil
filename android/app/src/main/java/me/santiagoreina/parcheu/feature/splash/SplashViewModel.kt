@@ -15,6 +15,7 @@ import me.santiagoreina.parcheu.data.auth.AuthRepository
 import me.santiagoreina.parcheu.data.auth.destination
 import me.santiagoreina.parcheu.navigation.AppRoute
 import me.santiagoreina.parcheu.navigation.Onboarding
+import me.santiagoreina.parcheu.navigation.Underage
 
 sealed interface SplashUiState {
     data object Loading : SplashUiState
@@ -25,7 +26,8 @@ sealed interface SplashUiState {
 
 /**
  * A1 (E2.2): sin sesión → A2; con sesión → `POST /v1/session` y destino según el paso de onboarding
- * (gemelo listo → C1; sin gemelo → B1; perfil, modos o términos pendientes → B0, B2 o A4).
+ * (gemelo listo → C1; sin gemelo → B1; perfil, modos o términos pendientes → B0, B2 o A4). Una cuenta
+ * de menor de edad (403 UNDERAGE, E2.6) va al bloqueo por edad.
  */
 class SplashViewModel(private val repository: AuthRepository) : ViewModel() {
     private val _state = MutableStateFlow<SplashUiState>(SplashUiState.Loading)
@@ -54,12 +56,15 @@ class SplashViewModel(private val repository: AuthRepository) : ViewModel() {
             when (val session = repository.refreshSession()) {
                 is ApiResult.Success -> _destination.send(session.value.onboarding.destination())
                 is ApiResult.Failure ->
-                    if (session.error == AppError.Unauthorized) {
-                        // La sesión de Firebase ya no vale para la API: se cierra y se empieza de cero.
-                        repository.signOut()
-                        _destination.send(Onboarding(page = 0))
-                    } else {
-                        _state.value = SplashUiState.Error(session.error)
+                    when (session.error) {
+                        AppError.Unauthorized -> {
+                            // La sesión de Firebase ya no vale para la API: se cierra y se empieza de cero.
+                            repository.signOut()
+                            _destination.send(Onboarding(page = 0))
+                        }
+                        // Cuenta de menor de edad (E2.6): la API solo deja verla o borrarla.
+                        AppError.Underage -> _destination.send(Underage)
+                        else -> _state.value = SplashUiState.Error(session.error)
                     }
             }
         }

@@ -66,12 +66,13 @@ fun simulationModule(
     graph: GraphModule,
     tasks: TaskQueue,
     firebaseProjectId: String?,
+    notifier: SimulationNotifier,
     chat: ChatModule,
     push: Notifier,
 ): SimulationModule {
     val mirror = if (env == Env.LOCAL || firebaseProjectId == null) NoopSimulationMirror else FirestoreSimulationMirror(firebaseProjectId)
     return assemble(
-        ExposedSimulationRepository(db), clock, ai, quota, graph, tasks, mirror, NoopSimulationNotifier,
+        ExposedSimulationRepository(db), clock, ai, quota, graph, tasks, mirror, notifier,
         ExposedReportRepository(db), chat, push,
     )
 }
@@ -91,8 +92,8 @@ fun inMemorySimulationModule(
     notifier: SimulationNotifier = NoopSimulationNotifier,
     runInline: Boolean = true,
     reportRepo: ReportRepository = InMemoryReportRepository(),
-    chat: ChatModule = inMemoryChatModule(clock, graph.policy),
     push: Notifier = NoopNotifier,
+    chat: ChatModule = inMemoryChatModule(clock, graph.policy, push),
 ): SimulationModule {
     val module = assemble(repo, clock, ai, quota, graph, queue, mirror, notifier, reportRepo, chat, push)
     if (runInline) queue.inline = { task -> module.engine.run(ContractJson.decodeFromString<TaskPayload>(task.body).uuid()) }

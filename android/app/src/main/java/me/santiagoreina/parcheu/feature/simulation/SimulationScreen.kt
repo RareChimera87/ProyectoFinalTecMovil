@@ -58,7 +58,7 @@ fun SimulationScreen(
     onRetry: () -> Unit,
     onHome: () -> Unit,
     modifier: Modifier = Modifier,
-    animate: Boolean = true,
+    animate: Boolean = true
 ) {
     val colors = ParcheUTheme.colors
     Column(modifier.fillMaxSize().background(colors.bg)) {
@@ -66,7 +66,7 @@ fun SimulationScreen(
             title = "Simulación",
             navigationIcon = rememberIcon(SimulationIcons.Close),
             navigationContentDescription = "Cerrar",
-            onNavigationClick = onClose,
+            onNavigationClick = onClose
         )
         when (state) {
             SimulationUiState.Connecting -> Connecting(animate)
@@ -81,7 +81,7 @@ fun SimulationScreen(
 private fun Connecting(animate: Boolean) {
     Box(
         Modifier.fillMaxSize().testTag(SimulationTags.CONNECTING),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         if (animate) {
             CircularProgressIndicator(color = ParcheUTheme.colors.primary)
@@ -100,46 +100,46 @@ private fun RunningContent(state: SimulationUiState.Running, animate: Boolean) {
             .testTag(SimulationTags.RUNNING)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Column(
             Modifier.fillMaxWidth().padding(top = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             state.participants?.let {
                 Text(
                     "Tú y ${it.otherLabel} · ${it.mode.label()}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = colors.mu,
+                    color = colors.mu
                 )
             }
             Text(
                 "Escenario ${state.currentScenario} de $SCENARIO_COUNT",
                 style = MaterialTheme.typography.titleMedium,
-                color = colors.tx,
+                color = colors.tx
             )
         }
         Box(
             Modifier.fillMaxWidth()
                 .height(300.dp)
                 .clip(RoundedCornerShape(28.dp))
-                .background(colors.s1),
+                .background(colors.s1)
         ) {
             SimulationMascot(
                 colors.primary,
                 80.dp,
-                Modifier.align(Alignment.BottomStart).padding(start = 22.dp, bottom = 26.dp),
+                Modifier.align(Alignment.BottomStart).padding(start = 22.dp, bottom = 26.dp)
             )
             SimulationMascot(
                 other,
                 80.dp,
-                Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 26.dp),
+                Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 26.dp)
             )
             TypingDots(colors.mu, Modifier.align(Alignment.TopCenter).padding(top = 28.dp), animate)
         }
         ParcheULinearProgress(
             progress = state.percent / 100f,
-            contentDescription = "Avance de la simulación: ${state.percent} %",
+            contentDescription = "Avance de la simulación: ${state.percent} %"
         )
         ParcheUCard {
             state.steps.forEach { step -> StepRow(step) }
@@ -147,24 +147,24 @@ private fun RunningContent(state: SimulationUiState.Running, animate: Boolean) {
         ParcheUCard {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Icon(
                     rememberIcon(SimulationIcons.Notifications),
                     contentDescription = null,
                     tint = colors.prt,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(24.dp)
                 )
                 Column(Modifier.weight(1f)) {
                     Text(
                         "Avisarme al terminar",
                         style = MaterialTheme.typography.titleSmall,
-                        color = colors.tx,
+                        color = colors.tx
                     )
                     Text(
                         "Puedes salir; la simulación sigue.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = colors.mu,
+                        color = colors.mu
                     )
                 }
             }
@@ -190,7 +190,7 @@ private fun StepRow(step: ScenarioStep) {
                     "Escenario ${step.number}: $status"
             },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (icon == null) {
             CircularProgressIndicator(progress = {
@@ -201,14 +201,14 @@ private fun StepRow(step: ScenarioStep) {
                 rememberIcon(icon),
                 contentDescription = null,
                 tint = tint,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(22.dp)
             )
         }
         Text(
             "Escenario ${step.number}",
             style = MaterialTheme.typography.bodyLarge,
             color = colors.tx,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f)
         )
         Text(
             status,
@@ -219,32 +219,36 @@ private fun StepRow(step: ScenarioStep) {
                 colors.prt
             } else {
                 colors.mu
-            },
+            }
         )
     }
 }
 
 @Composable
-private fun FailedContent(state: SimulationUiState.Failed, onRetry: () -> Unit, onHome: () -> Unit) {
+private fun FailedContent(
+    state: SimulationUiState.Failed,
+    onRetry: () -> Unit,
+    onHome: () -> Unit
+) {
     val colors = ParcheUTheme.colors
     Column(
         Modifier.fillMaxSize().testTag(SimulationTags.FAILED).padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
     ) {
         SimulationMascot(colors.primary, 84.dp, error = true)
         Text(
             "Los gemelos perdieron la señal",
             style = MaterialTheme.typography.headlineSmall,
             color = colors.tx,
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.Center
         )
         val paused = state.pausedAtScenario?.let { "La simulación se pausó en el escenario $it." }
         Text(
             listOfNotNull(paused).joinToString(" ").ifEmpty { "La simulación se cortó." },
             style = MaterialTheme.typography.bodyMedium,
             color = colors.mu,
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.Center
         )
         if (state.refunded) {
             Text(
@@ -252,7 +256,7 @@ private fun FailedContent(state: SimulationUiState.Failed, onRetry: () -> Unit, 
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.tx,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.testTag(SimulationTags.NOT_CHARGED),
+                modifier = Modifier.testTag(SimulationTags.NOT_CHARGED)
             )
         }
         state.retryError?.let {
@@ -260,7 +264,7 @@ private fun FailedContent(state: SimulationUiState.Failed, onRetry: () -> Unit, 
                 errorMessage(it),
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.error,
-                textAlign = TextAlign.Center,
+                textAlign = TextAlign.Center
             )
         }
         if (state.canRetry) {
@@ -269,13 +273,13 @@ private fun FailedContent(state: SimulationUiState.Failed, onRetry: () -> Unit, 
                 onClick = onRetry,
                 enabled = !state.retrying,
                 icon = rememberIcon(SimulationIcons.Refresh),
-                modifier = Modifier.fillMaxWidth().testTag(SimulationTags.RETRY),
+                modifier = Modifier.fillMaxWidth().testTag(SimulationTags.RETRY)
             )
         }
         OutlineButton(
             text = "Volver al inicio",
             onClick = onHome,
-            modifier = Modifier.fillMaxWidth().testTag(SimulationTags.HOME),
+            modifier = Modifier.fillMaxWidth().testTag(SimulationTags.HOME)
         )
     }
 }
@@ -286,19 +290,19 @@ private fun LoadError(error: AppError, onReload: () -> Unit) {
     Column(
         Modifier.fillMaxSize().testTag(SimulationTags.LOAD_ERROR).padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
     ) {
         Text(
             "No pudimos cargar la simulación",
             style = MaterialTheme.typography.headlineSmall,
             color = colors.tx,
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.Center
         )
         Text(
             errorMessage(error),
             style = MaterialTheme.typography.bodyMedium,
             color = colors.mu,
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.Center
         )
         PrimaryButton(text = "Reintentar", onClick = onReload, modifier = Modifier.fillMaxWidth())
     }

@@ -80,10 +80,13 @@ data class ResultsActions(
     val onOpenChat: () -> Unit = {},
     val onOpenTranscript: () -> Unit = {},
     val onCloseTranscript: () -> Unit = {},
-    val onDismissNotice: () -> Unit = {},
+    val onDismissNotice: () -> Unit = {}
 )
 
-/** F7 (gratis, bloqueado), F8/I3 (completo), 'esperando a la otra persona' y la conversación de los gemelos. Sin compartir. */
+/**
+ * F7 (gratis, bloqueado), F8/I3 (completo), 'esperando a la otra persona' y la conversación de los
+ * gemelos. Sin compartir.
+ */
 @Composable
 fun ResultsScreen(state: ResultsUiState, actions: ResultsActions, modifier: Modifier = Modifier) {
     val colors = ParcheUTheme.colors
@@ -98,12 +101,12 @@ fun ResultsScreen(state: ResultsUiState, actions: ResultsActions, modifier: Modi
             navigationIcon = rememberIcon(SimulationIcons.Close),
             navigationContentDescription = "Cerrar",
             onNavigationClick = actions.onClose,
-            action = { if (content?.plus == true) ParcheUPlusBadge(Modifier.padding(end = 12.dp)) },
+            action = { if (content?.plus == true) ParcheUPlusBadge(Modifier.padding(end = 12.dp)) }
         )
         when (state) {
             ResultsUiState.Loading -> Box(
                 Modifier.fillMaxSize().testTag(ResultsTags.LOADING),
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = colors.primary)
             }
@@ -121,7 +124,7 @@ private fun Loaded(content: ResultsContent, actions: ResultsActions) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .testTag(if (content.full) ResultsTags.FULL else ResultsTags.LOCKED + ":screen"),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Header(content)
             Text(
@@ -129,7 +132,7 @@ private fun Loaded(content: ResultsContent, actions: ResultsActions) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = ParcheUTheme.colors.mu,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.CenterHorizontally).widthIn(max = 280.dp),
+                modifier = Modifier.align(Alignment.CenterHorizontally).widthIn(max = 280.dp)
             )
             if (content.full) FullReport(content, actions) else Locked(content, actions)
             content.notice?.let { Notice(it, actions.onDismissNotice) }
@@ -145,9 +148,12 @@ private fun Header(content: ResultsContent) {
     Column(
         Modifier.fillMaxWidth().padding(top = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
             SimulationMascot(colors.primary, 48.dp)
             AffinityRing(content.report.score)
             SimulationMascot(mode.solid, 48.dp)
@@ -156,9 +162,12 @@ private fun Header(content: ResultsContent) {
             "Tú y ${content.displayName} · afinidad ${affinityWord(content.report.score)}",
             style = MaterialTheme.typography.titleLarge,
             color = colors.tx,
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.Center
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             ModeChip(label = content.mode.label(), mode = mode)
             if (content.isDemo) PillChip(DEMO_BADGE_TEXT, Modifier.testTag(ResultsTags.DEMO))
         }
@@ -179,7 +188,9 @@ private fun FullReport(content: ResultsContent, actions: ResultsActions) {
     if (frictions.isNotEmpty()) {
         ParcheUCard(Modifier.fillMaxWidth()) {
             CardOverline("Dónde chocarían")
-            frictions.forEach { ReportRow(it, rememberResultsIcon(ResultsIcons.Friction), colors.mu) }
+            frictions.forEach {
+                ReportRow(it, rememberResultsIcon(ResultsIcons.Friction), colors.mu)
+            }
         }
     }
     Row(
@@ -188,18 +199,18 @@ private fun FullReport(content: ResultsContent, actions: ResultsActions) {
             .padding(vertical = 12.dp, horizontal = 4.dp)
             .testTag(ResultsTags.TRANSCRIPT_LINK),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text(
             "Ver la conversación de los gemelos",
             style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp),
-            color = colors.prt,
+            color = colors.prt
         )
         Icon(
             rememberResultsIcon(ResultsIcons.ArrowForward),
             contentDescription = null,
             tint = colors.prt,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(18.dp)
         )
     }
 }
@@ -221,7 +232,7 @@ private fun Locked(content: ResultsContent, actions: ResultsActions) {
         reasonsCount = report.reasonsCount,
         frictionsCount = report.frictionsCount,
         title = "Informe completo: por qué son compatibles y dónde chocarían",
-        message = message,
+        message = message
     ) {
         if (report.unlockAvailable) {
             TonalButton(
@@ -229,20 +240,20 @@ private fun Locked(content: ResultsContent, actions: ResultsActions) {
                 onClick = actions.onUnlock,
                 enabled = !busy,
                 size = ParcheUButtonSize.Medium,
-                modifier = Modifier.testTag(ResultsTags.UNLOCK),
+                modifier = Modifier.testTag(ResultsTags.UNLOCK)
             )
             ParcheUTextButton(
                 text = "Ver ParcheU+",
                 onClick = actions.onSeePlus,
                 size = ParcheUButtonSize.Medium,
-                modifier = Modifier.testTag(ResultsTags.SEE_PLUS),
+                modifier = Modifier.testTag(ResultsTags.SEE_PLUS)
             )
         } else {
             TonalButton(
                 text = "Ver ParcheU+",
                 onClick = actions.onSeePlus,
                 size = ParcheUButtonSize.Medium,
-                modifier = Modifier.testTag(ResultsTags.SEE_PLUS),
+                modifier = Modifier.testTag(ResultsTags.SEE_PLUS)
             )
         }
     }
@@ -260,38 +271,44 @@ private fun Footer(content: ResultsContent, actions: ResultsActions) {
             },
             enabled = content.busy == null,
             onDecline = actions.onDecline,
-            onConnect = actions.onConnect,
+            onConnect = actions.onConnect
         )
         DecisionState.WAITING -> ParcheUCard(
             Modifier.fillMaxWidth().padding(
                 start = 16.dp,
                 end = 16.dp,
                 top = 12.dp,
-                bottom = 16.dp,
-            ).testTag(ResultsTags.WAITING),
+                bottom = 16.dp
+            ).testTag(ResultsTags.WAITING)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Box(
                     Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(colors.prc),
-                    contentAlignment = Alignment.Center,
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         rememberResultsIcon(ResultsIcons.Hourglass),
                         contentDescription = null,
                         tint = colors.onprc,
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(22.dp)
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         "Esperando a la otra persona",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = colors.tx,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = colors.tx
                     )
                     Text(
-                        "Te avisamos si también elige Conectar. Su nombre aparece solo si las dos personas conectan.",
+                        "Te avisamos si también elige Conectar. Su nombre aparece solo si las " +
+                            "dos personas conectan.",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                        color = colors.mu,
+                        color = colors.mu
                     )
                 }
             }
@@ -307,30 +324,30 @@ private fun Footer(content: ResultsContent, actions: ResultsActions) {
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
             color = colors.mu,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(16.dp).testTag(ResultsTags.DECLINED),
+            modifier = Modifier.fillMaxWidth().padding(16.dp).testTag(ResultsTags.DECLINED)
         )
         DecisionState.CONNECTED -> Column(
             Modifier.fillMaxWidth().padding(
                 start = 16.dp,
                 end = 16.dp,
                 top = 12.dp,
-                bottom = 16.dp,
+                bottom = 16.dp
             ).testTag(ResultsTags.CONNECTED),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             PrimaryButton(
                 text = "Abrir chat con ${content.displayName}",
                 onClick = actions.onOpenChat,
                 enabled = content.chatId != null,
                 icon = rememberResultsIcon(ResultsIcons.Chat),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
             Text(
                 "¡Conectaron! Ya pueden hablar.",
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                 color = colors.mu,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -343,7 +360,11 @@ private fun Notice(notice: ResultsNotice, onDismiss: () -> Unit) {
         is ResultsNotice.Failed -> errorText(notice.error)
     }
     ParcheUCard(Modifier.fillMaxWidth(), onClick = onDismiss) {
-        Text(text, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp), color = ParcheUTheme.colors.error)
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+            color = ParcheUTheme.colors.error
+        )
     }
 }
 
@@ -359,13 +380,13 @@ private fun LoadError(error: AppError, onRetry: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(24.dp).testTag(ResultsTags.ERROR),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
     ) {
         Text(
             errorText(error),
             style = MaterialTheme.typography.bodyLarge,
             color = ParcheUTheme.colors.tx,
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.Center
         )
         if (error != AppError.NotFound) PrimaryButton("Reintentar", onClick = onRetry)
     }
@@ -376,7 +397,7 @@ private fun TranscriptScreen(
     content: ResultsContent,
     transcript: TranscriptState,
     actions: ResultsActions,
-    modifier: Modifier,
+    modifier: Modifier
 ) {
     val colors = ParcheUTheme.colors
     Column(modifier.fillMaxSize().background(colors.bg).testTag(ResultsTags.TRANSCRIPT)) {
@@ -384,18 +405,21 @@ private fun TranscriptScreen(
             title = "Conversación de los gemelos",
             navigationIcon = rememberIcon(SimulationIcons.ArrowBack),
             navigationContentDescription = "Volver",
-            onNavigationClick = actions.onCloseTranscript,
+            onNavigationClick = actions.onCloseTranscript
         )
         when (transcript) {
-            TranscriptState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            TranscriptState.Loading -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator(color = colors.primary)
             }
             is TranscriptState.Error -> LoadError(transcript.error, actions.onOpenTranscript)
             is TranscriptState.Loaded -> Column(
                 Modifier.fillMaxSize().verticalScroll(
-                    rememberScrollState(),
+                    rememberScrollState()
                 ).padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 transcript.transcript.scenarios.forEachIndexed { index, scenario ->
                     CardOverline("Escenario ${index + 1} · ${scenario.title}")
@@ -403,7 +427,7 @@ private fun TranscriptScreen(
                         val mine = turn.speaker == Speaker.ME
                         Row(
                             Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
+                            horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start
                         ) {
                             Text(
                                 turn.text,
@@ -412,7 +436,7 @@ private fun TranscriptScreen(
                                 modifier = Modifier.widthIn(max = 280.dp)
                                     .clip(RoundedCornerShape(16.dp))
                                     .background(if (mine) colors.prc else colors.s1)
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         }
                     }
@@ -421,7 +445,7 @@ private fun TranscriptScreen(
                     "Tu gemelo a la derecha; el de ${content.displayName} a la izquierda.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.mu,
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
         }

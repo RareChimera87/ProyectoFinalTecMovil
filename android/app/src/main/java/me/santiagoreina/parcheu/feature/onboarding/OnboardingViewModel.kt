@@ -18,6 +18,7 @@ import me.santiagoreina.parcheu.data.auth.AuthRepository
 import me.santiagoreina.parcheu.data.auth.SignInResult
 import me.santiagoreina.parcheu.data.auth.destination
 import me.santiagoreina.parcheu.navigation.AppRoute
+import me.santiagoreina.parcheu.navigation.Underage
 
 /** Estado del login de A4 (los estados de cargando y error no están en los mockups). */
 sealed interface LoginState {
@@ -148,6 +149,12 @@ class OnboardingViewModel(private val repository: AuthRepository) : ViewModel() 
     }
 
     private suspend fun fail(error: AppError) {
+        if (error == AppError.Underage) {
+            // Cuenta de menor de edad (E2.6): no hay login que reintentar, solo el bloqueo por edad.
+            setLogin(LoginState.Idle)
+            _effects.send(OnboardingEffect.Navigate(Underage))
+            return
+        }
         // Un 401 que persiste tras refrescar el token: la sesión local ya no sirve.
         if (error == AppError.Unauthorized) repository.signOut()
         setLogin(LoginState.Error(error))

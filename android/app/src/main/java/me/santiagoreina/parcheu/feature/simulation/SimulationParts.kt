@@ -47,7 +47,12 @@ internal fun ParcheUColors.forMode(mode: Mode): ModeColors = when (mode) {
  * `TwinMascot` de E1.5 no está en `dev`.
  */
 @Composable
-internal fun SimulationMascot(color: Color, width: Dp, modifier: Modifier = Modifier, error: Boolean = false) {
+internal fun SimulationMascot(
+    color: Color,
+    width: Dp,
+    modifier: Modifier = Modifier,
+    error: Boolean = false
+) {
     val ink = Color(0xFF14111F)
     val tint = if (error) grayscale(color) else color
     val height = width * 1.125f
@@ -57,7 +62,7 @@ internal fun SimulationMascot(color: Color, width: Dp, modifier: Modifier = Modi
                 .offset(y = height * 0.054f)
                 .size(width * 0.08f, height * 0.142f)
                 .clip(RoundedCornerShape(50))
-                .background(tint),
+                .background(tint)
         )
         Box(
             Modifier.align(Alignment.BottomCenter)
@@ -67,21 +72,21 @@ internal fun SimulationMascot(color: Color, width: Dp, modifier: Modifier = Modi
                         topStartPercent = 48,
                         topEndPercent = 52,
                         bottomEndPercent = 44,
-                        bottomStartPercent = 46,
-                    ),
+                        bottomStartPercent = 46
+                    )
                 )
-                .background(tint),
+                .background(tint)
         )
         Row(
             Modifier.align(Alignment.Center).offset(y = -height * 0.04f),
-            horizontalArrangement = Arrangement.spacedBy(width * 0.2f),
+            horizontalArrangement = Arrangement.spacedBy(width * 0.2f)
         ) {
             repeat(2) {
                 Box(
                     Modifier.size(
                         width * 0.1f,
-                        height * 0.12f,
-                    ).clip(CircleShape).background(ink.copy(alpha = .85f)),
+                        height * 0.12f
+                    ).clip(CircleShape).background(ink.copy(alpha = .85f))
                 )
             }
         }
@@ -91,7 +96,7 @@ internal fun SimulationMascot(color: Color, width: Dp, modifier: Modifier = Modi
                 .width(width * 0.22f)
                 .size(width * 0.22f, height * 0.05f)
                 .clip(RoundedCornerShape(50))
-                .background(ink.copy(alpha = .85f)),
+                .background(ink.copy(alpha = .85f))
         )
     }
 }
@@ -114,14 +119,14 @@ internal fun TypingDots(color: Color, modifier: Modifier = Modifier, animate: Bo
                     animationSpec =
                     infiniteRepeatable(
                         tween(600, delayMillis = index * 150, easing = LinearEasing),
-                        RepeatMode.Reverse,
+                        RepeatMode.Reverse
                     ),
-                    label = "dot$index",
+                    label = "dot$index"
                 )
             Box(
                 Modifier.size(
-                    6.dp,
-                ).clip(CircleShape).background(color).alpha(if (animate) alpha else 0.7f),
+                    6.dp
+                ).clip(CircleShape).background(color).alpha(if (animate) alpha else 0.7f)
             )
         }
     }

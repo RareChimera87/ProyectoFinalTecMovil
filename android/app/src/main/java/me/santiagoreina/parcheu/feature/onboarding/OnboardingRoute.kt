@@ -24,7 +24,7 @@ fun OnboardingRoute(
     route: Onboarding,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: OnboardingViewModel = koinViewModel(),
+    viewModel: OnboardingViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pagerState =
@@ -53,6 +53,6 @@ fun OnboardingRoute(
         onContinueWithGoogle = { viewModel.onContinueWithGoogle(activityContext) },
         onAcceptTerms = viewModel::onAcceptTerms,
         onDeclineTerms = viewModel::onDeclineTerms,
-        modifier = modifier,
+        modifier = modifier
     )
 }

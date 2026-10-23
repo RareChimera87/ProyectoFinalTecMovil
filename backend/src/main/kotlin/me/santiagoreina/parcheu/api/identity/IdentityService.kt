@@ -1,10 +1,12 @@
 package me.santiagoreina.parcheu.api.identity
 
+import me.santiagoreina.parcheu.api.identity.consent.LearningConsentPolicy
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Suspended
 import me.santiagoreina.parcheu.api.platform.errors.TermsRequired
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
+import me.santiagoreina.parcheu.api.platform.errors.Underage
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.contract.AcceptTerms
 import me.santiagoreina.parcheu.contract.ConsentChange
@@ -28,8 +30,8 @@ import java.time.Instant
  * está al día solo si la última fila de TERMS y de PRIVACY está concedida con esa versión.
  */
 class IdentityService(
-    private val repo: IdentityRepository,
-    private val clock: Clock,
+    internal val repo: IdentityRepository,
+    internal val clock: Clock,
     val legalTextVersion: String,
 ) {
     /** Alta o login idempotente por `firebase_uid`. No exige términos: es la puerta de entrada. */
@@ -58,12 +60,26 @@ class IdentityService(
         return user
     }
 
-    /** Puerta de todas las rutas salvo las exentas: suspensión y términos vigentes (403 TERMS_REQUIRED). */
+    /**
+     * Puerta de todas las rutas salvo las exentas: cuenta de menor de edad (403 UNDERAGE, E2.6),
+     * suspensión y términos vigentes (403 TERMS_REQUIRED).
+     */
     suspend fun requireFullAccess(firebase: FirebaseUser) {
         val user = requireUser(firebase)
+        if (user.underageAt != null) throw Underage()
         val until = user.suspendedUntil
         if (until != null && until.isAfter(clock.instant())) throw Suspended()
         if (!termsAccepted(repo.latestConsents(user.id))) throw TermsRequired()
+    }
+
+    /**
+     * Puerta de edad para las rutas exentas de términos (`session` y `terms`): una cuenta marcada como
+     * menor de edad solo puede ver (`GET /v1/me`) o borrar (`DELETE /v1/me`) su cuenta. Si el usuario aún
+     * no existe (primer `POST /v1/session`) no hay nada que bloquear.
+     */
+    suspend fun requireNotUnderage(firebase: FirebaseUser) {
+        val user = repo.findByFirebaseUid(firebase.uid) ?: return
+        if (user.deletedAt == null && user.underageAt != null) throw Underage()
     }
 
     suspend fun me(firebase: FirebaseUser): MeDto = toMe(requireUser(firebase))
@@ -97,6 +113,8 @@ class IdentityService(
         if (change.granted && change.textVersion != legalTextVersion) {
             throw ValidationFailed("La versión del texto vigente es $legalTextVersion")
         }
+        // Aprender de los chats de Pareja exige Pareja activo y +18 confirmado (E2.5).
+        LearningConsentPolicy.checkGrant(change.kind, change.granted, user, repo.modes(user.id), clock.instant())
         val current = repo.latestConsents(user.id).firstOrNull { it.kind == change.kind }
         val unchanged = current != null && current.granted == change.granted && current.textVersion == change.textVersion
         if (!unchanged) repo.appendConsents(user.id, listOf(NewConsent(change.kind, change.granted, change.textVersion)), clock.instant())
@@ -128,7 +146,9 @@ class IdentityService(
 
     private suspend fun onboarding(user: UserRecord): OnboardingStep = when {
         !termsAccepted(repo.latestConsents(user.id)) -> OnboardingStep.NEEDS_TERMS
-        user.displayName.isNullOrBlank() || user.ageVerifiedAt == null -> OnboardingStep.NEEDS_PROFILE
+        // B0 (E2.6) exige fecha verificada y universidad; el nombre viene de Google y B0 lo pide si falta.
+        user.displayName.isNullOrBlank() || user.ageVerifiedAt == null || user.universityId == null ->
+            OnboardingStep.NEEDS_PROFILE
         !repo.hasTwin(user.id) -> OnboardingStep.NEEDS_TWIN
         repo.modes(user.id).none { it.value } -> OnboardingStep.NEEDS_MODES
         else -> OnboardingStep.DONE
@@ -165,6 +185,8 @@ class IdentityService(
             throw ValidationFailed("career debe tener máximo $MAX_CAREER caracteres")
         }
         request.universityId?.let { id ->
+            // El catálogo usa smallint: un id fuera de rango se truncaría a uno válido en Postgres.
+            if (id !in 1..Short.MAX_VALUE) throw ValidationFailed("universityId fuera de rango")
             if (!repo.universityExists(id)) throw ValidationFailed("universityId no existe en el catálogo")
         }
         request.interests?.let { slugs ->
@@ -194,7 +216,7 @@ class IdentityService(
 
     companion object {
         const val MAX_NAME = 40
-        const val MAX_CAREER = 80
+        const val MAX_CAREER = 60
         const val MAX_INTERESTS = 5
         const val MAX_FCM_TOKEN = 4096
         val LEGAL_KINDS = listOf(ConsentKind.TERMS, ConsentKind.PRIVACY)

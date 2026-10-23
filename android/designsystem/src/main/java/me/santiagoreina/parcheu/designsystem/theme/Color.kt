@@ -107,7 +107,7 @@ data class ParcheUColors(
     val wordmark: Color,
     val plusGradient: ParcheUGradient,
     val paywallHeroGradient: ParcheUGradient,
-    val celebrationGradient: ParcheURadialGradient,
+    val celebrationGradient: ParcheURadialGradient
 ) {
     /** Atajos con los nombres del inventario. */
     val mintt: Color get() = friendship.text
@@ -119,7 +119,7 @@ data class ParcheUColors(
 private val PlusGradient =
     ParcheUGradient(
         angleDegrees = 135f,
-        stops = listOf(0f to ParcheUPalette.Violet, 1f to ParcheUPalette.Orange),
+        stops = listOf(0f to ParcheUPalette.Violet, 1f to ParcheUPalette.Orange)
     )
 
 private val PaywallHeroGradient =
@@ -129,8 +129,8 @@ private val PaywallHeroGradient =
         listOf(
             0f to ParcheUPalette.Violet,
             0.55f to ParcheUPalette.PaywallMid,
-            1.30f to ParcheUPalette.Orange,
-        ),
+            1.30f to ParcheUPalette.Orange
+        )
     )
 
 /** radial rgba(255,138,61,.20) a rgba(109,74,255,.17) a transparente (B5, G3). */
@@ -140,8 +140,8 @@ private val CelebrationGradient =
         listOf(
             0f to ParcheUPalette.Orange.copy(alpha = 0.20f),
             0.5f to ParcheUPalette.Violet.copy(alpha = 0.17f),
-            1f to Color.Transparent,
-        ),
+            1f to Color.Transparent
+        )
     )
 
 val DarkParcheUColors =
@@ -161,13 +161,13 @@ val DarkParcheUColors =
         friendship = ModeColors(
             ParcheUPalette.Mint,
             ParcheUPalette.DarkMintTint,
-            ParcheUPalette.Ink,
+            ParcheUPalette.Ink
         ),
         couple = ModeColors(ParcheUPalette.Coral, ParcheUPalette.DarkCoralTint, ParcheUPalette.Ink),
         study = ModeColors(
             ParcheUPalette.ElectricBlue,
             ParcheUPalette.DarkBlueTint,
-            ParcheUPalette.Ink,
+            ParcheUPalette.Ink
         ),
         accent = ModeColors(ParcheUPalette.Orange, ParcheUPalette.OrangeTint, ParcheUPalette.Ink),
         error = ParcheUPalette.DarkCoralTint,
@@ -178,7 +178,7 @@ val DarkParcheUColors =
         wordmark = ParcheUPalette.White,
         plusGradient = PlusGradient,
         paywallHeroGradient = PaywallHeroGradient,
-        celebrationGradient = CelebrationGradient,
+        celebrationGradient = CelebrationGradient
     )
 
 val LightParcheUColors =
@@ -198,22 +198,22 @@ val LightParcheUColors =
         friendship = ModeColors(
             ParcheUPalette.Mint,
             ParcheUPalette.LightMintText,
-            ParcheUPalette.Ink,
+            ParcheUPalette.Ink
         ),
         couple = ModeColors(
             ParcheUPalette.Coral,
             ParcheUPalette.LightCoralText,
-            ParcheUPalette.Ink,
+            ParcheUPalette.Ink
         ),
         study = ModeColors(
             ParcheUPalette.ElectricBlue,
             ParcheUPalette.LightBlueText,
-            ParcheUPalette.Ink,
+            ParcheUPalette.Ink
         ),
         accent = ModeColors(
             ParcheUPalette.Orange,
             ParcheUPalette.LightOrangeText,
-            ParcheUPalette.Ink,
+            ParcheUPalette.Ink
         ),
         error = ParcheUPalette.LightCoralText,
         onError = ParcheUPalette.White,
@@ -223,7 +223,7 @@ val LightParcheUColors =
         wordmark = ParcheUPalette.Violet,
         plusGradient = PlusGradient,
         paywallHeroGradient = PaywallHeroGradient,
-        celebrationGradient = CelebrationGradient,
+        celebrationGradient = CelebrationGradient
     )
 
 /**
@@ -279,6 +279,6 @@ fun ParcheUColors.toColorScheme(): ColorScheme {
         surfaceContainerLow = s1,
         surfaceContainer = s1,
         surfaceContainerHigh = s2,
-        surfaceContainerHighest = s2,
+        surfaceContainerHighest = s2
     )
 }

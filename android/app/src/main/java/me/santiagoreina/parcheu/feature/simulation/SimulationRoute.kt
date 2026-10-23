@@ -21,7 +21,7 @@ fun SimulationRoute(
     route: Simulation,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: SimulationViewModel = koinViewModel(key = route.id) { parametersOf(route.id) },
+    viewModel: SimulationViewModel = koinViewModel(key = route.id) { parametersOf(route.id) }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -32,7 +32,7 @@ fun SimulationRoute(
                 when (effect) {
                     is SimulationEffect.OpenResults -> Results(effect.simulationId)
                     is SimulationEffect.OpenSimulation -> Simulation(effect.simulationId)
-                },
+                }
             )
         }
     }
@@ -43,6 +43,6 @@ fun SimulationRoute(
         onReload = viewModel::onReload,
         onRetry = viewModel::onRetry,
         onHome = { navigator.navigateToTopLevel(Home) },
-        modifier = modifier,
+        modifier = modifier
     )
 }

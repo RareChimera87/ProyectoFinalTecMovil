@@ -17,7 +17,7 @@ val SoraFontFamily =
     FontFamily(
         Font(R.font.sora_regular, FontWeight.Normal),
         Font(R.font.sora_semibold, FontWeight.SemiBold),
-        Font(R.font.sora_bold, FontWeight.Bold),
+        Font(R.font.sora_bold, FontWeight.Bold)
     )
 
 /** Inter (400/500/600/700): interfaz y cuerpo. OFL 1.1 (android/designsystem/licenses/OFL-Inter.txt). */
@@ -26,24 +26,26 @@ val InterFontFamily =
         Font(R.font.inter_regular, FontWeight.Normal),
         Font(R.font.inter_medium, FontWeight.Medium),
         Font(R.font.inter_semibold, FontWeight.SemiBold),
-        Font(R.font.inter_bold, FontWeight.Bold),
+        Font(R.font.inter_bold, FontWeight.Bold)
     )
 
-private fun sora(size: Int, weight: FontWeight, lineHeight: Int, letterSpacing: Float = 0f) = TextStyle(
-    fontFamily = SoraFontFamily,
-    fontWeight = weight,
-    fontSize = size.sp,
-    lineHeight = lineHeight.sp,
-    letterSpacing = letterSpacing.sp,
-)
+private fun sora(size: Int, weight: FontWeight, lineHeight: Int, letterSpacing: Float = 0f) =
+    TextStyle(
+        fontFamily = SoraFontFamily,
+        fontWeight = weight,
+        fontSize = size.sp,
+        lineHeight = lineHeight.sp,
+        letterSpacing = letterSpacing.sp
+    )
 
-private fun inter(size: Int, weight: FontWeight, lineHeight: Int, letterSpacing: Float = 0f) = TextStyle(
-    fontFamily = InterFontFamily,
-    fontWeight = weight,
-    fontSize = size.sp,
-    lineHeight = lineHeight.sp,
-    letterSpacing = letterSpacing.sp,
-)
+private fun inter(size: Int, weight: FontWeight, lineHeight: Int, letterSpacing: Float = 0f) =
+    TextStyle(
+        fontFamily = InterFontFamily,
+        fontWeight = weight,
+        fontSize = size.sp,
+        lineHeight = lineHeight.sp,
+        letterSpacing = letterSpacing.sp
+    )
 
 /**
  * Escala del inventario §3.4 sobre los roles de Material 3:
@@ -69,7 +71,7 @@ val ParcheUTypography =
         bodySmall = inter(13, FontWeight.Normal, 18),
         labelLarge = inter(15, FontWeight.SemiBold, 20),
         labelMedium = inter(13, FontWeight.Medium, 16),
-        labelSmall = inter(11, FontWeight.Medium, 14),
+        labelSmall = inter(11, FontWeight.Medium, 14)
     )
 
 /** Estilos del inventario que no tienen rol en Material 3. */
@@ -82,5 +84,5 @@ data class ParcheUExtraTextStyles(
     /** Iniciales de avatares y nodos del grafo. */
     val initials: TextStyle = sora(14, FontWeight.SemiBold, 18),
     /** Precios del paywall y de ParcheU+. */
-    val price: TextStyle = sora(24, FontWeight.Bold, 30),
+    val price: TextStyle = sora(24, FontWeight.Bold, 30)
 )

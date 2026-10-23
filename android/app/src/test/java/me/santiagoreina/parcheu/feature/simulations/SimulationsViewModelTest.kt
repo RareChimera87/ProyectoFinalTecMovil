@@ -26,7 +26,7 @@ class SimulationsViewModelTest {
         simulations = Usage(used, limit, Instant.parse("2026-11-09T05:00:00Z")),
         randomMatch = Usage(0, 1, Instant.parse("2026-11-04T05:00:00Z")),
         fullReport = Usage(0, 1, Instant.parse("2026-12-01T05:00:00Z")),
-        plus = limit == null,
+        plus = limit == null
     )
 
     @Test
@@ -49,7 +49,7 @@ class SimulationsViewModelTest {
         repository.pages =
             mapOf(
                 null to ApiResult.Success(Page(listOf(a), nextCursor = "c1")),
-                "c1" to ApiResult.Success(Page(listOf(b))),
+                "c1" to ApiResult.Success(Page(listOf(b)))
             )
         val viewModel = SimulationsViewModel(repository)
         viewModel.loadMore()
