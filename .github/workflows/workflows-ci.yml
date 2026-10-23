@@ -1,0 +1,28 @@
+name: workflows-ci
+
+# E0.6 (ronda 1). Pruebas estáticas de los propios workflows (scripts/test/workflows.test.py):
+# contrato de migration-order, pipefail en infra-ci, concurrencia de review-counter, revision-agente
+# con el código de la base y secretos de WIF documentados. No es un check obligatorio.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/test/workflows.test.py'
+      - 'docs/arquitectura.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workflows-ci:
+    name: workflows-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pyyaml==6.0.2
+      - run: python3 scripts/test/workflows.test.py

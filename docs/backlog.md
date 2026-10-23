@@ -267,7 +267,7 @@ Monorepo, contrato, backend base, esquema, infraestructura, CI/CD, esqueleto And
 - [ ] Un PR que rompe un test de Android queda bloqueado.
 - [ ] Tras mezclar a dev, `/v1/health` de dev responde con el SHA del commit.
 - [ ] El job `migrate` corre **antes** del despliegue de la API; si falla, la API no se despliega.
-- [ ] No hay llaves JSON en secretos de GitHub para GCP: solo `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_DEV` y `WIF_SERVICE_ACCOUNT_PROD` (mismos nombres que arquitectura.md §12).
+- [ ] No hay llaves JSON en secretos de GitHub para GCP: solo identificadores de WIF, sin credenciales: `WIF_PROVIDER`, `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_DEV`, `WIF_SERVICE_ACCOUNT_PROD`, `TF_PLAN_SERVICE_ACCOUNT_DEV` y `TF_SERVICE_ACCOUNT_DEV` (mismos nombres que arquitectura.md §12; hay un pool WIF por proyecto, ADR-0014).
 - [ ] Un PR con etiqueta `major` y CI verde **no** se mezcla hasta que un revisor distinto del autor lo aprueba; uno sin la etiqueta se mezcla con CI y `revision-agente` en verde.
 - [ ] Tras mezclar 3 PR no major, `review-counter` abre exactamente un issue de revisión (probado con un fixture de `docs/revisiones.md`).
 
@@ -465,6 +465,8 @@ Sesión, términos y política, onboarding con Google, perfil básico y edad, pr
 - **Archivos y módulos:** android/app/.../feature/onboarding/**, data/auth/**
 
 **Descripción.** A1 Splash (sin sesión → A2; con sesión y gemelo → C1; con sesión sin gemelo → B1), A2-A4 en pager con 'Saltar' que lleva a A4, Credential Manager + `googleid` → `FirebaseAuth.signInWithCredential` → `POST /v1/session`, estados de cargando y error (no están en los mockups) y regreso a A4 tras cerrar sesión. A4 agrega bajo el botón el texto 'Al continuar aceptas los Términos y la Política de privacidad (Ley 1581 de 2012). Tus respuestas y mensajes se procesan con IA de Google Cloud en EE. UU.' con enlaces a Hosting; tras el login, si el estado es `NEEDS_TERMS`, la app llama `POST /v1/me/terms` antes de seguir (una hoja de confirmación lo pide de nuevo si cambió la versión). Destinos tras el login: `NEEDS_PROFILE` → B0 (E2.6), `NEEDS_TWIN` → B1.
+
+**Contrato con E5.3.** El `FirebaseTokenProvider` debe implementar `currentUserId()` (abstracto en `TokenProvider`) devolviendo `FirebaseAuth.currentUser?.uid`; de lo contrario el registro del token FCM no ocurre.
 
 **Criterios de aceptación (verificables):**
 
