@@ -28,6 +28,7 @@ import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.platform.AppContainer
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.platform.allDomains
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
@@ -71,7 +72,16 @@ class IdentityDbTest : FunSpec({
 
     fun container(db: Database, version: String): AppContainer {
         val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, version)
-        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"), identity, allDomains(identity))
+        val quota = inMemoryQuotaModule(FIXED_CLOCK)
+        return AppContainer(
+            config = testConfig(),
+            clock = FIXED_CLOCK,
+            tokenVerifier = FakeTokenVerifier(),
+            oidcVerifier = FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"),
+            identity = identity,
+            quota = quota,
+            domains = allDomains(identity, quota),
+        )
     }
 
     suspend fun HttpClient.session(uid: String): SessionDto = post("/v1/session") { auth(uid) }.body()

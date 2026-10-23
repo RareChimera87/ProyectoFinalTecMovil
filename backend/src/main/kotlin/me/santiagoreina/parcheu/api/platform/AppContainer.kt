@@ -26,7 +26,10 @@ import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
+import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
+import me.santiagoreina.parcheu.api.quota.quotaModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
@@ -46,8 +49,10 @@ class AppContainer(
     val tokenVerifier: TokenVerifier,
     val oidcVerifier: OidcVerifier,
     val identity: IdentityService,
+    /** Cuotas (E4.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val quota: QuotaModule = inMemoryQuotaModule(clock),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity),
+    val domains: List<DomainRoutes> = allDomains(identity, quota),
     /** Pasarela de IA (E0.9). Por defecto Fake con uso en memoria (tests y `ENV=local`). */
     val ai: AiGateway = localAiGateway(clock),
 ) {
@@ -75,8 +80,9 @@ class AppContainer(
             }
             val database = connectExposed(createDataSource(dbConfig, failFast = false))
             val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
+            val quota = quotaModule(config.env, database, clock)
             val ai = aiGateway(config, vars, clock) { database }
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, ai = ai)
+            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, quota, ai = ai)
         }
 
         /**
@@ -108,10 +114,10 @@ class AppContainer(
 }
 
 /** Todos los dominios de arquitectura.md §3.1 que exponen rutas. */
-fun allDomains(identity: IdentityService): List<DomainRoutes> = listOf(
+fun allDomains(identity: IdentityService, quota: QuotaModule): List<DomainRoutes> = listOf(
     IdentityRoutes(identity),
     TwinRoutes(),
-    QuotaRoutes(),
+    QuotaRoutes(quota),
     MatchingRoutes(),
     SimulationRoutes(),
     ScenarioRoutes(),

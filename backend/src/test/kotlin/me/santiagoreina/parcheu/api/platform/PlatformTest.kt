@@ -117,6 +117,8 @@ class PlatformTest : FunSpec({
         val c = AppContainer.fromConfig(config, mapOf("GCP_PROJECT" to "parcheu-prod"))
         (c.tokenVerifier is FakeTokenVerifier) shouldBe false
         (c.oidcVerifier is FakeOidcVerifier) shouldBe false
+        // E4.1: en prod no existe la concesión de Plus de desarrollo.
+        c.quota.devPlus shouldBe null
     }
 
     test("fromConfig sin base de datos falla con un mensaje claro") {
