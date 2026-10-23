@@ -66,14 +66,8 @@ tuvo permiso para ejecutar `terraform apply` (ni siquiera en dev) ni para crear 
 1. **Aplicar el bootstrap de dev** (crea WIF, `sa-deployer`, `sa-terraform`, `sa-terraform-plan` y el presupuesto de facturación; importa el bucket):
 ## E0.1 · Monorepo y git flow
 
-1. **Protección de `dev` con checks requeridos.** Hoy `dev` y `main` exigen PR y bloquean force push, pero no tienen checks requeridos. Tras mezclar este PR y cuando los workflows `pr-title`, `gitleaks` y `major-gate` hayan corrido una vez, ejecuta como admin del repo:
-
-   ```bash
-   CHECKS="pr-title,gitleaks,major-gate" scripts/proteger-ramas.sh dev
-   ```
-
-   Cuando E0.6 agregue `revision-agente` y las CI por ruta, vuelve a ejecutarlo incluyéndolos en `CHECKS`.
-2. **Protección de `main` con tu aprobación.** `scripts/proteger-ramas.sh main` exige 1 aprobación pero deja `enforce_admins: false`. Decisión: al ser tú la única cuenta (autora y admin), GitHub no deja aprobar el PR propio y con `enforce_admins: true` nadie podría mezclar. Los agentes abren el PR `release/*` → `main` y tú lo mezclas con `gh pr merge --admin`, que cuenta como tu aprobación explícita. Cuando entre un segundo colaborador (I2/I3) pasa `enforce_admins` a `true`. En `dev` se usa `strict: false` para que los PR paralelos con auto-merge no queden detrás esperando un `update-branch`.
+1. ~~**Protección de `dev` con checks requeridos.**~~ Hecho el 2026-10-23 (fix del issue #49): `scripts/proteger-ramas.sh dev` exige por defecto los 10 checks que siempre reportan (`pr-title`, `gitleaks`, `major-gate`, `revision-agente`, `android-ci`, `backend-ci`, `contract-ci`, `infra-ci`, `rules-ci`, `migration-order`) con `strict: false`, para que los PR paralelos con auto-merge no queden detrás esperando un `update-branch`.
+2. ~~**Protección de `main`.**~~ Hecho el 2026-10-23: `scripts/proteger-ramas.sh main` deja PR obligatorio, 0 aprobaciones (una sola cuenta: GitHub no deja aprobar el PR propio), `enforce_admins: true` y sin force push. Los agentes abren el PR `release/*` → `main` y tú lo mezclas; ese merge es tu aprobación explícita. Cuando entre un segundo colaborador (I2/I3) se puede exigir 1 aprobación.
 3. **Agregar a I2 e I3 como colaboradores** del repo y reemplazar los comentarios de `.github/CODEOWNERS` con sus usuarios de GitHub.
 
 ## E0.3 · Esqueleto del backend
@@ -136,14 +130,8 @@ Lo automatizable ya quedó hecho: tokens, fuentes Sora e Inter (OFL) en `android
 
 ## E0.1 · Monorepo y git flow
 
-1. **Protección de `dev` con checks requeridos.** Hoy `dev` y `main` exigen PR y bloquean force push, pero no tienen checks requeridos. Tras mezclar este PR y cuando los workflows `pr-title`, `gitleaks` y `major-gate` hayan corrido una vez, ejecuta como admin del repo:
-
-   ```bash
-   CHECKS="pr-title,gitleaks,major-gate" scripts/proteger-ramas.sh dev
-   ```
-
-   Cuando E0.6 agregue `revision-agente` y las CI por ruta, vuelve a ejecutarlo incluyéndolos en `CHECKS`.
-2. **Protección de `main` con tu aprobación.** `scripts/proteger-ramas.sh main` exige 1 aprobación pero deja `enforce_admins: false`. Decisión: al ser tú la única cuenta (autora y admin), GitHub no deja aprobar el PR propio y con `enforce_admins: true` nadie podría mezclar. Los agentes abren el PR `release/*` → `main` y tú lo mezclas con `gh pr merge --admin`, que cuenta como tu aprobación explícita. Cuando entre un segundo colaborador (I2/I3) pasa `enforce_admins` a `true`. En `dev` se usa `strict: false` para que los PR paralelos con auto-merge no queden detrás esperando un `update-branch`.
+1. ~~**Protección de `dev` con checks requeridos.**~~ Hecho el 2026-10-23 (fix del issue #49): `scripts/proteger-ramas.sh dev` exige por defecto los 10 checks que siempre reportan (`pr-title`, `gitleaks`, `major-gate`, `revision-agente`, `android-ci`, `backend-ci`, `contract-ci`, `infra-ci`, `rules-ci`, `migration-order`) con `strict: false`, para que los PR paralelos con auto-merge no queden detrás esperando un `update-branch`.
+2. ~~**Protección de `main`.**~~ Hecho el 2026-10-23: `scripts/proteger-ramas.sh main` deja PR obligatorio, 0 aprobaciones (una sola cuenta: GitHub no deja aprobar el PR propio), `enforce_admins: true` y sin force push. Los agentes abren el PR `release/*` → `main` y tú lo mezclas; ese merge es tu aprobación explícita. Cuando entre un segundo colaborador (I2/I3) se puede exigir 1 aprobación.
 3. **Agregar a I2 e I3 como colaboradores** del repo y reemplazar los comentarios de `.github/CODEOWNERS` con sus usuarios de GitHub.
 
 ## E0.3 · Esqueleto del backend
@@ -202,7 +190,8 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
    cualquier auto-merge previo). **No actives *Require review from Code Owners* en dev mientras haya una sola cuenta
    colaboradora:** CODEOWNERS asigna `*` a RareChimera87, autor de todos los PR, que no puede aprobarse a sí mismo, y con
    `enforce_admins:true` ni el admin podría mezclar. Con una sola cuenta, los PR `major` y los de CI se mezclan con
-   `gh pr merge --admin --squash` (requiere `enforce_admins:false` en dev; `major-gate` no pasa sin una segunda cuenta).
+   la etiqueta `revisado-agente` (que exige `major-gate`); el par humano revisa después del merge. Ya no se usa
+   `gh pr merge --admin`: desde el issue #49, `enforce_admins` es true en dev y main.
    Solo cuando exista un segundo colaborador que apruebe (y CODEOWNERS deje de asignar `*`) tiene sentido exigir Code
    Owners. Los PR #13 y #14 deben mezclarse antes de exigir los checks. Nota de E0.5: `sa-deployer`
    de dev acepta cualquier workflow del repo (`attribute.repository`), incluidos los `pull_request`; conviene
@@ -334,7 +323,8 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
    ```
 
    Todos los checks de CI reportan en cada PR (si el PR no toca su parte, pasan sin trabajo), así que
-   exigirlos no bloquea PR ajenos. Actualiza el valor por defecto de `CHECKS` en `scripts/proteger-ramas.sh`.
+   exigirlos no bloquea PR ajenos. Hecho el 2026-10-23: es el valor por defecto de `CHECKS` en
+   `scripts/proteger-ramas.sh` y ya está aplicado en `dev` (issue #49).
 
 6. **Variables opcionales del repo** (`gh variable set ...`):
    - `DUENOS_GITHUB`: usuarios de GitHub de los dueños para `review-counter`, p. ej.

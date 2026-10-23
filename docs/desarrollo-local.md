@@ -64,7 +64,7 @@ cd backend && PARCHEU_TEST_DB_URL=jdbc:postgresql://localhost:54329/e04test ./gr
 `google-services.json` **no se versiona** (está en `.gitignore`). Para obtenerlo:
 
 1. Pide acceso al proyecto Firebase de dev a I1 o I3.
-2. Descárgalo desde Firebase Console (Configuración del proyecto, app Android `dev`) o con `scripts/fetch-google-services` cuando exista (E0.8).
+2. Descárgalo desde Firebase Console (Configuración del proyecto, app Android `dev`) o con `scripts/fetch-google-services.sh dev` (lo deja en su sitio; ya existe desde E0.7).
 3. Colócalo en `android/app/src/dev/google-services.json` (y `src/prod/` para prod).
 
 Hasta que exista, la app compila solo las partes que no dependen de Firebase.

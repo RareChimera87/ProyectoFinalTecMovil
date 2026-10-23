@@ -16,7 +16,15 @@
 # "squash! " se aceptan sin validar; en modo --titulo no hay excepciones.
 # No pretende analizar el español en general: solo formato y lista blanca.
 set -euo pipefail
-export LC_ALL=C.UTF-8
+
+# ${#var} cuenta caracteres solo con un locale UTF-8; con uno de bytes un asunto con tildes
+# mide de más. C.UTF-8 no existe en macOS, así que se elige el primero disponible y, si no
+# hay ninguno, se cuentan los bytes que no son de continuación UTF-8 (abajo).
+LOCALE_UTF8=""
+for l in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8 UTF-8; do
+  if locale -a 2>/dev/null | grep -qixF -- "$l"; then LOCALE_UTF8="$l"; break; fi
+done
+[[ -n "$LOCALE_UTF8" ]] && export LC_ALL="$LOCALE_UTF8"
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LISTA="${VERBOS_IMPERATIVO:-$DIR/verbos-imperativo.txt}"
@@ -47,7 +55,12 @@ error() {
 }
 
 [[ -n "$asunto" ]] || error "el asunto está vacío."
-(( ${#asunto} <= 72 )) || error "el asunto mide ${#asunto} caracteres (máximo 72)."
+if [[ -n "$LOCALE_UTF8" ]]; then
+  largo=${#asunto}
+else
+  largo="$(printf '%s' "$asunto" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d '[:space:]')"
+fi
+(( largo <= 72 )) || error "el asunto mide $largo caracteres (máximo 72)."
 [[ "$asunto" != *. ]] || error "el asunto no debe terminar en punto."
 
 # Prefijo opcional de feature: "E0.1 " o "E10.3: ".

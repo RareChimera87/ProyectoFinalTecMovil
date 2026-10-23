@@ -21,4 +21,4 @@ Feature del backlog: <!-- E0.1, E1.2, ... -->
 - [ ] Capturas Roborazzi adjuntas si hay UI
 - [ ] Documentación actualizada (`docs/`, ADR si cambia una decisión)
 - [ ] Pasos humanos pendientes anotados en `docs/pendientes-humanos.md`
-- [ ] Etiqueta `major` puesta si la feature es major (exige revisor par)
+- [ ] Etiqueta `major` puesta si la feature es major (exige la etiqueta `revisado-agente` por `major-gate`; el revisor par humano la revisa después del merge, en la ventana de la ola)
