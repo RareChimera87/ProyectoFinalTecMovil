@@ -50,20 +50,6 @@ createdb -h localhost -p 54329 -U postgres e04test
 cd backend && PARCHEU_TEST_DB_URL=jdbc:postgresql://localhost:54329/e04test ./gradlew test -PsinContenedores
 ```
 
-## Pasarela de IA (E0.9, ADR-0008)
-
-- Con `ENV=local` y sin `AI_PROVIDER` el backend usa `FakeLlmClient` y guarda el uso en memoria: no se llama a Vertex ni se gasta nada.
-- Para probar con Vertex real en local: `gcloud auth application-default login` y luego `ENV=local AI_PROVIDER=gemini AI_VERTEX_PROJECT=parcheu-dev ./gradlew run`.
-- Humo manual (no corre en CI ni en `./gradlew test`; consume unos centavos de USD):
-
-  ```bash
-  cd backend
-  ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'
-  AI_PROVIDER=claude ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'   # cuando Claude tenga cuota
-  ```
-
-- IDs de modelo, ubicación y precios: `backend/src/main/resources/ai/modelos.properties`. Un modelo nuevo necesita su fila `price.*` o el servicio no arranca.
-
 ## Migraciones (E0.4, ADR-0011)
 
 - Viven en `backend/src/main/resources/db/migration/`. `V1__esquema.sql` y `V2__semillas.sql` son fijas: **nunca edites una migración ya mezclada** (Flyway valida el checksum); agrega una nueva.
@@ -107,10 +93,27 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
   - Siempre: `ENV` (local|dev|prod), `PORT`, `APP_VERSION` (SHA).
   - `serve` en dev/prod (obligatorias): `INTERNAL_OIDC_AUDIENCE` (audiencia OIDC de `/internal/*`, la custom audience de E0.5; respaldo `SERVICE_URL`, debe ser https), `TASKS_SERVICE_ACCOUNT`, y `FIREBASE_PROJECT_ID` (respaldo `GCP_PROJECT`).
   - `migrate` (obligatorias): `DB_NAME` y `CLOUD_SQL_INSTANCE` o `DB_URL`; opcionales `DB_USER`, `DB_PASSWORD`. `migrate`, `seed-demo` y `purge-demo` no exigen Firebase ni OIDC.
+  - `serve` (E2.1) también necesita la base: `DB_NAME` y `CLOUD_SQL_INSTANCE` (o `DB_URL` en local), con las migraciones ya aplicadas. Opcional `LEGAL_TEXT_VERSION` (texto vigente de Términos y Política; por defecto `2026-10-29`, debe coincidir con las páginas web de E8.4).
+  - Arranque local completo: Postgres propio + `ENV=local DB_NAME=parcheu DB_URL=jdbc:postgresql://localhost:5432/parcheu DB_USER=postgres ./gradlew run` tras correr el modo `migrate`. Prueba con `curl -XPOST -H 'Authorization: Bearer fake-ana' localhost:8080/v1/session`.
 - **Modos:** `serve`, `migrate`, `seed-demo`, `purge-demo` (primer argumento del proceso o de la imagen; sin argumento es `serve`).
 - **Tests.** `./gradlew test -PsinContenedores` omite los tests con Testcontainers (solo CI). Los demás usan `testApplication` con `FakeTokenVerifier` y `FakeOidcVerifier`.
+- **Puerta de términos (E2.1).** `identity/TermsGate.kt` es un plugin de ruta que `IdentityRoutes` instala sobre la ruta autenticada de `/v1`: toda ruta de cualquier dominio responde 403 `TERMS_REQUIRED` (o `SUSPENDED`) salvo `POST /v1/session`, `POST /v1/me/terms`, `GET /v1/me` y `DELETE /v1/me`. Las pruebas de otros dominios usan `testContainer()`, que ya trae al usuario `ana` con términos aceptados.
 - **Agregar un dominio o ruta.** Rellena el `XRoutes.kt` de tu dominio (reemplaza los `stubXxx`) y cablea sus dependencias en `platform/AppContainer.kt`; `Application.kt` no se toca.
 - **Logs.** JSON a stdout con `severity`, `traceId` (de `X-Cloud-Trace-Context`) y `route`.
+
+## Pasarela de IA (E0.9, ADR-0008)
+
+- Con `ENV=local` y sin `AI_PROVIDER` el backend usa `FakeLlmClient` y guarda el uso en memoria: no se llama a Vertex ni se gasta nada.
+- Para probar con Vertex real en local: `gcloud auth application-default login` y luego `ENV=local AI_PROVIDER=gemini AI_VERTEX_PROJECT=parcheu-dev ./gradlew run`.
+- Humo manual (no corre en CI ni en `./gradlew test`; consume unos centavos de USD):
+
+  ```bash
+  cd backend
+  ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'
+  AI_PROVIDER=claude ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'   # cuando Claude tenga cuota
+  ```
+
+- IDs de modelo, ubicación y precios: `backend/src/main/resources/ai/modelos.properties`. Un modelo nuevo necesita su fila `price.*` o el servicio no arranca.
 
 ## Gemelo (E2.3)
 
