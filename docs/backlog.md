@@ -1211,6 +1211,13 @@ Reportar y bloquear desde todas partes (incluido contenido de IA), ajustes de pr
 - [ ] Test UI (Fakes): 'Descargar mis datos' pide el JSON y lanza el intent de crear documento con nombre `parcheu-datos-<fecha>.json`.
 - [ ] Roborazzi de la confirmación de borrado y de 'Descargar mis datos'.
 
+**Implementación futura (decisión 2026-10-23):** lo vigente para E8.3 es lo implementado en #59 y #62 (exportación como JSON local guardado con `ACTION_CREATE_DOCUMENT` o compartido con la hoja del sistema; borrado lógico inmediato con purga en cola, confirmado con una casilla). Los criterios de aceptación de arriba no cambian. El mockup H4 'Exportar mis datos' y H5 'Borrar cuenta' (inventario §1.1 y §6.3) queda como pendiente post-1.0:
+
+- (a) Exportación por correo con enlace válido 7 días (requiere un servicio de envío de correo que hoy no existe en la arquitectura) y formato PDF legible además de JSON.
+- (b) Selección de categorías a exportar: perfil y modos, gemelo, parche, simulaciones y chats (chats desmarcado por defecto).
+- (c) Confirmación del borrado escribiendo "BORRAR" y botón destructivo coral pleno (#FF5C7A con texto #14111F) con lista de consecuencias (`DestructiveButton`, `ConsequenceList` y `DestructiveHeroIcon` del inventario).
+- (d) Periodo de gracia de 14 días recuperable al iniciar sesión (hoy el borrado es inmediato; cambiarlo implica revisar la purga de arquitectura.md §10.2 y la declaración de Play).
+
 #### E8.4 · Páginas web legales
 
 - **Rama:** `feature/privacy-web`
