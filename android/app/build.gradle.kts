@@ -1,5 +1,7 @@
+import com.android.build.api.artifact.SingleArtifact
 import com.github.triplet.gradle.androidpublisher.ReleaseStatus
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import javax.xml.parsers.DocumentBuilderFactory
 
 plugins {
     alias(libs.plugins.android.application)
@@ -167,6 +169,57 @@ play {
     releaseStatus.set(ReleaseStatus.COMPLETED)
 }
 
+/**
+ * Falla si el manifiesto fusionado no declara [requiredPermission]. Play solo deja crear suscripciones
+ * si el AAB subido incluye Play Billing, cuyo manifiesto aporta `com.android.vending.BILLING` (E7.0).
+ */
+abstract class VerifyMergedManifestPermission : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val mergedManifest: RegularFileProperty
+
+    @get:Input
+    abstract val requiredPermission: Property<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun verify() {
+        val androidNs = "http://schemas.android.com/apk/res/android"
+        val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+        val document = factory.newDocumentBuilder().parse(mergedManifest.get().asFile)
+        val nodes = document.getElementsByTagName("uses-permission")
+        val permissions =
+            (0 until nodes.length).map { index ->
+                (nodes.item(index) as org.w3c.dom.Element).getAttributeNS(androidNs, "name")
+            }
+        val permission = requiredPermission.get()
+        if (permission !in permissions) {
+            throw GradleException(
+                "El manifiesto fusionado ${mergedManifest.get().asFile} no declara $permission. " +
+                    "Permisos encontrados: $permissions"
+            )
+        }
+        report.get().asFile.writeText("OK: $permission presente en el manifiesto fusionado\n")
+    }
+}
+
+androidComponents {
+    onVariants(selector().withName("prodRelease")) { variant ->
+        val verify =
+            tasks.register<VerifyMergedManifestPermission>("verifyProdReleaseBillingPermission") {
+                group = "verification"
+                description =
+                    "Verifica que el manifiesto fusionado de prodRelease pida BILLING (E7.0)."
+                mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                requiredPermission.set("com.android.vending.BILLING")
+                report.set(layout.buildDirectory.file("reports/billing-permission/prodRelease.txt"))
+            }
+        tasks.named("check") { dependsOn(verify) }
+    }
+}
+
 roborazzi {
     // Las capturas de referencia se versionan junto a las pruebas.
     outputDir.set(file("src/test/screenshots"))
@@ -197,6 +250,16 @@ dependencies {
     implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
+    // Login con Google (E2.2, ADR-0021): Credential Manager + googleid → Firebase Auth.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
+    implementation(libs.kotlinx.coroutines.play.services)
+    // E7.0: Play Billing. Su manifiesto agrega com.android.vending.BILLING por fusión (lo verifica
+    // verifyProdReleaseBillingPermission).
+    implementation(libs.billing.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.androidx.test.core)

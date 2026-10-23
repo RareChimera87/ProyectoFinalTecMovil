@@ -1,0 +1,33 @@
+name: major-gate
+
+# PLAN.md §5. En este repo hay una sola cuenta de GitHub (la del usuario, que también usan los
+# agentes), así que no puede exigirse la aprobación de "otro usuario". La puerta de las features
+# major es la misma revisión adversarial del agente, registrada con la etiqueta `revisado-agente`
+# (ver revision-agente.yml); el revisor par humano queda como práctica del equipo (equipo.md),
+# no como check. Pasa si el PR no es major o si ya está revisado.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  major-gate:
+    name: major-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Evalúa la puerta
+        env:
+          ETIQUETAS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          if [[ ",$ETIQUETAS," != *",major,"* ]]; then
+            echo "El PR no es major: la puerta pasa."
+          elif [[ ",$ETIQUETAS," == *",revisado-agente,"* ]]; then
+            echo "PR major con revisión del agente registrada: la puerta pasa."
+          else
+            echo "::error::PR major sin la etiqueta revisado-agente: falta la revisión del agente."
+            exit 1
+          fi

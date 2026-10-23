@@ -10,10 +10,12 @@
 #   HEAD_SHA     head_sha de la corrida de deploy-prod (solo workflow_run)
 #   PISTA, ESTADO, VERSION_NAME   entradas del disparo manual (VERSION_NAME puede ir vacío)
 #   ULTIMO_TAG   último tag v* alcanzable (puede ir vacío; se usa 0.0.1)
+#   EN_MAIN      true si el commit del tag es alcanzable desde origin/main (obligatorio cuando hay tag)
 #   RUN_NUMBER   número de ejecución (para el sufijo -int.<n>)
 #
-# Reglas: solo se publica código revisado (dev, main o un tag vX.Y.Z) y la pista cerrada (alpha)
-# solo sale de un tag vX.Y.Z, nunca de una rama.
+# Reglas: solo se publica código revisado (dev, main o un tag vX.Y.Z), la pista cerrada (alpha)
+# solo sale de un tag vX.Y.Z, nunca de una rama, y un tag solo publica si apunta a un commit de main
+# (misma regla que deploy-prod).
 set -euo pipefail
 
 error() { echo "::error::$1" >&2; exit 1; }
@@ -57,6 +59,10 @@ case "$evento" in
     ;;
   *) error "Evento no admitido para publicar: ${evento:-vacío}" ;;
 esac
+
+if [[ -n "$tag" && "${EN_MAIN:-}" != true ]]; then
+  error "El tag $tag no apunta a un commit de main: solo se publican tags de main (EN_MAIN=true)."
+fi
 
 [[ "$nombre" =~ ^[0-9A-Za-z.+-]{1,50}$ ]] || error "versionName inválido: $nombre"
 [[ "$pista" =~ ^(internal|alpha)$ ]] || error "Pista inválida: $pista"

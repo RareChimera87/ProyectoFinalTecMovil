@@ -22,7 +22,7 @@ name: android-release
 #   2. Excepción temporal (enmienda de ADR-0014): secreto PLAY_SERVICE_ACCOUNT_JSON con la llave de
 #      `sa-play` de parcheu-prod, solo hasta que exista el WIF de prod.
 # Environments: `play` (internal; ramas dev y main y tags v*) y `play-alpha` (pista cerrada; tags v* y
-# main, con aprobación del usuario). main es necesaria porque en `workflow_run` GITHUB_REF es
+# main). Ambos exigen la aprobación del usuario (reviewer del environment) antes de leer secretos. main es necesaria porque en `workflow_run` GITHUB_REF es
 # refs/heads/main, no el tag; lo que se publica lo fija scripts/release-params.sh (tag vX.Y.Z y commit
 # desplegado) y el aprobador revisa antes de que salga. Un environment, no el repo, guarda los secretos: una rama cualquiera
 # no puede leerlos aunque edite este archivo.
@@ -150,9 +150,13 @@ jobs:
             TAG_SHA="$(git rev-parse -q --verify "refs/tags/${TAG}^{commit}" || true)"
             export TAG_SHA
           fi
+          # Un tag solo publica si apunta a un commit de main (misma regla que deploy-prod).
+          git fetch --no-tags origin main
+          EN_MAIN=false
+          if git merge-base --is-ancestor HEAD origin/main; then EN_MAIN=true; fi
           ULTIMO_TAG="$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || echo v0.0.1)"
           RUN_NUMBER="$GITHUB_RUN_NUMBER"
-          export ULTIMO_TAG RUN_NUMBER
+          export EN_MAIN ULTIMO_TAG RUN_NUMBER
           {
             echo "version_code=$(scripts/version-code.sh "$GITHUB_RUN_NUMBER" "$GITHUB_RUN_ATTEMPT")"
             scripts/release-params.sh
