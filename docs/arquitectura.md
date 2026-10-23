@@ -683,11 +683,14 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 **Cuentas de servicio:**
 - `sa-api`: `cloudsql.client`, `cloudsql.instanceUser`, `aiplatform.user`, `cloudtasks.enqueuer`, `iam.serviceAccountUser` sobre `sa-tasks`, `secretmanager.secretAccessor` (secretos concretos), `datastore.user`, `firebaseauth.admin`, `firebasecloudmessaging.admin` (verificar nombres de rol).
 - `sa-tasks`: `run.invoker` sobre `api` (identidad OIDC de Tasks, Scheduler y Pub/Sub).
+- `sa-play` (solo en `parcheu-prod`; la crea E7.1 y la comparte E10.2): sin roles de IAM de GCP, invitada en Play Console con permisos mínimos. GitHub la suplanta por WIF (`roles/iam.workloadIdentityUser` para los environments `play` y `play-alpha`); el backend la usa en E7.1. No existe en `parcheu-dev`.
+- `sa-deployer` (GitHub vía WIF): `run.admin`, `artifactregistry.writer`, `iam.serviceAccountUser` sobre `sa-api`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin` (verificar nombres; los usa `firebase-deploy` de E0.8).
 - `sa-deployer` (GitHub vía WIF): `run.admin`, `artifactregistry.writer`, `iam.serviceAccountUser` sobre `sa-api`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin`, `serviceusage.serviceUsageConsumer` (nombres verificados en E0.5; los usa `firebase-deploy` de E0.8). En prod solo la puede usar un job del environment `production`.
 - `sa-terraform-plan` y `sa-terraform` (GitHub vía WIF, E0.5): `sa-terraform-plan` solo hace `plan`, con permisos de metadatos (sin `roles/viewer`, `securityReviewer` ni nada con `datastore.entities.*` o `logging.logEntries.list`; ADR-0012); en dev la usa cualquier PR del repo y en prod solo la rama `dev`. `sa-terraform` (solo dev) hace `apply` únicamente desde la rama `dev` y su `projectIamAdmin` tiene una condición que le impide otorgar `owner`/`editor`. Ninguna identidad de CI tiene roles sobre la cuenta de facturación: el presupuesto lo crea el bootstrap con el ADC del usuario.
 
 **Terraform:** `infra/terraform/bootstrap` (una vez por proyecto, con el ADC del usuario; cada proyecto tiene su bucket, su pool WIF y sus cuentas de CI), `modules/platform`, `envs/dev`, `envs/prod`; estado en GCS versionado (`gs://<proyecto>-tfstate`). Detalle y comandos en `infra/terraform/README.md`. CI hace `plan` en PR y `apply` de dev al mezclar; el `apply` de prod lo ejecuta solo el usuario.
 
+**Secretos de GitHub:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `WIF_PROVIDER_PROD` para la publicación en Play (WIF suplantando a `sa-play` de parcheu-prod; la variable `PLAY_SERVICE_ACCOUNT` guarda su correo). `PLAY_SERVICE_ACCOUNT_JSON` (llave de `sa-play`) es una **excepción temporal** documentada en la enmienda de ADR-0014, solo hasta que exista el WIF de prod. Los secretos de firma y de Play viven **solo en los environments** `play` (pista interna; ramas `dev` y `main` y tags `v*`) y `play-alpha` (pista cerrada; tags `v*` y `main`, esta última porque la ref de `workflow_run` es `main`; aprobación obligatoria del usuario, y `release-params.sh` exige tag y commit desplegado), no en el repo (E10.2). Variable opcional `UPLOAD_CERT_SHA256` (huella esperada del certificado de subida).
 **Secretos de GitHub:** `WIF_PROVIDER` (dev), `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `TF_PLAN_SERVICE_ACCOUNT_{DEV,PROD}`, `TF_SERVICE_ACCOUNT_DEV` (apply de dev), `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
 **Secretos de GitHub:** `WIF_PROVIDER` (pool de dev), `WIF_PROVIDER_PROD` (pool de prod: el bootstrap crea un pool WIF por proyecto, ADR-0014), `WIF_SERVICE_ACCOUNT_{DEV,PROD}` (`sa-deployer`), `TF_PLAN_SERVICE_ACCOUNT_DEV` (`sa-terraform-plan`, solo lectura, para el `plan` de los PR), `TF_SERVICE_ACCOUNT_DEV` (`sa-terraform`, para el `apply` de dev; el de prod lo ejecuta solo el usuario), `AUTO_MERGE_TOKEN` (PAT del auto-merge, solo si se reactiva con `AUTO_MERGE_ENABLED`), `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
 
@@ -702,7 +705,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 - **Testcontainers:** la serie 2.x cambió los nombres de artefacto (`org.testcontainers:testcontainers-postgresql`, `testcontainers-junit-jupiter`); no mezclar con los nombres 1.x.
 - **Exposed:** 1.0 cambió paquetes y API respecto de 0.x; E0.3 elige **una** serie y los agentes no copian ejemplos de la otra.
 - **Kotest:** existe la serie 6.x; E0.3 decide entre 5.9.x y 6.x según compatibilidad con Kotlin 2.2.
-- **Jib y Gradle Play Publisher:** confirmar compatibilidad con Gradle 9 y AGP 9; GPP tiene plan B (acción de subida).
+- **Jib y Gradle Play Publisher:** confirmar compatibilidad de Jib con Gradle 9. GPP quedó en 4.1.1, verificada con AGP 9.4.1 en E10.2.
 
 | Librería | Versión de referencia | Uso |
 |---|---|---|
@@ -764,6 +767,14 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
+| google-cloud-tasks | 2.x (verificar) | Tareas |
+| Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev2025xxxx (verificar) | Billing |
+| logback + logstash-logback-encoder | 1.5.x / 8.x (verificar) | Logs JSON |
+| Kotest (runner, assertions, property) | 5.9.1 o 6.x (verificar compatibilidad con Kotlin 2.2) | Tests y propiedades |
+| Testcontainers (`testcontainers-postgresql`, `testcontainers-junit-jupiter`) | 2.x (verificar nombres y versión) | Tests de BD |
+| foojay-resolver-convention (plugin de settings) | 1.0.0 (verificar) | Toolchains JDK |
+| Jib Gradle plugin | 3.4.5 (verificar) | Imagen |
+| Gradle Play Publisher | 4.1.1 (fijada en E10.2; la serie 4.x funciona con AGP 9.4.1, sin plan B) | Subida a Play |
 | google-cloud-tasks | 2.99.0 (fijada en E0.3; la dependencia la agrega la primera feature que encola) | Tareas |
 | Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev20260924-2.0.0 (fijada en E0.3; la dependencia la agrega E7.2) | Billing |
 | logback + logstash-logback-encoder | 1.6.5 / 9.0 (fijadas en E0.3) | Logs JSON |
