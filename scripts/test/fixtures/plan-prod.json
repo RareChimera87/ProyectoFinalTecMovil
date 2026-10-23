@@ -1805,6 +1805,43 @@
             "timeouts": null,
             "type": "CLOUD_IAM_SERVICE_ACCOUNT"
           }
+        },
+        {
+          "address": "module.platform.google_cloud_scheduler_job.this[\"purge-sweep\"]",
+          "name": "this",
+          "type": "google_cloud_scheduler_job",
+          "values": {
+            "app_engine_http_target": [],
+            "attempt_deadline": "320s",
+            "deletion_policy": "DELETE",
+            "description": "Reencola las purgas de cuentas atascadas (cada hora)",
+            "http_target": [
+              {
+                "body": null,
+                "headers": null,
+                "http_method": "POST",
+                "oauth_token": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ]
+              }
+            ],
+            "name": "purge-sweep",
+            "project": "parcheu-prod",
+            "pubsub_target": [],
+            "region": "us-central1",
+            "retry_config": [
+              {
+                "retry_count": 1
+              }
+            ],
+            "schedule": "15 * * * *",
+            "time_zone": "America/Bogota",
+            "timeouts": null
+          }
         }
       ]
     }
