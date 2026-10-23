@@ -65,7 +65,11 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
                     ChatAvatar(header.initials, header.name, header.anonymous, size = 36.dp)
                 }
             },
-            subtitle = if (header?.muted == true) "Silenciado" else null,
+            subtitle =
+            listOfNotNull(
+                DEMO_CHAT_SUBTITLE.takeIf { header?.isDemo == true },
+                "Silenciado".takeIf { header?.muted == true }
+            ).joinToString(" · ").ifEmpty { null },
             actions = {
                 Box {
                     ParcheUIconButton(
@@ -99,6 +103,7 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
                 }
             }
         )
+        if (header?.isDemo == true) DemoBanner()
         if (state.consentBannerVisible && header != null) {
             ConsentBanner(onSettings = actions.onPrivacy, onDismiss = actions.onDismissConsent)
         }
