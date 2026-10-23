@@ -1,3 +1,0 @@
-# Dependencias de scripts/revision-agente/revisar.py (workflow revision-agente, E0.6).
-anthropic==2.1.0
-pydantic==2.14.1
