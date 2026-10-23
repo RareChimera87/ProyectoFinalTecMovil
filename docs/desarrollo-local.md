@@ -27,8 +27,11 @@ Guía para preparar una máquina de desarrollo de ParcheU. Las decisiones de fon
 # Android
 cd android && ./gradlew :app:testDebugUnitTest
 
-# Backend (cuando exista, E0.3): sin contenedores en local
-./gradlew -p backend test -PsinContenedores
+# Backend: sin contenedores en local (el backend tiene su propio wrapper)
+cd backend && ./gradlew build -PsinContenedores
+
+# Imagen del backend sin daemon de Docker (genera backend/build/jib-image.tar)
+cd backend && ./gradlew jibBuildTar
 
 # Validador de commits
 scripts/test/commit-lint.test.sh
@@ -62,3 +65,17 @@ Hasta que exista, la app compila solo las partes que no dependen de Firebase.
 4. Abre un PR contra `dev` con la plantilla; el título sigue la misma regla (se valida en `pr-title`).
 
 Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y primer verbo en la lista blanca. Se admite un prefijo de feature opcional (`E0.1 Agrega ...`).
+
+## Backend (E0.3)
+
+- **Toolchain.** `backend/` compila con JDK 21. `backend/settings.gradle.kts` aplica `org.gradle.toolchains.foojay-resolver-convention` y `backend/gradle.properties` trae `org.gradle.java.installations.paths=/opt/android-studio/jbr`, así que con solo Java 17 en el PATH Gradle usa el JBR 21 sin descargar nada. En una máquina sin esa ruta Gradle la ignora y foojay descarga un JDK 21 (necesita red la primera vez). No hace falta `JAVA_HOME=21`.
+- **Contrato.** `backend/settings.gradle.kts` hace `includeBuild("../contract")`; los DTOs se consumen como `me.santiagoreina.parcheu:contract`.
+- **Arranque local.** `cd backend && ./gradlew run` (modo `serve`, puerto 8080). Con `ENV=local` (obligatorio: sin `ENV` el backend no arranca; `./gradlew run` ya lo define) la autenticación usa Fakes: `Authorization: Bearer fake-<uid>` para `/v1/*` y `Bearer oidc-tasks-fake` para `/internal/*`. En `dev` y `prod` los Fakes nunca se cablean, y `ENV=local` se rechaza si existen `K_SERVICE` o `CLOUD_RUN_JOB` (Cloud Run).
+- **Variables de entorno** (los valores locales van fuera del repo, en `~/.parcheu/`):
+  - Siempre: `ENV` (local|dev|prod), `PORT`, `APP_VERSION` (SHA).
+  - `serve` en dev/prod (obligatorias): `INTERNAL_OIDC_AUDIENCE` (audiencia OIDC de `/internal/*`, la custom audience de E0.5; respaldo `SERVICE_URL`, debe ser https), `TASKS_SERVICE_ACCOUNT`, y `FIREBASE_PROJECT_ID` (respaldo `GCP_PROJECT`).
+  - `migrate` (obligatorias): `DB_NAME` y `CLOUD_SQL_INSTANCE` o `DB_URL`; opcionales `DB_USER`, `DB_PASSWORD`. `migrate`, `seed-demo` y `purge-demo` no exigen Firebase ni OIDC.
+- **Modos:** `serve`, `migrate`, `seed-demo`, `purge-demo` (primer argumento del proceso o de la imagen; sin argumento es `serve`).
+- **Tests.** `./gradlew test -PsinContenedores` omite los tests con Testcontainers (solo CI). Los demás usan `testApplication` con `FakeTokenVerifier` y `FakeOidcVerifier`.
+- **Agregar un dominio o ruta.** Rellena el `XRoutes.kt` de tu dominio (reemplaza los `stubXxx`) y cablea sus dependencias en `platform/AppContainer.kt`; `Application.kt` no se toca.
+- **Logs.** JSON a stdout con `severity`, `traceId` (de `X-Cloud-Trace-Context`) y `route`.
