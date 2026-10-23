@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.home
 
+import me.santiagoreina.parcheu.api.demo.DemoVisibility.withoutDisabledDemos
 import me.santiagoreina.parcheu.api.graph.EgoEdgeRow
 import me.santiagoreina.parcheu.api.graph.GraphFilter
 import me.santiagoreina.parcheu.api.graph.GraphRepository
@@ -25,10 +26,14 @@ import java.util.UUID
  * Solo se sugiere un modo activo para los dos ([activeModes]): las aristas CONNECTED siguen en el
  * grafo aunque alguien apague el modo, pero `SimulationService.create` exige el modo activo en ambos,
  * así que sugerirlo haría fallar "Simular" siempre.
+ *
+ * Con [demoUsersEnabled] en falso (`DEMO_USERS_ENABLED=false`, ADR-0027) un usuario demo no se sugiere
+ * aunque quede una arista CONNECTED con él (p. ej. entre el `apply` que apaga la bandera y `purge-demo`).
  */
 class HomeSuggestions(
     private val graph: GraphRepository,
     private val policy: GraphVisibilityPolicy,
+    private val demoUsersEnabled: Boolean = true,
     private val activeModes: ActiveModes,
 ) : ThirdPartyView {
     /** Modos activos de un usuario (`user_modes.enabled`); vacío si no existe o fue borrado. */
@@ -64,6 +69,8 @@ class HomeSuggestions(
         val direct = graph.egoEdges(viewer, GraphFilter())
             .filter { it.state == EdgeState.CONNECTED && it.mode != Mode.PAREJA }
             .filter { policy.canSee(viewer, it.other, ViewContext.EGO, blocked) }
+            // Con la bandera apagada un demo no se propone a nadie (E4.9, ADR-0027).
+            .withoutDisabledDemos(demoUsersEnabled) { it.other.isDemo }
         val directIds = direct.map { it.other.id }.toSet()
         // Solo modos activos para los dos (los mismos que exige SimulationService.create). Se filtra
         // antes de elegir la mejor arista por persona: si el modo de mayor afinidad está apagado, gana

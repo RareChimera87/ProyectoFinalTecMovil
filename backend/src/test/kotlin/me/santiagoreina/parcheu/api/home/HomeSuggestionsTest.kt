@@ -106,4 +106,21 @@ class HomeSuggestionsTest : FunSpec({
         // Sin modos activos (usuario sin fila o borrado) no hay sugerencias.
         view(repo, mapOf(me.id to emptySet())).forHome(me.id, plus = false, exclude = emptySet()) shouldBe emptyList()
     }
+
+    test("con DEMO_USERS_ENABLED=false un demo conectado no se sugiere ni cuenta en la selección por persona") {
+        val valentina = person(7, name = "Valentina").copy(isDemo = true)
+        val repo = memoryRepo(me, beto, valentina)
+        repo.putEdge(me.id, valentina.id, Mode.AMISTAD, EdgeState.CONNECTED, 95)
+        repo.putEdge(me.id, beto.id, Mode.AMISTAD, EdgeState.CONNECTED, 60)
+        val policy = GraphVisibilityPolicy(AnonIdSigner.forTests())
+
+        val on = HomeSuggestions(repo, policy, demoUsersEnabled = true) { Mode.entries.toSet() }
+            .forHome(me.id, plus = false, exclude = emptySet())
+        on.map { it.other.label } shouldContainExactly listOf("Valentina", "Beto")
+        on.first().other.isDemo shouldBe true
+
+        val off = HomeSuggestions(repo, policy, demoUsersEnabled = false) { Mode.entries.toSet() }
+            .forHome(me.id, plus = false, exclude = emptySet())
+        off.map { it.other.label } shouldContainExactly listOf("Beto")
+    }
 })

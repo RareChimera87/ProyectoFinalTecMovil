@@ -71,11 +71,12 @@ fun simulationModule(
     chat: ChatModule,
     push: Notifier,
     demo: DemoConnectPolicy = DemoConnectPolicy.DEFAULT,
+    demoUsersEnabled: Boolean = true,
 ): SimulationModule {
     val mirror = if (env == Env.LOCAL || firebaseProjectId == null) NoopSimulationMirror else FirestoreSimulationMirror(firebaseProjectId)
     return assemble(
         ExposedSimulationRepository(db), clock, ai, quota, graph, tasks, mirror, notifier,
-        ExposedReportRepository(db), chat, push, demo,
+        ExposedReportRepository(db), chat, push, demo, demoUsersEnabled,
     )
 }
 
@@ -97,8 +98,9 @@ fun inMemorySimulationModule(
     push: Notifier = NoopNotifier,
     chat: ChatModule = inMemoryChatModule(clock, graph.policy, push),
     demo: DemoConnectPolicy = DemoConnectPolicy.DEFAULT,
+    demoUsersEnabled: Boolean = true,
 ): SimulationModule {
-    val module = assemble(repo, clock, ai, quota, graph, queue, mirror, notifier, reportRepo, chat, push, demo)
+    val module = assemble(repo, clock, ai, quota, graph, queue, mirror, notifier, reportRepo, chat, push, demo, demoUsersEnabled)
     if (runInline) queue.inline = { task -> module.engine.run(ContractJson.decodeFromString<TaskPayload>(task.body).uuid()) }
     return module
 }
@@ -116,10 +118,11 @@ private fun assemble(
     chat: ChatModule,
     push: Notifier,
     demo: DemoConnectPolicy,
+    demoUsersEnabled: Boolean,
 ): SimulationModule {
     val people = graphPersonPresenter(graph)
     val engine = SimulationEngine(repo, ai, quota.service, graph.edges, mirror, notifier, clock)
     val report = ReportService(repo, reportRepo, quota.service, graph.edges, chat.service, push, people, clock, demo)
-    val service = SimulationService(repo, quota.service, ai, tasks, people, mirror, clock, report)
+    val service = SimulationService(repo, quota.service, ai, tasks, people, mirror, clock, report, demoUsersEnabled)
     return SimulationModule(service, engine, repo, report)
 }
