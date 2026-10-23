@@ -17,7 +17,8 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * Rutas de arquitectura.md §5.2, agrupadas por dominio. Mientras el dominio sea un stub todas
  * responden 501; cuando una feature implementa su dominio, ajusta el estado esperado de sus rutas
  * (o las quita de esta lista) en su propio PR. Quitadas: `GET /v1/quota` y `POST /internal/dev/grant-plus`
- * (E4.1, probadas en `QuotaApiTest`).
+ * (E4.1, probadas en `QuotaApiTest`; desde E7.1 la segunda la registra `BillingRoutes`) y las de billing
+ * (E7.1, probadas en `BillingApiTest`).
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
@@ -46,7 +47,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     ),
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
     // Notifications: E5.4 implementa la bandeja y 'Marcar leídas' (NotificationsApiTest); ya no queda ningún stub.
-    "billing" to listOf(HttpMethod.Get to "/v1/billing/entitlement", HttpMethod.Post to "/v1/billing/verify"),
+    // Billing: E7.1 implementa entitlement, verify y la RTDN (BillingApiTest); ya no queda ningún stub.
     // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` sigue en 501 (E8.6).
     "admin" to listOf(HttpMethod.Get to "/v1/admin/reports", HttpMethod.Post to "/v1/admin/reports/r1/resolve"),
     // Home: E4.7 implementa GET /v1/home (HomeApiTest); ya no queda ningún stub.
@@ -58,7 +59,7 @@ private val internalRoutes = listOf(
     "/internal/tasks/judge-scenario",
     "/internal/tasks/extract-memories", "/internal/tasks/moderate", "/internal/tasks/name-community",
     "/internal/jobs/communities", "/internal/jobs/memories",
-    "/internal/jobs/twin-accuracy", "/internal/jobs/retention", "/internal/billing/rtdn",
+    "/internal/jobs/twin-accuracy", "/internal/jobs/retention",
 )
 
 class RoutesRegistryTest : FunSpec({
