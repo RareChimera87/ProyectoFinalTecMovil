@@ -1,0 +1,244 @@
+package me.santiagoreina.parcheu.api.chat
+
+import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
+import me.santiagoreina.parcheu.api.graph.PersonRow
+import me.santiagoreina.parcheu.api.graph.ViewContext
+import me.santiagoreina.parcheu.api.identity.UserRecord
+import me.santiagoreina.parcheu.api.identity.toKotlin
+import me.santiagoreina.parcheu.api.platform.errors.Blocked
+import me.santiagoreina.parcheu.api.platform.errors.Conflict
+import me.santiagoreina.parcheu.api.platform.errors.Forbidden
+import me.santiagoreina.parcheu.api.platform.errors.NotFound
+import me.santiagoreina.parcheu.api.platform.errors.ScenarioEnded
+import me.santiagoreina.parcheu.api.platform.errors.Suspended
+import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
+import me.santiagoreina.parcheu.api.platform.notifier.Notification
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
+import me.santiagoreina.parcheu.contract.ChatStatus
+import me.santiagoreina.parcheu.contract.ChatSummary
+import me.santiagoreina.parcheu.contract.ChatType
+import me.santiagoreina.parcheu.contract.ConsentKind
+import me.santiagoreina.parcheu.contract.MessageDto
+import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.NotificationKinds
+import me.santiagoreina.parcheu.contract.PersonRef
+import me.santiagoreina.parcheu.contract.SendMessage
+import org.slf4j.LoggerFactory
+import java.time.Clock
+import java.time.Instant
+import java.util.UUID
+
+/**
+ * Chats y mensajes (E5.1, arquitectura.md §8.3). Postgres es la fuente de verdad; cada cambio se
+ * replica en Firestore con [mirror] y los mensajes nuevos se avisan con [notifier].
+ *
+ * Otras features crean los chats con [createDirect] (decisión mutua E4.6, presentaciones E6.2) y
+ * [createScenario] (modo escenario E4.8); el bloqueo (E8.1) los cierra con [close].
+ */
+class ChatService(
+    private val repo: ChatRepository,
+    private val mirror: ChatMirror,
+    private val notifier: Notifier,
+    private val policy: GraphVisibilityPolicy,
+    private val clock: Clock,
+) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    // --- creación (la usan otros dominios) ---------------------------------------------------
+
+    /** Chat DIRECT de [a] y [b] en [mode]; si ya existe lo devuelve (idempotente y seguro ante concurrencia). */
+    suspend fun createDirect(a: UUID, b: UUID, mode: Mode): ChatRecord {
+        if (a == b) throw ValidationFailed("Un chat necesita dos personas distintas")
+        if (repo.blockedBetween(a, b)) throw Blocked()
+        val result = repo.getOrCreateDirect(a, b, mode, clock.instant())
+        // Se escribe también si ya existía: repara el espejo si una escritura anterior falló.
+        mirror.upsertChat(result.chat.toDoc())
+        return result.chat
+    }
+
+    /** Chat SCENARIO (F3) del escenario [scenarioId] que termina en [endsAt]. */
+    suspend fun createScenario(a: UUID, b: UUID, mode: Mode, scenarioId: Int, endsAt: Instant): ChatRecord {
+        if (a == b) throw ValidationFailed("Un chat necesita dos personas distintas")
+        if (repo.blockedBetween(a, b)) throw Blocked()
+        val now = clock.instant()
+        if (!endsAt.isAfter(now)) throw ValidationFailed("endsAt debe ser futuro")
+        val chat = repo.create(NewChat(ChatType.SCENARIO, mode, listOf(a, b), now, scenarioId, endsAt))
+        mirror.upsertChat(chat.toDoc())
+        return chat
+    }
+
+    /** Cierra el chat (bloqueo, fin del escenario). Devuelve null si no existe. */
+    suspend fun close(chatId: UUID): ChatRecord? {
+        val chat = repo.setStatus(chatId, ChatStatus.CLOSED) ?: return null
+        mirror.upsertChat(chat.toDoc())
+        return chat
+    }
+
+    // --- rutas -------------------------------------------------------------------------------
+
+    /** `GET /v1/chats`: chats del usuario sin los de personas bloqueadas (en cualquier sentido). */
+    suspend fun list(viewer: UserRecord): List<ChatSummary> {
+        val blocked = repo.blockedEitherWay(viewer.id)
+        return repo.chatsOf(viewer.id)
+            .filter { row -> row.chat.members.none { it.userId in blocked } }
+            .map { row ->
+                val other = personRef(viewer.id, row.other, row.chat)
+                ChatSummary(
+                    id = row.chat.id.toString(),
+                    type = row.chat.type,
+                    mode = row.chat.mode,
+                    other = other,
+                    lastMessage = row.lastMessage?.let { toDto(it, viewer.id, other) },
+                    unread = row.unread,
+                    muted = row.chat.member(viewer.id)?.muted ?: false,
+                    endsAt = row.chat.endsAt?.toKotlin(),
+                    status = row.chat.status,
+                )
+            }
+    }
+
+    /**
+     * `POST /v1/chats/{id}/messages`. Valida membresía, suspensión, bloqueo, estado y longitud;
+     * guarda con `learnable` según el consentimiento vigente del autor para el modo del chat; escribe
+     * en Firestore y avisa a los demás miembros que no lo silenciaron. Repetir el `clientId` devuelve
+     * el mismo mensaje sin duplicarlo (y vuelve a escribir el mismo documento, por si el espejo falló).
+     */
+    suspend fun send(sender: UserRecord, chatId: UUID, request: SendMessage): MessageDto {
+        val clientId = request.clientId.trim()
+        if (clientId.isEmpty() || clientId.length > MAX_CLIENT_ID) throw ValidationFailed("clientId debe tener entre 1 y $MAX_CLIENT_ID caracteres")
+        val text = request.text.trim()
+        if (text.isEmpty()) throw ValidationFailed("El mensaje no puede estar vacío")
+        if (text.codePointCount(0, text.length) > MAX_TEXT) throw ValidationFailed("El mensaje admite máximo $MAX_TEXT caracteres")
+
+        val now = clock.instant()
+        sender.suspendedUntil?.let { if (it.isAfter(now)) throw Suspended() }
+        if (sender.isDemo) throw Forbidden("Los perfiles de demostración no escriben mensajes")
+
+        val chat = repo.chat(chatId) ?: throw NotFound("El chat no existe")
+        if (chat.member(sender.id) == null) throw Forbidden("No eres miembro de este chat")
+
+        repo.findByClientId(sender.id, clientId)?.let { existing ->
+            if (existing.chatId != chatId) throw Conflict("clientId ya se usó en otro chat")
+            mirror.upsertMessage(chatId, existing.toDoc(sender.firebaseUid))
+            return toOwnDto(existing)
+        }
+
+        val others = chat.members.filter { it.userId != sender.id }
+        if (others.any { repo.blockedBetween(sender.id, it.userId) }) throw Blocked()
+        when {
+            chat.type == ChatType.SCENARIO && (chat.status == ChatStatus.CLOSED || chat.endsAt?.isAfter(now) == false) -> throw ScenarioEnded()
+            chat.status == ChatStatus.CLOSED -> throw Forbidden("El chat está cerrado")
+        }
+
+        val learnable = repo.learningConsent(sender.id, chat.mode)
+        val saved = repo.saveMessage(NewMessage(chatId, sender.id, clientId, text, learnable, now))
+        if (saved.message.chatId != chatId) throw Conflict("clientId ya se usó en otro chat")
+        mirror.upsertMessage(chatId, saved.message.toDoc(sender.firebaseUid))
+        if (saved.inserted) notifyOthers(chat, sender, others, saved.message)
+        return toOwnDto(saved.message)
+    }
+
+    /** `POST /v1/chats/{id}/read`. */
+    suspend fun markRead(user: UserRecord, chatId: UUID) {
+        requireMember(user, chatId)
+        repo.markRead(chatId, user.id, clock.instant())
+    }
+
+    /** `POST /v1/chats/{id}/mute`. Silenciar nunca exige más que ser miembro (tampoco con bloqueo). */
+    suspend fun mute(user: UserRecord, chatId: UUID, muted: Boolean) {
+        requireMember(user, chatId)
+        repo.setMuted(chatId, user.id, muted)
+    }
+
+    // --- internos ----------------------------------------------------------------------------
+
+    private suspend fun requireMember(user: UserRecord, chatId: UUID): ChatRecord {
+        val chat = repo.chat(chatId) ?: throw NotFound("El chat no existe")
+        if (chat.member(user.id) == null) throw Forbidden("No eres miembro de este chat")
+        return chat
+    }
+
+    private suspend fun notifyOthers(chat: ChatRecord, sender: UserRecord, others: List<ChatMemberRecord>, message: MessageRecord) {
+        val senderPerson = repo.person(sender.id)
+        for (member in others.filterNot { it.muted }) {
+            val label = senderPerson?.let { personRef(member.userId, it, chat).label } ?: GraphVisibilityPolicy.ANON_LABEL
+            val notification = Notification(
+                kind = NotificationKinds.CHAT_MESSAGE,
+                title = label,
+                body = preview(message.text),
+                route = "parcheu://chat/${chat.id}",
+                actorId = if (chat.type == ChatType.DIRECT) sender.id else null,
+            )
+            // El aviso nunca rompe el envío: el mensaje ya está en Postgres y en Firestore.
+            runCatching { notifier.notify(member.userId, notification) }
+                .onFailure { log.warn("No se pudo avisar del mensaje {} del chat {}", message.id, chat.id, it) }
+        }
+    }
+
+    /**
+     * Cómo ve [viewer] al otro miembro. Un chat DIRECT solo existe tras la conexión mutua (nombre);
+     * en SCENARIO sigue anónimo ("Alguien de la UIS" con su `anonId`, sin uuid interno).
+     */
+    private fun personRef(viewer: UUID, other: PersonRow?, chat: ChatRecord): PersonRef {
+        if (other == null || other.deletedAt != null) return PersonRef(label = DELETED_LABEL, initials = DELETED_INITIALS)
+        val view = policy.present(viewer, other, connected = chat.type == ChatType.DIRECT, context = ViewContext.EGO)
+        return PersonRef(
+            id = view.id.takeUnless { view.anonymous },
+            anonId = view.id.takeIf { view.anonymous },
+            label = view.label,
+            initials = view.initials,
+            photoUrl = view.photoUrl,
+            isDemo = view.isDemo,
+        )
+    }
+
+    /** Mensaje visto por [viewer]: su propio id, o el id (o `anonId`) con el que ve al otro. */
+    private fun toDto(message: MessageRecord, viewer: UUID, other: PersonRef): MessageDto = MessageDto(
+        id = message.id.toString(),
+        senderId = when (message.senderId) {
+            null -> null
+            viewer -> viewer.toString()
+            else -> other.id ?: other.anonId
+        },
+        text = if (message.hidden) "" else message.text,
+        createdAt = message.createdAt.toKotlin(),
+        hidden = message.hidden,
+    )
+
+    private fun toOwnDto(message: MessageRecord) = MessageDto(
+        id = message.id.toString(),
+        senderId = message.senderId?.toString(),
+        text = if (message.hidden) "" else message.text,
+        createdAt = message.createdAt.toKotlin(),
+        hidden = message.hidden,
+    )
+
+    private fun ChatRecord.toDoc() = ChatDoc(id, members.map { it.firebaseUid }, type, mode, status, endsAt)
+
+    private fun MessageRecord.toDoc(senderUid: String) = MessageDoc(
+        id = id,
+        senderUid = senderUid,
+        system = false,
+        text = text,
+        createdAt = createdAt,
+        hidden = hidden,
+    )
+
+    private fun preview(text: String): String =
+        if (text.codePointCount(0, text.length) <= MAX_PREVIEW) text else text.substring(0, text.offsetByCodePoints(0, MAX_PREVIEW)) + "…"
+
+    companion object {
+        const val MAX_TEXT = 1000
+        const val MAX_CLIENT_ID = 64
+        const val MAX_PREVIEW = 100
+        const val DELETED_LABEL = "Usuario eliminado"
+        const val DELETED_INITIALS = "UE"
+    }
+}
+
+/** Tipo de consentimiento que permite aprender de los chats de [mode] (arquitectura.md §4). */
+internal fun learningKind(mode: Mode): ConsentKind = when (mode) {
+    Mode.AMISTAD -> ConsentKind.CHAT_LEARNING_AMISTAD
+    Mode.PAREJA -> ConsentKind.CHAT_LEARNING_PAREJA
+    Mode.ESTUDIO -> ConsentKind.CHAT_LEARNING_ESTUDIO
+}

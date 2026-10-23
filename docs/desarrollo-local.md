@@ -144,3 +144,13 @@ La mutación `memorias` hoy se ancla en `MemorySelection`; `TwinPromptBuilderDel
 La demo exige que el archivo a mutar no tenga cambios sin commit (lo restaura con `git checkout`).
 Una vista de terceros nueva se agrega en `ThirdPartyViews.registered` y con su sonda en
 `ThirdPartyViewProbes.byView`; sin ambas, `ThirdPartyViewRegistryTest` falla.
+
+## Chat (E5.1)
+
+**Emulador de Firestore (E5.1).** Las pruebas del espejo del chat (`ChatFirestoreEmulatorTest`, y `ChatDbTest` cuando también hay Postgres) solo corren si existe `FIRESTORE_EMULATOR_HOST`. El emulador no necesita Docker, pero sí Java 21:
+
+```bash
+cd firebase && npm ci
+JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
+  npx firebase emulators:exec --only firestore --project demo-parcheu "cd ../backend && ./gradlew test -PsinContenedores"
+```

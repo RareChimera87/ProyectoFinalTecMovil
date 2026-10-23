@@ -8,7 +8,12 @@ import me.santiagoreina.parcheu.api.ai.ExposedAiUsageStore
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.InMemoryAiUsageStore
 import me.santiagoreina.parcheu.api.billing.BillingRoutes
+import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.ChatRoutes
+import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
+import me.santiagoreina.parcheu.api.chat.FirestoreChatMirror
+import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
+import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
@@ -72,10 +77,12 @@ class AppContainer(
     val twin: TwinModule = inMemoryTwinModule(clock, ai),
     /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
     val graph: GraphModule = inMemoryGraphModule(clock),
-    /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, quota, twin, graph),
     /** Avisos (push + bandeja, E5.3). Los tests de otros dominios pasan un `FakeNotifier`. */
     val notifier: Notifier = NoopNotifier,
+    /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
+    val chat: ChatModule = inMemoryChatModule(clock, graph.policy, notifier),
+    /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
+    val domains: List<DomainRoutes> = allDomains(identity, quota, twin, graph, chat),
 ) {
     companion object {
         /**
@@ -109,9 +116,13 @@ class AppContainer(
             // En local no hay credenciales de FCM: se guarda el aviso y el envío es un Fake (E5.3).
             val fcm = if (local) FakeFcmClient() else FirebaseFcmClient(requireNotNull(config.firebaseProjectId))
             val notifier = FcmNotifier(ExposedPushStore(database), fcm, clock)
+            // En local no hay Firestore: el espejo del chat queda en memoria (Postgres sigue siendo la verdad).
+            val chatMirror =
+                if (local) InMemoryChatMirror() else FirestoreChatMirror.forProject(requireNotNull(config.firebaseProjectId))
+            val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, quota,
-                ai = ai, twin = twin, graph = graph, notifier = notifier,
+                ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
             )
         }
 
@@ -149,6 +160,7 @@ fun allDomains(
     quota: QuotaModule,
     twin: TwinModule,
     graph: GraphModule = inMemoryGraphModule(systemClock()),
+    chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity),
     TwinRoutes(twin),
@@ -158,7 +170,7 @@ fun allDomains(
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),
-    ChatRoutes(),
+    ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     NotificationsRoutes(),
     BillingRoutes(),
     SafetyRoutes(),

@@ -792,6 +792,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
 | Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
