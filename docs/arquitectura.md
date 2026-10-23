@@ -469,6 +469,8 @@ LIMIT 30;
 
 La afinidad mostrada es una **estimación** (similitud de rasgos, sección 7.3) y se rotula así. Gratis recibe solo `count`.
 
+Implementación (E6.3, `backend/.../graph/fof/`): `ExposedFofRepository` ejecuta esta consulta con tres ajustes para que coincida con lo que muestra el ego-grafo: `mine` va sin duplicados y solo con amigos visibles en segundo grado (no borrados, no HIDDEN, sin bloqueo con el observador; un amigo HIDDEN no genera sugerencias ni se cuenta), se excluye un bloqueo entre el amigo en común y el candidato, y se devuelven las aristas que conectan (`array_agg(DISTINCT me:mode)`) y los rasgos del candidato. Se leen hasta 200 filas (techo de costo); `FofService` (vista de terceros registrada en `ThirdPartyViews`) vuelve a filtrar con la policy, ordena por amigos en común, luego por la estimación (`SimulationScoring.traitSimilarity`, 50 si falta un gemelo) y devuelve `count` = todos y `items` = los 30 primeros solo a ParcheU+. El modo del candidato es el de la mayoría de sus aristas (Amistad si empatan). `InMemoryFofRepository` replica la semántica y una prueba de paridad la compara con el SQL en mundos al azar. En Android (`feature/parche/fof/`), D6 dibuja G0 con la capa fof (máximo 8 en el grafo, todos en la lista) y "Pedir presentación" llama a `POST /v1/introductions/request` (E6.4); el plan se deduce de la respuesta (`items` presente).
+
 ### 6.3 Comunidades
 - Job semanal (lunes 03:00 Bogotá) sobre aristas CONNECTED de Amistad y Estudio entre usuarios no HIDDEN ni borrados.
 - **Propagación de etiquetas ponderada** por afinidad, semilla fija, máximo 20 iteraciones, orden de visita determinista; O(aristas) por iteración, implementada en Kotlin (sin librerías).
