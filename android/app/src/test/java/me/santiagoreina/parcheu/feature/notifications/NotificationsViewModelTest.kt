@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.feature.notifications
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
@@ -110,6 +111,39 @@ class NotificationsViewModelTest {
         assertEquals(AppError.Network, loaded(vm).actionError)
         vm.onDismissError()
         assertNull(loaded(vm).actionError)
+    }
+
+    @Test
+    fun failedMarkAllReadKeepsItemsOpenedMeanwhileAndTheLatestRefresh() {
+        // Lo que devuelve el backend tras abrir 'n-result': ese ya leído y un aviso nuevo.
+        val refreshed =
+            inbox.copy(
+                today =
+                inbox.today.map { if (it.id == "n-result") it.copy(read = true) else it } +
+                    NotificationsSamples.twin.copy(id = "n-nuevo", read = false)
+            )
+        val gate = CompletableDeferred<Unit>()
+        val repo =
+            FakeNotificationsRepository(
+                ApiResult.Success(inbox),
+                ApiResult.Success(refreshed),
+                markReadResult = ApiResult.Failure(AppError.Network),
+                markAllGate = gate
+            )
+        val vm = NotificationsViewModel(repo)
+        vm.onMarkAllRead()
+        // Mientras 'Marcar leídas' está en vuelo: se abre un aviso (marcado bien) y llega un refresco.
+        vm.onOpen(NotificationsSamples.resultReady)
+        vm.load()
+        gate.complete(Unit)
+
+        val state = loaded(vm)
+        assertEquals(AppError.Network, state.actionError)
+        assertTrue(state.all.first { it.id == "n-result" }.read)
+        assertTrue(state.all.any { it.id == "n-nuevo" })
+        assertEquals(inbox.today.size + 1, state.inbox.today.size)
+        // Vuelven a no leídas solo las que lo eran antes y nadie abrió.
+        assertEquals(2, state.all.count { !it.read && it.id != "n-nuevo" })
     }
 
     @Test

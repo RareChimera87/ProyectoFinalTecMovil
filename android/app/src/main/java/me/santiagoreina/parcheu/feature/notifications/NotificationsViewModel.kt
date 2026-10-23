@@ -45,7 +45,8 @@ sealed interface NotificationsEffect {
 /**
  * C2 (E5.4). Carga la bandeja al entrar. Tocar un aviso lo marca como leído y abre su ruta con la misma
  * tabla del push ([DeepLinks], E5.3); un aviso bloqueado abre el paywall (G1). 'Marcar leídas' marca
- * todas de forma optimista y lo deshace si el backend falla.
+ * todas de forma optimista y, si el backend falla, vuelve a no leídas solo las que lo eran y nadie abrió
+ * mientras tanto (sobre la bandeja actual, sin pisar un refresco).
  */
 class NotificationsViewModel(private val repository: NotificationsRepository) : ViewModel() {
     private val _state = MutableStateFlow<NotificationsUiState>(NotificationsUiState.Loading)
@@ -53,6 +54,9 @@ class NotificationsViewModel(private val repository: NotificationsRepository) : 
 
     private val _effects = Channel<NotificationsEffect>(Channel.BUFFERED)
     val effects: Flow<NotificationsEffect> = _effects.receiveAsFlow()
+
+    /** Ids marcados leídos al abrirlos; un 'Marcar leídas' fallido no los revierte. */
+    private val openedIds = mutableSetOf<String>()
 
     init {
         load()
@@ -76,6 +80,7 @@ class NotificationsViewModel(private val repository: NotificationsRepository) : 
     /** Abre el aviso: lo marca leído (best effort) y navega a su destino; si el destino es C2, se queda. */
     fun onOpen(item: NotificationDto) {
         if (!item.read) {
+            openedIds += item.id
             update {
                 it.copy(
                     inbox = it.inbox.mapItems { n ->
@@ -105,13 +110,20 @@ class NotificationsViewModel(private val repository: NotificationsRepository) : 
     fun onMarkAllRead() {
         val loaded = _state.value as? NotificationsUiState.Loaded ?: return
         if (loaded.unread == 0) return
-        val before = loaded.inbox
+        val wasUnread = loaded.all.filterNot { it.read }.map { it.id }.toSet()
         _state.value =
-            loaded.copy(inbox = before.mapItems { it.copy(read = true) }, actionError = null)
+            loaded.copy(inbox = loaded.inbox.mapItems { it.copy(read = true) }, actionError = null)
         viewModelScope.launch {
             val result = repository.markRead(null)
             if (result is ApiResult.Failure) {
-                update { it.copy(inbox = before, actionError = result.error) }
+                update {
+                    it.copy(
+                        inbox = it.inbox.mapItems { n ->
+                            if (n.id in wasUnread && n.id !in openedIds) n.copy(read = false) else n
+                        },
+                        actionError = result.error
+                    )
+                }
             }
         }
     }
