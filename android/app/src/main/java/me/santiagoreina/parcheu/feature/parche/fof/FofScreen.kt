@@ -1,0 +1,368 @@
+package me.santiagoreina.parcheu.feature.parche.fof
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import me.santiagoreina.parcheu.contract.FofCandidate
+import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
+import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCardVariant
+import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
+import me.santiagoreina.parcheu.designsystem.components.base.ParcheUPlusBadge
+import me.santiagoreina.parcheu.designsystem.components.compound.AvatarInitials
+import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
+import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
+import me.santiagoreina.parcheu.designsystem.components.compound.LoadingDots
+import me.santiagoreina.parcheu.designsystem.components.compound.LockedOverlay
+import me.santiagoreina.parcheu.designsystem.components.compound.LockedPlaceholder
+import me.santiagoreina.parcheu.designsystem.graph.GraphFof
+import me.santiagoreina.parcheu.designsystem.graph.PU_GRAPH_DEFAULT_SIZE
+import me.santiagoreina.parcheu.designsystem.graph.PuGraph
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.feature.parche.ParcheIcon
+import me.santiagoreina.parcheu.feature.parche.parcheIconPainter
+import me.santiagoreina.parcheu.feature.parche.toGraphNode
+
+/** Etiquetas de prueba de D6/D7. */
+object FofTags {
+    const val ROOT = "fof_root"
+    const val LOCKED = "fof_locked"
+    const val LIST = "fof_list"
+    const val EMPTY = "fof_empty"
+    const val MESSAGE = "fof_message"
+
+    fun card(anonId: String) = "fof_card_$anonId"
+}
+
+/** Cuántos amigos de amigos se dibujan en la capa de G0 (la lista los muestra todos). */
+const val MAX_GRAPH_FOF = 8
+
+/** Etiqueta con la que el servidor enmascara a una persona ANONYMOUS ("Alguien" o "Alguien de la UIS"). */
+private const val ANON_LABEL = "Alguien"
+
+/** true si el servidor mandó al candidato enmascarado (sin nombre). */
+val FofCandidate.isAnonymous: Boolean
+    get() = label == ANON_LABEL || label.startsWith("$ANON_LABEL de la ")
+
+/** Nodo de la capa fof de G0 (sin conexión de origen: el contrato no la trae). */
+fun FofCandidate.toGraphFof(): GraphFof = GraphFof(
+    id = anonId,
+    parentId = null,
+    name = if (isAnonymous) ANON_LABEL else label,
+    initials = if (isAnonymous) "A" else label.firstOrNull()?.uppercase() ?: "A",
+    affinity = estimatedAffinity,
+    anonymous = isAnonymous
+)
+
+/** "1 amigo en común" / "3 amigos en común". */
+fun mutualsText(mutuals: Int): String =
+    if (mutuals == 1) "1 amigo en común" else "$mutuals amigos en común"
+
+/** Acciones de D6/D7. */
+data class FofCallbacks(
+    val onBack: () -> Unit = {},
+    val onUnlock: () -> Unit = {},
+    val onRetry: () -> Unit = {},
+    val onRequestIntroduction: (String) -> Unit = {}
+)
+
+/** D6 (ParcheU+) y D7 (gratis, borroso con candado). Pantalla hija: sin NavBar. */
+@Composable
+fun FofScreen(
+    state: FofUiState,
+    callbacks: FofCallbacks,
+    modifier: Modifier = Modifier,
+    animate: Boolean = true
+) {
+    val colors = ParcheUTheme.colors
+    Column(modifier = modifier.fillMaxSize().background(colors.bg).testTag(FofTags.ROOT)) {
+        ParcheUChildTopBar(
+            title = "Amigos de amigos",
+            navigationIcon = rememberVectorPainter(FofIcons.Back),
+            navigationContentDescription = "Volver",
+            onNavigationClick = callbacks.onBack,
+            action = { if (state is FofUiState.Unlocked) ParcheUPlusBadge() }
+        )
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when (state) {
+                FofUiState.Loading ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        LoadingDots(animated = animate)
+                    }
+                is FofUiState.Error ->
+                    ErrorState(
+                        title = "No pudimos cargar amigos de amigos",
+                        message = state.error.fofMessage(),
+                        retryLabel = "Reintentar",
+                        onRetryClick = callbacks.onRetry,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                is FofUiState.Locked -> LockedContent(state, callbacks)
+                is FofUiState.Unlocked -> UnlockedContent(state, callbacks)
+            }
+        }
+    }
+}
+
+/** D7: el bloqueo no recibe ningún dato real (el servidor solo manda el conteo). */
+@Composable
+private fun LockedContent(state: FofUiState.Locked, callbacks: FofCallbacks) {
+    val colors = ParcheUTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp)
+            .padding(top = 4.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        LockedOverlay(
+            title = lockedTitle(state.count),
+            actionLabel = "Ver ParcheU+",
+            onActionClick = callbacks.onUnlock,
+            lockIcon = parcheIconPainter(ParcheIcon.Lock),
+            placeholder = LockedPlaceholder.Graph,
+            modifier = Modifier.height(320.dp).testTag(FofTags.LOCKED)
+        )
+        Text(
+            text =
+            "Con ParcheU+ ves a los amigos de tus amigos que son compatibles contigo y puedes " +
+                "pedir que te los presenten.",
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+            color = colors.mu,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        ParcheUCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "GRATIS TIENES",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.6.sp
+                ),
+                color = colors.mu
+            )
+            IncludedRow("Tu grafo con tus contactos directos")
+            IncludedRow("Presentar a dos amigos")
+        }
+    }
+}
+
+/** Título del bloqueo: con el conteo si hay candidatos. */
+fun lockedTitle(count: Int): String = when {
+    count <= 0 -> "Mira a las personas afines a 2 pasos de ti"
+    count == 1 -> "Hay 1 persona a 2 pasos de ti"
+    else -> "Hay $count personas a 2 pasos de ti"
+}
+
+@Composable
+private fun IncludedRow(text: String) {
+    val colors = ParcheUTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            painter = rememberVectorPainter(FofIcons.Check),
+            contentDescription = null,
+            tint = colors.prt,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+            color = colors.tx,
+            modifier = Modifier.padding(start = 10.dp)
+        )
+    }
+}
+
+/** D6: G0 con la capa fof y la lista de candidatos. */
+@Composable
+private fun UnlockedContent(state: FofUiState.Unlocked, callbacks: FofCallbacks) {
+    val content = state.content
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val graphSize = minOf(PU_GRAPH_DEFAULT_SIZE, maxWidth - 32.dp)
+            PuGraph(
+                nodes = content.nodes.map { it.toGraphNode() },
+                size = graphSize,
+                fof = content.candidates.take(MAX_GRAPH_FOF).map { it.toGraphFof() }
+            )
+        }
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            state.message?.let {
+                InfoNote(text = it, modifier = Modifier.testTag(FofTags.MESSAGE))
+            }
+            if (content.candidates.isEmpty()) {
+                EmptyFof()
+            } else {
+                Column(
+                    modifier = Modifier.testTag(FofTags.LIST),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    content.candidates.forEach { candidate ->
+                        FofCard(
+                            candidate = candidate,
+                            requested = candidate.anonId in state.requested,
+                            sending = state.sending == candidate.anonId,
+                            onRequest = { callbacks.onRequestIntroduction(candidate.anonId) }
+                        )
+                    }
+                }
+            }
+            FootNote(
+                "La afinidad es una estimación por los rasgos de sus gemelos; simulen para " +
+                    "conocer la real."
+            )
+            FootNote("Los vínculos de Pareja nunca aparecen en el grafo de otras personas.")
+        }
+    }
+}
+
+@Composable
+private fun EmptyFof() {
+    val colors = ParcheUTheme.colors
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag(FofTags.EMPTY),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            "Aún no hay amigos de amigos",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = colors.tx,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            "Cuando tus amigos conecten con más gente, aquí verás a quienes te quedan a 2 pasos.",
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+            color = colors.mu,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/** FriendOfFriendCard: avatar, "Alguien · 87 % afín", amigos en común y "Pedir presentación". */
+@Composable
+private fun FofCard(
+    candidate: FofCandidate,
+    requested: Boolean,
+    sending: Boolean,
+    onRequest: () -> Unit
+) {
+    val colors = ParcheUTheme.colors
+    val name = if (candidate.isAnonymous) ANON_LABEL else candidate.label
+    ParcheUCard(
+        variant = ParcheUCardVariant.Suggestion,
+        modifier = Modifier.fillMaxWidth().testTag(FofTags.card(candidate.anonId))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            AvatarInitials(
+                name = name,
+                affinity = candidate.estimatedAffinity,
+                size = 40.dp,
+                anonymous = candidate.isAnonymous,
+                anonymousIcon = parcheIconPainter(ParcheIcon.Person)
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "$name · ${candidate.estimatedAffinity} % afín",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = colors.tx,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${mutualsText(candidate.mutuals)} · afinidad estimada",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                    color = colors.mu,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            val enabled = !requested && !sending
+            Text(
+                text = when {
+                    requested -> "Pedida"
+                    sending -> "Pidiendo…"
+                    else -> "Pedir presentación"
+                },
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = if (enabled) colors.prt else colors.mu,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .widthIn(max = 96.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = enabled, role = Role.Button, onClick = onRequest)
+                    .heightIn(min = 48.dp)
+                    .wrapContentHeight()
+                    .padding(horizontal = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun FootNote(text: String) {
+    val colors = ParcheUTheme.colors
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            painter = rememberVectorPainter(FofIcons.Shield),
+            contentDescription = null,
+            tint = colors.mu,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+            color = colors.mu,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
+}
