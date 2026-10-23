@@ -1,0 +1,89 @@
+name: backend-ci
+
+# E0.6. Tests del backend con Testcontainers (Docker sí existe en el runner) y build de la
+# imagen con Jib sin daemon (jibBuildTar). Mismo patrón que android-ci: el check
+# `backend-ci` siempre reporta y el trabajo solo corre si el PR toca backend/ o contract/.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cambios:
+    name: backend-cambios
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      existe: ${{ steps.existe.outputs.existe }}
+      backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filtro.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filtro
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'contract/**'
+              - '.github/workflows/backend-ci.yml'
+      - name: Comprueba que existe backend/
+        id: existe
+        run: |
+          if [[ -f "backend/gradlew" ]]; then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No existe backend/gradlew en esta rama (solo un README o nada): se omite la verificación hasta que lleguen los cimientos."
+          fi
+
+  verificar:
+    name: backend-verificar
+    needs: cambios
+    if: needs.cambios.outputs.backend == 'true' && needs.cambios.outputs.existe == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # 17 para el contrato; 21 para el backend (queda como JAVA_HOME).
+          java-version: |
+            17
+            21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests (con Testcontainers) e imagen Jib
+        working-directory: backend
+        run: ./gradlew --stacktrace test jibBuildTar
+      - name: Reportes de tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-reportes
+          path: |
+            backend/build/reports/
+            backend/build/test-results/
+          retention-days: 7
+
+  backend-ci:
+    name: backend-ci
+    needs: [cambios, verificar]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resultado
+        env:
+          CAMBIOS: ${{ needs.cambios.result }}
+          VERIFICAR: ${{ needs.verificar.result }}
+        run: |
+          echo "cambios=$CAMBIOS verificar=$VERIFICAR"
+          [[ "$CAMBIOS" == success ]] || exit 1
+          [[ "$VERIFICAR" == success || "$VERIFICAR" == skipped ]] || exit 1

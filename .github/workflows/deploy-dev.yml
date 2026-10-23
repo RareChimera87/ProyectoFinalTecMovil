@@ -1,0 +1,30 @@
+name: deploy-dev
+
+# E0.6. Push a dev que toca el backend o el contrato: Jib -> Artifact Registry -> job migrate
+# -> API en Cloud Run de parcheu-dev -> humo de /v1/health con el SHA (flujo en _desplegar-api.yml).
+# workflow_dispatch sirve para redesplegar a mano (p. ej. si el merge lo hizo el GITHUB_TOKEN).
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "backend/**"
+      - "contract/**"
+      - ".github/workflows/deploy-dev.yml"
+      - ".github/workflows/_desplegar-api.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  api:
+    name: deploy-dev
+    if: github.ref == 'refs/heads/dev'
+    uses: ./.github/workflows/_desplegar-api.yml
+    with:
+      entorno: dev
+      proyecto: ${{ vars.GCP_PROJECT_DEV || 'parcheu-dev' }}
+    secrets:
+      wif_provider: ${{ secrets.WIF_PROVIDER }}
+      wif_service_account: ${{ secrets.WIF_SERVICE_ACCOUNT_DEV }}
