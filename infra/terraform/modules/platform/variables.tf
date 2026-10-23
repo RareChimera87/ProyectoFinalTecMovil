@@ -123,6 +123,14 @@ variable "rtdn_push_enabled" {
   type        = bool
 }
 
+# --- Usuarios demo (ADR-0027, E4.9) --------------------------
+
+variable "demo_users_enabled" {
+  description = "DEMO_USERS_ENABLED de la api y de los jobs: true en dev y durante la prueba cerrada; false en la 1.0."
+  type        = bool
+  default     = false
+}
+
 # --- Monitoreo -------------------------------------------------
 
 variable "scheduler_time_zone" {
