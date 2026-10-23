@@ -152,9 +152,18 @@ data object ManageSubscription : AppRoute
 
 // H. Seguridad y privacidad
 
-/** H1/H2 · Reportar o bloquear, motivos y confirmaciones. */
+/**
+ * H2 · Reportar (motivos) y la confirmación de reporte enviado. H1 es una hoja que abre la pantalla de
+ * origen (`SafetySheetHost`) y navega aquí al elegir "Reportar". [userId] es el uuid o, si [anonymous],
+ * el `anonId` con el que se ve a la persona; [name] es su etiqueta en esa pantalla (E8.1).
+ */
 @Serializable
-data class Report(val userId: String, val chatId: String? = null) : AppRoute
+data class Report(
+    val userId: String,
+    val chatId: String? = null,
+    val name: String? = null,
+    val anonymous: Boolean = false
+) : AppRoute
 
 /** H3 · Ajustes de privacidad. */
 @Serializable

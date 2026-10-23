@@ -42,6 +42,8 @@ class InMemoryMatchingRepository(
 
     fun block(blocker: UUID, blocked: UUID) = synchronized(blocks) { blocks += blocker to blocked }
 
+    fun unblock(blocker: UUID, blocked: UUID) = synchronized(blocks) { blocks -= blocker to blocked }
+
     fun connect(a: UUID, b: UUID) = synchronized(connections) { connections += setOf(a, b) }
 
     /** Chats SCENARIO creados hasta ahora. */
