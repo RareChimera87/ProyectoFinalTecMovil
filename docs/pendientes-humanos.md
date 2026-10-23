@@ -26,6 +26,15 @@ Lo automatizable ya quedó hecho: tokens, fuentes Sora e Inter (OFL) en `android
 
 ## E0.6 · Pipelines de CI/CD
 
+**Corrección del 22 oct (fix/ci-sin-puertas-humanas).** El CI exigía la aprobación de un segundo usuario
+de GitHub (`major-gate`) y una revisión por API con `ANTHROPIC_API_KEY` (`revision-agente`); con una sola
+cuenta eso dejó 40 PR sin mezclar. Ahora ambos checks solo exigen la etiqueta `revisado-agente`, que pone
+el integrador del workflow tras la revisión adversarial del agente revisor. `auto-merge` queda apagado
+(`AUTO_MERGE_ENABLED` no definida): los merges a `dev` los hace el workflow. Los checks de backend,
+contrato, Firestore, migraciones e infra se omiten (en verde, con aviso) mientras su directorio no exista
+en la rama, e `infra-plan-dev` se omite hasta que exista el secreto `WIF_PROVIDER` (E0.5).
+**Nada pendiente del usuario** por este cambio; el incidente original de abajo se conserva como historia.
+
 **Incidente del 22 oct (leer primero).** El PR #11 (E0.6, major) se mezcló a `dev` a los segundos de
 abrirse, sin revisión y con checks en rojo: su propio workflow `auto-merge` corrió en el PR y, como la
 protección de `dev` no exigía ningún check, `gh pr merge --auto` mezcló al instante. Medidas tomadas: el

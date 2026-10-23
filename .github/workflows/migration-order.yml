@@ -22,6 +22,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      existe: ${{ steps.existe.outputs.existe }}
       migraciones: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filtro.outputs.migraciones }}
     steps:
       - uses: actions/checkout@v4
@@ -34,11 +35,20 @@ jobs:
               - 'scripts/check-migration-order.sh'
               - 'scripts/test/**migration**'
               - '.github/workflows/migration-order.yml'
+      - name: Comprueba que existe backend/src/main/resources/db/migration/
+        id: existe
+        run: |
+          if [[ -d "backend/src/main/resources/db/migration" ]]; then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No existe backend/src/main/resources/db/migration/ en esta rama: se omite la verificación (los cimientos aún no están integrados)."
+          fi
 
   verificar:
     name: migration-verificar
     needs: cambios
-    if: needs.cambios.outputs.migraciones == 'true'
+    if: needs.cambios.outputs.migraciones == 'true' && needs.cambios.outputs.existe == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
