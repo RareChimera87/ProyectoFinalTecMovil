@@ -70,6 +70,7 @@ class InMemorySimulationRepository(scenarios: List<ScenarioDef> = DefaultScenari
     ): SimulationRecord? = synchronized(lock) {
         simulations.values
             .filter { it.id != excluding && it.mode == mode && it.status == SimulationStatus.DONE && it.score != null }
+            .filter { it.origin != SimulationOrigin.INTRODUCTION }
             .filter { it.finishedAt != null && it.finishedAt > since }
             .filter {
                 (it.userA == userA && it.twinVersionA == versionA && it.userB == userB && it.twinVersionB == versionB) ||

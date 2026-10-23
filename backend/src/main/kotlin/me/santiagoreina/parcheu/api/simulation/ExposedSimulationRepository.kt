@@ -165,7 +165,8 @@ class ExposedSimulationRepository(private val db: Database) : SimulationReposito
         Simulations.selectAll()
             .where {
                 samePair and (Simulations.mode eq mode) and (Simulations.status eq SimulationStatus.DONE) and
-                    (Simulations.finishedAt greater since.odt()) and (Simulations.id neq excluding)
+                    (Simulations.finishedAt greater since.odt()) and (Simulations.id neq excluding) and
+                    (Simulations.origin neq SimulationOrigin.INTRODUCTION)
             }
             .orderBy(Simulations.finishedAt to SortOrder.DESC)
             .limit(1)
