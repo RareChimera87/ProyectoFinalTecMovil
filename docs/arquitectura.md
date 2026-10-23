@@ -766,6 +766,8 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | foojay-resolver-convention (plugin de settings) | 1.0.0 (fijada en contract/ y backend/) | Toolchains JDK |
 | Jib Gradle plugin | 3.5.4 (fijada en E0.3; compatible con Gradle 9.6; base `eclipse-temurin:21-jre`) | Imagen |
 | Gradle Play Publisher | 3.12.x (verificar compatibilidad con AGP 9) | Subida a Play |
+| Terraform / provider google, google-beta | 1.15 / 7.x (verificar) | Infra |
+| `@firebase/rules-unit-testing` | 6.0.0 (con `firebase` 13.1.0 y Node 24; el emulador pide Java 21) | Tests de reglas |
 | Terraform / provider google, google-beta | 1.15.9 / 7.46.1 (fijado en E0.5, `.terraform.lock.hcl`) | Infra |
 | `@firebase/rules-unit-testing` | 4.x (verificar) | Tests de reglas |
 
