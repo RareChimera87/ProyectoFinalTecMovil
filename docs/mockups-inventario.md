@@ -370,6 +370,7 @@ Basado en las notas de cada inventario parcial (el texto íntegro de los requisi
 - **Exportación (H4) frente a E8.3:** el mockup envía un **enlace al correo** (7 días) con formato JSON o **PDF**; E8.3 especifica `GET /v1/me/export` en JSON descargado en el teléfono con `ACTION_CREATE_DOCUMENT` o la hoja de compartir, y así quedó implementado (#59). El PDF y el envío por correo no están en el alcance; tampoco la selección por categorías (la API exporta todo). La categoría "Chats" desmarcada por defecto choca con E8.3, que incluye los mensajes propios.
 - **Borrado (H5) frente a E8.3:** el mockup promete "Tienes 14 días para arrepentirte iniciando sesión"; E8.3 hace borrado lógico inmediato y purga con `purge-user` sin periodo de gracia. La confirmación del mockup es escribir 'BORRAR'; la implementación de #59 usa la casilla 'Entiendo que no se puede deshacer'. Decidir cuál manda antes de cambiar el código.
 - **Anotación de H4:** dice "Borrar mi cuenta → 24b" pero la pantalla no tiene ese botón.
+- **Resolución (2026-10-23):** la diferencia de H4/H5 con E8.3 se resolvió a favor del código (#59 y #62). El mockup H4/H5 queda como implementación futura post-1.0; ver la ficha [E8.3](backlog.md#e83--borrado-y-exportación-de-cuenta).
 - **Fechas y precios hardcodeados** ("lunes 26 de octubre", "21 de octubre de 2027", $45.000, $5.000, $3.750/mes; en H4/H5: correo, "Nivel 6 · 24 aprendizajes", "9 conexiones", "14 simulaciones") deben venir del backend y de Play Billing.
 
 ### 6.4 Pantallas referenciadas en los mockups que no existen
