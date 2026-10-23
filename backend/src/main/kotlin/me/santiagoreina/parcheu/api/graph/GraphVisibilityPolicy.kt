@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.graph
 
+import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
@@ -116,6 +117,8 @@ object ThirdPartyViews {
     val registered: Set<KClass<out ThirdPartyView>> = setOf(
         // Sugerencias de Inicio (E4.7): el conteo de amigos en común lee aristas del candidato.
         HomeSuggestions::class,
+        // Amigos de amigos (E6.3): candidatos a dos saltos y las aristas que los conectan.
+        FofService::class,
     )
 
     fun names(): Set<String> = registered.mapNotNull { it.simpleName }.toSet()

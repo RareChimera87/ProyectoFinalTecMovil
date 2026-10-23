@@ -6,6 +6,8 @@ import me.santiagoreina.parcheu.api.graph.GraphService
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.ThirdPartyView
 import me.santiagoreina.parcheu.api.graph.ViewContext
+import me.santiagoreina.parcheu.api.graph.fof.FofService
+import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
 import me.santiagoreina.parcheu.contract.Mode
 import java.util.UUID
@@ -32,6 +34,7 @@ interface ThirdPartyViewProbe {
 object ThirdPartyViewProbes {
     val byView: Map<KClass<out ThirdPartyView>, ThirdPartyViewProbe> = mapOf(
         HomeSuggestions::class to HomeSuggestionsProbe,
+        FofService::class to FofProbe,
     )
 
     val reference: List<ThirdPartyViewProbe> = listOf(ThirdPartyNodesProbe, EgoGraphProbe)
@@ -110,5 +113,28 @@ object HomeSuggestionsProbe : ThirdPartyViewProbe {
             .flatMap { it.mutuals.orEmpty() }
             .map { ExposedEdge(it.candidateId, it.mutualId, it.mode) }
         return Exposure(personIds = edges.map { it.bId }, edges = edges)
+    }
+}
+
+/**
+ * Amigos de amigos (E6.3) con ParcheU+ (el caso que entrega la lista). Expone a cada candidato por su
+ * id público y las aristas amigo en común–candidato que entran en `mutuals`, en segundo grado: nunca
+ * Pareja ajena, HIDDEN, bloqueados ni borrados, y el candidato siempre con su `anonId` (nunca hay
+ * conexión mutua con él).
+ */
+object FofProbe : ThirdPartyViewProbe {
+    override val name = "amigos de amigos"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val graph = world.toGraphRepository()
+        val view = FofService(InMemoryFofRepository(graph), graph, GraphVisibilityPolicy(signer), isPlus = { true })
+        val candidates = view.candidates(viewer)
+        val dto = view.fof(viewer)
+        val edges = candidates.flatMap { it.edges }.map { ExposedEdge(it.candidateId, it.mutualId, it.mode) }
+        return Exposure(
+            personIds = candidates.map { it.person.id } + dto.items.orEmpty().map { it.anonId },
+            edges = edges,
+        )
     }
 }
