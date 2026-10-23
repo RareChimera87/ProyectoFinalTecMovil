@@ -410,10 +410,10 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | GET `/v1/graph/history` | - | `HistoryDto{months: List<MonthSnapshot{month, connections, newConnections, nodes}>, moments: List<Moment>}` | PLUS_REQUIRED |
 | GET `/v1/communities` | - | `CommunitiesDto{count, items?: List<CommunityDto{id, name, members: List<PersonRef>, size, traits}>}` | - |
 | GET `/v1/connect-requests` | - | `ConnectRequestsDto{count, items?: List<ConnectRequest{simulationId, other, affinity}>}` | - |
-| POST `/v1/introductions` | `Introduce{mode, userA, userB}` | 202 `IntroductionDto{id, status, simulationId}` | VALIDATION, FORBIDDEN, QUOTA_EXCEEDED |
-| GET `/v1/introductions/{id}` | - | `IntroductionDto{..., report: ReportDto?, myResponse?}` | NOT_FOUND |
-| POST `/v1/introductions/{id}/response` | `IntroResponse{interested}` | `IntroductionDto` | CONFLICT |
-| POST `/v1/introductions/request` | `IntroRequest{anonId}` | 202 | PLUS_REQUIRED |
+| POST `/v1/introductions` | `Introduce{mode, userA, userB}` | 202 `IntroductionDto{id, status, simulationId}` | VALIDATION, FORBIDDEN, BLOCKED, QUOTA_EXCEEDED, CONFLICT (ya hay una en curso) |
+| GET `/v1/introductions/{id}` | - | `IntroductionDto{..., report: ReportDto?, myResponse?, introduced}` | NOT_FOUND |
+| POST `/v1/introductions/{id}/response` (quien presenta: enviar o 'No por ahora'; cada persona presentada: 'Me interesa' o 'No, gracias') | `IntroResponse{interested}` | `IntroductionDto` | CONFLICT, BLOCKED |
+| POST `/v1/introductions/request` | `IntroRequest{anonId}` | 202 | PLUS_REQUIRED, NOT_FOUND |
 | GET `/v1/invites/me` | - | `InviteDto{code, link}` | - |
 | POST `/v1/invites/redeem` | `Redeem{code, mode}` | `RedeemResult{status: PENDING\|CONNECTED, other: PersonRef}` | VALIDATION, BLOCKED, NOT_FOUND |
 | POST `/v1/invites/{userId}/accept` | - | `RedeemResult` | NOT_FOUND |
@@ -446,6 +446,8 @@ Nota: tras un match, `GET /v1/match/queue` sigue devolviendo el ticket `MATCHED`
 - Detalles de E3.1: un `NodeDto` por persona; su `id` es el `users.id` si hay CONNECTED en algún modo y el `anonId` (`a_` + 22 caracteres base64url de la HMAC-SHA256) si no, y `GET /v1/graph/nodes/{id}` solo acepta ese mismo id (el uuid de un anónimo da 404). El modo, estado y afinidad del nodo son los de su arista principal (CONNECTED > PENDING > SIMULATED, luego mayor afinidad). `stats` describe el subgrafo filtrado y cuenta personas (`connections` = personas con alguna arista CONNECTED; `avgAffinity` promedia las aristas con afinidad). `community` solo filtra si el observador es miembro (si no, grafo vacío).
 - `EdgeService` (E3.1) es la única puerta de escritura de `edges`: `Simulated` (crea SIMULATED o actualiza afinidad y `last_simulation_id`), `InterestShown` (invitación de E6.1, donde el interés es explícito: PENDING; la decisión unilateral de E4.6 no la emite), `Connected` (decisión mutua, invitación o presentación aceptada: CONNECTED con `connected_at`) y `Declined` (PENDING vuelve a SIMULATED, o se borra si nunca hubo simulación). CONNECTED nunca baja de estado por estos eventos y no se crean aristas entre usuarios con un bloqueo.
 - **Suite de invariantes (E3.5, ADR-0012):** `ThirdPartyViews.registered` es un conjunto declarativo de clases (`KClass<out ThirdPartyView>`). Cada feature de vista de terceros (fof E6.3, comunidades E6.2, presentaciones E6.4, sugerencias E4.7) agrega allí su clase **y** una sonda en `backend/src/test/.../privacy/ThirdPartyViewProbes.byView` que carga un mundo aleatorio en sus repositorios en memoria y traduce su respuesta a una `Exposure`. `ThirdPartyViewRegistryTest` escanea `build/classes/kotlin/main` y falla si una implementación no está registrada o no tiene sonda. `PrivacyInvariantsTest` corre 1.000 mundos por sonda (más la sonda de referencia "nodos de terceros" que solo filtra con la policy, y el ego-grafo) e imprime la semilla (`PRIVACY_SEED=<n>` la reproduce). `scripts/demo-mutacion-privacidad.sh [pareja|memorias|ninguna]` aplica una mutación, corre la suite y restaura el archivo.
+
+- **Presentaciones (E6.2, `social/introductions`).** La presentación y su simulación `INTRODUCTION` comparten id, así que el cupo de quien presenta lleva `usage_events.ref_id = introductionId` y la devolución automática del motor (FAILED) lo alcanza; a las personas presentadas no se les cobra. Al terminar la simulación solo se avisa a quien presenta (`IntroductionSimulationNotifier`, `INTRODUCTION_READY`), que ve el informe con la regla del informe mensual (puede usar su informe del mes con `POST /v1/simulations/{id}/report:unlock`) y decide si envía la propuesta (`INTRODUCTION_PROPOSAL` a cada una). Estados vistos por quien consulta: SIMULATING → READY (solo quien presenta) → PROPOSED → CONNECTED; DECLINED solo lo ve quien dijo que no (o quien presenta si eligió 'No por ahora'); FAILED si la simulación falló. Un 'No, gracias' ajeno nunca se revela. Ambos 'Me interesa' → `EdgeEvent.Connected(INTRODUCTION)`, chat DIRECT y `NEW_CONNECTION`. `IntroductionPeople` es la vista de terceros registrada en la suite (la otra persona presentada y los amigos de amigos de 'Pedir presentación'); una persona HIDDEN no se puede presentar (403 FORBIDDEN). 'Pedir presentación' (ParcheU+) resuelve el `anonId` entre los amigos de amigos (sin aristas de Pareja, HIDDEN, bloqueados ni borrados), guarda un `intro_request` PENDING y avisa al amigo en común (`INTRODUCTION_REQUEST`); la respuesta 202 no lleva ningún id.
 
 ### 6.2 Amigos de amigos (2 saltos)
 
@@ -616,6 +618,8 @@ Mensajes de datos con `type` y `route`; canales Android `chat`, `resultados`, `s
 | `CONNECT_REQUEST` | social | `parcheu://notifications` | Notifications (C2) | Notifications (C2) |
 | `NEW_CONNECTION` | social | `parcheu://parche` | Parche (D1) | Parche (D1) |
 | `INTRODUCTION_PROPOSAL` | social | `parcheu://intro/{id}` | IntroProposal (E3) | Notifications (C2) |
+| `INTRODUCTION_READY` (a quien presenta: simulación lista o fallida, E6.2) | social | `parcheu://intro-result/{id}` | IntroResult (E2) | Notifications (C2) |
+| `INTRODUCTION_REQUEST` (al amigo en común: 'Pedir presentación', E6.2) | social | `parcheu://introduce` | Introduce (E1) | Introduce (E1) |
 | `INVITE_PENDING` | social | `parcheu://add-friends` | AddFriends (C5) | AddFriends (C5) |
 | `COMMUNITY` | social | `parcheu://communities` | Communities (D8) | Communities (D8) |
 | `CHAT_MESSAGE` | chat | `parcheu://chat/{chatId}` | Chat (F9) | ChatList |
