@@ -29,7 +29,7 @@ class FakeInvitesRepository(
         )
 ) : InvitesRepository {
     val redeemed = mutableListOf<Pair<String, Mode>>()
-    val accepted = mutableListOf<String>()
+    val accepted = mutableListOf<Pair<String, Mode>>()
 
     override suspend fun myInvite() = invite
 
@@ -38,17 +38,24 @@ class FakeInvitesRepository(
         return redeemResult
     }
 
-    override suspend fun accept(id: String): ApiResult<RedeemResult> {
-        accepted += id
+    override suspend fun accept(id: String, mode: Mode): ApiResult<RedeemResult> {
+        accepted += id to mode
         return acceptResult
     }
 
     companion object {
         val pendingLaura = PendingInvite(
-            id = "a_laura",
+            id = "a_laura:ESTUDIO",
             other = PersonRef(anonId = "a_laura", label = "Laura Pérez", initials = "LP"),
             mode = Mode.ESTUDIO,
             createdAt = Instant.parse("2026-11-10T15:00:00Z")
+        )
+
+        /** Laura también canjeó en Pareja: es otro canje, con otro `id`. */
+        val pendingLauraPareja = pendingLaura.copy(
+            id = "a_laura:PAREJA",
+            mode = Mode.PAREJA,
+            createdAt = Instant.parse("2026-11-10T15:05:00Z")
         )
 
         fun sampleInvite(pending: List<PendingInvite> = emptyList()) =

@@ -128,9 +128,14 @@ class InvitesViewModelTest {
         assertTrue(vm.state.value.message!!.text.startsWith("Ese código no existe"))
 
         repo.redeemResult =
-            ApiResult.Failure(AppError.Validation("El modo Pareja debe estar activo para los dos"))
+            ApiResult.Failure(
+                AppError.Validation("Activa el modo Pareja en tu perfil para conectar en ese modo")
+            )
         vm.onAdd()
-        assertEquals("El modo Pareja debe estar activo para los dos", vm.state.value.message?.text)
+        assertEquals(
+            "Activa el modo Pareja en tu perfil para conectar en ese modo",
+            vm.state.value.message?.text
+        )
     }
 
     @Test
@@ -159,10 +164,41 @@ class InvitesViewModelTest {
         val vm = vm(repo)
         assertEquals(listOf(pending), vm.state.value.pending)
         vm.onAccept(pending)
-        assertEquals(listOf("a_laura"), repo.accepted)
+        assertEquals(listOf("a_laura:ESTUDIO" to Mode.ESTUDIO), repo.accepted)
         assertTrue(vm.state.value.pending.isEmpty())
         assertNull(vm.state.value.accepting)
         assertTrue(vm.state.value.message!!.text.contains("Laura Pérez"))
+    }
+
+    @Test
+    fun acceptingOneModeKeepsTheOtherModesOfThatPersonPending() {
+        val estudio = FakeInvitesRepository.pendingLaura
+        val pareja = FakeInvitesRepository.pendingLauraPareja
+        val repo = FakeInvitesRepository(
+            invite = ApiResult.Success(FakeInvitesRepository.sampleInvite(listOf(pareja, estudio)))
+        )
+        val vm = vm(repo)
+        vm.onAccept(estudio)
+        // Solo se pide aceptar Estudio, y Pareja sigue esperando su propio "Aceptar".
+        assertEquals(listOf(estudio.id to Mode.ESTUDIO), repo.accepted)
+        assertEquals(listOf(pareja), vm.state.value.pending)
+        assertTrue(vm.state.value.message!!.text.endsWith("en Estudio."))
+
+        vm.onAccept(pareja)
+        assertEquals(pareja.id to Mode.PAREJA, repo.accepted.last())
+        assertTrue(vm.state.value.pending.isEmpty())
+    }
+
+    @Test
+    fun theDailyRedeemLimitIsExplained() {
+        val repo = FakeInvitesRepository(redeemResult = ApiResult.Failure(AppError.Forbidden))
+        val vm = vm(repo)
+        vm.onCodeChange("SEBA-1290")
+        vm.onAdd()
+        assertEquals(
+            "Llegaste al límite de códigos por hoy. Inténtalo de nuevo mañana.",
+            vm.state.value.message?.text
+        )
     }
 
     @Test

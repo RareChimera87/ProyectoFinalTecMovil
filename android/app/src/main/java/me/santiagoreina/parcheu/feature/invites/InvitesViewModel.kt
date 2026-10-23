@@ -34,7 +34,7 @@ data class InvitesUiState(
     val mode: Mode = Mode.AMISTAD,
     val submitting: Boolean = false,
     val message: InviteMessage? = null,
-    /** `id` del canje pendiente que se está aceptando. */
+    /** `id` del canje pendiente (persona y modo) que se está aceptando. */
     val accepting: String? = null
 ) {
     val pending: List<PendingInvite> get() = invite?.pending.orEmpty()
@@ -172,18 +172,19 @@ class InvitesViewModel(
         }
     }
 
-    /** El dueño del código acepta un canje pendiente: quedan CONNECTED en ese modo. */
+    /**
+     * El dueño del código acepta un canje pendiente: quedan CONNECTED solo en ese modo. Si la misma
+     * persona canjeó en otro modo (p. ej. Pareja), ese canje sigue en la lista hasta que lo acepte.
+     */
     fun onAccept(pending: PendingInvite) {
         if (_state.value.accepting != null) return
         _state.update { it.copy(accepting = pending.id, message = null) }
         viewModelScope.launch {
-            when (val result = repository.accept(pending.id)) {
+            when (val result = repository.accept(pending.id, pending.mode)) {
                 is ApiResult.Success -> _state.update { state ->
                     state.copy(
                         accepting = null,
-                        invite = state.invite?.copy(
-                            pending = state.pending.filterNot { it.id == pending.id }
-                        ),
+                        invite = state.invite?.copy(pending = state.pending.without(pending)),
                         message = InviteMessage(
                             "Ahora estás conectado con ${result.value.other.label} en " +
                                 "${pending.mode.label()}.",
@@ -197,9 +198,7 @@ class InvitesViewModel(
                         // Ya no existe (aceptado en otro dispositivo, bloqueo o cuenta borrada): se
                         // quita.
                         invite = if (result.error == AppError.NotFound) {
-                            state.invite?.copy(
-                                pending = state.pending.filterNot { it.id == pending.id }
-                            )
+                            state.invite?.copy(pending = state.pending.without(pending))
                         } else {
                             state.invite
                         },
@@ -222,9 +221,15 @@ internal fun Mode.label(): String = when (this) {
     Mode.ESTUDIO -> "Estudio"
 }
 
+/** Quita solo ese canje (persona y modo): los de otros modos de la misma persona siguen. */
+private fun List<PendingInvite>.without(pending: PendingInvite) =
+    filterNot { it.id == pending.id && it.mode == pending.mode }
+
 internal fun redeemErrorMessage(error: AppError): String = when (error) {
     AppError.NotFound -> "Ese código no existe. Revisa que esté bien escrito."
     AppError.Blocked -> "No puedes agregar a esta persona."
+    // 403 FORBIDDEN del canje: límite diario de códigos por persona.
+    AppError.Forbidden -> "Llegaste al límite de códigos por hoy. Inténtalo de nuevo mañana."
     is AppError.Validation -> error.message
     AppError.Network -> "Sin conexión. Inténtalo de nuevo."
     else -> "No pudimos agregar a esa persona. Inténtalo de nuevo."

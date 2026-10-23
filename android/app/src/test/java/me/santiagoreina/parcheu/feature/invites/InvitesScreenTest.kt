@@ -83,7 +83,7 @@ class InvitesScreenTest {
             useUnmergedTree = true
         ).assertTextEquals("MARI-4827")
         composeRule.onNodeWithTag(InvitesTags.accept(pending.id)).performScrollTo().performClick()
-        assertEquals(listOf(pending.id), repo.accepted)
+        assertEquals(listOf(pending.id to pending.mode), repo.accepted)
         composeRule.onNodeWithTag(
             InvitesTags.MESSAGE
         ).performScrollTo().assertTextContains("Laura Pérez", substring = true)

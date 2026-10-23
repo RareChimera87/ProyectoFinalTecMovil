@@ -15,7 +15,8 @@ interface InvitesRepository {
 
     suspend fun redeem(code: String, mode: Mode): ApiResult<RedeemResult>
 
-    suspend fun accept(id: String): ApiResult<RedeemResult>
+    /** Acepta el canje [id] (persona y modo) solo en [mode]. */
+    suspend fun accept(id: String, mode: Mode): ApiResult<RedeemResult>
 }
 
 class InvitesRepositoryImpl(private val api: InvitesApi, private val errorMapper: ApiErrorMapper) :
@@ -25,5 +26,6 @@ class InvitesRepositoryImpl(private val api: InvitesApi, private val errorMapper
     override suspend fun redeem(code: String, mode: Mode) =
         apiCall(errorMapper) { api.redeem(Redeem(code, mode)) }
 
-    override suspend fun accept(id: String) = apiCall(errorMapper) { api.accept(id) }
+    override suspend fun accept(id: String, mode: Mode) =
+        apiCall(errorMapper) { api.accept(id, mode) }
 }
