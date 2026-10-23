@@ -133,4 +133,62 @@ class PuGraphStyleTest {
         val layout = computeGraphLayout(PuGraphSamples.nodes, fof, 300f)
         assertEquals(2, layout.fof.size)
     }
+
+    private fun connections(n: Int) = List(n) {
+        GraphNode(
+            "c$it",
+            "Ana",
+            "A",
+            95 - it,
+            GraphMode.entries[it % GraphMode.entries.size],
+            GraphEdgeState.CONNECTED
+        )
+    }
+
+    private fun assertNoFofOverlap(
+        layout: me.santiagoreina.parcheu.designsystem.graph.layout.GraphLayout
+    ) {
+        for (a in layout.fof) {
+            for (b in layout.fof) {
+                if (a.id < b.id) {
+                    assertTrue(
+                        "${a.id}/${b.id} a ${hypot(a.x - b.x, a.y - b.y)}",
+                        hypot(a.x - b.x, a.y - b.y) >= a.radius + b.radius + 2f - 0.01f
+                    )
+                }
+            }
+        }
+        assertFalse(layout.hasOverlaps)
+    }
+
+    @Test
+    fun `30 amigos de amigos repartidos entre 9 conexiones no se pisan`() {
+        val nodes = connections(9)
+        val fof = List(30) { GraphFof("f$it", "c${it % 9}", "", "", 70 + it % 20) }
+        assertNoFofOverlap(computeGraphLayout(nodes, fof, 328f))
+    }
+
+    @Test
+    fun `30 amigos de amigos del mismo padre no se pisan`() {
+        val fof = List(30) { GraphFof("f$it", "c0", "", "", 70 + it % 20) }
+        assertNoFofOverlap(computeGraphLayout(connections(9), fof, 328f))
+    }
+
+    @Test
+    fun `30 conexiones y 30 amigos de amigos no se pisan`() {
+        val fof = List(30) { GraphFof("f$it", "c${it % 30}", "", "", 70 + it % 20) }
+        assertNoFofOverlap(computeGraphLayout(connections(30), fof, 328f))
+    }
+
+    @Test
+    fun `la zona tactil de cada nodo llega a 48 dp`() {
+        val layout = computeGraphLayout(PuGraphSamples.nodes, PuGraphSamples.fof, 328f)
+        (layout.nodes + layout.fof).forEach {
+            assertTrue("${it.id}", 2 * (it.radius + hitSlopFor(it.radius)) >= 48f - 0.01f)
+            assertEquals(
+                it.id,
+                layout.hitTestTouch(it.x + it.radius + hitSlopFor(it.radius) - 0.5f, it.y)?.id
+            )
+        }
+    }
 }
