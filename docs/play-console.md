@@ -53,6 +53,12 @@ Lo que sí se pudo comprobar o preparar sin la consola:
 4. **Play App Signing**: actívalo (viene activo por defecto en apps nuevas con AAB). Google guarda la llave de firma; nosotros usamos solo la **llave de subida**.
 5. Cuando exista el primer AAB (E7.0, 28 oct), en **Integridad de la app > Firma de apps** copia las huellas SHA-1 y SHA-256 del **certificado de firma de la app** para registrarlas en Firebase prod (E10.3).
 
+### 4.1 Primera subida: manual desde la consola (E7.0, 28 oct)
+
+- La **primera subida** de la app es el AAB `prod` **0.0.1 con Play Billing** (`~/.parcheu/parcheu-0.0.1-prod-release.aab`, firmado con la llave de subida) y la hace I3 **a mano desde la consola**, en la pista interna, a más tardar el **28 oct** (E7.0, pasos en la [§11.2](#112-pasos-en-la-consola-i3-28-oct)). La API de Play no permite crear la primera versión de una app nueva.
+- Es **prerrequisito para crear la suscripción `parcheu_plus`**: Play solo deja crear suscripciones cuando la app ya tiene un AAB subido que incluye Play Billing Library. Sin esa subida no hay `parcheu_plus` ni license testers útiles, y se bloquea E7.1-E7.3.
+- **E10.2 valida la subida por API solo después** de esa primera subida manual: el workflow `android-release` (con `sa-play`) sube las versiones siguientes (0.1 en adelante) y su prueba de subida a la pista interna no puede pasar antes del 28 oct. No intentes adelantar la primera subida desde CI.
+
 ## 5. Perfil de pagos (comerciante)
 
 Necesario para vender la suscripción `parcheu_plus` (riesgo n.º 4 del plan).
@@ -119,6 +125,7 @@ Se necesita en cuanto existan los proyectos GCP (22-23 oct). Hay dos usos: publi
 - [ ] `sa-play` invitada a Play Console con permisos mínimos; `PLAY_SERVICE_ACCOUNT_JSON` cargado.
 - [ ] Grupo de testers con ≥ 15 correos confirmados antes del 28 oct.
 - [ ] ≥ 3 license testers.
+- [ ] Primera subida (AAB 0.0.1 con Billing) hecha **a mano** en la consola antes del 28 oct (E7.0, ver [§4.1](#41-primera-subida-manual-desde-la-consola-e70-28-oct)); E10.2 valida la subida por API después.
 
 ## URLs legales (E8.4)
 

@@ -32,7 +32,7 @@ Algunas carpetas solo tienen un README hasta que llega su feature (ver `docs/bac
 ## Git flow en breve
 
 - `main` y `dev` están protegidas: solo se cambian con PR.
-- `feature/<kebab>` -> PR a `dev`; se mezcla (squash) cuando pasa la CI y la revisión automática. Las features `major` exigen además un revisor par.
+- `feature/<kebab>` -> PR a `dev`; se mezcla (squash) cuando pasa la CI y la revisión automática del agente (etiqueta `revisado-agente`). Las features `major` exigen esa etiqueta (check `major-gate`); el revisor par humano las revisa después del merge, en la ventana de revisión de la ola.
 - `release/x.y.z` -> `main` solo con aprobación del usuario; el tag `v*` despliega a prod.
 - Commits y títulos de PR en español e imperativo: `Agrega esqueleto del backend`. Se validan con `scripts/commit-lint.sh` (instala el hook local con `scripts/instalar-hooks.sh`).
 - Nunca se versionan secretos, `google-services.json`, keystores ni `.tfstate`; gitleaks corre en cada PR.

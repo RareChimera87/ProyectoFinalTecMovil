@@ -33,6 +33,12 @@ rechaza "Agrega backend."
 rechaza "Agrega"
 rechaza ""
 rechaza "Agrega $(printf 'x%.0s' $(seq 1 70))"
+# 72 caracteres con tildes (más de 72 bytes): debe pasar aunque el sistema no tenga C.UTF-8.
+asunto_72="Corrige cálculo de cuota semanal y acción de búsquedas en sesión pública"
+largo_72="$(printf '%s' "$asunto_72" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d '[:space:]')"
+(( largo_72 == 72 )) || { echo "FALLA el caso de 72 caracteres mide $largo_72"; fallos=$((fallos + 1)); }
+acepta "$asunto_72"
+rechaza "${asunto_72}ñ"
 
 # Modo archivo (hook commit-msg): solo cuenta la primera línea.
 tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
