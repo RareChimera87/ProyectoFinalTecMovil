@@ -864,7 +864,11 @@ Lo automatizable ya quedó hecho: `POST/GET/DELETE /v1/match/queue`, `GET /v1/ma
 
 ## E4.9 · Usuarios semilla de demo
 
-Lo automatizable ya quedó hecho: `seed-demo` (20 demos idempotentes, Amistad y Estudio, nunca Pareja, en la fila con prioridad -1), `purge-demo` (Postgres completo y espejos de Firestore), la decisión del demo con `DEMO_CONNECT_PROBABILITY`, `isDemo` en `NodeDto`, la insignia en D2 y el banner fijo en F9, y la variable `DEMO_USERS_ENABLED` en Terraform (`var.demo_users_enabled`: `true` en dev, `false` por defecto en prod). Esto también resuelve la parte de `DEMO_USERS_ENABLED` del paso 2 de E4.2. Las pruebas con Postgres (`DemoDbTest`) corren en CI con Testcontainers. Lo que falta necesita un entorno vivo o Play Console:
+Lo automatizable ya quedó hecho: `seed-demo` (20 demos idempotentes, Amistad y Estudio, nunca Pareja, en la fila con prioridad -1), `purge-demo` (Postgres completo y espejos de Firestore), la decisión del demo con `DEMO_CONNECT_PROBABILITY`, `isDemo` en `NodeDto`, la insignia en D2 y el banner fijo en F9, y la variable `DEMO_USERS_ENABLED` en Terraform (`var.demo_users_enabled`: `true` en dev, `false` por defecto en prod). Esto también resuelve la parte de `DEMO_USERS_ENABLED` del paso 2 de E4.2. Las pruebas con Postgres (`DemoDbTest`) corren en CI con Testcontainers.
+
+**Traspaso a E4.7 (sugerencias de inicio).** `GET /v1/home` todavía es un esqueleto, así que la parte "los demo no aparecen en sugerencias" del criterio de E4.9 no tiene consumidor. Quedó como criterio en la ficha de E4.7 (backlog §4): las sugerencias deben pasar por `DemoVisibility.withoutDisabledDemos(settings.enabled) { it.isDemo }` y llevar un test con `DEMO_USERS_ENABLED=false`. Quien revise el PR de E4.7 debe comprobarlo antes de aprobar; sin ese filtro, entre el `apply` con `demo_users_enabled=false` y `purge-demo` (paso 4), o si la purga falla, un tester vería sugerido a un demo con la bandera apagada.
+
+Lo que falta necesita un entorno vivo o Play Console:
 
 | # | Paso | Dueño | Cuándo |
 |---|---|---|---|
