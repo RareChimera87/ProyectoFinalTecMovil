@@ -129,6 +129,36 @@ class FofDbTest : FunSpec({
                 item.mutuals shouldBe 2
                 item.estimatedAffinity shouldBe 100
                 item.mode shouldBe Mode.ESTUDIO
+                // viaId: uno de los amigos en común con arista del modo del candidato (desempate por id).
+                item.viaId shouldBe listOf(beto, caro).minBy { it.toString() }.toString()
+            }
+        }
+
+    test("viaId sale de la arista CONNECTED sin Pareja de la misma fila, nunca de una Pareja ajena")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { db ->
+                // Caro tiene el id menor: si viaId saliera de cualquier amigo en común, ganaría ella.
+                val me = db.user("Ana")
+                val caro = db.user("Caro", id = UUID.fromString("00000000-0000-4000-8000-000000000001"))
+                val eli = db.user("Eli", id = UUID.fromString("00000000-0000-4000-8000-000000000002"))
+                val beto = db.user("Beto", id = UUID.fromString("00000000-0000-4000-8000-000000000003"))
+                val dani = db.user("Dani")
+                db.edge(me, beto, Mode.AMISTAD)
+                db.edge(me, caro, Mode.AMISTAD)
+                db.edge(me, eli, Mode.AMISTAD)
+                db.edge(beto, dani, Mode.AMISTAD)
+                db.edge(caro, dani, Mode.PAREJA) // Pareja ajena: no es un salto ni puede ser viaId
+                db.edge(eli, dani, Mode.AMISTAD, EdgeState.SIMULATED, 70) // no CONNECTED
+
+                val service = FofService(
+                    ExposedFofRepository(db),
+                    ExposedGraphRepository(db),
+                    GraphVisibilityPolicy(AnonIdSigner.forTests()),
+                    { true },
+                )
+                val item = service.fof(me).items!!.single()
+                item.mutuals shouldBe 1
+                item.viaId shouldBe beto.toString()
             }
         }
 
@@ -210,6 +240,15 @@ class FofDbTest : FunSpec({
                             sql.candidates(viewer, 200).normalized() shouldBe expected
                         }
                         compared += expected.size
+                        // viaId también coincide: sale solo de las aristas que la paridad ya compara.
+                        val policy = GraphVisibilityPolicy(AnonIdSigner.forTests())
+                        val viaMemory = FofService(memory, world.toGraphRepository(), policy, { true })
+                            .fof(viewer).items.orEmpty().map { it.anonId to it.viaId }
+                        val viaSql = FofService(sql, ExposedGraphRepository(db), policy, { true })
+                            .fof(viewer).items.orEmpty().map { it.anonId to it.viaId }
+                        withClue("viaId, mundo $seed, observador $viewer en $world") {
+                            viaSql.toSet() shouldBe viaMemory.toSet()
+                        }
                     }
                 }
                 // Que la paridad no sea trivial (mundos sin candidatos).

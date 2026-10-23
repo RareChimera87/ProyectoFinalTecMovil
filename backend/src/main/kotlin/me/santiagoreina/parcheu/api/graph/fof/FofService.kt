@@ -28,6 +28,8 @@ import kotlin.math.roundToInt
  *   dos queda en [NEUTRAL_AFFINITY].
  * - Orden: amigos en común (mayor primero), luego la estimación y luego el id público.
  * - El modo del candidato es el de la mayoría de las aristas que lo conectan (Amistad si empatan).
+ * - `viaId` (origen de la línea punteada de G0 y "Amigo de …" en D6) es uno de esos amigos en común,
+ *   elegido entre las aristas que ya pasaron los dos filtros ([viaOf]); nunca sale de otra consulta.
  * - Gratis recibe solo `count`: los `items` son premium y no viajan ([isPlus]).
  * - Con [demoUsersEnabled] en falso un usuario demo no se propone (ADR-0027).
  */
@@ -50,6 +52,8 @@ class FofService(
         val mode: Mode,
         val estimatedAffinity: Int,
         val edges: List<MutualEdge>,
+        /** Amigo en común por el que se llega (id público para el observador: `users.id`). */
+        val viaId: String,
     )
 
     /** Todos los candidatos visibles de [viewer] (hasta [MAX_CANDIDATES]) en el orden de la vista. */
@@ -77,12 +81,14 @@ class FofService(
                 val mutuals = links.map { it.mutual }.distinct().size
                 if (mutuals == 0) return@mapNotNull null
                 val view = policy.present(viewer, row.person, connected = false, context = ViewContext.THIRD_PARTY)
+                val mode = dominantMode(links)
                 Candidate(
                     person = view,
                     mutuals = mutuals,
-                    mode = dominantMode(links),
+                    mode = mode,
                     estimatedAffinity = estimate(myTraits, row.traits),
                     edges = links.map { MutualEdge(view.id, it.mutual.toString(), it.mode) },
+                    viaId = viaOf(links, mode).toString(),
                 )
             }
             .sortedWith(
@@ -105,6 +111,7 @@ class FofService(
                     estimatedAffinity = it.estimatedAffinity,
                     mutuals = it.mutuals,
                     mode = it.mode,
+                    viaId = it.viaId,
                 )
             },
         )
@@ -128,6 +135,18 @@ class FofService(
             if (a == null || b == null || a.isEmpty() || a.size != b.size) return NEUTRAL_AFFINITY
             return SimulationScoring.traitSimilarity(a, b).roundToInt()
         }
+
+        /**
+         * Amigo en común por el que se llega al candidato. Sale solo de [links], que ya son aristas
+         * CONNECTED que no son de Pareja de la misma fila de la consulta §6.2 y pasaron `canSeeEdge`:
+         * nunca de una subconsulta aparte, que podría revelar una arista de Pareja ajena (ADR-0012,
+         * backlog E3.4 "Hueco de contrato"). Prefiere una arista del modo del candidato y desempata
+         * por id para que sea estable. [links] no puede estar vacío.
+         */
+        fun viaOf(links: List<FofLink>, mode: Mode): UUID =
+            links.filter { it.mode == mode }.ifEmpty { links }
+                .map { it.mutual }
+                .minBy { it.toString() }
 
         /** Modo de la mayoría de las aristas que conectan; Amistad si empatan. */
         fun dominantMode(links: List<FofLink>): Mode {

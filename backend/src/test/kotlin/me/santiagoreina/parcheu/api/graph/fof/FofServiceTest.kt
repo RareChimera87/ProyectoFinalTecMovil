@@ -11,6 +11,8 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldStartWith
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
+import me.santiagoreina.parcheu.api.graph.GraphFilter
+import me.santiagoreina.parcheu.api.graph.GraphService
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.InMemoryGraphRepository
 import me.santiagoreina.parcheu.api.graph.PersonRow
@@ -204,6 +206,41 @@ class FofServiceTest : FunSpec({
         repo.connect(beto, demo)
         service(repo).fof(me.id).count shouldBe 1
         service(repo, demoUsersEnabled = false).fof(me.id).count shouldBe 0
+    }
+
+    test("viaId es un amigo en común del modo del candidato y coincide con su id en el ego-grafo") {
+        val dani = person(3, name = "Dani")
+        val repo = memoryRepo(me, beto, caro, dani)
+        repo.connect(me, beto)
+        repo.connect(me, caro)
+        repo.connect(beto, dani, Mode.AMISTAD)
+        repo.connect(caro, dani, Mode.ESTUDIO)
+        repo.connect(beto, dani, Mode.ESTUDIO)
+
+        val item = service(repo).fof(me.id).items!!.single()
+        item.mode shouldBe Mode.ESTUDIO
+        item.viaId shouldBe listOf(beto, caro).map { it.id.toString() }.min()
+        val egoIds = GraphService(repo, GraphVisibilityPolicy(signer)).graph(me.id, GraphFilter()).nodes.map { it.id }
+        egoIds shouldContain item.viaId
+    }
+
+    test("viaId nunca sale de una arista de Pareja aunque el repositorio la deje pasar (segunda barrera)") {
+        val dani = person(3, name = "Dani")
+        val repo = memoryRepo(me, beto, caro, dani)
+        repo.connect(me, beto)
+        repo.connect(me, caro)
+        repo.connect(beto, dani)
+        // Un SQL defectuoso que devolviera además la arista de Pareja Caro–Dani.
+        val leaky = object : FofRepository {
+            override suspend fun candidates(viewer: UUID, limit: Int) = listOf(
+                FofRow(dani, 2, listOf(FofLink(caro.id, Mode.PAREJA), FofLink(beto.id, Mode.AMISTAD)), null),
+            )
+
+            override suspend fun traits(userId: UUID): List<Double>? = null
+        }
+        val item = FofService(leaky, repo, GraphVisibilityPolicy(signer), isPlus = { true }).fof(me.id).items!!.single()
+        item.mutuals shouldBe 1
+        item.viaId shouldBe beto.id.toString()
     }
 
     test("fof está registrada como vista de terceros") {

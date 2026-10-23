@@ -5,13 +5,27 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.parche.ParcheSamples
 
-/** Datos de D6 del mockup 09a: el grafo de D1 más amigos de amigos. */
+/** Datos de D6 del mockup 09a: el grafo de D1 más amigos de amigos (con su amigo en común). */
 object FofSamples {
     val candidates =
         listOf(
-            FofCandidate("a_alguien000000000000001", "Alguien de la UIS", 87, 2, Mode.AMISTAD),
-            FofCandidate("a_felipe0000000000000002", "Felipe R.", 84, 1, Mode.ESTUDIO),
-            FofCandidate("a_alguien000000000000003", "Alguien", 71, 1, Mode.AMISTAD)
+            FofCandidate(
+                "a_alguien000000000000001",
+                "Alguien de la UIS",
+                87,
+                2,
+                Mode.AMISTAD,
+                viaId = "val"
+            ),
+            FofCandidate(
+                "a_felipe0000000000000002",
+                "Felipe R.",
+                84,
+                1,
+                Mode.ESTUDIO,
+                viaId = "and"
+            ),
+            FofCandidate("a_alguien000000000000003", "Alguien", 71, 1, Mode.AMISTAD, viaId = "seb")
         )
 
     val plus =

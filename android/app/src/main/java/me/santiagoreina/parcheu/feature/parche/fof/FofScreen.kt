@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.FofCandidate
+import me.santiagoreina.parcheu.contract.NodeDto
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCardVariant
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
@@ -73,15 +74,47 @@ private const val ANON_LABEL = "Alguien"
 val FofCandidate.isAnonymous: Boolean
     get() = label == ANON_LABEL || label.startsWith("$ANON_LABEL de la ")
 
-/** Nodo de la capa fof de G0 (sin conexión de origen: el contrato no la trae). */
+/**
+ * Nodo de la capa fof de G0. [GraphFof.parentId] es `viaId`, el amigo en común por el que se llega
+ * (su `NodeDto.id` en el ego-grafo): PuGraph dibuja desde él la línea punteada prt "2 4". Si el
+ * servidor no lo manda o ese amigo no está entre los nodos, el fof conserva la posición radial.
+ */
 fun FofCandidate.toGraphFof(): GraphFof = GraphFof(
     id = anonId,
-    parentId = null,
+    parentId = viaId,
     name = if (isAnonymous) ANON_LABEL else label,
     initials = if (isAnonymous) "A" else label.firstOrNull()?.uppercase() ?: "A",
     affinity = estimatedAffinity,
     anonymous = isAnonymous
 )
+
+/**
+ * Nombre corto del amigo en común [FofCandidate.viaId] entre [nodes] (el ego-grafo), o null si no
+ * llegó o no está (p. ej. grafo guardado viejo). Una conexión directa siempre viene con nombre.
+ */
+fun FofCandidate.viaName(nodes: List<NodeDto>): String? {
+    val id = viaId ?: return null
+    val node = nodes.firstOrNull { it.id == id && !it.anonymous } ?: return null
+    return node.label.trim().substringBefore(' ').takeIf { it.isNotEmpty() }
+}
+
+/**
+ * Segunda línea de la tarjeta de D6 (mockup 09a): "Amigo de Valentina · afinidad estimada",
+ * "Amigo de Valentina y 2 más · …" o, sin [viaName], "3 amigos en común · …".
+ */
+fun fofSubtitle(viaName: String?, mutuals: Int): String {
+    val origin = when {
+        viaName == null -> mutualsText(mutuals)
+        mutuals <= 1 -> "Amigo de $viaName"
+        else -> "Amigo de $viaName y ${mutuals - 1} más"
+    }
+    return "$origin · afinidad estimada"
+}
+
+/** Nota al pie de D6 sobre la estimación (ADR-0023); la real sale de la simulación de la presentación. */
+const val FOF_ESTIMATE_NOTE =
+    "La afinidad es una estimación por los rasgos de sus gemelos. Si te los presentan, la " +
+        "simulación de la presentación calcula la real."
 
 /** "1 amigo en común" / "3 amigos en común". */
 fun mutualsText(mutuals: Int): String =
@@ -240,6 +273,7 @@ private fun UnlockedContent(state: FofUiState.Unlocked, callbacks: FofCallbacks)
                     content.candidates.forEach { candidate ->
                         FofCard(
                             candidate = candidate,
+                            viaName = candidate.viaName(content.nodes),
                             requested = candidate.anonId in state.requested,
                             sending = state.sending == candidate.anonId,
                             onRequest = { callbacks.onRequestIntroduction(candidate.anonId) }
@@ -247,10 +281,7 @@ private fun UnlockedContent(state: FofUiState.Unlocked, callbacks: FofCallbacks)
                     }
                 }
             }
-            FootNote(
-                "La afinidad es una estimación por los rasgos de sus gemelos; simulen para " +
-                    "conocer la real."
-            )
+            FootNote(FOF_ESTIMATE_NOTE)
             FootNote("Los vínculos de Pareja nunca aparecen en el grafo de otras personas.")
         }
     }
@@ -279,10 +310,11 @@ private fun EmptyFof() {
     }
 }
 
-/** FriendOfFriendCard: avatar, "Alguien · 87 % afín", amigos en común y "Pedir presentación". */
+/** FriendOfFriendCard: avatar, "Alguien · 87 % afín", "Amigo de …" y "Pedir presentación". */
 @Composable
 private fun FofCard(
     candidate: FofCandidate,
+    viaName: String?,
     requested: Boolean,
     sending: Boolean,
     onRequest: () -> Unit
@@ -316,7 +348,7 @@ private fun FofCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${mutualsText(candidate.mutuals)} · afinidad estimada",
+                    text = fofSubtitle(viaName, candidate.mutuals),
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
                     color = colors.mu,
                     maxLines = 2,

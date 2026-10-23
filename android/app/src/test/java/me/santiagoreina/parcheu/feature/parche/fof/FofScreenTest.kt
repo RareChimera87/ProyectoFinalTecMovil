@@ -51,7 +51,40 @@ class FofScreenTest {
         composeRule.onNodeWithText("Felipe R. · 84 % afín").assertIsDisplayed()
         // El anónimo nunca muestra la universidad ni un nombre en la tarjeta.
         composeRule.onAllNodesWithText("Alguien de la UIS · 87 % afín").assertCountEquals(0)
-        composeRule.onNodeWithText("2 amigos en común · afinidad estimada").assertIsDisplayed()
+        // "Amigo de …" sale de viaId resuelto contra el ego-grafo (mockup 09a).
+        composeRule.onNodeWithText(
+            "Amigo de Valentina y 1 más · afinidad estimada"
+        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Amigo de Andrés · afinidad estimada").assertIsDisplayed()
+    }
+
+    @Test
+    fun footnoteDoesNotInviteAMissingSimulateAction() {
+        show(FofUiState.Unlocked(FofSamples.plus))
+        composeRule.onNodeWithText(FOF_ESTIMATE_NOTE).performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("Simular", substring = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun graphLayerUsesViaIdAsParent() {
+        val layer = FofSamples.candidates.map { it.toGraphFof() }
+        assertEquals(listOf("val", "and", "seb"), layer.map { it.parentId })
+        assertEquals(null, FofSamples.candidates[0].copy(viaId = null).toGraphFof().parentId)
+    }
+
+    @Test
+    fun subtitleFallsBackToMutualsWithoutAKnownVia() {
+        val nodes = FofSamples.plus.nodes
+        val first = FofSamples.candidates[0]
+        assertEquals("Valentina", first.viaName(nodes))
+        assertEquals("Laura", first.copy(viaId = "lau").viaName(nodes))
+        // Sin viaId, con un id que no está en el grafo o con un nodo anónimo: sin nombre.
+        assertEquals(null, first.copy(viaId = null).viaName(nodes))
+        assertEquals(null, first.copy(viaId = "otro").viaName(nodes))
+        assertEquals(null, first.copy(viaId = "nico").viaName(nodes))
+        assertEquals("3 amigos en común · afinidad estimada", fofSubtitle(null, 3))
+        assertEquals("Amigo de Valentina · afinidad estimada", fofSubtitle("Valentina", 1))
+        assertEquals("Amigo de Valentina y 2 más · afinidad estimada", fofSubtitle("Valentina", 3))
     }
 
     @Test

@@ -79,6 +79,8 @@ class FofApiTest : FunSpec({
             item.mutuals shouldBe 1
             item.mode shouldBe Mode.ESTUDIO
             item.label shouldBe "Alguien de la UIS"
+            // Origen de la línea punteada: el amigo en común (conexión directa, con su users.id).
+            item.viaId shouldBe f.beto.id.toString()
         }
     }
 
