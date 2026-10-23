@@ -423,6 +423,42 @@ class AccountPurgeDbTest : FunSpec({
             }
         }
 
+    test("al borrar a quien presenta (E6.2) su simulación INTRODUCTION entra al plan y se borra su documento")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { ds ->
+                val db = connectExposed(ds)
+                val s = ds.connection.use { seed(it) }
+                val intro = UUID.randomUUID()
+                val other = UUID.randomUUID()
+                ds.connection.use { c ->
+                    val now = Timestamp.from(FIXED_CLOCK.instant())
+                    c.exec(
+                        "insert into users (id, firebase_uid, display_name, created_at, updated_at) values (?, ?, 'Vale', ?, ?)",
+                        other, "uid-vale-${UUID.randomUUID()}", now, now,
+                    )
+                    // Zoraida presenta a Bruno y a Vale: no es user_a ni user_b, solo requested_by.
+                    c.exec(
+                        "insert into simulations (id, mode, user_a, user_b, requested_by, origin, status, score, created_at, finished_at) " +
+                            "values (?, 'AMISTAD', ?, ?, ?, 'INTRODUCTION', 'DONE', 80, ?, ?)",
+                        intro, s.bruno, other, s.zoraida, now, now,
+                    )
+                }
+                val mirror = RecordingAccountMirrorCleaner()
+                val service = AccountDeletionService(
+                    ExposedIdentityRepository(db), ExposedAccountPurgeRepository(db), mirror, FakeAuthAccountRemover(), FakeTaskQueue(), FIXED_CLOCK,
+                )
+                service.requestDeletion(FirebaseUser(s.zoraidaUid, null, null))
+                service.purge(s.zoraida) shouldBe PurgeOutcome.PURGED
+
+                mirror.plans.single().simulationIds.toSet() shouldBe setOf(s.shared, intro)
+                mirror.removedSimulations.single().toSet() shouldBe setOf(s.shared, intro)
+                ds.connection.use { c ->
+                    // La fila sobrevive para las personas presentadas, pero ya sin el uuid de quien presentó.
+                    c.count("select count(*) from simulations where requested_by = ?", s.zoraida) shouldBe 0
+                }
+            }
+        }
+
     test("una simulación en curso queda FAILED con el cupo devuelto y el motor ya no puede guardar turnos en ella")
         .config(enabled = TestDatabase.enabled) {
             withDb { ds ->
