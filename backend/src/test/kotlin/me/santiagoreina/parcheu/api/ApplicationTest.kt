@@ -7,11 +7,21 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.server.plugins.NotFoundException
+import io.ktor.server.plugins.PayloadTooLargeException
+import io.ktor.server.plugins.UnsupportedMediaTypeException
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import kotlinx.serialization.Serializable
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
@@ -36,8 +46,18 @@ private class ThrowingRoutes : DomainRoutes {
         get("/_test/validation") { throw ValidationFailed("campo inválido") }
         get("/_test/budget") { throw AiBudgetExceeded(Instant.parse("2026-10-26T05:00:00Z")) }
         get("/_test/boom") { error("detalle interno que no debe filtrarse") }
+        // Errores de cliente propios de Ktor (issue #49).
+        post("/_test/eco") { call.respond(call.receive<Eco>()) }
+        get("/_test/ktor-not-found") { throw NotFoundException("Plan inexistente") }
+        get("/_test/payload") { throw PayloadTooLargeException(1024) }
+        get("/_test/media") { throw UnsupportedMediaTypeException(ContentType.Text.Plain) }
+        get("/_test/404-propio") { call.respond(HttpStatusCode.NotFound, ApiError(ErrorCode.NOT_FOUND, "Simulación inexistente")) }
+        get("/_test/404-vacio") { call.respond(HttpStatusCode.NotFound) }
     }
 }
+
+@Serializable
+private data class Eco(val texto: String)
 
 private fun bearer(token: String): io.ktor.client.request.HttpRequestBuilder.() -> Unit =
     { header(HttpHeaders.Authorization, "Bearer $token") }
@@ -110,6 +130,71 @@ class ApplicationTest : FunSpec({
             response.status shouldBe HttpStatusCode.InternalServerError
             val text = response.body<String>()
             (text.contains("detalle interno")) shouldBe false
+        }
+    }
+
+    test("POST con text/plain a una ruta que hace receive responde 415 VALIDATION, no 500") {
+        testApplication {
+            val client = startApp(testContainer(listOf(ThrowingRoutes())))
+            val response = client.post("/v1/_test/eco") {
+                bearer(fakeToken)()
+                contentType(ContentType.Text.Plain)
+                setBody("hola")
+            }
+            response.status shouldBe HttpStatusCode.UnsupportedMediaType
+            response.body<ApiError>().code shouldBe ErrorCode.VALIDATION
+            // UnsupportedMediaTypeException lanzada directamente también es 415.
+            val lanzada = client.get("/v1/_test/media", bearer(fakeToken))
+            lanzada.status shouldBe HttpStatusCode.UnsupportedMediaType
+            lanzada.body<ApiError>().code shouldBe ErrorCode.VALIDATION
+        }
+    }
+
+    test("POST sin cuerpo a una ruta que hace receive responde 400 VALIDATION, no 500") {
+        testApplication {
+            val client = startApp(testContainer(listOf(ThrowingRoutes())))
+            val sinCuerpo = client.post("/v1/_test/eco") { bearer(fakeToken)() }
+            sinCuerpo.status shouldBe HttpStatusCode.BadRequest
+            sinCuerpo.body<ApiError>().code shouldBe ErrorCode.VALIDATION
+            val jsonVacio = client.post("/v1/_test/eco") {
+                bearer(fakeToken)()
+                contentType(ContentType.Application.Json)
+            }
+            jsonVacio.status shouldBe HttpStatusCode.BadRequest
+            jsonVacio.body<ApiError>().code shouldBe ErrorCode.VALIDATION
+        }
+    }
+
+    test("NotFoundException de Ktor responde 404 NOT_FOUND con su mensaje") {
+        testApplication {
+            val response = startApp(testContainer(listOf(ThrowingRoutes()))).get("/v1/_test/ktor-not-found", bearer(fakeToken))
+            response.status shouldBe HttpStatusCode.NotFound
+            val error = response.body<ApiError>()
+            error.code shouldBe ErrorCode.NOT_FOUND
+            error.message shouldBe "Plan inexistente"
+        }
+    }
+
+    test("PayloadTooLargeException responde 413 VALIDATION") {
+        testApplication {
+            val response = startApp(testContainer(listOf(ThrowingRoutes()))).get("/v1/_test/payload", bearer(fakeToken))
+            response.status shouldBe HttpStatusCode.PayloadTooLarge
+            response.body<ApiError>().code shouldBe ErrorCode.VALIDATION
+        }
+    }
+
+    test("Un 404 que la ruta responde con su ApiError no se reescribe") {
+        testApplication {
+            val client = startApp(testContainer(listOf(ThrowingRoutes())))
+            val propio = client.get("/v1/_test/404-propio", bearer(fakeToken))
+            propio.status shouldBe HttpStatusCode.NotFound
+            propio.body<ApiError>() shouldBe ApiError(ErrorCode.NOT_FOUND, "Simulación inexistente")
+            val dominio = client.get("/v1/_test/not-found", bearer(fakeToken)).body<ApiError>()
+            dominio.message shouldBe "No existe o no es visible"
+            // Un 404 sin cuerpo sí se convierte en ApiError.
+            val vacio = client.get("/v1/_test/404-vacio", bearer(fakeToken))
+            vacio.status shouldBe HttpStatusCode.NotFound
+            vacio.body<ApiError>().code shouldBe ErrorCode.NOT_FOUND
         }
     }
 
