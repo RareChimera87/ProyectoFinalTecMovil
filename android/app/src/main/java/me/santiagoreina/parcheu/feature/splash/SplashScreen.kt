@@ -46,7 +46,7 @@ fun SplashScreen(
     state: SplashUiState,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
-    animateLoading: Boolean = true,
+    animateLoading: Boolean = true
 ) {
     val colors = ParcheUTheme.colors
     Box(
@@ -56,33 +56,33 @@ fun SplashScreen(
             .background(
                 Brush.radialGradient(
                     0f to ParcheUPalette.Violet.copy(alpha = if (colors.isDark) 0.35f else 0.18f),
-                    0.6f to ParcheUPalette.Violet.copy(alpha = 0f),
-                ),
-            ).testTag(SplashTags.SCREEN),
+                    0.6f to ParcheUPalette.Violet.copy(alpha = 0f)
+                )
+            ).testTag(SplashTags.SCREEN)
     ) {
         Column(
             modifier = Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(22.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
             OnboardingAppIcon(size = 104.dp)
             OnboardingWordmark(size = 44.dp)
             Text(
                 "Tu gemelo conoce gente por ti",
                 style = MaterialTheme.typography.bodyMedium,
-                color = colors.mu,
+                color = colors.mu
             )
         }
         Column(
             modifier = Modifier.align(
-                Alignment.BottomCenter,
+                Alignment.BottomCenter
             ).fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 56.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             when (state) {
                 SplashUiState.Loading -> LoadingDots(
                     animate = animateLoading,
-                    modifier = Modifier.testTag(SplashTags.LOADING),
+                    modifier = Modifier.testTag(SplashTags.LOADING)
                 )
                 is SplashUiState.Error -> {
                     Text(
@@ -90,13 +90,13 @@ fun SplashScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.tx,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.testTag(SplashTags.ERROR),
+                        modifier = Modifier.testTag(SplashTags.ERROR)
                     )
                     Spacer(Modifier.height(16.dp))
                     PrimaryButton(
                         text = "Reintentar",
                         onClick = onRetry,
-                        modifier = Modifier.fillMaxWidth().testTag(SplashTags.RETRY),
+                        modifier = Modifier.fillMaxWidth().testTag(SplashTags.RETRY)
                     )
                 }
             }

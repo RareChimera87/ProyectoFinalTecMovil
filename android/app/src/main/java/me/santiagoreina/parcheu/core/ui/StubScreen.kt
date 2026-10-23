@@ -33,7 +33,7 @@ fun StubScreen(
     route: AppRoute,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit = {}
 ) {
     val entry = catalogEntryFor(route)
     Column(
@@ -43,14 +43,14 @@ fun StubScreen(
             .testTag(stubTag(route))
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(text = entry.title, style = MaterialTheme.typography.headlineSmall)
         Text(text = "Pantallas ${entry.screens}", style = MaterialTheme.typography.labelLarge)
         Text(
             text = route.toString(),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(text = "Pantalla en construcción.", style = MaterialTheme.typography.bodyMedium)
         content()
