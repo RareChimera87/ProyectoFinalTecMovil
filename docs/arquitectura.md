@@ -391,9 +391,9 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | POST `/v1/matches/{id}/choice` | `Choice{choice: SCENARIO\|SIMULATION}` | `MatchDto` | CONFLICT |
 | GET `/v1/scenarios` | `?mode=` | `List<ScenarioDto{id, title, isBasic, locked}>` | - |
 | POST `/v1/scenario-sessions/{chatId}/agreement` | - | `ScenarioSessionDto{status: OPEN\|WAITING_OTHER\|JUDGING\|DONE, simulationId?}` | SCENARIO_ENDED |
-| POST `/v1/simulations` | `StartSimulation{otherUserId, mode}` | 202 `SimulationSummary{id, status, mode, other, createdAt}` | QUOTA_EXCEEDED, BLOCKED, VALIDATION, AI_BUDGET |
+| POST `/v1/simulations` | `StartSimulation{otherUserId, mode}` | 202 `SimulationSummary{id, status, mode, other, createdAt, origin?, score?, refunded}` | QUOTA_EXCEEDED, BLOCKED, VALIDATION, AI_BUDGET |
 | GET `/v1/simulations` | `?cursor=` | `Page<SimulationSummary>` | - |
-| GET `/v1/simulations/{id}` | - | `SimulationDto{summary, progress: Progress{scenarioIndex, turn, of}, score?}` | NOT_FOUND |
+| GET `/v1/simulations/{id}` (`summary.refunded` = true si falló y el cupo se devolvió; F5) | - | `SimulationDto{summary, progress: Progress{scenarioIndex, turn, of}, score?}` | NOT_FOUND |
 | GET `/v1/simulations/{id}/report` | - | `ReportDto{score, summary, reasons?: List<String>, frictions?: List<String>, dimensions?: List<Dimension>, locked: Boolean, unlockAvailable: Boolean, myDecision?, otherDecided: Boolean, otherName?}` | NOT_FOUND |
 | POST `/v1/simulations/{id}/report:unlock` | - | `ReportDto` | QUOTA_EXCEEDED |
 | GET `/v1/simulations/{id}/transcript` | - | `TranscriptDto{scenarios: List<ScenarioTranscript{title, turns: List<Turn{speaker: ME\|OTHER, text}>}>}` | PLUS_REQUIRED |
@@ -427,6 +427,8 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | POST `/internal/billing/rtdn` | sobre Pub/Sub push | 204 | (OIDC) |
 | POST `/internal/dev/grant-plus` | `{userId, days}` | 204 (404 en prod) | - |
 
+Nota: tras un match, `GET /v1/match/queue` sigue devolviendo el ticket `MATCHED` (estado terminal de la fila, con `matchId`). El cliente solo lo reanuda si `GET /v1/matches/{id}` está en `PENDING_CHOICE` sin `myChoice`; si no, vuelve a encolar con POST.
+
 `PersonRef{id?, anonId?, label, initials, photoUrl?, isDemo}`: antes de la conexión mutua `id` y `photoUrl` son nulos y `label` = "Alguien de la UIS". Los usuarios gratis nunca reciben los campos marcados como premium (`reasons`, `frictions`, `dimensions`, `transcript`, `items` de fof, comunidades y connect-requests): el servidor los omite, el borroso de la UI es decorativo.
 
 ---
@@ -440,6 +442,7 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 - La visibilidad del usuario (NAME / ANONYMOUS / HIDDEN) aplica a contextos de segundo grado (fof, comunidades de otros, presentaciones, sugerencias). Una conexión directa mutua siempre ve el nombre.
 - Detalles de E3.1: un `NodeDto` por persona; su `id` es el `users.id` si hay CONNECTED en algún modo y el `anonId` (`a_` + 22 caracteres base64url de la HMAC-SHA256) si no, y `GET /v1/graph/nodes/{id}` solo acepta ese mismo id (el uuid de un anónimo da 404). El modo, estado y afinidad del nodo son los de su arista principal (CONNECTED > PENDING > SIMULATED, luego mayor afinidad). `stats` describe el subgrafo filtrado y cuenta personas (`connections` = personas con alguna arista CONNECTED; `avgAffinity` promedia las aristas con afinidad). `community` solo filtra si el observador es miembro (si no, grafo vacío).
 - `EdgeService` (E3.1) es la única puerta de escritura de `edges`: `Simulated` (crea SIMULATED o actualiza afinidad y `last_simulation_id`), `InterestShown` (decisión unilateral o invitación: PENDING), `Connected` (decisión mutua, invitación o presentación aceptada: CONNECTED con `connected_at`) y `Declined` (PENDING vuelve a SIMULATED, o se borra si nunca hubo simulación). CONNECTED nunca baja de estado por estos eventos y no se crean aristas entre usuarios con un bloqueo.
+- **Suite de invariantes (E3.5, ADR-0012):** `ThirdPartyViews.registered` es un conjunto declarativo de clases (`KClass<out ThirdPartyView>`). Cada feature de vista de terceros (fof E6.3, comunidades E6.2, presentaciones E6.4, sugerencias E4.7) agrega allí su clase **y** una sonda en `backend/src/test/.../privacy/ThirdPartyViewProbes.byView` que carga un mundo aleatorio en sus repositorios en memoria y traduce su respuesta a una `Exposure`. `ThirdPartyViewRegistryTest` escanea `build/classes/kotlin/main` y falla si una implementación no está registrada o no tiene sonda. `PrivacyInvariantsTest` corre 1.000 mundos por sonda (más la sonda de referencia "nodos de terceros" que solo filtra con la policy, y el ego-grafo) e imprime la semilla (`PRIVACY_SEED=<n>` la reproduce). `scripts/demo-mutacion-privacidad.sh [pareja|memorias|ninguna]` aplica una mutación, corre la suite y restaura el archivo.
 
 ### 6.2 Amigos de amigos (2 saltos)
 

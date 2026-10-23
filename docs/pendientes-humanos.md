@@ -583,6 +583,27 @@ No hay pasos bloqueantes: la feature no crea recursos en GCP, Firebase ni consol
 3. **Revisión legal.** Pide al docente o a un abogado revisar el texto de aceptación de A4 y el plazo de conservación de
    `consents` (5 años, arquitectura.md §10.2) antes de la prueba cerrada.
 
+## E4.5 · UI de simulación
+
+1. **Backend: llenar `summary.refunded`.** E4.5 agregó `refunded: Boolean = false` a `SimulationSummary` del
+   contrato (la ficha pide que F5 solo diga "No se descontó de tu cupo" con `refunded=true`). El motor de E4.3
+   (PR #37) ya marca `usage_events.refunded` al fallar; falta que `GET /v1/simulations/{id}` y la lista lo lean
+   de ahí y lo devuelvan en el resumen. Sin eso F5 nunca mostrará el mensaje. Dueño sugerido: I1.
+2. **Firestore en el dispositivo:** F4 escucha `simulations/{id}` con el SDK, que necesita `google-services.json`
+   (`scripts/fetch-google-services.sh`) y las reglas de E0.8 desplegadas en dev. Sin ellos F4 cae al respaldo REST
+   (una consulta a los 10 s) y no se actualiza en vivo.
+3. **Verificación manual en el PR:** con E4.3 desplegado en dev, instala el flavor dev, inicia una simulación
+   con un usuario demo y comprueba: F4 avanza 3 escenarios, sales y vuelves (se reanuda), al terminar abre
+   Resultados (F7/F8, E4.6) y "atrás" no vuelve a F4. Fuerza un fallo (apaga el modelo en dev) y confirma F5.
+4. **Revisión lado a lado (ADR-0022):** I2 compara `android/app/src/test/screenshots/simulation/` con las
+   pantallas 15a, 15b y 15c. Diferencias conocidas: la mascota está dibujada localmente en
+   `feature/simulation/SimulationParts.kt` y los iconos en `SimulationIcons.kt` (E1.4, E1.5 y E1.2 aún no están
+   en `dev`); los títulos de los escenarios se muestran como "Escenario N" porque la API no los entrega; no hay
+   burbujas con texto en el escenario porque `simulations/{id}` solo publica progreso. Cuando se mezclen
+   esas features, cambiar las piezas locales y volver a grabar (`./gradlew :app:recordRoborazziDevDebug`).
+5. **Reintentar con una persona anónima:** `POST /v1/simulations` pide `otherUserId`; en un match al azar la
+   otra persona sigue anónima, así que F5 oculta "Reintentar" y deja "Volver al inicio". Decide con I1 si el
+   servidor ofrece un reintento por `simulationId`.
 ## E1.4 · Componentes compuestos
 
 Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/.../components/compound/`, pruebas de semántica, de LockedOverlay (sdk 30 y 35) y de avatares, y capturas Roborazzi en ambos temas (`android/designsystem/src/test/screenshots/compound/`).
@@ -607,6 +628,16 @@ No crea recursos en GCP, Firebase ni consolas.
 | 3 | **Revisión visual lado a lado.** Comparar `screenshots/modes/*.png` con 03b-03e de 'PU Seccion B'. Diferencias intencionales: B2 arranca con todo apagado y valida 0 modos; B3 muestra la fecha verificada en B0 en solo lectura y la casilla 'Confirmo que soy mayor de 18 y quiero activar Pareja'; B4 cambia el interruptor por 'Acepto' / 'Ahora no' y aclara que Pareja queda fuera; los íconos son trazos de Material dibujados en código hasta que se mezcle E1.2. | I2 | Ventana de revisión de la ola 7 |
 | 4 | **Prueba de punta a punta en un dispositivo** cuando E2.6 (B0 y `POST /v1/me/age-verification`) esté en `dev`: sin fecha verificada B3 no deja confirmar; con fecha, activar Pareja, Continuar, B4 'Acepto' y revisar en Cloud SQL de dev que `consents` tenga CHAT_LEARNING_AMISTAD y CHAT_LEARNING_ESTUDIO y ninguna de Pareja. | I1 + I2 | Tras mezclar E2.6 |
 | 5 | **Revisión legal del texto de B4** (qué aprende y qué nunca hace) junto con la de A4 (E2.1, paso 3). | Equipo | Antes de la prueba cerrada |
+## E4.4 · UI de match al azar
+
+Lo automatizable ya quedó hecho: F1, F2 y la hoja de límite de match diario en `android/app/.../feature/conocer/match/`, pruebas de ViewModel con `FakeMatchRepository`, pruebas de la pantalla y capturas Roborazzi en ambos temas (`android/app/src/test/screenshots/match/`).
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar primero #20 (E1.3), #26 (E1.4) y #18 (E1.5).** E4.4 depende de E1.4 y E1.5, que aún no estaban en `dev`: esta rama los mezcla para poder compilar y el PR muestra también sus commits hasta que esos PR entren a `dev`. | I2 | Antes del merge de E4.4 |
+| 2 | **Confirmar con I1 los ids de F3 y F4.** `MatchDto` no trae el id del chat de escenario ni de la simulación; F2 navega a `ScenarioChat(matchId)` y `Simulation(matchId)` y E5.2/E4.5 deben resolverlos por el id del match, o el contrato debe agregar `simulationId`/`chatId` a `MatchDto` o a la respuesta de `POST /v1/matches/{id}/choice`. | I1 e I2 | Antes de integrar E4.5 y F3 |
+| 3 | **Revisión visual lado a lado** de `screenshots/match/*.png` con los mockups 13a y 13b. Diferencias conocidas: sin iconos de modo ni de intereses (E1.2 no está en `dev`), sin la ciudad en la línea de edad (el contrato no la trae) y la hoja de límite de match diario es nueva (el inventario no la diseñó: G2 cubre solo simulaciones). | I2 | Ventana de revisión de la ola 7 |
+| 4 | **Probar contra dev con dos cuentas**: entrar a la fila con dos usuarios del mismo modo y comprobar que el listener de `matchTickets/{uid}` abre F2 en ambos. Requiere `google-services.json` de dev y las reglas de Firestore desplegadas (E0.8). Docker y Firestore real no están disponibles en CI. | I2 | Con la primera prueba cerrada |
 ### Corrección de la revisión de la ola 6 (E2.2)
 
 - **Release 0.1 (E10.3):** cortar `release/0.1.0` desde `d7989af`, no desde `dev` (ver ficha E10.3 en backlog.md).
