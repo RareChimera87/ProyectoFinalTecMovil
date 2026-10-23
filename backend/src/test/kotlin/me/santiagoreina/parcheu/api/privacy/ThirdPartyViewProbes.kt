@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.ThirdPartyView
 import me.santiagoreina.parcheu.api.graph.ViewContext
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
 import me.santiagoreina.parcheu.contract.Mode
 import java.util.UUID
 import kotlin.reflect.KClass
@@ -32,6 +33,7 @@ interface ThirdPartyViewProbe {
 object ThirdPartyViewProbes {
     val byView: Map<KClass<out ThirdPartyView>, ThirdPartyViewProbe> = mapOf(
         HomeSuggestions::class to HomeSuggestionsProbe,
+        IntroductionPeople::class to IntroductionsProbe,
     )
 
     val reference: List<ThirdPartyViewProbe> = listOf(ThirdPartyNodesProbe, EgoGraphProbe)
@@ -110,5 +112,25 @@ object HomeSuggestionsProbe : ThirdPartyViewProbe {
             .flatMap { it.mutuals.orEmpty() }
             .map { ExposedEdge(it.candidateId, it.mutualId, it.mode) }
         return Exposure(personIds = edges.map { it.bId }, edges = edges)
+    }
+}
+
+/**
+ * Presentaciones (E6.2): cómo ve una persona presentada a la otra en E3 (se prueba con **todas** las
+ * personas del mundo que no son conexiones directas del observador, el peor caso) y los amigos de
+ * amigos que 'Pedir presentación' puede resolver por `anonId`. Las conexiones directas son contexto EGO.
+ */
+object IntroductionsProbe : ThirdPartyViewProbe {
+    override val name = "presentaciones (la otra persona y amigos de amigos)"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val view = IntroductionPeople(world.toGraphRepository(), GraphVisibilityPolicy(signer), signer)
+        val others = world.people
+            .filter { it.id != viewer && !world.connected(viewer, it.id) }
+            .mapNotNull { view.presentOther(viewer, it.id) }
+            .map { checkNotNull(it.id ?: it.anonId) { "Una persona presentada sin id público" } }
+        val fof = view.friendsOfFriends(viewer).keys.map { signer.anonId(viewer, it) }
+        return Exposure(personIds = others + fof, edges = emptyList())
     }
 }

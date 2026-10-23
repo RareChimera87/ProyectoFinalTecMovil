@@ -71,6 +71,13 @@ import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
 import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.api.social.SocialRoutes
+import me.santiagoreina.parcheu.api.social.introductions.ExposedIntroductionRepository
+import me.santiagoreina.parcheu.api.social.introductions.InMemoryIntroductionRepository
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionModule
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionRepository
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionRoutes
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionSimulationNotifier
+import me.santiagoreina.parcheu.api.social.introductions.introductionModule
 import me.santiagoreina.parcheu.api.platform.tasks.CloudTasksQueue
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.twin.TwinModule
@@ -106,11 +113,18 @@ class AppContainer(
     /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
     val chat: ChatModule = inMemoryChatModule(clock, graph.policy, notifier),
     /**
+     * Presentaciones guardadas (E6.2). Va antes de [simulation] porque el aviso de fin de simulación lo
+     * consulta para no avisar a las personas presentadas antes de la propuesta.
+     */
+    val introductionStore: IntroductionRepository = InMemoryIntroductionRepository(),
+    /**
      * Simulación (E4.3) e informe y decisión mutua (E4.6, con [chat] y [notifier]). Por defecto en
      * memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore.
      */
     val simulation: SimulationModule = inMemorySimulationModule(
-        clock, ai, quota, graph, notifier = NotifierSimulationNotifier(notifier), chat = chat, push = notifier,
+        clock, ai, quota, graph,
+        notifier = IntroductionSimulationNotifier(introductionStore, NotifierSimulationNotifier(notifier), notifier),
+        chat = chat, push = notifier,
     ),
     /** Fila de match (E4.2). Por defecto en memoria: solo [fromConfig] cablea Postgres y Firestore. */
     val matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
@@ -124,10 +138,14 @@ class AppContainer(
      * Postgres, la cola `maintenance`, Firestore y Firebase Auth.
      */
     val account: AccountModule = inMemoryAccountModule(identity, graph, twin, clock),
+    /** Presentar a dos amigos (E6.2): sobre [introductionStore], [simulation], [chat] y [notifier]. */
+    val introductions: IntroductionModule =
+        introductionModule(introductionStore, simulation, graph, chat, quota, notifier, clock),
     /** No leídas de la campana de Inicio (E4.7). Por defecto sin base: 0; [fromConfig] cuenta en Postgres. */
     val unread: UnreadCounter = UnreadCounter.NONE,
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread),
+    val domains: List<DomainRoutes> =
+        allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, introductions),
 ) {
     companion object {
         /**
@@ -170,9 +188,12 @@ class AppContainer(
             // El informe y la decisión mutua (E4.6) reutilizan el chat (DIRECT) y el notifier (NEW_CONNECTION).
             // Los demo deciden con `DEMO_CONNECT_PROBABILITY` (E4.9, ADR-0027).
             val demo = DemoSettings.fromEnv(config.env, vars)
+            // Presentaciones (E6.2): el fin de una simulación de presentación solo avisa a quien presenta.
+            val introductionStore = ExposedIntroductionRepository(database)
             val simulation = simulationModule(
                 config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId,
-                notifier = NotifierSimulationNotifier(notifier), chat = chat, push = notifier,
+                notifier = IntroductionSimulationNotifier(introductionStore, NotifierSimulationNotifier(notifier), notifier),
+                chat = chat, push = notifier,
                 demo = DemoConnectPolicy(demo.connectProbability), demoUsersEnabled = demo.enabled,
             )
             // Fila de match (E4.2): misma base, cuotas, simulación, grafo y avisos; espejo matchTickets en Firestore fuera de local.
@@ -187,10 +208,13 @@ class AppContainer(
                 config.env, database, identity, graph, twin, tasks, config.firebaseProjectId, clock,
                 closedMatches = matching.service::onMatchesClosedByDeletion,
             )
+            val introductions = introductionModule(introductionStore, simulation, graph, chat, quota, notifier, clock)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
-                ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
-                matching = matching, safety = safety, account = account, unread = ExposedUnreadCounter(database),
+                ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
+                introductionStore = introductionStore, simulation = simulation,
+                matching = matching, safety = safety, account = account, introductions = introductions,
+                unread = ExposedUnreadCounter(database),
             )
         }
 
@@ -235,6 +259,8 @@ fun allDomains(
     safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
     unread: UnreadCounter = UnreadCounter.NONE,
+    introductions: IntroductionModule =
+        introductionModule(InMemoryIntroductionRepository(), simulation, graph, chat, quota, NoopNotifier, systemClock()),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -244,6 +270,8 @@ fun allDomains(
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),
+    // Presentar a dos amigos (E6.2).
+    IntroductionRoutes(introductions.service) { firebase -> identity.requireUser(firebase).id },
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     NotificationsRoutes(),
     BillingRoutes(),

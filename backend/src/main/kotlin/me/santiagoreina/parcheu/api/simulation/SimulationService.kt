@@ -65,7 +65,7 @@ class SimulationService(
      * Crea y encola una simulación. [requestedBy] es quien la pidió (null si la origina el sistema);
      * con [chargeQuota] cobra una `SIMULATION` a [requestedBy]. Lo usan `POST /v1/simulations`
      * (PARCHE) y, en sus features, el match al azar (E4.2, RANDOM sin cupo semanal) y las
-     * presentaciones (E6.4).
+     * presentaciones (E6.2, que pasan [id] = id de la presentación para que el cupo lleve ese `ref_id`).
      */
     suspend fun create(
         requestedBy: UUID?,
@@ -74,6 +74,7 @@ class SimulationService(
         mode: Mode,
         origin: SimulationOrigin,
         chargeQuota: Boolean,
+        id: UUID = UUID.randomUUID(),
     ): SimulationRecord {
         if (userA == userB) throw ValidationFailed("No puedes simularte contigo")
         val a = repo.participant(userA)?.takeIf { !it.deleted } ?: throw NotFound("Usuario no encontrado")
@@ -93,7 +94,6 @@ class SimulationService(
         // ADR-0010: con el presupuesto agotado se responde 503 antes de cobrar el cupo.
         ai.ensureBudget()
 
-        val id = UUID.randomUUID()
         val plus = requestedBy?.let { quota.isPlus(it) } ?: false
         val scenarios = SimulationScoring.pickScenarios(repo.scenarios(mode), plus, id)
         if (chargeQuota) quota.consume(checkNotNull(requestedBy) { "Cobrar cupo exige quien la pidió" }, QuotaKind.SIMULATION, id.toString())

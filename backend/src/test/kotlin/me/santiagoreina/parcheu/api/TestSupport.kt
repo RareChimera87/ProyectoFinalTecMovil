@@ -28,6 +28,10 @@ import me.santiagoreina.parcheu.api.matching.MatchingModule
 import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
 import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.platform.notifier.Notifier
+import me.santiagoreina.parcheu.api.social.introductions.InMemoryIntroductionRepository
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionModule
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionRepository
+import me.santiagoreina.parcheu.api.social.introductions.introductionModule
 import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
@@ -78,6 +82,10 @@ fun testContainer(
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
     unread: UnreadCounter = UnreadCounter.NONE,
+    // Presentaciones (E6.2): para que el fin de simulación avise solo a quien presenta, [simulation] debe
+    // usar un `IntroductionSimulationNotifier` sobre este mismo [introductionStore] (IntroductionApiTest).
+    introductionStore: IntroductionRepository = InMemoryIntroductionRepository(),
+    introductions: IntroductionModule = introductionModule(introductionStore, simulation, graph, chat, quota, notifier, clock),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
@@ -96,13 +104,15 @@ fun testContainer(
         twin = twin,
         graph = graph,
         chat = chat,
+        introductionStore = introductionStore,
         simulation = simulation,
         notifier = notifier,
         matching = matching,
         safety = safety,
         account = accountModule,
+        introductions = introductions,
         unread = unread,
-        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread) + extra,
+        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, introductions) + extra,
     )
 }
 

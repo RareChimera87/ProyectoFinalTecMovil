@@ -22,6 +22,7 @@ import me.santiagoreina.parcheu.contract.DecisionStatus
 import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.ReportDto
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import kotlinx.coroutines.CancellationException
 import org.slf4j.LoggerFactory
@@ -58,9 +59,12 @@ class ReportService(
 ) : ReportAccess {
     private val log = LoggerFactory.getLogger(ReportService::class.java)
 
-    /** `GET /v1/simulations/{id}/report`. */
+    /**
+     * `GET /v1/simulations/{id}/report`. Quien presentó (simulación `INTRODUCTION`, E6.2) también lo ve
+     * (E2), con la misma regla del informe mensual y sin campos de decisión.
+     */
     suspend fun report(viewer: UUID, id: String): ReportDto {
-        val record = finished(viewer, id)
+        val record = finished(viewer, id, allowIntroducer = true)
         return build(viewer, record, checkNotNull(record.report))
     }
 
@@ -69,7 +73,7 @@ class ReportService(
      * devuelve el informe completo sin cobrar. Sin cupo → 402 `QUOTA_EXCEEDED(kind=FULL_REPORT)`.
      */
     suspend fun unlock(viewer: UUID, id: String): ReportDto {
-        val record = finished(viewer, id)
+        val record = finished(viewer, id, allowIntroducer = true)
         if (!hasFullAccess(viewer, record.id)) {
             val refId = "report:${record.id}:$viewer"
             quota.consume(viewer, QuotaKind.FULL_REPORT, refId)
@@ -196,11 +200,15 @@ class ReportService(
         false
     }
 
-    /** Simulación DONE con informe en la que participa [viewer]; si no, 404 (no revela si existe). */
-    private suspend fun finished(viewer: UUID, rawId: String): SimulationRecord {
+    /**
+     * Simulación DONE con informe en la que participa [viewer] (o que presentó, con [allowIntroducer]);
+     * si no, 404 (no revela si existe). Decidir conectar exige participar.
+     */
+    private suspend fun finished(viewer: UUID, rawId: String, allowIntroducer: Boolean = false): SimulationRecord {
         val id = runCatching { UUID.fromString(rawId) }.getOrNull() ?: throw NotFound()
         val record = simulations.find(id) ?: throw NotFound()
-        if (record.sideOf(viewer) == null) throw NotFound()
+        val introducer = allowIntroducer && record.origin == SimulationOrigin.INTRODUCTION && record.requestedBy == viewer
+        if (record.sideOf(viewer) == null && !introducer) throw NotFound()
         if (record.status != SimulationStatus.DONE || record.report == null) throw NotFound("El informe todavía no está listo")
         return record
     }

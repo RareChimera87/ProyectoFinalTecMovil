@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.graph
 
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
 import java.util.UUID
@@ -116,6 +117,8 @@ object ThirdPartyViews {
     val registered: Set<KClass<out ThirdPartyView>> = setOf(
         // Sugerencias de Inicio (E4.7): el conteo de amigos en común lee aristas del candidato.
         HomeSuggestions::class,
+        // Presentaciones (E6.2): la otra persona presentada (E3) y los amigos de amigos de 'Pedir presentación'.
+        IntroductionPeople::class,
     )
 
     fun names(): Set<String> = registered.mapNotNull { it.simpleName }.toSet()

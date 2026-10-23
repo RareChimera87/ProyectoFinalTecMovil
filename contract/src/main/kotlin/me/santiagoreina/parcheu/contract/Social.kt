@@ -9,8 +9,15 @@ import kotlin.time.Instant
  * los usuarios gratis solo reciben `count`.
  */
 
+/**
+ * Estado de una presentación (E6.2) **visto por quien consulta**: SIMULATING (los gemelos simulan),
+ * READY (terminó; solo quien presenta lo ve mientras decide si enviar la propuesta), PROPOSED (la
+ * propuesta llegó a los dos), CONNECTED (los dos dijeron 'Me interesa'), DECLINED (quien consulta dijo
+ * que no) y FAILED (la simulación falló; el cupo se devolvió). Un 'No, gracias' ajeno nunca se revela:
+ * quien no lo dijo sigue viendo PROPOSED.
+ */
 @Serializable
-public enum class IntroductionStatus { SIMULATING, PROPOSED, CONNECTED, DECLINED, FAILED }
+public enum class IntroductionStatus { SIMULATING, READY, PROPOSED, CONNECTED, DECLINED, FAILED }
 
 @Serializable
 public enum class RedeemStatus { PENDING, CONNECTED }
@@ -110,6 +117,8 @@ public data class Introduce(
 /**
  * POST/GET /v1/introductions[/{id}]; `myResponse` nulo = sin responder. `introducer` es quien
  * presenta y `other` la persona propuesta al usuario (E3); ambos permiten Reportar o bloquear (E8.1).
+ * Para quien presenta (E2), `other` es la primera persona presentada e `introduced` trae a las dos;
+ * a las personas presentadas `introduced` les llega vacío.
  */
 @Serializable
 public data class IntroductionDto(
@@ -121,9 +130,14 @@ public data class IntroductionDto(
     val simulationId: String? = null,
     val report: ReportDto? = null,
     val myResponse: Boolean? = null,
+    val introduced: List<PersonRef> = emptyList(),
 )
 
-/** POST /v1/introductions/{id}/response */
+/**
+ * POST /v1/introductions/{id}/response. Quien presenta lo usa en E2 para enviar la propuesta
+ * (`true`) o dejarla en 'No por ahora' (`false`); cada persona presentada, en E3, para 'Me interesa'
+ * o 'No, gracias'.
+ */
 @Serializable
 public data class IntroResponse(
     val interested: Boolean,

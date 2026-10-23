@@ -16,6 +16,12 @@ public object NotificationKinds {
     public const val CONNECT_REQUEST: String = "CONNECT_REQUEST"
     public const val NEW_CONNECTION: String = "NEW_CONNECTION"
     public const val INTRODUCTION_PROPOSAL: String = "INTRODUCTION_PROPOSAL"
+
+    /** A quien presenta: la simulación de su presentación terminó (E2) o falló. */
+    public const val INTRODUCTION_READY: String = "INTRODUCTION_READY"
+
+    /** Al amigo en común: alguien de su parche le pide una presentación (D6, ParcheU+). */
+    public const val INTRODUCTION_REQUEST: String = "INTRODUCTION_REQUEST"
     public const val INVITE_PENDING: String = "INVITE_PENDING"
     public const val CHAT_MESSAGE: String = "CHAT_MESSAGE"
     public const val TWIN_MEMORIES: String = "TWIN_MEMORIES"

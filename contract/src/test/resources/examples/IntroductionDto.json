@@ -24,5 +24,6 @@
     "reasonsCount": 0,
     "frictionsCount": 0
   },
-  "myResponse": true
+  "myResponse": true,
+  "introduced": []
 }
