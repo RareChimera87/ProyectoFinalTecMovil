@@ -280,6 +280,35 @@ class BillingRepositoryImplTest {
     }
 
     @Test
+    fun alreadyOwnedWithoutPlusFromTheServerStaysPending() = runTest {
+        // Play dice ITEM_ALREADY_OWNED, la compra se verifica pero el servidor no da Plus.
+        val h = harness(api = FakeBillingApi(verifyResponse = FREE))
+        h.client.activePurchases = listOf(purchase("tok-own"))
+
+        h.client.emitPurchasesUpdate(BillingResponseCode.ITEM_ALREADY_OWNED)
+        runCurrent()
+
+        assertEquals(listOf("tok-own"), h.api.verifyCalls.map { it.purchaseToken })
+        assertEquals(PurchaseState.VerificationPending, h.repository.purchaseState.value)
+        assertFalse(h.states.any { it is PurchaseState.Completed })
+    }
+
+    @Test
+    fun alreadyOwnedWithOnlyAPendingPurchaseKeepsVerificationPending() = runTest {
+        // Nada que verificar (la compra sigue PENDING) y el derecho del servidor es plus=false.
+        val h = harness()
+        h.client.activePurchases = listOf(purchase("tok-cash", pending = true))
+
+        h.client.emitPurchasesUpdate(BillingResponseCode.ITEM_ALREADY_OWNED)
+        runCurrent()
+
+        assertTrue(h.api.verifyCalls.isEmpty())
+        assertEquals(PurchaseState.VerificationPending, h.repository.purchaseState.value)
+        assertFalse(h.states.any { it is PurchaseState.Completed })
+        assertEquals(FREE, h.repository.entitlement.value)
+    }
+
+    @Test
     fun refreshEntitlementPublishesTheServerState() = runTest {
         val grace = EntitlementDto(plus = true, state = EntitlementState.IN_GRACE_PERIOD)
         val h = harness(api = FakeBillingApi(entitlementResponse = grace))
@@ -304,6 +333,22 @@ class BillingRepositoryImplTest {
         runCurrent()
 
         assertEquals(PurchaseState.VerificationPending, h.repository.purchaseState.value)
+    }
+
+    @Test
+    fun notImplementedVerifyIsPendingNeverSuccess() = runTest {
+        // Backend sin /v1/billing/verify todavía: 501 es 'verificación pendiente', no éxito.
+        val api =
+            FakeBillingApi().apply {
+                verifyFailure = HttpException(Response.error<Any>(501, "".toResponseBody()))
+            }
+        val h = harness(api = api)
+
+        h.client.emitPurchasesUpdate(BillingResponseCode.OK, listOf(purchase("tok-501")))
+        runCurrent()
+
+        assertEquals(PurchaseState.VerificationPending, h.repository.purchaseState.value)
+        assertEquals(null, h.repository.entitlement.value)
     }
 
     @Test

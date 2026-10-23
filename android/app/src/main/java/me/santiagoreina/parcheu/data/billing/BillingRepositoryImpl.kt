@@ -164,8 +164,18 @@ class BillingRepositoryImpl(
             // Ya la tiene (p. ej. comprada en otro dispositivo o sin verificar): se restaura.
             BillingResponseCode.ITEM_ALREADY_OWNED ->
                 when (val restored = restorePurchases()) {
+                    // Solo el derecho Plus confirmado por el servidor completa la compra. Con
+                    // plus=false (nada verificado, compra PENDING o verify sin derecho) Play dice
+                    // que ya es suya pero la API no lo confirma: queda pendiente (incluido el
+                    // VerificationPending que restorePurchases pudo poner) y lo concilia
+                    // syncPurchases.
                     is RestoreResult.Restored ->
-                        _purchaseState.value = PurchaseState.Completed(restored.entitlement)
+                        _purchaseState.value =
+                            if (restored.entitlement.plus) {
+                                PurchaseState.Completed(restored.entitlement)
+                            } else {
+                                PurchaseState.VerificationPending
+                            }
                     is RestoreResult.Failed -> {
                         val failure = restored.failure
                         // Ya pagada: red o 5xx al verificar no es un error definitivo, queda pendiente
