@@ -45,6 +45,8 @@ dependencies {
     runtimeOnly(libs.flyway.postgresql)
 
     implementation(libs.firebase.admin)
+    // Cloud Tasks (E2.3, ADR-0019): encolar trabajo asíncrono hacia /internal/tasks/*.
+    implementation(libs.google.cloud.tasks)
     implementation(libs.google.api.client)
 
     // Pasarela de IA (E0.9, ADR-0008): Gemini (Gen AI SDK en modo Vertex) y Claude en Vertex.
