@@ -93,4 +93,26 @@ class ExportDataViewModelTest {
         assertEquals(AppError.Network, vm.state.value.error)
         assertNull(vm.state.value.loading)
     }
+
+    @Test
+    fun afterProcessDeathTheChosenDocumentIsFilledWithAFreshExport() = runTest {
+        // ViewModel nuevo (el sistema mató el proceso con el selector abierto): no tiene el JSON pendiente.
+        val vm = viewModel()
+        vm.onDocumentCreated("content://docs/2")
+        assertEquals(listOf("export"), account.calls)
+        assertEquals(FakeAccountRepository.SAMPLE_EXPORT, files.written["content://docs/2"])
+        assertEquals(ExportOutcome.SAVED, vm.state.value.outcome)
+        assertNull(vm.state.value.loading)
+    }
+
+    @Test
+    fun afterProcessDeathAnApiErrorIsShownInsteadOfCancelled() = runTest {
+        account.exportResult = ApiResult.Failure(AppError.Network)
+        val vm = viewModel()
+        vm.onDocumentCreated("content://docs/2")
+        assertTrue(files.written.isEmpty())
+        assertEquals(AppError.Network, vm.state.value.error)
+        assertNull(vm.state.value.outcome)
+        assertNull(vm.state.value.loading)
+    }
 }
