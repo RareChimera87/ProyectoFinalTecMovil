@@ -7,7 +7,10 @@ import kotlinx.serialization.Serializable
 @Serializable
 public enum class EdgeState { CONNECTED, SIMULATED, PENDING }
 
-/** Nodo del grafo; `anonymous` = sin conexión mutua (sin nombre ni foto). `affinity` 0-100. */
+/**
+ * Nodo del grafo; `anonymous` = sin conexión mutua (sin nombre ni foto). `affinity` 0-100. `isDemo` marca un
+ * perfil de demostración (ADR-0027): la UI muestra la insignia 'Perfil de demostración'.
+ */
 @Serializable
 public data class NodeDto(
     val id: String,
@@ -18,6 +21,7 @@ public data class NodeDto(
     val mode: Mode,
     val state: EdgeState,
     val anonymous: Boolean = false,
+    val isDemo: Boolean = false,
 )
 
 @Serializable

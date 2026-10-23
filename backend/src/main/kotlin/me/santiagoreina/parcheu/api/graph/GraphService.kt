@@ -117,6 +117,7 @@ class GraphService(
             mode = primary.mode,
             state = primary.state,
             anonymous = view.anonymous,
+            isDemo = view.isDemo,
         )
     }
 

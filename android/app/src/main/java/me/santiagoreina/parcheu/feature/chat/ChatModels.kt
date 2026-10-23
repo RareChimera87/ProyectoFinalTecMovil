@@ -63,7 +63,9 @@ data class ChatHeader(
     val muted: Boolean,
     val closed: Boolean,
     /** `anonId` con el que se ve a la otra persona en un chat anónimo (escenario, F3). */
-    val otherAnonId: String? = null
+    val otherAnonId: String? = null,
+    /** La otra persona es un perfil de demostración (ADR-0027): banner fijo y nunca responde. */
+    val isDemo: Boolean = false
 ) {
     /**
      * H1 necesita un objetivo: el uuid de la otra persona o, si es anónima, su `anonId` (el servidor
@@ -82,7 +84,8 @@ internal fun ChatSummary.toHeader(): ChatHeader = ChatHeader(
     mode = mode,
     muted = muted,
     closed = status == ChatStatus.CLOSED,
-    otherAnonId = other.anonId.takeIf { other.id == null }
+    otherAnonId = other.anonId.takeIf { other.id == null },
+    isDemo = other.isDemo
 )
 
 /** Falla del listener de Firestore ya traducida a [error]; la lanza el repositorio y la lee el ViewModel. */

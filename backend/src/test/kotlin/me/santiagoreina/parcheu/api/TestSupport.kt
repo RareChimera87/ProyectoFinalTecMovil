@@ -17,6 +17,7 @@ import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
+import me.santiagoreina.parcheu.api.home.UnreadCounter
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
@@ -76,6 +77,8 @@ fun testContainer(
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
+    unread: UnreadCounter = UnreadCounter.NONE,
+    // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
     val identity = IdentityService(repo, clock, legalTextVersion)
@@ -98,7 +101,8 @@ fun testContainer(
         matching = matching,
         safety = safety,
         account = accountModule,
-        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule) + extra,
+        unread = unread,
+        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread) + extra,
     )
 }
 

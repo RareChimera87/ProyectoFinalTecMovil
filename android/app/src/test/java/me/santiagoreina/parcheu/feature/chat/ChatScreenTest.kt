@@ -6,7 +6,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import me.santiagoreina.parcheu.contract.ChatSummary
+import me.santiagoreina.parcheu.contract.ChatType
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.PersonRef
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import org.junit.Assert.assertEquals
@@ -36,6 +39,43 @@ class ChatScreenTest {
 
     private fun show(state: ChatUiState, actions: ChatActions = ChatActions()) {
         composeRule.setContent { ParcheUTheme { ChatScreen(state, actions) } }
+    }
+
+    @Test
+    fun demoChatShowsFixedBannerAndBadge() {
+        show(ChatUiState(loading = false, header = header.copy(isDemo = true)))
+        composeRule.onNodeWithTag(ChatTags.DEMO_BANNER).assertIsDisplayed()
+        composeRule.onNodeWithText(DEMO_CHAT_BANNER_TEXT).assertIsDisplayed()
+        composeRule.onNodeWithText(DEMO_CHAT_SUBTITLE).assertIsDisplayed()
+    }
+
+    @Test
+    fun regularChatHasNoDemoBanner() {
+        show(ChatUiState(loading = false, header = header))
+        composeRule.onNodeWithTag(ChatTags.DEMO_BANNER).assertDoesNotExist()
+        composeRule.onNodeWithText(DEMO_CHAT_SUBTITLE).assertDoesNotExist()
+    }
+
+    @Test
+    fun summaryOfDemoMapsToDemoHeader() {
+        val summary =
+            ChatSummary(
+                id = "c9",
+                type = ChatType.DIRECT,
+                mode = Mode.AMISTAD,
+                other =
+                PersonRef(
+                    id = "u9",
+                    label = "Valentina (demo)",
+                    initials = "V",
+                    isDemo = true
+                )
+            )
+        assertEquals(true, summary.toHeader().isDemo)
+        assertEquals(
+            false,
+            summary.copy(other = summary.other.copy(isDemo = false)).toHeader().isDemo
+        )
     }
 
     @Test

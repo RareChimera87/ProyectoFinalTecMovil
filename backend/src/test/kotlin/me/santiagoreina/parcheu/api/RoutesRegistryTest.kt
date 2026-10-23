@@ -49,7 +49,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     "billing" to listOf(HttpMethod.Get to "/v1/billing/entitlement", HttpMethod.Post to "/v1/billing/verify"),
     // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` sigue en 501 (E8.6).
     "admin" to listOf(HttpMethod.Get to "/v1/admin/reports", HttpMethod.Post to "/v1/admin/reports/r1/resolve"),
-    "home" to listOf(HttpMethod.Get to "/v1/home"),
+    // Home: E4.7 implementa GET /v1/home (HomeApiTest); ya no queda ningún stub.
 )
 
 // `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest) y

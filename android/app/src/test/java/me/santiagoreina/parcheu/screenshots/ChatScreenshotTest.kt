@@ -132,6 +132,21 @@ class ChatScreenshotTest(private val dark: Boolean) {
     }
 
     @Test
+    fun f9ChatDemo() = capture("f9_chat_demo") {
+        ChatScreen(
+            ChatUiState(
+                loading = false,
+                header = header.copy(name = "Valentina (demo)", initials = "V", isDemo = true),
+                messages =
+                listOf(
+                    ChatMessageUi("1", "Hola, ¿qué tal el parcial?", mine = true, createdAt = at)
+                )
+            ),
+            ChatActions()
+        )
+    }
+
+    @Test
     fun chatListWithChats() = capture("chat_list") {
         ChatListScreen(
             UiState.Loaded(

@@ -7,7 +7,8 @@
     "affinity": 100,
     "mode": "AMISTAD",
     "state": "CONNECTED",
-    "anonymous": false
+    "anonymous": false,
+    "isDemo": false
   },
   "nodes": [
     {
@@ -18,7 +19,8 @@
       "affinity": 87,
       "mode": "AMISTAD",
       "state": "CONNECTED",
-      "anonymous": false
+      "anonymous": false,
+      "isDemo": false
     },
     {
       "id": "n-anon-1",
@@ -27,7 +29,8 @@
       "affinity": 64,
       "mode": "ESTUDIO",
       "state": "SIMULATED",
-      "anonymous": true
+      "anonymous": true,
+      "isDemo": false
     }
   ],
   "edges": [

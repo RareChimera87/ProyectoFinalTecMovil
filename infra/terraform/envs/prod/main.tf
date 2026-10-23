@@ -46,6 +46,12 @@ variable "simulations_max_dispatches_per_second" {
   default     = 2
 }
 
+variable "demo_users_enabled" {
+  description = "Usuarios demo (ADR-0027): true solo durante la prueba cerrada; false antes de la 1.0 (y luego purge-demo)."
+  type        = bool
+  default     = false
+}
+
 variable "simulations_max_concurrent_dispatches" {
   description = "Techo de gasto de IA: simulaciones en paralelo."
   type        = number
@@ -78,6 +84,8 @@ module "platform" {
   }
 
   rtdn_push_enabled = true
+
+  demo_users_enabled = var.demo_users_enabled
 }
 
 output "api_url" {

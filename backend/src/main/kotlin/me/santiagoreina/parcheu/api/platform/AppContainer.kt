@@ -14,12 +14,18 @@ import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
 import me.santiagoreina.parcheu.api.chat.FirestoreChatMirror
 import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
+import me.santiagoreina.parcheu.api.demo.DemoConnectPolicy
+import me.santiagoreina.parcheu.api.demo.DemoSettings
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
+import me.santiagoreina.parcheu.api.home.ExposedUnreadCounter
 import me.santiagoreina.parcheu.api.home.HomeRoutes
+import me.santiagoreina.parcheu.api.home.HomeService
+import me.santiagoreina.parcheu.api.home.HomeSuggestions
+import me.santiagoreina.parcheu.api.home.UnreadCounter
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
@@ -118,8 +124,10 @@ class AppContainer(
      * Postgres, la cola `maintenance`, Firestore y Firebase Auth.
      */
     val account: AccountModule = inMemoryAccountModule(identity, graph, twin, clock),
+    /** No leídas de la campana de Inicio (E4.7). Por defecto sin base: 0; [fromConfig] cuenta en Postgres. */
+    val unread: UnreadCounter = UnreadCounter.NONE,
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread),
 ) {
     companion object {
         /**
@@ -160,9 +168,12 @@ class AppContainer(
             val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
             // Simulación (E4.3): misma base, cola y avisos; el espejo de progreso va a Firestore fuera de local.
             // El informe y la decisión mutua (E4.6) reutilizan el chat (DIRECT) y el notifier (NEW_CONNECTION).
+            // Los demo deciden con `DEMO_CONNECT_PROBABILITY` (E4.9, ADR-0027).
+            val demo = DemoSettings.fromEnv(config.env, vars)
             val simulation = simulationModule(
                 config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId,
                 notifier = NotifierSimulationNotifier(notifier), chat = chat, push = notifier,
+                demo = DemoConnectPolicy(demo.connectProbability),
             )
             // Fila de match (E4.2): misma base, cuotas, simulación, grafo y avisos; espejo matchTickets en Firestore fuera de local.
             val matching = matchingModule(
@@ -176,7 +187,7 @@ class AppContainer(
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
-                matching = matching, safety = safety, account = account,
+                matching = matching, safety = safety, account = account, unread = ExposedUnreadCounter(database),
             )
         }
 
@@ -220,6 +231,7 @@ fun allDomains(
     matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
     safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
+    unread: UnreadCounter = UnreadCounter.NONE,
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -234,5 +246,15 @@ fun allDomains(
     BillingRoutes(),
     SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
     AdminRoutes(),
-    HomeRoutes(),
+    // Inicio (E4.7): agregador de cupos, simulaciones, sugerencias del grafo y no leídas.
+    // Las sugerencias solo ofrecen modos activos para los dos, como exige SimulationService.create.
+    HomeRoutes(HomeService(quota.service, simulation.service, homeSuggestions(graph, simulation), unread)) { firebase ->
+        identity.requireUser(firebase).id
+    },
 )
+
+/** Sugerencias de Inicio con los modos activos leídos de `user_modes` (vía el repositorio de simulaciones). */
+private fun homeSuggestions(graph: GraphModule, simulation: SimulationModule) =
+    HomeSuggestions(graph.repository, graph.policy) { userId ->
+        simulation.repository.participant(userId)?.takeIf { !it.deleted }?.activeModes.orEmpty()
+    }

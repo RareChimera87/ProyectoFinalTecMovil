@@ -12,6 +12,7 @@ locals {
     TASKS_QUEUE_AI_LIGHT   = google_cloud_tasks_queue.this["ai-light"].name
     TASKS_QUEUE_MAINT      = google_cloud_tasks_queue.this["maintenance"].name
     INTERNAL_OIDC_AUDIENCE = local.internal_audience
+    DEMO_USERS_ENABLED     = tostring(var.demo_users_enabled)
     # Nombres completos de los secretos; la API lee la versión `latest` con la
     # API de Secret Manager (no se montan para que Cloud Run no falle mientras
     # el secreto no tenga versión).

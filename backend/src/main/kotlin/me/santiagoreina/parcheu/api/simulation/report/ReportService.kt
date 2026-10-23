@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.simulation.report
 
 import me.santiagoreina.parcheu.api.chat.ChatService
+import me.santiagoreina.parcheu.api.demo.DemoConnectPolicy
 import me.santiagoreina.parcheu.api.graph.EdgeEvent
 import me.santiagoreina.parcheu.api.graph.EdgeService
 import me.santiagoreina.parcheu.api.graph.EdgeSource
@@ -41,6 +42,8 @@ import java.util.UUID
  *   entonces. "Ahora no" no avisa a nadie ni se revela: quien conecta después ve WAITING.
  * - **409 puro:** repetir una decisión ya resuelta no escribe nada (ni reabre un chat cerrado por un
  *   bloqueo, E8.1). La única excepción es el par completo sin chat (la conexión falló a medias).
+ * - **Usuarios demo (E4.9, ADR-0027):** un demo no usa la app, así que decide justo antes que el tester según
+ *   [demo] (probabilidad configurable, determinista por simulación). Su decisión se guarda como cualquier otra.
  */
 class ReportService(
     private val simulations: SimulationRepository,
@@ -51,6 +54,7 @@ class ReportService(
     private val notifier: Notifier,
     private val people: PersonPresenter,
     private val clock: Clock,
+    private val demo: DemoConnectPolicy = DemoConnectPolicy.DEFAULT,
 ) : ReportAccess {
     private val log = LoggerFactory.getLogger(ReportService::class.java)
 
@@ -87,6 +91,7 @@ class ReportService(
         val record = finished(viewer, id)
         val other = record.otherThan(viewer)
         if (simulations.blockedEitherWay(viewer, other)) throw Blocked()
+        decideForDemo(record, other)
         val saved = when (val outcome = repo.decide(record.id, viewer, body.connect, clock.instant())) {
             DecideOutcome.AlreadyDecided -> {
                 // Reintento de quien completó el par cuando la conexión falló a medias (arista/chat/avisos):
@@ -115,6 +120,12 @@ class ReportService(
                 DecisionResult(DecisionStatus.CONNECTED, chatId.toString())
             }
         }
+    }
+
+    /** Si [other] es un demo y aún no decidió, decide ahora (idempotente: una segunda vez no cambia nada). */
+    private suspend fun decideForDemo(record: SimulationRecord, other: UUID) {
+        if (simulations.participant(other)?.isDemo != true) return
+        repo.decide(record.id, other, demo.wantsToConnect(record.id), clock.instant())
     }
 
     /** ¿[viewer] ve el informe completo (y la transcripción)? Plus o informe desbloqueado. */

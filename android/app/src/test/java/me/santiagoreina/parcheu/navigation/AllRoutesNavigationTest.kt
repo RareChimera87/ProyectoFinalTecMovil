@@ -11,6 +11,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import me.santiagoreina.parcheu.ParcheUApp
 import me.santiagoreina.parcheu.core.ui.stubTag
+import me.santiagoreina.parcheu.feature.home.HomeTags
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -33,10 +34,11 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         lateinit var navController: NavHostController
         composeRule.setContent {
             navController = rememberNavController()
-            // Se arranca en Home (stub): el Splash real (E2.2) navegaría solo según la sesión.
+            // Se arranca en Home: el Splash real (E2.2) navegaría solo según la sesión. Desde E4.7 Home
+            // es la pantalla real C1 (HomeScreenTest), así que se comprueba su raíz y no un stub.
             ParcheUApp(navController = navController, startDestination = Home)
         }
-        composeRule.onNodeWithTag(stubTag(Home)).assertIsDisplayed()
+        composeRule.onNodeWithTag(HomeTags.ROOT).assertIsDisplayed()
 
         composeRule.runOnUiThread { navController.navigate(entry.route) }
         composeRule.waitForIdle()
@@ -72,8 +74,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * (E2.5: Modes, Consent, TwinReady), D1-D5 (E3.4, ParcheViewModelTest), F1-F2 (E4.4,
          * MatchQueueViewModelTest), F4-F6 (E4.5, feature/simulation), F7-F8 e I3 (E4.6, feature/results),
          * lista de chats y F9 (E5.2), H2 con sus confirmaciones (E8.1, ReportScreenTest y
-         * SafetyScreenshotTest) y el borrado y 'Descargar mis datos' (E8.3, DeleteAccountScreenTest,
-         * ExportDataRouteTest y AccountScreenshotTest).
+         * SafetyScreenshotTest), el borrado y 'Descargar mis datos' (E8.3, DeleteAccountScreenTest,
+         * ExportDataRouteTest y AccountScreenshotTest) y C1/I1 (E4.7, HomeScreenTest y HomeScreenshotTest).
          */
         val implementedRoutes =
             setOf(
@@ -95,7 +97,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 Chat::class,
                 Report::class,
                 DeleteAccount::class,
-                ExportData::class
+                ExportData::class,
+                Home::class
             )
     }
 }

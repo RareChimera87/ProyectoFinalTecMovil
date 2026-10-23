@@ -59,6 +59,7 @@ object ChatTags {
     const val MENU_MUTE = "chat:menu:mute"
     const val MENU_REPORT = "chat:menu:report"
     const val CONSENT_BANNER = "chat:consent"
+    const val DEMO_BANNER = "chat:demo"
     const val BACK = "chat:back"
     const val RETRY = "chat:retry"
 
@@ -261,6 +262,32 @@ internal fun ConsentBanner(
             )
         }
     }
+}
+
+/** Texto fijo del chat con un perfil de demostración (ADR-0027). */
+const val DEMO_CHAT_BANNER_TEXT = "Esta es una cuenta de demostración: no responde mensajes"
+
+/** Subtítulo de la barra superior cuando la otra persona es un demo. */
+const val DEMO_CHAT_SUBTITLE = "Perfil de demostración"
+
+/** Banner fijo de F9 con un demo (ADR-0027): no se puede cerrar y siempre está visible. */
+@Composable
+internal fun DemoBanner(modifier: Modifier = Modifier) {
+    val colors = ParcheUTheme.colors
+    val shape = RoundedCornerShape(16.dp)
+    Text(
+        text = DEMO_CHAT_BANNER_TEXT,
+        style = MaterialTheme.typography.bodySmall,
+        color = colors.tx,
+        modifier =
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(shape)
+            .background(colors.s2, shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .testTag(ChatTags.DEMO_BANNER)
+    )
 }
 
 /** Entrada de F9: píldora s2 de 48dp y botón de enviar circular de 48dp, deshabilitado sin texto. */

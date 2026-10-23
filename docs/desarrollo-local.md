@@ -173,6 +173,21 @@ JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
 
 - `SimulationDbTest` usa Postgres real: en local, `PARCHEU_TEST_DB_URL` apuntando a un Postgres 16 desechable (ver `TestDatabase`).
 
+## Usuarios demo (E4.9, ADR-0027)
+
+- Variables (servicio `api` y jobs): `DEMO_USERS_ENABLED` (la misma bandera de la fila), `DEMO_CONNECT_PROBABILITY` (0..1, por defecto `0.7`: probabilidad de que un demo diga "Conectar"; determinista por simulación) y `DEMO_TICKET_DAYS` (1..30, por defecto 7: vigencia de los tickets que siembra `seed-demo`). Un valor inválido hace fallar el arranque.
+- Sembrar y purgar contra un Postgres local (tras `migrate`):
+
+  ```bash
+  cd backend
+  export ENV=local DB_NAME=parcheu DB_URL=jdbc:postgresql://localhost:5432/parcheu DB_USER=postgres
+  ./gradlew run --args=seed-demo    # 20 demos (demo-01..demo-20), repetible: refresca sus tickets de la fila
+  ./gradlew run --args=purge-demo   # borra los demo y todo lo que los nombra
+  ```
+
+- `seed-demo` es idempotente y no llama a la IA. Un demo emparejado vuelve a la fila cuando se repite `seed-demo` (si no tiene un match esperando elección ni gastó ya su match al azar del día).
+- `DemoDbTest` usa Postgres real (idempotencia, bandera, prioridad y purga sobre **todas** las columnas de todas las tablas): en local, `PARCHEU_TEST_DB_URL` apuntando a un Postgres 16 desechable (ver `TestDatabase`). Sin Docker se puede levantar uno con los binarios del paquete `pgserver` de PyPI (`initdb` + `pg_ctl -o "-p 54329"`).
+
 ## Fila de match (E4.2)
 
 - Banderas del servicio `api`: `DEMO_USERS_ENABLED` (por defecto `true` en local y dev, `false` en prod) y `SCENARIO_MODE_ENABLED` (por defecto `false` hasta E4.8). El espejo `matchTickets/{uid}` escribe en Firestore solo si hay `FIREBASE_PROJECT_ID` y `ENV` no es `local`.

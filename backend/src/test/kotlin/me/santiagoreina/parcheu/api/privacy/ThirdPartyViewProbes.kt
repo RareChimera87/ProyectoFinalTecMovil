@@ -6,6 +6,8 @@ import me.santiagoreina.parcheu.api.graph.GraphService
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.ThirdPartyView
 import me.santiagoreina.parcheu.api.graph.ViewContext
+import me.santiagoreina.parcheu.api.home.HomeSuggestions
+import me.santiagoreina.parcheu.contract.Mode
 import java.util.UUID
 import kotlin.reflect.KClass
 
@@ -28,7 +30,9 @@ interface ThirdPartyViewProbe {
  * test de registro falla si falta. [reference] se verifica siempre, haya o no vistas registradas.
  */
 object ThirdPartyViewProbes {
-    val byView: Map<KClass<out ThirdPartyView>, ThirdPartyViewProbe> = emptyMap()
+    val byView: Map<KClass<out ThirdPartyView>, ThirdPartyViewProbe> = mapOf(
+        HomeSuggestions::class to HomeSuggestionsProbe,
+    )
 
     val reference: List<ThirdPartyViewProbe> = listOf(ThirdPartyNodesProbe, EgoGraphProbe)
 
@@ -87,5 +91,24 @@ object EgoGraphProbe : ThirdPartyViewProbe {
             edges = graph.edges.map { ExposedEdge(me, it.otherId, it.mode) } +
                 details.flatMap { detail -> detail.sharedModes.map { ExposedEdge(me, detail.node.id, it) } },
         )
+    }
+}
+
+/**
+ * Sugerencias de Inicio (E4.7) con ParcheU+ (el caso que calcula amigos en común). Lo que se expone a
+ * terceros son las aristas candidato–amigo que entran en `mutualCount`: se traducen a [ExposedEdge]
+ * y se verifican en segundo grado (nunca Pareja ajena, HIDDEN, bloqueados ni borrados). Las personas
+ * sugeridas son conexiones directas (contexto EGO) y se prueban en `HomeSuggestionsTest`.
+ */
+object HomeSuggestionsProbe : ThirdPartyViewProbe {
+    override val name = "sugerencias de inicio (amigos en común)"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val view = HomeSuggestions(world.toGraphRepository(), GraphVisibilityPolicy(signer)) { Mode.entries.toSet() }
+        val edges = view.candidates(viewer, withMutuals = true)
+            .flatMap { it.mutuals.orEmpty() }
+            .map { ExposedEdge(it.candidateId, it.mutualId, it.mode) }
+        return Exposure(personIds = edges.map { it.bId }, edges = edges)
     }
 }

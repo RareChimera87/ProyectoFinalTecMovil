@@ -46,6 +46,7 @@ ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de 
 | `TASKS_SERVICE_ACCOUNT` | email de `sa-tasks` (va en el token OIDC de cada tarea) |
 | `TASKS_QUEUE_SIM`, `TASKS_QUEUE_AI_LIGHT`, `TASKS_QUEUE_MAINT` | nombre completo de cada cola |
 | `INTERNAL_OIDC_AUDIENCE` | `https://api.parcheu-<env>.internal`: audiencia fija (custom audience de Cloud Run) de los tokens de Tasks, Scheduler y Pub/Sub; `/internal/*` la verifica junto con el email de `sa-tasks` |
+| `DEMO_USERS_ENABLED` | `var.demo_users_enabled`: `true` en dev; en prod `false` salvo durante la prueba cerrada (`-var demo_users_enabled=true`, ADR-0027, E4.9) |
 | `SECRET_HMAC_ANON_KEY`, `SECRET_PLAY_SA` | nombre del secreto; la API lee la versión `latest` con la API de Secret Manager (no se montan, para que Cloud Run no falle mientras el secreto no tenga valor) |
 
 Trabajos de Cloud Scheduler (hora de Bogotá) → `POST /internal/jobs/<nombre>`: `communities` (lunes 03:00),
