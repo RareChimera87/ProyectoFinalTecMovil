@@ -21,11 +21,21 @@ import java.util.UUID
  * Es una vista de terceros (ADR-0012): el conteo de amigos en común lee aristas del candidato con
  * otras personas, así que sigue el patrón de la suite E3.5 (candidatos → `canSee` → `canSeeEdge` →
  * `present`) y está registrada en [me.santiagoreina.parcheu.api.graph.ThirdPartyViews].
+ *
+ * Solo se sugiere un modo activo para los dos ([activeModes]): las aristas CONNECTED siguen en el
+ * grafo aunque alguien apague el modo, pero `SimulationService.create` exige el modo activo en ambos,
+ * así que sugerirlo haría fallar "Simular" siempre.
  */
 class HomeSuggestions(
     private val graph: GraphRepository,
     private val policy: GraphVisibilityPolicy,
+    private val activeModes: ActiveModes,
 ) : ThirdPartyView {
+    /** Modos activos de un usuario (`user_modes.enabled`); vacío si no existe o fue borrado. */
+    fun interface ActiveModes {
+        suspend fun of(userId: UUID): Set<Mode>
+    }
+
     override val viewName = "home-suggestions"
 
     /** Arista candidato–amigo en común que entró en el conteo (ids públicos para el observador). */
@@ -55,8 +65,15 @@ class HomeSuggestions(
             .filter { it.state == EdgeState.CONNECTED && it.mode != Mode.PAREJA }
             .filter { policy.canSee(viewer, it.other, ViewContext.EGO, blocked) }
         val directIds = direct.map { it.other.id }.toSet()
-        return direct
-            .filter { it.other.id !in exclude }
+        // Solo modos activos para los dos (los mismos que exige SimulationService.create). Se filtra
+        // antes de elegir la mejor arista por persona: si el modo de mayor afinidad está apagado, gana
+        // la arista del modo activo aunque tenga menos afinidad.
+        val viewerModes = activeModes.of(viewer)
+        val otherModes = mutableMapOf<UUID, Set<Mode>>()
+        val simulable = direct
+            .filter { it.other.id !in exclude && it.mode in viewerModes }
+            .filter { edge -> edge.mode in otherModes.getOrPut(edge.other.id) { activeModes.of(edge.other.id) } }
+        return simulable
             .groupBy { it.other.id }
             .values
             // Una sugerencia por persona: la arista de mayor afinidad (Amistad antes que Estudio si empatan).

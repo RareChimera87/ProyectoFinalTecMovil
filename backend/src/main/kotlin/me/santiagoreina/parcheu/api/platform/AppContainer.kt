@@ -231,7 +231,14 @@ fun allDomains(
     SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
     AdminRoutes(),
     // Inicio (E4.7): agregador de cupos, simulaciones, sugerencias del grafo y no leídas.
-    HomeRoutes(HomeService(quota.service, simulation.service, HomeSuggestions(graph.repository, graph.policy), unread)) { firebase ->
+    // Las sugerencias solo ofrecen modos activos para los dos, como exige SimulationService.create.
+    HomeRoutes(HomeService(quota.service, simulation.service, homeSuggestions(graph, simulation), unread)) { firebase ->
         identity.requireUser(firebase).id
     },
 )
+
+/** Sugerencias de Inicio con los modos activos leídos de `user_modes` (vía el repositorio de simulaciones). */
+private fun homeSuggestions(graph: GraphModule, simulation: SimulationModule) =
+    HomeSuggestions(graph.repository, graph.policy) { userId ->
+        simulation.repository.participant(userId)?.takeIf { !it.deleted }?.activeModes.orEmpty()
+    }

@@ -12,6 +12,7 @@ import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
 import java.time.Instant
+import java.util.UUID
 
 /** Reglas de [HomeSuggestions]: candidatos directos sin Pareja y amigos en común sin fugas (ADR-0012). */
 class HomeSuggestionsTest : FunSpec({
@@ -23,8 +24,9 @@ class HomeSuggestionsTest : FunSpec({
     val fede = person(5, name = "Fede")
     val gabi = person(6, name = "Gabi", deletedAt = Instant.parse("2026-10-01T00:00:00Z"))
 
-    fun view(repo: me.santiagoreina.parcheu.api.graph.GraphRepository) =
-        HomeSuggestions(repo, GraphVisibilityPolicy(AnonIdSigner.forTests()))
+    /** Modos activos por persona; quien no aparece tiene los tres activos. */
+    fun view(repo: me.santiagoreina.parcheu.api.graph.GraphRepository, modes: Map<UUID, Set<Mode>> = emptyMap()) =
+        HomeSuggestions(repo, GraphVisibilityPolicy(AnonIdSigner.forTests())) { modes[it] ?: Mode.entries.toSet() }
 
     test("está registrada como vista de terceros") {
         (HomeSuggestions::class in ThirdPartyViews.registered) shouldBe true
@@ -81,5 +83,27 @@ class HomeSuggestionsTest : FunSpec({
         repo.putEdge(beto.id, caro.id, Mode.AMISTAD, EdgeState.CONNECTED, 50)
         view(repo).candidates(me.id, withMutuals = false).forEach { it.mutuals shouldBe null }
         view(repo).forHome(me.id, plus = false, exclude = emptySet()).forEach { it.mutualCount shouldBe null }
+    }
+
+    test("solo modos activos para los dos: la arista del modo activo gana aunque tenga menos afinidad") {
+        val repo = memoryRepo(me, beto, caro, dani)
+        repo.putEdge(me.id, beto.id, Mode.ESTUDIO, EdgeState.CONNECTED, 90)
+        repo.putEdge(me.id, beto.id, Mode.AMISTAD, EdgeState.CONNECTED, 60)
+        repo.putEdge(me.id, caro.id, Mode.ESTUDIO, EdgeState.CONNECTED, 80)
+        repo.putEdge(me.id, dani.id, Mode.AMISTAD, EdgeState.CONNECTED, 70)
+        val all = Mode.entries.toSet()
+
+        // Beto apagó Estudio: se le sugiere en Amistad (60) y no en Estudio (90). Caro solo tiene Estudio: sale.
+        val betoOff = view(repo, mapOf(beto.id to all - Mode.ESTUDIO, caro.id to all - Mode.ESTUDIO))
+            .forHome(me.id, plus = false, exclude = emptySet(), limit = 10)
+        betoOff.map { it.other.label to it.mode } shouldContainExactly listOf("Dani" to Mode.AMISTAD, "Beto" to Mode.AMISTAD)
+        betoOff.single { it.other.label == "Beto" }.estimatedAffinity shouldBe 60
+
+        // Si es el observador quien apaga Amistad, solo quedan sugerencias en Estudio.
+        val viewerOff = view(repo, mapOf(me.id to all - Mode.AMISTAD)).forHome(me.id, plus = false, exclude = emptySet(), limit = 10)
+        viewerOff.map { it.other.label to it.mode } shouldContainExactly listOf("Beto" to Mode.ESTUDIO, "Caro" to Mode.ESTUDIO)
+
+        // Sin modos activos (usuario sin fila o borrado) no hay sugerencias.
+        view(repo, mapOf(me.id to emptySet())).forHome(me.id, plus = false, exclude = emptySet()) shouldBe emptyList()
     }
 })

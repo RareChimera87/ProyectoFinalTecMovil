@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.ThirdPartyView
 import me.santiagoreina.parcheu.api.graph.ViewContext
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
+import me.santiagoreina.parcheu.contract.Mode
 import java.util.UUID
 import kotlin.reflect.KClass
 
@@ -104,7 +105,7 @@ object HomeSuggestionsProbe : ThirdPartyViewProbe {
     override val context = ViewContext.THIRD_PARTY
 
     override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
-        val view = HomeSuggestions(world.toGraphRepository(), GraphVisibilityPolicy(signer))
+        val view = HomeSuggestions(world.toGraphRepository(), GraphVisibilityPolicy(signer)) { Mode.entries.toSet() }
         val edges = view.candidates(viewer, withMutuals = true)
             .flatMap { it.mutuals.orEmpty() }
             .map { ExposedEdge(it.candidateId, it.mutualId, it.mode) }

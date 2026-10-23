@@ -146,6 +146,27 @@ class HomeApiTest : FunSpec({
         }
     }
 
+    test("las sugerencias respetan los modos activos y 'Simular' con la sugerida funciona") {
+        val w = World()
+        w.connect("ana", "beto", Mode.ESTUDIO, affinity = 90)
+        w.connect("ana", "beto", Mode.AMISTAD, affinity = 60)
+        // Beto apaga Estudio: la arista sigue en el grafo, pero ya no se puede simular en ese modo.
+        w.sim.person("beto", modes = setOf(Mode.AMISTAD), id = w.id("beto"))
+        testApplication {
+            val client = app(w)
+            val suggestion = client.get("/v1/home") { auth("ana") }.body<HomeDto>().suggestions.single()
+            suggestion.other.label shouldBe "beto"
+            suggestion.mode shouldBe Mode.AMISTAD
+            suggestion.estimatedAffinity shouldBe 60
+            val started = client.post("/v1/simulations") {
+                auth("ana")
+                contentType(ContentType.Application.Json)
+                setBody(StartSimulation(suggestion.other.id!!, suggestion.mode))
+            }
+            started.status shouldBe HttpStatusCode.Accepted
+        }
+    }
+
     test("quien está simulando con el usuario no aparece en sugerencias") {
         val w = World()
         w.connect("ana", "beto")
