@@ -214,7 +214,7 @@ backend/src/main/kotlin/me/santiagoreina/parcheu/api/
 
 ## 4. Modelo de datos
 
-Postgres 16 es la única fuente de verdad. Convenciones: `uuid` con `gen_random_uuid()`, `timestamptz`, enums como `text` con `CHECK`. `consents` solo agrega filas: como la API y el job `migrate` usan el mismo usuario IAM (`sa-api`, dueño de las tablas) un `GRANT` no basta, así que un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE`; la única excepción es la purga por retención (E8.8), que activa `set local parcheu.consents_purge = 'on'` (E0.4). Las tablas que solo contienen datos de un usuario usan `ON DELETE CASCADE`; las que deben sobrevivirle (`consents`, `simulations`, `reports`, `entitlements`, `purchase_events`) no. Las tablas Exposed viven en `platform/db/tables/` (un archivo por dominio) y los enums sin equivalente en el contrato en `DbEnums.kt`.
+Postgres 16 es la única fuente de verdad. Convenciones: `uuid` con `gen_random_uuid()`, `timestamptz`, enums como `text` con `CHECK`. `consents` solo agrega filas: como la API y el job `migrate` usan el mismo usuario IAM (`sa-api`, dueño de las tablas) un `GRANT` no basta, así que un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE`; las únicas excepciones son la purga por retención (E8.8) y el traslado de los consentimientos a la lápida al borrar una cuenta (E8.3), que activan `set local parcheu.consents_purge = 'on'` (E0.4). Las tablas que solo contienen datos de un usuario usan `ON DELETE CASCADE`; las que deben sobrevivirle (`consents`, `simulations`, `reports`, `entitlements`, `purchase_events`) no. Las tablas Exposed viven en `platform/db/tables/` (un archivo por dominio) y los enums sin equivalente en el contrato en `DbEnums.kt`.
 
 ```sql
 -- Identidad
@@ -685,6 +685,8 @@ La tabla vive en `android/.../push/DeepLinks.kt` (con su test de casos) y la usa
 | Compras (`entitlements`, `purchase_events`) | Se conserva | - | Se desvinculan del usuario; los eventos se conservan por obligación contable (verificar plazo) |
 | Tokens FCM | Mientras sean válidos | Al cerrar sesión o al fallar | Se borran |
 | Logs (Cloud Logging) | Solo uuid interno, nunca email ni texto de mensajes | 30 días (retención por defecto del bucket `_Default`, verificar) | No contienen datos que borrar |
+
+**Implementación (E8.3).** `identity/deletion/AccountDeletionService`: `DELETE /v1/me` marca `deleted_at` y encola `purge-user`; la tarea lee el plan de Postgres, limpia Firestore (borra `simulations/{id}` y `matchTickets/{uid}`, saca el uid de `chats/{id}.members` y pone `senderUid = null` en sus mensajes), borra el usuario de Firebase Auth y purga Postgres en una transacción. Lo que se conserva (consentimientos, simulaciones del otro, reportes y compras) pasa a una **lápida** por cuenta (`firebase_uid = deleted:<sha256 del uid>`, sin datos de contacto, `deleted_at` fijado): así el uuid de la persona no queda en ninguna tabla y las llaves foráneas siguen válidas. Los mensajes propios quedan con `sender_id = null` (autor 'Usuario eliminado'). Cada columna de `PersonalJsonPaths.personal` tiene su regla en `JsonbPurgeRules` (por relación y por búsqueda del uuid en `col::text`); los reportes abiertos donde la persona es parte se resuelven con `resolution = 'ACCOUNT_DELETED'`. `GET /v1/me/export` (`identity/export/`) solo expone el `anonId` de terceros.
 
 ### 10.3 Ubicación de los datos y transferencia internacional
 
