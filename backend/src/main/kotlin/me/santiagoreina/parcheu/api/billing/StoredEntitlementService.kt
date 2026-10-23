@@ -40,4 +40,4 @@ class StoredEntitlementService(private val store: BillingStore) : EntitlementSer
 }
 
 /** ¿Esta fila da Plus en [at]? (arquitectura.md §9). */
-fun EntitlementRow.grants(at: Instant): Boolean = grantsPlus(state, expiresAt, at)
+fun EntitlementRow.grants(at: Instant): Boolean = grantsPlus(state, expiresAt, at, autoRenewing)

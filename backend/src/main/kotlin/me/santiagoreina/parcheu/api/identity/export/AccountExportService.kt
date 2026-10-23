@@ -88,7 +88,7 @@ class AccountExportService(
             },
             entitlement = rows.entitlement?.let {
                 EntitlementDto(
-                    plus = grantsPlus(it.state, it.expiresAt, now),
+                    plus = grantsPlus(it.state, it.expiresAt, now, it.autoRenewing),
                     state = it.state,
                     basePlan = it.basePlan,
                     expiresAt = it.expiresAt?.toKotlin(),

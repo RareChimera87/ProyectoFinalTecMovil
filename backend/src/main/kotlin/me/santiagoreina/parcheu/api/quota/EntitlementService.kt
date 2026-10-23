@@ -24,12 +24,20 @@ interface DevPlusGranter {
 internal val PLUS_STATES = setOf(EntitlementState.ACTIVE, EntitlementState.IN_GRACE_PERIOD)
 
 /**
- * ¿Una fila de `entitlements` da Plus en [at]? ACTIVE e IN_GRACE_PERIOD mientras no hayan vencido
- * (sin `expires_at` cuenta); CANCELED solo antes de `expires_at` (periodo ya pagado).
+ * Margen tras `expires_at` de una suscripción ACTIVE que se renueva sola: el cobro puede tardar minutos
+ * y la RTDN `SUBSCRIPTION_RENEWED` llega después, así que no se corta Plus en el segundo exacto.
  */
-internal fun grantsPlus(state: EntitlementState, expiresAt: Instant?, at: Instant): Boolean = when (state) {
-    in PLUS_STATES -> expiresAt?.isAfter(at) ?: true
-    EntitlementState.CANCELED -> expiresAt?.isAfter(at) ?: false
+internal val RENEWAL_MARGIN: Duration = Duration.ofHours(1)
+
+/**
+ * ¿Una fila de `entitlements` da Plus en [at]? ACTIVE e IN_GRACE_PERIOD mientras no hayan vencido
+ * (sin `expires_at` cuenta); CANCELED solo antes de `expires_at` (periodo ya pagado). Solo ACTIVE con
+ * [autoRenewing] tiene además [RENEWAL_MARGIN] de margen; ninguno más (arquitectura.md §9).
+ */
+internal fun grantsPlus(state: EntitlementState, expiresAt: Instant?, at: Instant, autoRenewing: Boolean = false): Boolean = when {
+    state == EntitlementState.ACTIVE && autoRenewing -> expiresAt?.plus(RENEWAL_MARGIN)?.isAfter(at) ?: true
+    state in PLUS_STATES -> expiresAt?.isAfter(at) ?: true
+    state == EntitlementState.CANCELED -> expiresAt?.isAfter(at) ?: false
     else -> false
 }
 
