@@ -624,6 +624,8 @@ Mensajes de datos con `type` y `route`; canales Android `chat`, `resultados`, `s
 
 La tabla vive en `android/.../push/DeepLinks.kt` (con su test de casos) y la usa también C2 (E5.4). Los IDs de canal están en `PushChannel` (backend) y `PushChannelSpec` (Android) y no cambian sin tocar ambos.
 
+**Centro de notificaciones (E5.4).** Backend: `notifications/center/` (`NotificationStore` sobre la tabla `notifications`, `NotificationCenterService`, `NotificationsRoutes`). `GET /v1/notifications` devuelve los 100 avisos más recientes agrupados por la fecha de Bogotá: `today` es el día calendario de hoy en America/Bogota, `week` los seis días anteriores y el resto `older`. Un aviso con `payload.locked` sale `locked = true` y sin `actor` solo si la persona no es ParcheU+ (se decide al leer, así que al suscribirse se desbloquea); el actor se presenta con la policy del grafo (ADR-0012). `POST /v1/notifications/read` con `ids` nulo, vacío o sin cuerpo marca todas las del usuario; ids ajenos o inválidos se ignoran y un cuerpo mal formado es 400. La campana de `GET /v1/home` cuenta la misma tabla. Android: `feature/notifications/` (C2): tocar un aviso lo marca leído y navega con `DeepLinks.resolve(kind, route)`; uno bloqueado abre G1 (`Paywall("notifications")`); 'Marcar leídas' es optimista y se deshace si falla. Al volver, C1 recarga y la campana se actualiza.
+
 ---
 
 ## 9. Billing (ParcheU+)
