@@ -479,3 +479,26 @@ para que Play pueda instalar):
 - [ ] Enlace de inscripción enviado el día de la publicación; ≥ 12 inscritos ese día.
 - [ ] Fechas de §12.11 completas, incluida la de los 14 días.
 - [ ] Instalación desde la pista cerrada abre la app y A4 lleva a `/terminos` y `/privacidad` de prod.
+
+## 13. Usuarios demo en la prueba cerrada (E4.9, ADR-0027)
+
+Durante la prueba cerrada la fila de match tiene **20 perfiles de demostración** para que no esté vacía. Son
+ficticios, se declaran en todas partes y se borran antes de la 1.0 (`purge-demo`, E10.9). Nunca aparecen en Pareja
+y nunca escriben mensajes.
+
+**Texto para las instrucciones de la prueba** (Play Console > Pruebas > Prueba cerrada > *Detalles de la prueba* /
+correo de bienvenida al grupo de testers; es-419):
+
+> Para que siempre haya alguien con quien probar, ParcheU incluye perfiles de demostración. No son personas reales:
+> llevan la insignia "Perfil de demostración" y su nombre termina en "(demo)". Solo aparecen en Amistad y Estudio,
+> nunca en Pareja. Si conectas con uno, el chat muestra "Esta es una cuenta de demostración: no responde mensajes";
+> lo que tú escribas ahí sigue tus ajustes de privacidad normales (tu gemelo solo aprende de tus propios mensajes si
+> lo permitiste). Todos los perfiles de demostración se borran antes del lanzamiento público.
+
+| Paso | Cuándo | Comando o lugar |
+|---|---|---|
+| Pegar el texto de arriba en las instrucciones de la prueba y en el correo al grupo | Antes de enviar la 0.2 a revisión | Play Console |
+| Encender la bandera en prod durante la prueba cerrada | Con el `apply` de prod de la 0.2 | `terraform apply -var demo_users_enabled=true` (`infra/terraform/envs/prod`) |
+| Sembrar los demo | Tras el `apply` y el despliegue de la 0.2; repetir cada día de la prueba para devolverlos a la fila | `gcloud run jobs execute seed-demo --region us-central1 --project parcheu-prod --wait` |
+| Apagar la bandera y purgar | Antes de enviar la 1.0 (E10.9) | `terraform apply -var demo_users_enabled=false` y luego `gcloud run jobs execute purge-demo --region us-central1 --project parcheu-prod --wait` |
+
