@@ -1,7 +1,17 @@
 package me.santiagoreina.parcheu.feature.home
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -12,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.contract.Suggestion
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
@@ -117,6 +128,71 @@ class HomeScreenTest {
         assertEquals("u-sebas", simulated.single().other.id)
         assertEquals(1, random)
         assertEquals(1, bell)
+    }
+
+    @Test
+    fun avatarOpensProfileWithA48dpTargetAndDescription() {
+        var profile = 0
+        show(HomeSamples.freeThreeOfFive, HomeCallbacks(onAvatar = { profile++ }))
+        val avatar = composeRule.onNodeWithTag(HomeTags.AVATAR)
+        avatar.assertContentDescriptionEquals("Tu perfil")
+        avatar.assertHasClickAction()
+        avatar.assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+        composeRule.onAllNodesWithContentDescription("Mari").assertCountEquals(0)
+        avatar.performClick()
+        assertEquals(1, profile)
+    }
+
+    @Test
+    fun bellBadgeIsNotReadTwice() {
+        show(HomeSamples.freeThreeOfFive)
+        composeRule.onNodeWithContentDescription("Notificaciones, 2 sin leer").assertIsDisplayed()
+        composeRule.onAllNodesWithText("2").assertCountEquals(0)
+    }
+
+    @Test
+    fun actionErrorIsADismissButton() {
+        var dismissed = 0
+        show(
+            HomeSamples.freeThreeOfFive.copy(actionError = AppError.Network),
+            HomeCallbacks(onDismissError = { dismissed++ })
+        )
+        val error = composeRule.onNodeWithTag(HomeTags.ACTION_ERROR)
+        error.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+        error.assert(
+            SemanticsMatcher("acción 'Descartar'") {
+                it.config.getOrNull(SemanticsActions.OnClick)?.label == "Descartar"
+            }
+        )
+        error.performClick()
+        assertEquals(1, dismissed)
+    }
+
+    @Test
+    fun demoProfilesShowTheBadgeInRunningReadyAndSuggestions() {
+        show(HomeSamples.demo)
+        composeRule.onAllNodesWithTag(
+            HomeTags.DEMO_BADGE,
+            useUnmergedTree = true
+        ).assertCountEquals(3)
+        composeRule.onNodeWithText("Resultado listo con Alguien de la UIS", substring = true)
+            .assertIsDisplayed()
+        // Filas en curso y resultado listo: la insignia completa; la sugerencia, compacta con la misma lectura.
+        composeRule.onAllNodesWithText(
+            DEMO_PROFILE_BADGE,
+            useUnmergedTree = true
+        ).assertCountEquals(2)
+        composeRule.onAllNodesWithContentDescription(DEMO_PROFILE_BADGE, useUnmergedTree = true)
+            .assertCountEquals(1)
+    }
+
+    @Test
+    fun nonDemoProfilesHaveNoBadge() {
+        show(HomeSamples.resultReady)
+        composeRule.onAllNodesWithTag(
+            HomeTags.DEMO_BADGE,
+            useUnmergedTree = true
+        ).assertCountEquals(0)
     }
 
     @Test

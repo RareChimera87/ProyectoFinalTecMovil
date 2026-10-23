@@ -17,7 +17,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Capturas de C1 (3 de 5, en curso, resultado listo, vacío, 0 restantes y ParcheU+) en oscuro, e I1
+ * Capturas de C1 (3 de 5, en curso, resultado listo, vacío, 0 restantes, ParcheU+ y perfiles demo) en oscuro, e I1
  * (las mismas en claro, ADR-0022). Se graban con `-Proborazzi.test.record=true`.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
@@ -62,6 +62,9 @@ class HomeScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun plus() = capture("plus", HomeSamples.plus)
+
+    @Test
+    fun demo() = capture("demo", HomeSamples.demo)
 
     companion object {
         @JvmStatic
