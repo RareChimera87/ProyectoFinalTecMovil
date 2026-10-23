@@ -12,7 +12,8 @@ plugins {
 
 // URLs por entorno. Se pueden sobrescribir con -Pparcheu.apiUrl.dev=... (o en ~/.gradle/gradle.properties)
 // sin tocar este archivo. La URL de Cloud Run es determinista: https://<servicio>-<número de proyecto>.<región>.run.app
-fun urlProperty(name: String, default: String): String = providers.gradleProperty(name).getOrElse(default)
+fun urlProperty(name: String, default: String): String =
+    providers.gradleProperty(name).getOrElse(default)
 
 android {
     namespace = "me.santiagoreina.parcheu"

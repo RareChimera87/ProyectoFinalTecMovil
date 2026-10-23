@@ -11,6 +11,10 @@ import me.santiagoreina.parcheu.navigation.TwinQuestions
  * [twinQuestionsModule]; AppNavHost.kt no cambia.
  */
 @Composable
-fun TwinQuestionsRoute(route: TwinQuestions, navigator: AppNavigator, modifier: Modifier = Modifier) {
+fun TwinQuestionsRoute(
+    route: TwinQuestions,
+    navigator: AppNavigator,
+    modifier: Modifier = Modifier
+) {
     StubScreen(route = route, navigator = navigator, modifier = modifier)
 }
