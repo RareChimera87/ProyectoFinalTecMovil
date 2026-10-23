@@ -16,7 +16,7 @@ object BirthDates {
     private val MONTHS =
         listOf(
             "enero", "febrero", "marzo", "abril", "mayo", "junio",
-            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
         )
 
     private fun utcCalendar(): Calendar = Calendar.getInstance(UTC).apply { clear() }
@@ -29,7 +29,9 @@ object BirthDates {
         return IsoDate(String.format(Locale.ROOT, "%04d-%02d-%02d", y, m, d))
     }
 
-    fun toUtcMillis(date: IsoDate): Long = utcCalendar().apply { set(date.year, date.month - 1, date.day) }.timeInMillis
+    fun toUtcMillis(date: IsoDate): Long = utcCalendar().apply {
+        set(date.year, date.month - 1, date.day)
+    }.timeInMillis
 
     /** "17 de mayo de 2004". */
     fun display(date: IsoDate): String = "${date.day} de ${MONTHS[date.month - 1]} de ${date.year}"

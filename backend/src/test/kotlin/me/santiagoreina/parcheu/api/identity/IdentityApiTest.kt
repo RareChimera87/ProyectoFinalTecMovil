@@ -139,8 +139,8 @@ class IdentityApiTest : FunSpec({
         testApplication {
             val client = startApp(testContainer(repo = repo))
             client.session("lucia")
-            // /v1/twin/answers es un stub de otro dominio: la puerta actúa antes que él.
-            val blocked = client.post("/v1/twin/answers") { auth("lucia") }
+            // /v1/twin/memories es un stub de otro dominio (E9.x): la puerta actúa antes que él.
+            val blocked = client.get("/v1/twin/memories") { auth("lucia") }
             blocked.status shouldBe HttpStatusCode.Forbidden
             blocked.error() shouldBe ErrorCode.TERMS_REQUIRED
             client.get("/v1/me/consents") { auth("lucia") }.error() shouldBe ErrorCode.TERMS_REQUIRED
@@ -150,7 +150,7 @@ class IdentityApiTest : FunSpec({
             client.get("/v1/me") { auth("lucia") }.status shouldBe HttpStatusCode.OK
             client.delete("/v1/me") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
             client.acceptTerms("lucia").status shouldBe HttpStatusCode.OK
-            client.post("/v1/twin/answers") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+            client.get("/v1/twin/memories") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
         }
     }
 
@@ -186,13 +186,13 @@ class IdentityApiTest : FunSpec({
             startApp(testContainer(repo = repo)).apply {
                 session("lucia")
                 acceptTerms("lucia")
-                post("/v1/twin/answers") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+                get("/v1/twin/memories") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
             }
         }
         testApplication {
             val client = startApp(testContainer(repo = repo, legalTextVersion = "2026-12-01"))
             client.session("lucia").onboarding shouldBe OnboardingStep.NEEDS_TERMS
-            client.post("/v1/twin/answers") { auth("lucia") }.error() shouldBe ErrorCode.TERMS_REQUIRED
+            client.get("/v1/twin/memories") { auth("lucia") }.error() shouldBe ErrorCode.TERMS_REQUIRED
             client.acceptTerms("lucia", "2026-12-01").status shouldBe HttpStatusCode.OK
             // Quedan 4 filas: las 2 viejas se conservan y se agregan 2 nuevas con la versión nueva.
             repo.consentRows(repo.user("lucia").id) shouldBe 4
@@ -271,7 +271,7 @@ class IdentityApiTest : FunSpec({
         repo.replace(repo.user("ana").copy(suspendedUntil = Instant.parse("2026-11-30T00:00:00Z")))
         testApplication {
             val client = startApp(testContainer(repo = repo))
-            client.post("/v1/twin/answers") { auth("ana") }.error() shouldBe ErrorCode.SUSPENDED
+            client.get("/v1/twin/memories") { auth("ana") }.error() shouldBe ErrorCode.SUSPENDED
             client.get("/v1/me") { auth("ana") }.body<MeDto>().suspendedUntil?.toString() shouldBe "2026-11-30T00:00:00Z"
         }
     }

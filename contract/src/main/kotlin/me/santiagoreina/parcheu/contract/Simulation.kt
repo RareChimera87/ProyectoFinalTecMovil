@@ -28,7 +28,10 @@ public data class StartSimulation(
     val mode: Mode,
 )
 
-/** Resumen de una simulación (202 de POST /v1/simulations, listas e Inicio). `score` solo si DONE. */
+/**
+ * Resumen de una simulación (202 de POST /v1/simulations, listas e Inicio). `score` solo si DONE.
+ * `refunded` es `true` cuando la simulación quedó FAILED y el cupo se devolvió (F5 lo muestra).
+ */
 @Serializable
 public data class SimulationSummary(
     val id: String,
@@ -38,6 +41,7 @@ public data class SimulationSummary(
     val createdAt: Instant,
     val origin: SimulationOrigin? = null,
     val score: Int? = null,
+    val refunded: Boolean = false,
 )
 
 /** Progreso: escenario actual (0-based), turno y total de turnos. */

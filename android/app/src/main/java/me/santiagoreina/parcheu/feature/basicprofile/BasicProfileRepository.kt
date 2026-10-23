@@ -26,7 +26,9 @@ class BasicProfileRepositoryImpl(private val api: ProfileApi, private val mapper
 
     override suspend fun me() = apiCall(mapper) { api.me() }
 
-    override suspend fun verifyAge(birthDate: IsoDate) = apiCall(mapper) { api.verifyAge(AgeVerification(birthDate)) }
+    override suspend fun verifyAge(birthDate: IsoDate) = apiCall(mapper) {
+        api.verifyAge(AgeVerification(birthDate))
+    }
 
     override suspend fun update(request: UpdateMe) = apiCall(mapper) { api.updateMe(request) }
 }

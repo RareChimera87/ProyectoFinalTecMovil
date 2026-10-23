@@ -62,7 +62,7 @@ object Galleries {
         GalleryRow("ModeChip M / S") {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 ModeChip("Amistad", colors.friendship, icon = icon)
                 ModeChip("Pareja", colors.couple, icon = icon)
@@ -176,7 +176,7 @@ object Galleries {
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         ) {
             StatCard("24", "Conexiones", Modifier.padding(0.dp))
             StatCard("5", "Comunidades")
@@ -208,7 +208,7 @@ object Galleries {
         val icon = testIcon()
         ParcheUHomeTopBar(
             wordmark = { Text("ParcheU", color = ParcheUTheme.colors.tx) },
-            actions = { ParcheUIconButton(icon, "Notificaciones", {}) },
+            actions = { ParcheUIconButton(icon, "Notificaciones", {}) }
         )
         ParcheURootTopBar("Conocer", actions = {
             ParcheUIconButton(icon, "Buscar", {})
@@ -223,7 +223,7 @@ object Galleries {
             onNavigationClick = {},
             avatar = { PillChip("C") },
             subtitle = "En línea",
-            actions = { ParcheUIconButton(icon, "Más opciones", {}) },
+            actions = { ParcheUIconButton(icon, "Más opciones", {}) }
         )
     }
 
@@ -241,7 +241,7 @@ object Galleries {
                     unread
                 } else {
                     0
-                },
+                }
             )
         }
         ParcheUNavBar(items(0), "home", {})

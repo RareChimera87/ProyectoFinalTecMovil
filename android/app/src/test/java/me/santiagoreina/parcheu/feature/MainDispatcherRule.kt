@@ -11,7 +11,8 @@ import org.junit.runner.Description
 
 /** Usa un dispatcher de prueba como `Dispatchers.Main` (viewModelScope) durante cada test. */
 @OptIn(ExperimentalCoroutinesApi::class)
-class MainDispatcherRule(val dispatcher: TestDispatcher = UnconfinedTestDispatcher()) : TestWatcher() {
+class MainDispatcherRule(val dispatcher: TestDispatcher = UnconfinedTestDispatcher()) :
+    TestWatcher() {
     override fun starting(description: Description) {
         Dispatchers.setMain(dispatcher)
     }

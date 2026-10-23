@@ -8,7 +8,17 @@ import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.identity.profile.InMemoryProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
+import me.santiagoreina.parcheu.api.quota.QuotaModule
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
+import me.santiagoreina.parcheu.api.ai.AiGateway
+import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.graph.GraphModule
+import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
+import me.santiagoreina.parcheu.api.chat.ChatModule
+import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.platform.AppContainer
+import me.santiagoreina.parcheu.api.twin.TwinModule
+import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.allDomains
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
@@ -46,17 +56,28 @@ fun testContainer(
     repo: InMemoryIdentityRepository = InMemoryIdentityRepository().also { it.seedAcceptedUser("ana", TEST_LEGAL_VERSION) },
     legalTextVersion: String = TEST_LEGAL_VERSION,
     clock: Clock = FIXED_CLOCK,
+    quota: QuotaModule = inMemoryQuotaModule(clock),
+    config: AppConfig = testConfig(),
+    ai: AiGateway = testGateway(),
+    twin: TwinModule = inMemoryTwinModule(clock, ai),
+    graph: GraphModule = inMemoryGraphModule(clock),
+    chat: ChatModule = inMemoryChatModule(clock, graph.policy),
 ): AppContainer {
     val identity = IdentityService(repo, clock, legalTextVersion)
     val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
     return AppContainer(
-        config = testConfig(),
+        config = config,
         clock = clock,
         tokenVerifier = FakeTokenVerifier(),
         oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
         identity = identity,
         profile = profile,
-        domains = allDomains(identity, profile) + extra,
+        quota = quota,
+        ai = ai,
+        twin = twin,
+        graph = graph,
+        chat = chat,
+        domains = allDomains(identity, profile, quota, twin, graph, chat) + extra,
     )
 }
 

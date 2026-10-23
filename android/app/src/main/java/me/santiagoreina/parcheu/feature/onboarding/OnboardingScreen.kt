@@ -1,7 +1,9 @@
 package me.santiagoreina.parcheu.feature.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,10 +28,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -50,8 +56,23 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PillChipVariant
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
+import me.santiagoreina.parcheu.designsystem.graph.GraphEdgeState
+import me.santiagoreina.parcheu.designsystem.graph.GraphMode
+import me.santiagoreina.parcheu.designsystem.graph.GraphNode
+import me.santiagoreina.parcheu.designsystem.graph.PuGraph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+
+/** Conexiones de ejemplo del grafo de A4 (datos fijos: la persona aún no tiene conexiones). */
+internal val ONBOARDING_GRAPH_NODES =
+    listOf(
+        GraphNode("o1", "Laura P.", "LP", 82, GraphMode.AMISTAD, GraphEdgeState.CONNECTED),
+        GraphNode("o2", "Mateo R.", "MR", 74, GraphMode.ESTUDIO, GraphEdgeState.CONNECTED),
+        GraphNode("o3", "Sofía G.", "SG", 66, GraphMode.PAREJA, GraphEdgeState.SIMULATED),
+        GraphNode("o4", "Andrés V.", "AV", 58, GraphMode.AMISTAD, GraphEdgeState.SIMULATED),
+        GraphNode("o5", "Camila T.", "CT", 41, GraphMode.ESTUDIO, GraphEdgeState.PENDING),
+        GraphNode("o6", "Juan D.", "JD", 33, GraphMode.AMISTAD, GraphEdgeState.PENDING)
+    )
 
 /** Número de páginas del pager A2-A4. */
 const val ONBOARDING_PAGES = 3
@@ -77,15 +98,15 @@ object OnboardingTags {
 internal fun legalNotice(
     termsUrl: String,
     privacyUrl: String,
-    linkColor: androidx.compose.ui.graphics.Color,
+    linkColor: androidx.compose.ui.graphics.Color
 ): AnnotatedString {
     val linkStyle =
         TextLinkStyles(
             SpanStyle(
                 color = linkColor,
                 fontWeight = FontWeight.SemiBold,
-                textDecoration = TextDecoration.Underline,
-            ),
+                textDecoration = TextDecoration.Underline
+            )
         )
     return buildAnnotatedString {
         append("Al continuar aceptas los ")
@@ -131,7 +152,7 @@ fun OnboardingScreen(
     onAcceptTerms: () -> Unit,
     onDeclineTerms: () -> Unit,
     modifier: Modifier = Modifier,
-    animateLoading: Boolean = true,
+    animateLoading: Boolean = true
 ) {
     val colors = ParcheUTheme.colors
     val login = state.login
@@ -139,10 +160,15 @@ fun OnboardingScreen(
     val page = pagerState.currentPage
     val isLoginPage = page == ONBOARDING_PAGES - 1
     Box(modifier.fillMaxSize().background(colors.bg).testTag(OnboardingTags.SCREEN)) {
-        Column(Modifier.fillMaxSize()) {
+        Column(
+            // Con la hoja visible el fondo no es alcanzable por TalkBack (la hoja se comporta como modal).
+            Modifier.fillMaxSize().then(
+                if (login is LoginState.TermsSheet) Modifier.clearAndSetSemantics {} else Modifier
+            )
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 OnboardingWordmark(size = 20.dp)
                 Spacer(Modifier.weight(1f))
@@ -151,7 +177,7 @@ fun OnboardingScreen(
                         text = "Saltar",
                         onClick = onSkip,
                         size = ParcheUButtonSize.Medium,
-                        modifier = Modifier.testTag(OnboardingTags.SKIP),
+                        modifier = Modifier.testTag(OnboardingTags.SKIP)
                     )
                 }
             }
@@ -159,7 +185,7 @@ fun OnboardingScreen(
                 state = pagerState,
                 userScrollEnabled = !busy,
                 modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.Top,
+                verticalAlignment = Alignment.Top
             ) { index ->
                 OnboardingPage(index)
             }
@@ -168,10 +194,10 @@ fun OnboardingScreen(
                     start = 24.dp,
                     end = 24.dp,
                     top = 12.dp,
-                    bottom = 32.dp,
+                    bottom = 32.dp
                 ),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 PageIndicator(count = ONBOARDING_PAGES, current = page)
                 Spacer(Modifier.height(12.dp))
@@ -179,7 +205,7 @@ fun OnboardingScreen(
                     PrimaryButton(
                         text = "Siguiente",
                         onClick = onNext,
-                        modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.NEXT),
+                        modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.NEXT)
                     )
                 } else {
                     LoginFooter(
@@ -187,7 +213,7 @@ fun OnboardingScreen(
                         termsUrl = termsUrl,
                         privacyUrl = privacyUrl,
                         onContinueWithGoogle = onContinueWithGoogle,
-                        animateLoading = animateLoading,
+                        animateLoading = animateLoading
                     )
                 }
             }
@@ -199,7 +225,7 @@ fun OnboardingScreen(
                 privacyUrl = privacyUrl,
                 onAccept = onAcceptTerms,
                 onDecline = onDeclineTerms,
-                animateLoading = animateLoading,
+                animateLoading = animateLoading
             )
         }
     }
@@ -211,7 +237,7 @@ private fun LoginFooter(
     termsUrl: String,
     privacyUrl: String,
     onContinueWithGoogle: () -> Unit,
-    animateLoading: Boolean,
+    animateLoading: Boolean
 ) {
     val colors = ParcheUTheme.colors
     when (login) {
@@ -219,14 +245,14 @@ private fun LoginFooter(
             Row(
                 modifier = Modifier.fillMaxWidth().height(52.dp).testTag(OnboardingTags.LOADING),
                 horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 LoadingDots(animate = animateLoading)
                 Spacer(Modifier.width(12.dp))
                 Text(
                     "Iniciando sesión…",
                     style = MaterialTheme.typography.labelLarge,
-                    color = colors.mu,
+                    color = colors.mu
                 )
             }
         is LoginState.Error -> {
@@ -241,12 +267,12 @@ private fun LoginFooter(
                     .background(colors.s2, RoundedCornerShape(16.dp))
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite }
-                    .testTag(OnboardingTags.ERROR),
+                    .testTag(OnboardingTags.ERROR)
             )
             PrimaryButton(
                 text = "Reintentar",
                 onClick = onContinueWithGoogle,
-                modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.RETRY),
+                modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.RETRY)
             )
         }
         else ->
@@ -254,7 +280,7 @@ private fun LoginFooter(
                 text = "Continuar con Google",
                 onClick = onContinueWithGoogle,
                 enabled = login == LoginState.Idle,
-                modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.GOOGLE),
+                modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.GOOGLE)
             )
     }
     Text(
@@ -262,7 +288,7 @@ private fun LoginFooter(
         style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 18.sp),
         color = colors.mu,
         textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.LEGAL),
+        modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.LEGAL)
     )
 }
 
@@ -290,18 +316,18 @@ private fun OnboardingPage(index: Int) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
             .testTag(OnboardingTags.page(index)),
-        verticalArrangement = Arrangement.spacedBy(28.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxWidth().height(
-                330.dp,
+                330.dp
             ).background(colors.s1, RoundedCornerShape(28.dp)),
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.Center
         ) {
             when (index) {
                 0 -> TwinIllustration()
                 1 -> SimulationIllustration()
-                else -> OnboardingGraph(size = 260.dp)
+                else -> PuGraph(nodes = ONBOARDING_GRAPH_NODES, size = 260.dp)
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -310,10 +336,10 @@ private fun OnboardingPage(index: Int) {
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontSize = 27.sp,
                     lineHeight = 34.sp,
-                    letterSpacing = (-0.4).sp,
+                    letterSpacing = (-0.4).sp
                 ),
                 color = colors.tx,
-                modifier = Modifier.semantics { heading() },
+                modifier = Modifier.semantics { heading() }
             )
             Text(text = body, style = MaterialTheme.typography.bodyMedium, color = colors.mu)
         }
@@ -326,12 +352,12 @@ private fun TwinIllustration() {
         Row(
             modifier = Modifier.align(Alignment.Center),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(26.dp),
+            horizontalArrangement = Arrangement.spacedBy(26.dp)
         ) {
             InitialsAvatar("MG", 72.dp)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("✦", color = ParcheUPalette.Orange, fontSize = 26.sp)
                 OnboardingMascot(width = 104.dp, color = ParcheUPalette.Violet)
@@ -348,30 +374,30 @@ private fun SimulationIllustration() {
     Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             OnboardingMascot(width = 56.dp, color = ParcheUPalette.Violet)
             Bubble(
                 "¿Un plan el sábado? Yo propongo la Mesa.",
-                RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp),
+                RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp)
             )
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)
         ) {
             Bubble(
                 "¡Hágale! Pero salimos temprano.",
                 RoundedCornerShape(18.dp, 18.dp, 6.dp, 18.dp),
-                Modifier.weight(1f, fill = false),
+                Modifier.weight(1f, fill = false)
             )
             OnboardingMascot(width = 56.dp, color = ParcheUPalette.Mint)
         }
         PillChip(
             "Afinidad 84 %",
             Modifier.align(Alignment.CenterHorizontally),
-            variant = PillChipVariant.Affinity,
+            variant = PillChipVariant.Affinity
         )
     }
 }
@@ -385,8 +411,8 @@ private fun Bubble(text: String, shape: RoundedCornerShape, modifier: Modifier =
         color = colors.tx,
         modifier = modifier.background(
             colors.s2,
-            shape,
-        ).padding(horizontal = 13.dp, vertical = 9.dp),
+            shape
+        ).padding(horizontal = 13.dp, vertical = 9.dp)
     )
 }
 
@@ -401,20 +427,21 @@ private fun TermsSheet(
     privacyUrl: String,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
-    animateLoading: Boolean,
+    animateLoading: Boolean
 ) {
     val colors = ParcheUTheme.colors
+    // Atrás equivale a "Ahora no": Onboarding es la única entrada de la pila y, sin esto, cerraría la app.
+    BackHandler(enabled = true) { if (!sheet.submitting) onDecline() }
     Box(
         Modifier
             .fillMaxSize()
+            .semantics {
+                paneTitle = "Actualizamos los Términos y la Política"
+                isTraversalGroup = true
+            }
             .background(colors.scrim)
-            .clickable(
-                interactionSource = remember {
-                    MutableInteractionSource()
-                },
-                indication = null,
-                onClick = {},
-            ),
+            // Absorbe los toques sobre el scrim sin exponer una acción de clic a TalkBack.
+            .pointerInput(Unit) { detectTapGestures { } }
     ) {
         Column(
             modifier =
@@ -424,31 +451,31 @@ private fun TermsSheet(
                 .background(colors.s1, ParcheUTheme.shapes.bottomSheet)
                 .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 32.dp)
                 .testTag(OnboardingTags.TERMS_SHEET),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
                 Modifier
                     .align(Alignment.CenterHorizontally)
                     .size(width = 36.dp, height = 4.dp)
-                    .background(colors.ln, RoundedCornerShape(2.dp)),
+                    .background(colors.ln, RoundedCornerShape(2.dp))
             )
             Text(
                 text = "Actualizamos los Términos y la Política",
                 style = MaterialTheme.typography.titleLarge,
                 color = colors.tx,
-                modifier = Modifier.semantics { heading() },
+                modifier = Modifier.semantics { heading() }
             )
             Text(
                 text =
                 "Para seguir usando ParcheU necesitamos que aceptes la versión vigente " +
                     "(${sheet.textVersion}).",
                 style = MaterialTheme.typography.bodyMedium,
-                color = colors.mu,
+                color = colors.mu
             )
             Text(
                 text = legalNotice(termsUrl, privacyUrl, colors.prt),
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.mu,
+                color = colors.mu
             )
             Spacer(Modifier.height(4.dp))
             if (sheet.submitting) {
@@ -459,14 +486,14 @@ private fun TermsSheet(
                 PrimaryButton(
                     text = "Aceptar y continuar",
                     onClick = onAccept,
-                    modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.TERMS_ACCEPT),
+                    modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.TERMS_ACCEPT)
                 )
             }
             ParcheUTextButton(
                 text = "Ahora no (cerrar sesión)",
                 onClick = onDecline,
                 enabled = !sheet.submitting,
-                modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.TERMS_DECLINE),
+                modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.TERMS_DECLINE)
             )
         }
     }

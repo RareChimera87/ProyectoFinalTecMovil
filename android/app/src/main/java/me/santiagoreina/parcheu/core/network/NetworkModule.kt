@@ -13,29 +13,33 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 /** Cliente HTTP con sesión: token y refresco ante 401 solo para [apiHost]. */
-fun createOkHttpClient(tokenProvider: TokenProvider, apiHost: String, debugLogging: Boolean = false): OkHttpClient =
-    OkHttpClient
-        .Builder()
-        .addInterceptor(AuthInterceptor(tokenProvider, apiHost))
-        .authenticator(TokenAuthenticator(tokenProvider, apiHost))
-        .apply {
-            if (debugLogging) {
-                addInterceptor(
-                    HttpLoggingInterceptor().apply {
-                        level =
-                            HttpLoggingInterceptor.Level.BASIC
-                    },
-                )
-            }
-        }.build()
+fun createOkHttpClient(
+    tokenProvider: TokenProvider,
+    apiHost: String,
+    debugLogging: Boolean = false
+): OkHttpClient = OkHttpClient
+    .Builder()
+    .addInterceptor(AuthInterceptor(tokenProvider, apiHost))
+    .authenticator(TokenAuthenticator(tokenProvider, apiHost))
+    .apply {
+        if (debugLogging) {
+            addInterceptor(
+                HttpLoggingInterceptor().apply {
+                    level =
+                        HttpLoggingInterceptor.Level.BASIC
+                }
+            )
+        }
+    }.build()
 
 /** Retrofit con el JSON del contrato (`ignoreUnknownKeys`, `explicitNulls = false`). */
-fun createRetrofit(baseUrl: String, client: OkHttpClient, json: Json = ContractJson): Retrofit = Retrofit
-    .Builder()
-    .baseUrl(baseUrl)
-    .client(client)
-    .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-    .build()
+fun createRetrofit(baseUrl: String, client: OkHttpClient, json: Json = ContractJson): Retrofit =
+    Retrofit
+        .Builder()
+        .baseUrl(baseUrl)
+        .client(client)
+        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+        .build()
 
 /**
  * Red compartida. Cada feature crea su servicio con `get<Retrofit>().create(XApi::class.java)` en su
@@ -49,7 +53,7 @@ val networkModule =
             createOkHttpClient(
                 get(),
                 apiHost = BuildConfig.API_URL.toHttpUrl().host,
-                debugLogging = BuildConfig.DEBUG,
+                debugLogging = BuildConfig.DEBUG
             )
         }
         single { createRetrofit(BuildConfig.API_URL, get(), get()) }
