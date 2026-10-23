@@ -25,7 +25,15 @@ public enum class MomentKind {
     HIGHEST_AFFINITY,
 }
 
-/** Candidato de amigo de amigo; la afinidad es una estimación (ADR-0023). */
+/**
+ * Candidato de amigo de amigo; la afinidad es una estimación (ADR-0023).
+ *
+ * [viaId] es el id (el de `NodeDto.id` del ego-grafo) del amigo en común por el que se llega: el
+ * origen de la línea punteada de la capa fof de G0 y el "Amigo de …" de D6. Sale de una arista
+ * CONNECTED que no es de Pareja entre ese amigo y el candidato (la misma fila de la consulta de
+ * arquitectura.md §6.2), nunca de otra. Es opcional para que un cliente o servidor viejo siga
+ * funcionando.
+ */
 @Serializable
 public data class FofCandidate(
     val anonId: String,
@@ -33,6 +41,7 @@ public data class FofCandidate(
     val estimatedAffinity: Int,
     val mutuals: Int,
     val mode: Mode,
+    val viaId: String? = null,
 )
 
 /** GET /v1/graph/fof */

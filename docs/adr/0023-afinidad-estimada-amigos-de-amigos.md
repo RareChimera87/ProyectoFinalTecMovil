@@ -18,3 +18,7 @@ D6 muestra 'Alguien · 87 % afín' para personas a dos pasos con las que el usua
 ## Consecuencias
 - Cálculo en microsegundos en Kotlin; honesto porque se rotula como estimación.
 - Puede diferir del puntaje real de una simulación; el texto lo explica.
+
+## Nota de implementación (E6.3, 23 oct 2026)
+- 'Simular' **no** está en D6 todavía: `POST /v1/simulations` exige el `users.id` de la otra persona y un candidato fof solo llega con su `anonId` (ADR-0012). La nota al pie de D6 remite a la simulación que hace la presentación ('Pedir presentación', E6.4).
+- Hueco abierto con dueño (I1 API + I3 UI, decisión antes de la ventana de E7.4): aceptar `anonId` en `POST /v1/simulations` resolviéndolo contra los candidatos fof del observador, o enmendar este ADR para quitar 'Simular' de D6. Detalle en la ficha de E6.3 de `docs/backlog.md`.

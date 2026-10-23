@@ -193,7 +193,42 @@ fun GraphEdgeLegend(modifier: Modifier = Modifier) {
     }
 }
 
-/** Banner de bloqueo para gratis: candado, texto y la insignia ParcheU+; lleva al paywall. */
+/** Etiqueta de la entrada a amigos de amigos (D6) para ParcheU+. */
+const val PARCHE_FOF_ENTRY_TAG = "parche_fof_entry"
+
+/** Entrada de ParcheU+ a D6 (E6.3): misma forma que el banner, sin candado. */
+@Composable
+fun FriendsOfFriendsEntry(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = ParcheUTheme.colors
+    Row(
+        modifier =
+        modifier
+            .fillMaxWidth()
+            .testTag(PARCHE_FOF_ENTRY_TAG)
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.s1)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            painter = parcheIconPainter(ParcheIcon.Friends),
+            contentDescription = null,
+            tint = colors.prt,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = "Amigos de amigos: personas afines a 2 pasos",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.tx,
+            modifier = Modifier.weight(1f)
+        )
+        ParcheUPlusBadge()
+    }
+}
+
+/** Banner de bloqueo para gratis: candado, texto y la insignia ParcheU+; lleva a D7 (y de ahí a G1). */
 @Composable
 fun LockedFeatureBanner(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = ParcheUTheme.colors

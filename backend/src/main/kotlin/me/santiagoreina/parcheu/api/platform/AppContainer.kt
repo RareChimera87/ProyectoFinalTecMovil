@@ -20,6 +20,9 @@ import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
+import me.santiagoreina.parcheu.api.graph.fof.ExposedFofRepository
+import me.santiagoreina.parcheu.api.graph.fof.FofService
+import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.home.HomeService
@@ -175,7 +178,9 @@ class AppContainer(
             val ai = aiGateway(config, vars, clock) { database }
             val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
             val twin = twinModule(config.env, database, clock, ai, tasks)
-            val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
+            val graph = GraphModule(
+                ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock, ExposedFofRepository(database),
+            )
             // En local no hay credenciales de FCM: se guarda el aviso y el envío es un Fake (E5.3).
             val fcm = if (local) FakeFcmClient() else FirebaseFcmClient(requireNotNull(config.firebaseProjectId))
             val notifier = FcmNotifier(ExposedPushStore(database), fcm, clock)
@@ -265,7 +270,9 @@ fun allDomains(
     MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
-    GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
+    GraphRoutes(graph.service, fofService(graph, twin, quota, matching.flags.demoUsersEnabled)) { firebase ->
+        identity.requireUser(firebase).id
+    },
     SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     // Centro de notificaciones C2 (E5.4): bandeja agrupada por fecha de Bogotá y 'Marcar leídas'.
@@ -279,6 +286,15 @@ fun allDomains(
         identity.requireUser(firebase).id
     },
 )
+
+/**
+ * Amigos de amigos (E6.3): la consulta de Postgres si el módulo del grafo la trae; si no, la versión en
+ * memoria con los rasgos del gemelo en memoria. ParcheU+ decide si viajan los `items`.
+ */
+private fun fofService(graph: GraphModule, twin: TwinModule, quota: QuotaModule, demoUsersEnabled: Boolean): FofService {
+    val repository = graph.fofRepository ?: InMemoryFofRepository(graph.repository) { twin.repository.state(it)?.traits }
+    return FofService(repository, graph.repository, graph.policy, { quota.service.isPlus(it) }, demoUsersEnabled)
+}
 
 /**
  * Sugerencias de Inicio con los modos activos leídos de `user_modes` (vía el repositorio de simulaciones).

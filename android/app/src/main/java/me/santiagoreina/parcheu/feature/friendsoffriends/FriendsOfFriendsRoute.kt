@@ -2,13 +2,13 @@ package me.santiagoreina.parcheu.feature.friendsoffriends
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import me.santiagoreina.parcheu.core.ui.StubScreen
+import me.santiagoreina.parcheu.feature.parche.fof.FofRoute
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.FriendsOfFriends
 
 /**
- * Punto de entrada de la ruta [FriendsOfFriends] (stub de E0.7). La feature dueña reemplaza solo este archivo y
- * [friendsOfFriendsModule]; AppNavHost.kt no cambia.
+ * Punto de entrada de la ruta [FriendsOfFriends] (D6/D7). La pantalla vive en `feature/parche/fof`
+ * (E6.3); AppNavHost.kt no cambia.
  */
 @Composable
 fun FriendsOfFriendsRoute(
@@ -16,5 +16,5 @@ fun FriendsOfFriendsRoute(
     navigator: AppNavigator,
     modifier: Modifier = Modifier
 ) {
-    StubScreen(route = route, navigator = navigator, modifier = modifier)
+    FofRoute(navigator = navigator, modifier = modifier)
 }

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import org.junit.Assert.assertEquals
@@ -46,6 +47,22 @@ class ParcheScreenTest {
     fun plusUserHasNoBanner() {
         show(ParcheUiState.Loaded(ParcheSamples.content.copy(plus = true)))
         composeRule.onAllNodes(hasTestTag(PARCHE_BANNER_TAG)).assertCountEquals(0)
+    }
+
+    @Test
+    fun bannerAndPlusEntryOpenFriendsOfFriends() {
+        var unlock = 0
+        var fof = 0
+        val callbacks = ParcheCallbacks(onUnlock = { unlock++ }, onFriendsOfFriends = { fof++ })
+        show(ParcheUiState.Loaded(ParcheSamples.content.copy(plus = true)), callbacks)
+        composeRule.onNode(hasTestTag(PARCHE_FOF_ENTRY_TAG)).performScrollTo().performClick()
+        assertEquals(0 to 1, unlock to fof)
+    }
+
+    @Test
+    fun freeUserHasNoPlusEntry() {
+        show(ParcheUiState.Loaded(ParcheSamples.content))
+        composeRule.onAllNodes(hasTestTag(PARCHE_FOF_ENTRY_TAG)).assertCountEquals(0)
     }
 
     @Test

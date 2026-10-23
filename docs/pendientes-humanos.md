@@ -656,10 +656,20 @@ El código y las pruebas están completos: 31 pruebas nuevas con FakeLlm y la AP
 No hay pasos humanos en consolas externas. Quedan decisiones de contrato para I1 y la dueña de E3.1/E6.3:
 
 - **`NodeDetail.chatId` sin llenar en el servidor.** El contrato ya trae `chatId?` y D2 solo muestra "Chatear" cuando viene con valor. I1 debe devolverlo en `GET /v1/graph/nodes/{id}` para nodos `CONNECTED` (E4.6/E5.1); mientras tanto el botón permanece oculto.
-- **`GraphFof.parentId`.** D1 no pinta la capa de amigos de amigos (es de D6, ParcheU+); el hueco `viaId` de `FofCandidate` sigue abierto para E3.1/E6.3.
+- ~~**`GraphFof.parentId`.**~~ Cerrado en E6.3: `FofCandidate.viaId` llega en `GET /v1/graph/fof` y D6 lo mapea a `parentId` (D1 no pinta la capa fof).
 - **Comunidades.** `GraphDto` no trae la lista de comunidades: el chip "Comunidad" abre D8 (ParcheU+) o el paywall (gratis) y D8 vuelve a D1 con `Parche(community)`, que pasa `?community=` a la API.
 - **Iconos.** D1-D5 usan iconos vectoriales propios (`ParcheIcons.kt`) hasta que exista la biblioteca de Material Symbols del sistema de diseño (E1.4).
 - **Cierre de sesión (E8.2).** Debe llamar `GraphCache.clear()` para borrar el último grafo guardado.
+
+## E6.3 · Amigos de amigos
+
+No hay pasos en consolas externas. Queda una decisión de contrato:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **'Simular' desde D6 (ADR-0023, flujo 11 D6 → F4).** `POST /v1/simulations` solo acepta `otherUserId` = `users.id` y fof solo entrega `anonId`, así que D6 salió sin 'Simular' (la nota al pie remite a la presentación). Decidir entre (a) aceptar `anonId` en `SimulationRequest` y resolverlo en el servidor contra `FofService.candidates` del observador (cambio compatible del contrato + botón en D6 → F4), o (b) enmendar ADR-0023 para quitar 'Simular' de D6. Ver la ficha de E6.3 en `docs/backlog.md`. | I1 (API) + I3 (UI) | Antes de la ventana de E7.4 (18 nov) |
+| 2 | **Aprobación del revisor par** del PR (feature major, check `major-gate`) según `docs/equipo.md`. | Par de E6.3 | Ventana de la ola 10 (12 nov) |
+
 ## E0.8 · Configuración de Firebase
 
 Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,

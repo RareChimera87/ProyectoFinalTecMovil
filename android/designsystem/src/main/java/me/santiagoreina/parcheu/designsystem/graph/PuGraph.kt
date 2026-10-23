@@ -91,8 +91,8 @@ data class GraphNode(
 )
 
 /**
- * Amigo de amigo (capa ParcheU+). [parentId] es la conexión directa a través de la cual se llega;
- * es nulo mientras el contrato (FofCandidate de E3.1) no lo entregue: el fof conserva la posición
+ * Amigo de amigo (capa ParcheU+). [parentId] es la conexión directa a través de la cual se llega
+ * (`FofCandidate.viaId`, E6.3); si es nulo o no está entre los nodos, el fof conserva la posición
  * del layout radial y no dibuja línea punteada de origen. [affinity] es la estimación de ADR-0023.
  */
 @Immutable
