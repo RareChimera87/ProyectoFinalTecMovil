@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "parcheu-dev",
+    "dev": "parcheu-dev",
+    "prod": "parcheu-prod"
+  }
+}
