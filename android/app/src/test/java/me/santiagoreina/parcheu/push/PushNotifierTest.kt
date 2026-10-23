@@ -30,8 +30,8 @@ class PushNotifierTest {
                 "channel" to "chat",
                 "title" to "Beto",
                 "body" to "Hola",
-                "route" to "parcheu://chat/c-1",
-            ),
+                "route" to "parcheu://chat/c-1"
+            )
         )!!
 
     @Test
@@ -42,7 +42,7 @@ class PushNotifierTest {
             setOf("chat", "resultados", "social", "cuenta"),
             manager.notificationChannels.map {
                 it.id
-            }.toSet(),
+            }.toSet()
         )
     }
 
@@ -70,7 +70,10 @@ class PushNotifierTest {
 
     @Test
     fun anUnknownRouteWithAnUnknownTypeOpensTheInbox() {
-        val intent = PushNotifier.openIntent(context, payload.copy(type = "TIPO_NUEVO", route = "https://evil.example"))
+        val intent = PushNotifier.openIntent(
+            context,
+            payload.copy(type = "TIPO_NUEVO", route = "https://evil.example")
+        )
         assertEquals("parcheu://notifications", intent.dataString)
     }
 
@@ -78,7 +81,10 @@ class PushNotifierTest {
     fun withoutRouteTheTypeDecidesTheScreen() {
         val chat = PushNotifier.openIntent(context, payload.copy(route = null))
         assertEquals(ChatList, DeepLinks.fromUri(chat.dataString))
-        val sim = PushNotifier.openIntent(context, payload.copy(type = "SIMULATION_READY", route = null))
+        val sim = PushNotifier.openIntent(
+            context,
+            payload.copy(type = "SIMULATION_READY", route = null)
+        )
         assertEquals(Simulations, DeepLinks.fromUri(sim.dataString))
         val badChat = PushNotifier.openIntent(context, payload.copy(route = "parcheu://chat"))
         assertEquals(ChatList, DeepLinks.fromUri(badChat.dataString))
@@ -88,7 +94,7 @@ class PushNotifierTest {
     fun everyKindResolvesToTheSameScreenInTheIntentAsInTheTable() {
         listOf(
             "SIMULATION_READY", "MATCH_FOUND", "NEW_CONNECTION", "INVITE_PENDING", "CHAT_MESSAGE",
-            "TWIN_MEMORIES", "COMMUNITY", "ACCOUNT", "TIPO_NUEVO",
+            "TWIN_MEMORIES", "COMMUNITY", "ACCOUNT", "TIPO_NUEVO"
         ).forEach { type ->
             val intent = PushNotifier.openIntent(context, payload.copy(type = type, route = null))
             assertEquals(type, DeepLinks.fromType(type), DeepLinks.fromUri(intent.dataString))

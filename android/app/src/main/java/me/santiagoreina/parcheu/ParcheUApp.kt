@@ -34,7 +34,7 @@ import org.koin.core.context.GlobalContext
 fun ParcheUApp(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
-    startDestination: AppRoute = Splash,
+    startDestination: AppRoute = Splash
 ) {
     val navigator = remember(navController) { NavControllerNavigator(navController) }
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -64,7 +64,7 @@ fun ParcheUApp(
         onDone = {
             val registrar = GlobalContext.getOrNull()?.getOrNull<PushTokenRegistrar>()
             if (registrar != null) scope.launch { registrar.sync() }
-        },
+        }
     )
     ParcheUTheme {
         Scaffold(
@@ -73,16 +73,16 @@ fun ParcheUApp(
                 if (topLevel) {
                     ParcheUNavBar(
                         currentDestination = destination,
-                        onSelect = { navigator.navigateToTopLevel(it.route) },
+                        onSelect = { navigator.navigateToTopLevel(it.route) }
                     )
                 }
-            },
+            }
         ) { padding ->
             AppNavHost(
                 navController = navController,
                 navigator = navigator,
                 startDestination = startDestination,
-                modifier = Modifier.padding(padding),
+                modifier = Modifier.padding(padding)
             )
         }
     }

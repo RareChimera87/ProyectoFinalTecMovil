@@ -56,9 +56,13 @@ object DeepLinks {
         }
     }
 
-    /** Deep link de respaldo por `type` (tabla de arquitectura.md §8.4); la bandeja para tipos sin pantalla propia. */
+    /**
+     * Deep link de respaldo por `type` (tabla de arquitectura.md §8.4); la bandeja para tipos sin
+     * pantalla propia.
+     */
     fun uriFromType(type: String?): String = when (type) {
-        NotificationKinds.SIMULATION_READY, NotificationKinds.SIMULATION_FAILED -> "parcheu://simulations"
+        NotificationKinds.SIMULATION_READY, NotificationKinds.SIMULATION_FAILED ->
+            "parcheu://simulations"
         NotificationKinds.MATCH_FOUND, NotificationKinds.MATCH_EXPIRED -> "parcheu://match"
         NotificationKinds.NEW_CONNECTION -> "parcheu://parche"
         NotificationKinds.INVITE_PENDING -> "parcheu://add-friends"

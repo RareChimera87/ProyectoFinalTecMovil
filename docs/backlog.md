@@ -267,7 +267,7 @@ Monorepo, contrato, backend base, esquema, infraestructura, CI/CD, esqueleto And
 - [ ] Un PR que rompe un test de Android queda bloqueado.
 - [ ] Tras mezclar a dev, `/v1/health` de dev responde con el SHA del commit.
 - [ ] El job `migrate` corre **antes** del despliegue de la API; si falla, la API no se despliega.
-- [ ] No hay llaves JSON en secretos de GitHub para GCP: solo `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_DEV` y `WIF_SERVICE_ACCOUNT_PROD` (mismos nombres que arquitectura.md §12).
+- [ ] No hay llaves JSON en secretos de GitHub para GCP: solo identificadores de WIF, sin credenciales: `WIF_PROVIDER`, `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_DEV`, `WIF_SERVICE_ACCOUNT_PROD`, `TF_PLAN_SERVICE_ACCOUNT_DEV` y `TF_SERVICE_ACCOUNT_DEV` (mismos nombres que arquitectura.md §12; hay un pool WIF por proyecto, ADR-0014).
 - [ ] Un PR con etiqueta `major` y CI verde **no** se mezcla hasta que un revisor distinto del autor lo aprueba; uno sin la etiqueta se mezcla con CI y `revision-agente` en verde.
 - [ ] Tras mezclar 3 PR no major, `review-counter` abre exactamente un issue de revisión (probado con un fixture de `docs/revisiones.md`).
 
@@ -626,6 +626,8 @@ API del grafo, layout radial, componente G0, pantalla D1-D5 y suite de invariant
 - **Archivos y módulos:** android/app/.../feature/parche/**
 
 **Descripción.** D1 con grafo, chips de filtro funcionales (modo, afinidad 70 %+, comunidad), StatCards, banner bloqueado para gratis, D2 bottom sheet con variantes conectados, simularon y pendiente ('Simular de nuevo' → F4, 'Chatear' → F9), D3 vacío, D4 skeleton, D5 error con reintentar, I2 claro. Pinta al instante el último grafo guardado en DataStore.
+
+**Hueco de contrato (E3.3, ronda 2).** `GraphFof.parentId` (la conexión por la que se llega al amigo de amigo) es nulo porque `FofCandidate` y la consulta de arquitectura §6.2 no lo devuelven. Sin él, el fof conserva la posición radial y no dibuja la línea punteada. Coordinar con E3.1/E6.3 un campo `viaId` (uno de los mutuals; nunca la Pareja, que ya se excluye de 'mine') en `FofCandidate` y en la consulta SQL; mientras tanto, mapear `parentId = null`.
 
 **Criterios de aceptación (verificables):**
 

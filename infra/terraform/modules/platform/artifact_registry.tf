@@ -1,0 +1,28 @@
+resource "google_artifact_registry_repository" "images" {
+  project       = var.project_id
+  location      = var.region
+  repository_id = "parcheu"
+  format        = "DOCKER"
+  description   = "Imágenes de la API (Jib)."
+  labels        = local.labels
+
+  cleanup_policy_dry_run = false
+
+  cleanup_policies {
+    id     = "conservar-recientes"
+    action = "KEEP"
+    most_recent_versions {
+      keep_count = 10
+    }
+  }
+
+  cleanup_policies {
+    id     = "borrar-viejas"
+    action = "DELETE"
+    condition {
+      older_than = "2592000s" # 30 días
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}

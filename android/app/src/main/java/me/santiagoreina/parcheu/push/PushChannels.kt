@@ -7,26 +7,36 @@ import android.os.Build
 import me.santiagoreina.parcheu.R
 
 /** Canales de notificación. Los IDs son los del backend (`PushChannel` en notifications/push). */
-enum class PushChannelSpec(val id: String, val nameRes: Int, val descriptionRes: Int, val importance: Int) {
-    CHAT("chat", R.string.push_channel_chat, R.string.push_channel_chat_desc, NotificationManager.IMPORTANCE_HIGH),
+enum class PushChannelSpec(
+    val id: String,
+    val nameRes: Int,
+    val descriptionRes: Int,
+    val importance: Int
+) {
+    CHAT(
+        "chat",
+        R.string.push_channel_chat,
+        R.string.push_channel_chat_desc,
+        NotificationManager.IMPORTANCE_HIGH
+    ),
     RESULTADOS(
         "resultados",
         R.string.push_channel_resultados,
         R.string.push_channel_resultados_desc,
-        NotificationManager.IMPORTANCE_DEFAULT,
+        NotificationManager.IMPORTANCE_DEFAULT
     ),
     SOCIAL(
         "social",
         R.string.push_channel_social,
         R.string.push_channel_social_desc,
-        NotificationManager.IMPORTANCE_DEFAULT,
+        NotificationManager.IMPORTANCE_DEFAULT
     ),
     CUENTA(
         "cuenta",
         R.string.push_channel_cuenta,
         R.string.push_channel_cuenta_desc,
-        NotificationManager.IMPORTANCE_LOW,
-    ),
+        NotificationManager.IMPORTANCE_LOW
+    )
     ;
 
     companion object {
@@ -41,7 +51,8 @@ object PushChannels {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         PushChannelSpec.entries.forEach { spec ->
-            val channel = NotificationChannel(spec.id, context.getString(spec.nameRes), spec.importance)
+            val channel =
+                NotificationChannel(spec.id, context.getString(spec.nameRes), spec.importance)
             channel.description = context.getString(spec.descriptionRes)
             manager.createNotificationChannel(channel)
         }

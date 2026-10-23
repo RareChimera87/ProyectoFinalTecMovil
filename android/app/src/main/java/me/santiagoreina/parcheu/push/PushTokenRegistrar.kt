@@ -19,7 +19,10 @@ interface PushTokenStore {
 }
 
 class SharedPrefsPushTokenStore(context: Context) : PushTokenStore {
-    private val prefs = context.applicationContext.getSharedPreferences("push", Context.MODE_PRIVATE)
+    private val prefs = context.applicationContext.getSharedPreferences(
+        "push",
+        Context.MODE_PRIVATE
+    )
 
     override var lastToken: String?
         get() = prefs.getString("last_token", null)
@@ -44,7 +47,7 @@ class PushTokenRegistrar(
     private val mapper: ApiErrorMapper,
     private val store: PushTokenStore,
     private val currentToken: suspend () -> String? = ::firebaseToken,
-    private val currentUser: suspend () -> String? = { null },
+    private val currentUser: suspend () -> String? = { null }
 ) {
     /** Llega un token nuevo: se recuerda y se intenta registrar. */
     suspend fun onNewToken(token: String): Boolean {
@@ -74,7 +77,8 @@ class PushTokenRegistrar(
     }
 
     private suspend fun register(token: String): Boolean {
-        val user = currentUser() ?: return false // sin sesión la llamada sería un 401; sync() reintenta tras el login
+        // Sin sesión la llamada sería un 401; sync() reintenta tras el login.
+        val user = currentUser() ?: return false
         val result = apiCall(mapper) { api.register(FcmToken(token)) }
         if (result is ApiResult.Success) {
             store.registeredToken = token

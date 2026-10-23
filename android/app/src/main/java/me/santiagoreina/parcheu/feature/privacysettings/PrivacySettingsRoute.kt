@@ -11,6 +11,10 @@ import me.santiagoreina.parcheu.navigation.PrivacySettings
  * [privacySettingsModule]; AppNavHost.kt no cambia.
  */
 @Composable
-fun PrivacySettingsRoute(route: PrivacySettings, navigator: AppNavigator, modifier: Modifier = Modifier) {
+fun PrivacySettingsRoute(
+    route: PrivacySettings,
+    navigator: AppNavigator,
+    modifier: Modifier = Modifier
+) {
     StubScreen(route = route, navigator = navigator, modifier = modifier)
 }

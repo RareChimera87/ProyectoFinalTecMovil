@@ -27,13 +27,13 @@ class ApiErrorMapperTest {
                     ErrorCode.QUOTA_EXCEEDED,
                     "Sin cupo",
                     kind = "RANDOM_MATCH",
-                    resetsAt = resetsAt,
-                ),
+                    resetsAt = resetsAt
+                )
             )
 
         assertEquals(
             AppError.QuotaExceeded(QuotaKind.RANDOM_MATCH, resetsAt),
-            mapper.map(402, json),
+            mapper.map(402, json)
         )
     }
 
@@ -41,7 +41,7 @@ class ApiErrorMapperTest {
     fun plusRequired402MapsToPlusRequired() {
         assertEquals(
             AppError.PlusRequired,
-            mapper.map(402, body(ApiError(ErrorCode.PLUS_REQUIRED, "ParcheU+"))),
+            mapper.map(402, body(ApiError(ErrorCode.PLUS_REQUIRED, "ParcheU+")))
         )
     }
 
@@ -55,7 +55,7 @@ class ApiErrorMapperTest {
 
         assertEquals(
             AppError.QuotaExceeded(QuotaKind.SIMULATION, Instant.parse(resetsAt)),
-            mapper.map(HttpException(response)),
+            mapper.map(HttpException(response))
         )
     }
 
@@ -76,14 +76,14 @@ class ApiErrorMapperTest {
                 ErrorCode.NOT_FOUND to AppError.NotFound,
                 ErrorCode.CONFLICT to AppError.Conflict,
                 ErrorCode.SCENARIO_ENDED to AppError.ScenarioEnded,
-                ErrorCode.AI_BUDGET to AppError.AiBudget(null),
+                ErrorCode.AI_BUDGET to AppError.AiBudget(null)
             )
         assertEquals(ErrorCode.entries.toSet(), expected.keys)
         expected.forEach { (code, appError) ->
             assertEquals(
                 code.name,
                 appError,
-                mapper.map(code.httpStatus, body(ApiError(code, "m"))),
+                mapper.map(code.httpStatus, body(ApiError(code, "m")))
             )
         }
     }

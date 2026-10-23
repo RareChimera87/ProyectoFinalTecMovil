@@ -7,7 +7,7 @@ data class PushPayload(
     val channel: PushChannelSpec,
     val title: String,
     val body: String,
-    val route: String?,
+    val route: String?
 ) {
     companion object {
         /** `null` si el mensaje no trae texto que mostrar (no se muestra una notificación vacía). */
@@ -21,7 +21,7 @@ data class PushPayload(
                 channel = PushChannelSpec.forId(data["channel"]),
                 title = title ?: body,
                 body = if (title == null) "" else body,
-                route = data["route"],
+                route = data["route"]
             )
         }
     }

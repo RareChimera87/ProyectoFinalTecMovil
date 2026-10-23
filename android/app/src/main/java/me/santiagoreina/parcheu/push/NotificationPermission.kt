@@ -12,12 +12,14 @@ import androidx.compose.runtime.LaunchedEffect
 object NotificationPermission {
     fun isRequired(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
-    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences("push", Context.MODE_PRIVATE)
+    private fun prefs(context: Context) =
+        context.applicationContext.getSharedPreferences("push", Context.MODE_PRIVATE)
 
     /** El permiso se pide una sola vez; si la persona lo niega, no se insiste (lo cambia desde Ajustes). */
     fun wasAsked(context: Context): Boolean = prefs(context).getBoolean("permission_asked", false)
 
-    fun markAsked(context: Context) = prefs(context).edit().putBoolean("permission_asked", true).apply()
+    fun markAsked(context: Context) =
+        prefs(context).edit().putBoolean("permission_asked", true).apply()
 }
 
 /**

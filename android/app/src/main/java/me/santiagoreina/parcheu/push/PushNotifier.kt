@@ -25,7 +25,7 @@ object PushNotifier {
         Intent.ACTION_VIEW,
         Uri.parse(DeepLinks.resolveUri(payload.type, payload.route)),
         context,
-        MainActivity::class.java,
+        MainActivity::class.java
     )
         .putExtra(EXTRA_TYPE, payload.type)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -39,7 +39,7 @@ object PushNotifier {
             context,
             requestCode,
             openIntent(context, payload),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(context, payload.channel.id)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -55,7 +55,7 @@ object PushNotifier {
                     NotificationCompat.PRIORITY_HIGH
                 } else {
                     NotificationCompat.PRIORITY_DEFAULT
-                },
+                }
             ).build()
         NotificationManagerCompat.from(context).notify(requestCode, notification)
         return true

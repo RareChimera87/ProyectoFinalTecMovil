@@ -18,7 +18,10 @@ import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/** Cada ruta del inventario (A1..H3, lista de chats, confirmaciones) se puede navegar y muestra su stub. */
+/**
+ * Cada ruta del inventario que sigue siendo stub (B0..H3, lista de chats, confirmaciones) se puede navegar
+ * y muestra su stub. Las rutas ya implementadas ([implementedRoutes]) tienen sus propias pruebas.
+ */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @Config(sdk = [35])
 class AllRoutesNavigationTest(private val entry: RouteEntry) {
@@ -30,9 +33,10 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         lateinit var navController: NavHostController
         composeRule.setContent {
             navController = rememberNavController()
-            ParcheUApp(navController = navController)
+            // Se arranca en Home (stub): el Splash real (E2.2) navegaría solo según la sesión.
+            ParcheUApp(navController = navController, startDestination = Home)
         }
-        composeRule.onNodeWithTag(stubTag(Splash)).assertIsDisplayed()
+        composeRule.onNodeWithTag(stubTag(Home)).assertIsDisplayed()
 
         composeRule.runOnUiThread { navController.navigate(entry.route) }
         composeRule.waitForIdle()
@@ -40,7 +44,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         val tag = stubTag(entry.route)
         composeRule.onNodeWithTag(tag).assertIsDisplayed()
         composeRule.onAllNodes(
-            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag)),
+            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag))
         ).onFirst().assertIsDisplayed()
         // Los argumentos llegan intactos a la pantalla (round-trip de la ruta tipada).
         composeRule
@@ -51,13 +55,18 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         assertEquals(
             "NavBar solo en las raíces",
             TopLevelDestination.entries.any { it.routeClass == entry.route::class },
-            shown.isTopLevel(),
+            shown.isTopLevel()
         )
     }
 
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "{0}")
-        fun routes(): List<Array<Any>> = routeCatalog.map { arrayOf<Any>(it) }
+        fun routes(): List<Array<Any>> = routeCatalog
+            .filterNot { it.route::class in implementedRoutes }
+            .map { arrayOf<Any>(it) }
+
+        /** Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest), B1-B2 (E2.4, TwinQuestions). */
+        val implementedRoutes = setOf(Splash::class, Onboarding::class, TwinQuestions::class)
     }
 }

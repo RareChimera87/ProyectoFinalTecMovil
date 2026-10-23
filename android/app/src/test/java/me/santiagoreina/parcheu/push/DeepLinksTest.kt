@@ -26,18 +26,26 @@ class DeepLinksTest {
     private val cases =
         listOf(
             Case(NotificationKinds.SIMULATION_READY, "parcheu://results/sim-1", Results("sim-1")),
-            Case(NotificationKinds.SIMULATION_FAILED, "parcheu://simulation/sim-2", Simulation("sim-2")),
+            Case(
+                NotificationKinds.SIMULATION_FAILED,
+                "parcheu://simulation/sim-2",
+                Simulation("sim-2")
+            ),
             Case(NotificationKinds.MATCH_FOUND, "parcheu://match/m-3", MatchFound("m-3")),
             Case(NotificationKinds.MATCH_EXPIRED, "parcheu://match", MatchQueue()),
             Case(NotificationKinds.CONNECT_REQUEST, "parcheu://notifications", Notifications),
             Case(NotificationKinds.NEW_CONNECTION, "parcheu://parche", Parche()),
-            Case(NotificationKinds.INTRODUCTION_PROPOSAL, "parcheu://intro/i-4", IntroProposal("i-4")),
+            Case(
+                NotificationKinds.INTRODUCTION_PROPOSAL,
+                "parcheu://intro/i-4",
+                IntroProposal("i-4")
+            ),
             Case(NotificationKinds.INVITE_PENDING, "parcheu://add-friends", AddFriends()),
             Case(NotificationKinds.CHAT_MESSAGE, "parcheu://chat/c-5", Chat("c-5")),
             Case(NotificationKinds.TWIN_MEMORIES, "parcheu://train-twin", TrainTwin),
             Case(NotificationKinds.TWIN_FEEDBACK, "parcheu://train-twin", TrainTwin),
             Case(NotificationKinds.COMMUNITY, "parcheu://communities", Communities),
-            Case(NotificationKinds.ACCOUNT, "parcheu://notifications", Notifications),
+            Case(NotificationKinds.ACCOUNT, "parcheu://notifications", Notifications)
         )
 
     @Test
@@ -48,7 +56,10 @@ class DeepLinksTest {
     @Test
     fun theTableCoversEveryKindOfTheContract() {
         val declared = NotificationKinds::class.java.declaredFields
-            .filter { java.lang.reflect.Modifier.isStatic(it.modifiers) && it.type == String::class.java }
+            .filter {
+                java.lang.reflect.Modifier.isStatic(it.modifiers) &&
+                    it.type == String::class.java
+            }
             .map { it.get(null) as String }
         assertEquals(declared.toSet(), cases.map { it.type }.toSet())
     }
@@ -69,16 +80,21 @@ class DeepLinksTest {
                 NotificationKinds.TWIN_MEMORIES to TrainTwin,
                 NotificationKinds.TWIN_FEEDBACK to TrainTwin,
                 NotificationKinds.COMMUNITY to Communities,
-                NotificationKinds.ACCOUNT to Notifications,
+                NotificationKinds.ACCOUNT to Notifications
             )
-        expected.forEach { (type, route) -> assertEquals(type, route, DeepLinks.resolve(type, null)) }
+        expected.forEach { (type, route) ->
+            assertEquals(type, route, DeepLinks.resolve(type, null))
+        }
     }
 
     @Test
     fun unknownTypeOrBrokenRouteOpensTheInbox() {
         assertEquals(Notifications, DeepLinks.resolve("TIPO_NUEVO", null))
         assertEquals(Notifications, DeepLinks.resolve(null, null))
-        assertEquals(Notifications, DeepLinks.resolve("TIPO_NUEVO", "parcheu://pantalla-que-no-existe"))
+        assertEquals(
+            Notifications,
+            DeepLinks.resolve("TIPO_NUEVO", "parcheu://pantalla-que-no-existe")
+        )
     }
 
     @Test
@@ -86,7 +102,7 @@ class DeepLinksTest {
         assertEquals(ChatList, DeepLinks.resolve(NotificationKinds.CHAT_MESSAGE, "parcheu://chat"))
         assertEquals(
             Simulations,
-            DeepLinks.resolve(NotificationKinds.SIMULATION_READY, "https://evil.example/results/1"),
+            DeepLinks.resolve(NotificationKinds.SIMULATION_READY, "https://evil.example/results/1")
         )
     }
 
@@ -104,6 +120,9 @@ class DeepLinksTest {
 
     @Test
     fun addFriendsLinkCarriesTheInviteCode() {
-        assertEquals(AddFriends(code = "ABCD-1234"), DeepLinks.fromUri("parcheu://add-friends/ABCD-1234"))
+        assertEquals(
+            AddFriends(code = "ABCD-1234"),
+            DeepLinks.fromUri("parcheu://add-friends/ABCD-1234")
+        )
     }
 }

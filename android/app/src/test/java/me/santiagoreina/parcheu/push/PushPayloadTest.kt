@@ -15,8 +15,8 @@ class PushPayloadTest {
                     "channel" to "chat",
                     "title" to "Beto",
                     "body" to "Hola",
-                    "route" to "parcheu://chat/c-1",
-                ),
+                    "route" to "parcheu://chat/c-1"
+                )
             )!!
         assertEquals(PushChannelSpec.CHAT, payload.channel)
         assertEquals("Beto", payload.title)
@@ -26,7 +26,15 @@ class PushPayloadTest {
 
     @Test
     fun unknownChannelFallsBackToAccount() {
-        assertEquals(PushChannelSpec.CUENTA, PushPayload.from(mapOf("title" to "x", "channel" to "nuevo"))!!.channel)
+        assertEquals(
+            PushChannelSpec.CUENTA,
+            PushPayload.from(
+                mapOf(
+                    "title" to "x",
+                    "channel" to "nuevo"
+                )
+            )!!.channel
+        )
         assertEquals(PushChannelSpec.CUENTA, PushPayload.from(mapOf("title" to "x"))!!.channel)
     }
 
@@ -38,6 +46,11 @@ class PushPayloadTest {
 
     @Test
     fun theChannelIdsMatchTheBackend() {
-        assertEquals(listOf("chat", "resultados", "social", "cuenta"), PushChannelSpec.entries.map { it.id })
+        assertEquals(
+            listOf("chat", "resultados", "social", "cuenta"),
+            PushChannelSpec.entries.map {
+                it.id
+            }
+        )
     }
 }
