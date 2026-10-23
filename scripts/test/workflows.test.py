@@ -97,12 +97,14 @@ class MajorGate(unittest.TestCase):
 
 
 class GuardasDeDirectorio(unittest.TestCase):
+    # (archivo marcador, clave del filtro). Se comprueba un archivo y no el directorio porque E0.1
+    # deja un README en cada carpeta antes de que exista el proyecto.
     CASOS = {
-        "backend-ci.yml": ("backend", "backend"),
-        "contract-ci.yml": ("contract", "contract"),
-        "rules-ci.yml": ("firebase", "firebase"),
-        "migration-order.yml": ("backend/src/main/resources/db/migration", "migraciones"),
-        "infra-ci.yml": ("infra/terraform", "infra"),
+        "backend-ci.yml": ('-f "backend/gradlew"', "backend"),
+        "contract-ci.yml": ('-f "contract/gradlew"', "contract"),
+        "rules-ci.yml": ('-f "firebase/package.json"', "firebase"),
+        "migration-order.yml": ('-d "backend/src/main/resources/db/migration"', "migraciones"),
+        "infra-ci.yml": ('-f "infra/terraform/envs/dev/main.tf"', "infra"),
     }
 
     def test_verificar_se_omite_si_no_existe_el_directorio(self):
@@ -112,7 +114,7 @@ class GuardasDeDirectorio(unittest.TestCase):
                 cambios = wf["jobs"]["cambios"]
                 self.assertIn("existe", cambios["outputs"])
                 paso = next(p for p in cambios["steps"] if p.get("id") == "existe")
-                self.assertIn(f'-d "{directorio}"', paso["run"])
+                self.assertIn(directorio, paso["run"])
                 verificar = wf["jobs"]["verificar" if "verificar" in wf["jobs"] else "static"]
                 self.assertIn(f"needs.cambios.outputs.{clave} == 'true'", verificar["if"])
                 self.assertIn("needs.cambios.outputs.existe == 'true'", verificar["if"])
