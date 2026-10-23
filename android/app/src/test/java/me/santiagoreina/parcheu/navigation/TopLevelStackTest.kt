@@ -25,7 +25,8 @@ class TopLevelStackTest {
         lateinit var navigator: AppNavigator
         composeRule.setContent {
             navController = rememberNavController()
-            ParcheUApp(navController = navController)
+            // Desde E2.2 el Splash decide el destino solo; se arranca en Home para no competir con él.
+            ParcheUApp(navController = navController, startDestination = Home)
         }
         composeRule.runOnUiThread {
             navigator = NavControllerNavigator(navController)
