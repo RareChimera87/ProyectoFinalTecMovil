@@ -20,6 +20,12 @@ import me.santiagoreina.parcheu.api.identity.IdentityRoutes
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
 import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
+import me.santiagoreina.parcheu.api.notifications.push.ExposedPushStore
+import me.santiagoreina.parcheu.api.notifications.push.FakeFcmClient
+import me.santiagoreina.parcheu.api.notifications.push.FcmNotifier
+import me.santiagoreina.parcheu.api.notifications.push.FirebaseFcmClient
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
@@ -68,6 +74,8 @@ class AppContainer(
     val graph: GraphModule = inMemoryGraphModule(clock),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
     val domains: List<DomainRoutes> = allDomains(identity, quota, twin, graph),
+    /** Avisos (push + bandeja, E5.3). Los tests de otros dominios pasan un `FakeNotifier`. */
+    val notifier: Notifier = NoopNotifier,
 ) {
     companion object {
         /**
@@ -98,7 +106,13 @@ class AppContainer(
             val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
             val twin = twinModule(config.env, database, clock, ai, tasks)
             val graph = GraphModule(ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock)
-            return AppContainer(config, clock, tokenVerifier, oidcVerifier, identity, quota, ai = ai, twin = twin, graph = graph)
+            // En local no hay credenciales de FCM: se guarda el aviso y el envío es un Fake (E5.3).
+            val fcm = if (local) FakeFcmClient() else FirebaseFcmClient(requireNotNull(config.firebaseProjectId))
+            val notifier = FcmNotifier(ExposedPushStore(database), fcm, clock)
+            return AppContainer(
+                config, clock, tokenVerifier, oidcVerifier, identity, quota,
+                ai = ai, twin = twin, graph = graph, notifier = notifier,
+            )
         }
 
         /**

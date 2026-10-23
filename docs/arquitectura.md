@@ -579,6 +579,25 @@ No hay indicador de 'escribiendo' en la 1.0 (sería la única escritura de clien
 ### 8.4 Push (FCM)
 Mensajes de datos con `type` y `route`; canales Android `chat`, `resultados`, `social` y `cuenta`. Cada aviso también se guarda en `notifications` para C2.
 
+**Implementación (E5.3).** Backend: `platform/notifier/Notifier` (puerto), `notifications/push/FcmNotifier` (guarda la fila en `notifications` con `payload = {title, body, route, actorId, locked}`, manda un mensaje de datos `{id, type, channel, title, body, route?}` a cada token y borra los que FCM responde `UNREGISTERED`; un fallo de FCM no interrumpe la operación que originó el aviso). Android: `push/ParcheUMessagingService` arma la notificación en el canal de `channel`; al tocarla abre `MainActivity` con el deep link, que `ParcheUApp` entrega cuando ya pasó el Splash (`PendingDeepLink`). El permiso POST_NOTIFICATIONS (API 33+) se pide una vez al llegar a Inicio, que es el destino de B5.
+
+| `type` (NotificationKinds) | Canal | `route` que manda el backend | Pantalla | Sin `route` |
+|---|---|---|---|---|
+| `SIMULATION_READY` | resultados | `parcheu://results/{simulationId}` | Results (F7/F8) | Simulations (F6) |
+| `SIMULATION_FAILED` | resultados | `parcheu://simulation/{id}` | Simulation (F4/F5) | Simulations (F6) |
+| `MATCH_FOUND` | resultados | `parcheu://match/{matchId}` | MatchFound (F2) | MatchQueue (F1) |
+| `MATCH_EXPIRED` | resultados | `parcheu://match` | MatchQueue (F1) | MatchQueue (F1) |
+| `CONNECT_REQUEST` | social | `parcheu://notifications` | Notifications (C2) | Notifications (C2) |
+| `NEW_CONNECTION` | social | `parcheu://parche` | Parche (D1) | Parche (D1) |
+| `INTRODUCTION_PROPOSAL` | social | `parcheu://intro/{id}` | IntroProposal (E3) | Notifications (C2) |
+| `INVITE_PENDING` | social | `parcheu://add-friends` | AddFriends (C5) | AddFriends (C5) |
+| `COMMUNITY` | social | `parcheu://communities` | Communities (D8) | Communities (D8) |
+| `CHAT_MESSAGE` | chat | `parcheu://chat/{chatId}` | Chat (F9) | ChatList |
+| `TWIN_MEMORIES`, `TWIN_FEEDBACK` | cuenta | `parcheu://train-twin` | TrainTwin (C4) | TrainTwin (C4) |
+| `ACCOUNT` y tipos desconocidos | cuenta | `parcheu://notifications` | Notifications (C2) | Notifications (C2) |
+
+La tabla vive en `android/.../push/DeepLinks.kt` (con su test de casos) y la usa también C2 (E5.4). Los IDs de canal están en `PushChannel` (backend) y `PushChannelSpec` (Android) y no cambian sin tocar ambos.
+
 ---
 
 ## 9. Billing (ParcheU+)
@@ -767,6 +786,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Flyway (`flyway-core`, `flyway-database-postgresql`) | 13.11.1 (fijada en E0.3) | Migraciones |
 | Firebase Admin Java | 9.11.0 (fijada en E0.3) | Auth, FCM, Firestore |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
 | Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |

@@ -254,6 +254,8 @@ dependencies {
     // Login con Google (E2.2, ADR-0021): Credential Manager + googleid → Firebase Auth.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    // E5.3: push con FCM.
+    implementation(libs.firebase.messaging)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)

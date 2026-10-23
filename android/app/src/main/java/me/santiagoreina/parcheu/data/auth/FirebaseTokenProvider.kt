@@ -13,6 +13,9 @@ class FirebaseTokenProvider(private val source: FirebaseAuthSource) : TokenProvi
 
     override suspend fun refreshToken(): String? = token(forceRefresh = true)
 
+    /** UID de la sesión: lo exige el registro del token FCM (E5.3). */
+    override suspend fun currentUserId(): String? = source.authOrNull()?.currentUser?.uid
+
     private suspend fun token(forceRefresh: Boolean): String? {
         val user = source.authOrNull()?.currentUser ?: return null
         return try {

@@ -442,6 +442,19 @@ No hay pasos bloqueantes: la feature no crea recursos en GCP, Firebase ni consol
 3. **Revisión legal.** Pide al docente o a un abogado revisar el texto de aceptación de A4 y el plazo de conservación de
    `consents` (5 años, arquitectura.md §10.2) antes de la prueba cerrada.
 
+## E5.3 · Push con FCM
+
+El código, los tests y las rutas están hechos; lo siguiente solo lo puedes hacer tú o depende de piezas que aún no se mezclan.
+
+1. **Permiso de FCM para la cuenta del API.** Cuando exista `sa-api` en `parcheu-dev` (E0.5), debe tener el rol `roles/firebasecloudmessaging.admin` (envío con `messages.create`). Si E0.5 no lo concede en Terraform, agrégalo allí. En `parcheu-dev` las APIs `fcm.googleapis.com` y `firebase.googleapis.com` ya están habilitadas.
+2. **Verificación manual del push real en el flavor dev** (criterio de la ficha, no se pudo hacer sin dispositivo ni backend desplegado):
+   1. Descargar `google-services.json` de dev con `scripts/fetch-google-services.sh` y compilar `:app:installDevDebug` en un dispositivo o emulador con Play Services (API 33+ para ver el permiso).
+   2. Iniciar sesión (E2.2), llegar a Inicio y aceptar el permiso de notificaciones; el token se registra con `POST /v1/me/fcm-token`.
+   3. Con el backend de dev desplegado, enviar un aviso de prueba (por ejemplo desde un test de integración o un Cloud Run Job) con `Notifier.notify(userId, Notification(kind = "ACCOUNT", title = "Prueba", body = "Hola"))`, o con curl a la API de FCM v1 mandando `data: {type, channel, title, body, route}`.
+   4. Comprobar que llega con la app cerrada, que se ve en el canal correcto (Ajustes > Notificaciones) y que al tocarla abre la pantalla de la tabla de arquitectura §8.4.
+   5. Pegar el resultado (captura) en el PR de E5.3.
+3. **Integración con otras features que aún no se mezclan:** E2.2 debe llamar `PushTokenRegistrar.sync()` justo después de iniciar sesión (ya se llama al llegar a Inicio, pero conviene también tras el login) y E8.2 debe llamar `PushTokenRegistrar.unregister()` en el cierre de sesión.
+4. **`TokenProvider.currentUserId()` (E2.2).** Es abstracto: el `FirebaseTokenProvider` de E2.2 debe implementarlo devolviendo `FirebaseAuth.currentUser?.uid`. Sin eso no compila; no se deja un valor por defecto para que el push no se apague en silencio (`PushTokenRegistrar` no llama a `POST /v1/me/fcm-token` sin UID). Sin esto la verificación manual del punto 2 no se puede hacer.
 ## E3.1 · API del grafo
 
 La feature no crea recursos en GCP; solo necesita que exista el valor del secreto de E0.5.

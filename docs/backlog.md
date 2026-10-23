@@ -466,6 +466,8 @@ Sesión, términos y política, onboarding con Google, perfil básico y edad, pr
 
 **Descripción.** A1 Splash (sin sesión → A2; con sesión y gemelo → C1; con sesión sin gemelo → B1), A2-A4 en pager con 'Saltar' que lleva a A4, Credential Manager + `googleid` → `FirebaseAuth.signInWithCredential` → `POST /v1/session`, estados de cargando y error (no están en los mockups) y regreso a A4 tras cerrar sesión. A4 agrega bajo el botón el texto 'Al continuar aceptas los Términos y la Política de privacidad (Ley 1581 de 2012). Tus respuestas y mensajes se procesan con IA de Google Cloud en EE. UU.' con enlaces a Hosting; tras el login, si el estado es `NEEDS_TERMS`, la app llama `POST /v1/me/terms` antes de seguir (una hoja de confirmación lo pide de nuevo si cambió la versión). Destinos tras el login: `NEEDS_PROFILE` → B0 (E2.6), `NEEDS_TWIN` → B1.
 
+**Contrato con E5.3.** El `FirebaseTokenProvider` debe implementar `currentUserId()` (abstracto en `TokenProvider`) devolviendo `FirebaseAuth.currentUser?.uid`; de lo contrario el registro del token FCM no ocurre.
+
 **Criterios de aceptación (verificables):**
 
 - [ ] ViewModel con `FakeAuthRepository`: éxito navega según `onboarding`; cancelación vuelve a A4 sin error; error de red muestra mensaje y botón reintentar.
