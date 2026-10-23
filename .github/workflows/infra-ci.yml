@@ -113,6 +113,8 @@ jobs:
           terraform show -no-color plan.tfplan > plan.txt
       - name: check-plan y check-iam
         id: checks
+        # `shell: bash` activa -o pipefail: sin él, `| tee` oculta el código de salida de check-plan/check-iam.
+        shell: bash
         run: |
           {
             scripts/check-plan.sh infra/terraform/envs/dev/plan.json

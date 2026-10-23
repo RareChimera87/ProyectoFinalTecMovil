@@ -1,8 +1,8 @@
 name: migration-order
 
 # E0.6 + ADR-0011. Rechaza migraciones Flyway con versión menor que la última de dev. La lógica
-# vive en scripts/check-migration-order.sh (E0.4); contrato: primer argumento = ref base
-# (origin/dev), código distinto de 0 si alguna migración nueva queda fuera de orden.
+# vive en scripts/check-migration-order.sh (E0.4); contrato: `--base-ref <ref>` (aquí origin/dev),
+# código distinto de 0 si alguna migración nueva queda fuera de orden (2 si el uso es incorrecto).
 on:
   pull_request:
   workflow_dispatch:
@@ -52,7 +52,7 @@ jobs:
             echo "::error::Falta scripts/check-migration-order.sh (lo agrega E0.4) y el PR toca migraciones."
             exit 1
           fi
-          scripts/check-migration-order.sh origin/dev
+          scripts/check-migration-order.sh --base-ref origin/dev
       - name: Pruebas del script
         run: |
           shopt -s nullglob
