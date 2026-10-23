@@ -85,6 +85,9 @@ module "platform" {
 
   rtdn_push_enabled = true
 
+  # sa-play: verify/RTDN del backend (E7.1) y publicación desde CI (E10.2).
+  play_service_account_enabled = true
+
   demo_users_enabled = var.demo_users_enabled
 }
 

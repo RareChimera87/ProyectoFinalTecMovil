@@ -7,7 +7,10 @@ import me.santiagoreina.parcheu.api.ai.AiModule
 import me.santiagoreina.parcheu.api.ai.ExposedAiUsageStore
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.InMemoryAiUsageStore
+import me.santiagoreina.parcheu.api.billing.BillingModule
 import me.santiagoreina.parcheu.api.billing.BillingRoutes
+import me.santiagoreina.parcheu.api.billing.billingModule
+import me.santiagoreina.parcheu.api.billing.inMemoryBillingModule
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.ChatRoutes
 import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
@@ -142,11 +145,16 @@ class AppContainer(
     val unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
     /** Invitaciones por QR y código (E6.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
     val invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
+    /**
+     * Billing (E7.1): verify, derecho vigente y RTDN. Por defecto en memoria y sin API de Play: solo
+     * [fromConfig] cablea Postgres (la misma tabla `entitlements` que lee [quota]) y Google Play.
+     */
+    val billing: BillingModule = inMemoryBillingModule(clock),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
     val domains: List<DomainRoutes> =
         allDomains(
-            identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread,
-            notifications, invites,
+            identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
+            invites, billing, config.env,
         ),
 ) {
     companion object {
@@ -211,11 +219,14 @@ class AppContainer(
             )
             // Invitaciones (E6.1): aristas por EdgeService, modos de user_modes y enlace https://<hosting>/i/{codigo}.
             val invites = exposedInviteModule(database, graph, simulation, notifier, InviteLinks.fromConfig(config, vars), clock)
+            // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.
+            val billing = billingModule(config.env, database, clock, vars)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
                 matching = matching, safety = safety, account = account,
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
+                billing = billing,
                 invites = invites,
             )
         }
@@ -263,6 +274,9 @@ fun allDomains(
     unread: UnreadCounter = UnreadCounter.NONE,
     notifications: NotificationCenterModule = inMemoryNotificationCenter(systemClock(), quota, graph),
     invites: InviteModule = inMemoryInviteModule(systemClock(), graph, simulation, NoopNotifier),
+    billing: BillingModule = inMemoryBillingModule(systemClock()),
+    /** Con `PROD` no se registra `POST /internal/dev/grant-plus` (404), aunque [quota] traiga concesión. */
+    env: Env = Env.LOCAL,
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -277,7 +291,10 @@ fun allDomains(
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     // Centro de notificaciones C2 (E5.4): bandeja agrupada por fecha de Bogotá y 'Marcar leídas'.
     NotificationsRoutes(notifications.service) { firebase -> identity.requireUser(firebase).id },
-    BillingRoutes(),
+    // Billing (E7.1): verify, derecho vigente, RTDN y, fuera de prod, `grant-plus`.
+    BillingRoutes(billing.service, quota.devPlus.takeIf { env != Env.PROD }, quota.clock) { firebase ->
+        identity.requireUser(firebase).id
+    },
     SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
     AdminRoutes(),
     // Inicio (E4.7): agregador de cupos, simulaciones, sugerencias del grafo y no leídas.

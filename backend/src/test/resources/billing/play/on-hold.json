@@ -1,0 +1,24 @@
+{
+  "kind": "androidpublisher#subscriptionPurchaseV2",
+  "regionCode": "CO",
+  "startTime": "2026-08-24T09:12:30.004Z",
+  "subscriptionState": "SUBSCRIPTION_STATE_ON_HOLD",
+  "latestOrderId": "GPA.3322-1189-6650-44120..1",
+  "acknowledgementState": "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+  "externalAccountIdentifiers": {
+    "obfuscatedExternalAccountId": "{{obfuscatedAccountId}}"
+  },
+  "lineItems": [
+    {
+      "productId": "parcheu_plus",
+      "expiryTime": "2026-10-24T09:12:29.512Z",
+      "autoRenewingPlan": {
+        "autoRenewEnabled": true,
+        "recurringPrice": { "currencyCode": "COP", "units": "5000" }
+      },
+      "offerDetails": { "basePlanId": "mensual" },
+      "latestSuccessfulOrderId": "GPA.3322-1189-6650-44120..0"
+    }
+  ],
+  "testPurchase": {}
+}

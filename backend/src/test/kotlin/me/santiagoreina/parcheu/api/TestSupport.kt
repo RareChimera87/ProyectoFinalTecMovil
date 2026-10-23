@@ -4,6 +4,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
+import me.santiagoreina.parcheu.api.billing.BillingModule
+import me.santiagoreina.parcheu.api.billing.inMemoryBillingModule
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.deletion.AccountModule
 import me.santiagoreina.parcheu.api.identity.deletion.inMemoryAccountModule
@@ -85,6 +87,8 @@ fun testContainer(
     // Por defecto la campana de Inicio cuenta en la misma bandeja que C2 (E5.4).
     unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
     invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
+    // Billing (E7.1): para que `verify` dé Plus en el cupo, pasar también `quota` con `billing.entitlements`.
+    billing: BillingModule = inMemoryBillingModule(clock),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
@@ -110,10 +114,11 @@ fun testContainer(
         account = accountModule,
         notifications = notifications,
         unread = unread,
+        billing = billing,
         invites = invites,
         domains = allDomains(
-            identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread,
-            notifications, invites,
+            identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
+            invites, billing, config.env,
         ) + extra,
     )
 }
