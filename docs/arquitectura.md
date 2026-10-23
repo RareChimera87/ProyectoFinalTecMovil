@@ -687,12 +687,13 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 **Terraform:** `infra/terraform/bootstrap` (una vez por proyecto, con el ADC del usuario; cada proyecto tiene su bucket, su pool WIF y sus cuentas de CI), `modules/platform`, `envs/dev`, `envs/prod`; estado en GCS versionado (`gs://<proyecto>-tfstate`). Detalle y comandos en `infra/terraform/README.md`. CI hace `plan` en PR y `apply` de dev al mezclar; el `apply` de prod lo ejecuta solo el usuario.
 
 **Secretos de GitHub:** `WIF_PROVIDER` (dev), `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_{DEV,PROD}`, `TF_PLAN_SERVICE_ACCOUNT_{DEV,PROD}`, `TF_SERVICE_ACCOUNT_DEV` (apply de dev), `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
+**Secretos de GitHub:** `WIF_PROVIDER` (pool de dev), `WIF_PROVIDER_PROD` (pool de prod: el bootstrap crea un pool WIF por proyecto, ADR-0014), `WIF_SERVICE_ACCOUNT_{DEV,PROD}` (`sa-deployer`), `TF_PLAN_SERVICE_ACCOUNT_DEV` (`sa-terraform-plan`, solo lectura, para el `plan` de los PR), `TF_SERVICE_ACCOUNT_DEV` (`sa-terraform`, para el `apply` de dev; el de prod lo ejecuta solo el usuario), `AUTO_MERGE_TOKEN` (PAT del auto-merge, solo si se reactiva con `AUTO_MERGE_ENABLED`), `GOOGLE_SERVICES_JSON_{DEV,PROD}` (base64), `UPLOAD_KEYSTORE` (base64), `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON` (si Play no admite WIF; verificar).
 
 ---
 
 ## 13. Versiones de librerías
 
-Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y todas llevan '(verificar)'. Avisos para los agentes:
+Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Avisos para los agentes:
 - **Testcontainers:** la serie 2.x cambió los nombres de artefacto (`org.testcontainers:testcontainers-postgresql`, `testcontainers-junit-jupiter`); no mezclar con los nombres 1.x.
 - **Exposed:** 1.0 cambió paquetes y API respecto de 0.x; E0.3 elige **una** serie y los agentes no copian ejemplos de la otra.
 - **Kotest:** existe la serie 6.x; E0.3 decide entre 5.9.x y 6.x según compatibilidad con Kotlin 2.2.
@@ -700,25 +701,25 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 
 | Librería | Versión de referencia | Uso |
 |---|---|---|
-| kotlinx-serialization (plugin y json) | plugin 2.2.10; json 1.9.0 (verificar) | DTOs |
-| kotlinx-coroutines | 1.10.2 (verificar) | Concurrencia |
-| Koin (`koin-bom`, `koin-androidx-compose`) | 4.1.1 (verificar) | DI Android |
-| Navigation Compose | 2.9.5 (verificar) | Navegación |
-| Retrofit + converter kotlinx-serialization | 3.0.0 (verificar) | Red |
-| OkHttp | 5.1.0 (verificar) | Red |
-| DataStore Preferences | 1.1.7 (verificar) | Persistencia |
-| Coil 3 (`coil-compose`, `coil-network-okhttp`) | 3.3.0 (verificar) | Imágenes |
-| core-splashscreen | 1.0.1 (verificar) | Splash |
-| Credential Manager (`credentials`, `credentials-play-services-auth`) | 1.5.0 (verificar) | Login |
-| googleid | 1.1.1 (verificar) | Login |
-| Firebase BoM (auth, firestore, messaging, crashlytics) | 34.x (verificar) | Firebase |
-| Play Billing (`billing-ktx`) | 8.x (verificar; la agrega E7.0) | Suscripciones |
-| ZXing core | 3.5.3 (verificar) | Generar QR |
-| play-services-code-scanner | 16.1.0 (verificar) | Escanear QR |
-| Robolectric | 4.16 (verificar; `@Config(sdk=[35])`) | Tests JVM |
-| Roborazzi | 1.50.0 (verificar) | Capturas |
-| Turbine | 1.2.1 (verificar) | Tests de Flow |
-| Spotless + ktlint | 7.x / 1.7.x (verificar) | Estilo |
+| kotlinx-serialization (plugin y json) | plugin 2.2.10; json 1.9.0 (fijada en E0.7; el plugin funciona con el Kotlin integrado de AGP 9.4.1, ADR-0005) | DTOs |
+| kotlinx-coroutines | 1.10.2 (fijada en E0.7; core, android y test) | Concurrencia |
+| Koin (`koin-bom`, `koin-android`, `koin-androidx-compose`, `koin-test`) | 4.1.1 (fijada en E0.7; 4.2.x se compila con Kotlin 2.3.20 y se deja para cuando suba Kotlin) | DI Android |
+| Navigation Compose (+ `navigation-testing`) | 2.9.8 (fijada en E0.7; última 2.9.x, ADR-0006) | Navegación |
+| Retrofit + converter kotlinx-serialization | 3.0.0 (fijada en E0.7) | Red |
+| OkHttp (+ `logging-interceptor`, `mockwebserver3` para tests) | 5.5.1 (fijada en E0.7) | Red |
+| DataStore Preferences | 1.2.1 (fijada en E0.7) | Persistencia |
+| Coil 3 (`coil-compose`, `coil-network-okhttp`) | 3.4.0 (fijada en E0.7; 3.5+ está compilada con Kotlin 2.4 y no la lee Kotlin 2.2) | Imágenes |
+| core-splashscreen | 1.2.0 (fijada en E0.7) | Splash |
+| Credential Manager (`credentials`, `credentials-play-services-auth`) | 1.6.0 (fijada en E0.7) | Login |
+| googleid | 1.1.1 (fijada en E0.7; 1.2.x está compilada con Kotlin 2.4) | Login |
+| Firebase BoM (auth, firestore, messaging, crashlytics) + plugin `google-services` | BoM 34.19.0; plugin 4.5.0 (fijadas en E0.7; la BoM 35 trae firebase-auth 25, compilada con Kotlin 2.4) | Firebase |
+| Play Billing (`billing-ktx`) | 8.3.0 (fijada en E0.7, la agrega E7.0; existe 9.x, cambiar solo si Play lo exige) | Suscripciones |
+| ZXing core | 3.5.4 (fijada en E0.7) | Generar QR |
+| play-services-code-scanner | 16.1.0 (fijada en E0.7) | Escanear QR |
+| Robolectric | 4.16.1 (fijada en E0.7; `@Config(sdk=[35])`) | Tests JVM |
+| Roborazzi (plugin, `roborazzi`, `roborazzi-compose`, `roborazzi-junit-rule`) | 1.77.0 (fijada en E0.7; `changeThreshold` 0,01) | Capturas |
+| Turbine | 1.2.1 (fijada en E0.7) | Tests de Flow |
+| Spotless + ktlint | 8.10.4 / 1.7.1 (fijadas en E0.7; estilo `android_studio`, máx. 100 columnas) | Estilo |
 | Ktor (server, client para tests) | 3.3.0 (verificar) | Backend |
 | Exposed | 1.0.0 (verificar; si no es estable, 0.61.0) | SQL |
 | HikariCP | 6.3.0 (verificar) | Pool |

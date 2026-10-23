@@ -1,0 +1,56 @@
+name: deploy-prod
+
+# E0.6. Tag v* (en main): migración y API en parcheu-prod con el environment `production`,
+# que exige la aprobación del usuario antes de correr. La 0.1 no usa backend (PLAN.md §5):
+# mientras la variable de repo DESPLEGAR_API_PROD no sea 'true', el tag no despliega la API.
+# El `terraform apply` de prod no está aquí: lo ejecuta solo el usuario. Para repetir un
+# despliegue, vuelve a ejecutar la corrida del tag desde la pestaña Actions.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validar:
+    name: deploy-prod-validar
+    runs-on: ubuntu-latest
+    outputs:
+      desplegar: ${{ steps.v.outputs.desplegar }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        env:
+          HABILITADO: ${{ vars.DESPLEGAR_API_PROD }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Tag inválido: $TAG"; exit 1; }
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::El tag $TAG no apunta a un commit de main."
+            exit 1
+          fi
+          if [[ "$HABILITADO" != true ]]; then
+            echo "::notice::DESPLEGAR_API_PROD != true: $TAG no despliega la API (la 0.1 no usa backend)."
+            echo "desplegar=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "desplegar=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  api:
+    name: deploy-prod
+    needs: validar
+    if: needs.validar.outputs.desplegar == 'true'
+    uses: ./.github/workflows/_desplegar-api.yml
+    with:
+      # El environment `production` exige la aprobación del usuario y es el único
+      # que puede usar sa-deployer de prod (attribute.environment en el bootstrap).
+      entorno: production
+      proyecto: ${{ vars.GCP_PROJECT_PROD || 'parcheu-prod' }}
+    secrets:
+      wif_provider: ${{ secrets.WIF_PROVIDER_PROD }}
+      wif_service_account: ${{ secrets.WIF_SERVICE_ACCOUNT_PROD }}

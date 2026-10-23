@@ -1,0 +1,52 @@
+{
+  "quota": {
+    "simulations": {
+      "used": 3,
+      "limit": 5,
+      "resetsAt": "2026-10-27T05:00:00Z"
+    },
+    "randomMatch": {
+      "used": 0,
+      "limit": 1,
+      "resetsAt": "2026-10-24T05:00:00Z"
+    },
+    "fullReport": {
+      "used": 1,
+      "limit": 1,
+      "resetsAt": "2026-10-27T05:00:00Z"
+    },
+    "plus": false
+  },
+  "running": {
+    "id": "7a6b5c4d-3e2f-4011-9223-344556677889",
+    "status": "RUNNING",
+    "mode": "ESTUDIO",
+    "other": {
+      "id": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
+      "label": "Laura Pinzón",
+      "initials": "LP",
+      "photoUrl": "https://lh3.googleusercontent.com/a/laura",
+      "isDemo": false
+    },
+    "createdAt": "2026-10-23T15:30:00Z"
+  },
+  "ready": [
+    {
+      "id": "5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+      "status": "DONE",
+      "mode": "AMISTAD",
+      "other": {
+        "anonId": "h7Kq2xP9",
+        "label": "Alguien de la UIS",
+        "initials": "A",
+        "isDemo": false
+      },
+      "createdAt": "2026-10-23T15:30:00Z",
+      "origin": "PARCHE",
+      "score": 82
+    }
+  ],
+  "suggestions": [],
+  "unread": 2,
+  "plus": false
+}
