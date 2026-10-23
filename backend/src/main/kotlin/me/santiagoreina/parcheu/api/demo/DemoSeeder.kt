@@ -195,7 +195,9 @@ class DemoSeeder(private val db: Database, private val settings: DemoSettings) {
                     it[matchId] = null
                 }
             } else {
-                MatchQueue.update({ MatchQueue.userId eq id }) {
+                // Condicionado al estado leído: si un emparejamiento simultáneo cambió el ticket (p. ej. a MATCHED)
+                // entre la lectura y este UPDATE, Postgres reevalúa la condición tras el candado de fila y no lo pisa.
+                val changed = MatchQueue.update({ (MatchQueue.userId eq id) and (MatchQueue.status eq ticket[MatchQueue.status]) }) {
                     it[MatchQueue.mode] = mode
                     it[priority] = DEMO_PRIORITY
                     if (!waitingNow) it[enqueuedAt] = at
@@ -203,6 +205,7 @@ class DemoSeeder(private val db: Database, private val settings: DemoSettings) {
                     it[status] = TicketStatus.WAITING
                     it[matchId] = null
                 }
+                if (changed == 0) continue
             }
             waiting++
         }

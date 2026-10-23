@@ -200,6 +200,47 @@ class DemoDbTest : FunSpec({
         }
     }
 
+    test("Postgres: refresh no pisa un ticket demo que un emparejamiento simultáneo cambió tras la lectura").config(enabled = TestDatabase.enabled) {
+        withDb { db ->
+            DemoSeeder(db, enabled).seed(start.minusSeconds(3600))
+            val demo = db.demoIds().first()
+            // Transacción concurrente (como enqueueAndPair): cambia el ticket del demo y retiene el candado de fila.
+            val locked = java.util.concurrent.CountDownLatch(1)
+            val release = java.util.concurrent.CountDownLatch(1)
+            val pairing = Thread {
+                transaction(db) {
+                    exec("update match_queue set status = 'EXPIRED' where user_id = '$demo'")
+                    locked.countDown()
+                    release.await()
+                }
+            }.apply { start() }
+            locked.await()
+            // refresh lee el ticket aún WAITING (READ COMMITTED) y su UPDATE se queda esperando el candado.
+            var refreshed = -1
+            val job = Thread { refreshed = DemoSeeder(db, enabled).refresh(start.plusSeconds(60)) }.apply { start() }
+            val deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos()
+            var waitingOnLock = false
+            while (!waitingOnLock && System.nanoTime() < deadline) {
+                transaction(db) {
+                    exec("select count(*) from pg_stat_activity where wait_event_type = 'Lock' and query ilike 'update match_queue%'") { rs ->
+                        rs.next()
+                        waitingOnLock = rs.getLong(1) > 0
+                    }
+                }
+                if (!waitingOnLock) Thread.sleep(20)
+            }
+            waitingOnLock shouldBe true
+            release.countDown()
+            pairing.join()
+            job.join()
+
+            refreshed shouldBe 19
+            transaction(db) {
+                MatchQueue.selectAll().where { MatchQueue.userId eq demo }.single()[MatchQueue.status] shouldBe TicketStatus.EXPIRED
+            }
+        }
+    }
+
     test("Postgres: tras purge-demo ninguna columna de ninguna tabla referencia a un usuario is_demo").config(enabled = TestDatabase.enabled) {
         withDb { db ->
             DemoSeeder(db, enabled).seed(start.minusSeconds(3600))
@@ -230,6 +271,11 @@ class DemoDbTest : FunSpec({
                     "insert into twin_memories (user_id, mode, text, source_chat_id, status) values ('$ana', 'AMISTAD', 'Le gusta el café', '${chat.id}', 'ACCEPTED')",
                     "insert into notifications (user_id, kind, payload) values ('$ana', 'NEW_CONNECTION', '{\"actorId\": \"$demo\", \"route\": \"parcheu://chat/${chat.id}\"}')",
                     "insert into notifications (user_id, kind, payload) values ('$demo', 'MATCH_FOUND', '{}')",
+                    // Avisos del tester que solo nombran la simulación o el chat purgados (sin `actorId`).
+                    "insert into notifications (user_id, kind, payload) values ('$ana', 'RESULT_READY', '{\"simulationId\": \"$simulationId\"}')",
+                    "insert into notifications (user_id, kind, payload) values ('$ana', 'NEW_MESSAGE', '{\"route\": \"parcheu://chat/${chat.id}\"}')",
+                    // Y uno que no tiene nada que ver con demos: se queda.
+                    "insert into notifications (user_id, kind, payload) values ('$ana', 'NEW_CONNECTION', '{\"route\": \"parcheu://inicio\"}')",
                     "insert into consents (user_id, kind, granted, text_version) values ('$demo', 'TERMS', true, 'v1')",
                     "insert into reports (reporter_id, target_id, chat_id, reason, snapshot) values ('$ana', '$demo', '${chat.id}', 'OTHER', '{\"target\": \"$demo\"}')",
                     "insert into entitlements (user_id, product_id, purchase_token, state) values ('$otherDemo', 'parcheu_plus', 'tok-demo', 'ACTIVE')",
@@ -267,6 +313,12 @@ class DemoDbTest : FunSpec({
             }
             hits.shouldBeEmpty()
             db.demoIds().shouldBeEmpty()
+            // Sin avisos huérfanos: solo queda el aviso de Ana que no nombraba nada de un demo.
+            transaction(db) {
+                var left = 0L
+                exec("select count(*) from notifications where user_id = '$ana'") { rs -> rs.next(); left = rs.getLong(1) }
+                left shouldBe 1
+            }
 
             // Lo del tester se queda: su usuario, su gemelo y su memoria (sin el chat de origen).
             transaction(db) {

@@ -132,10 +132,16 @@ class DemoPurger(private val db: Database, private val mirrors: DemoMirrorCleane
             "update twin_memories set source_chat_id = null where source_chat_id in (select id from demo_chats)",
             // Mensajes, miembros y `reports.chat_id` caen en cascada (o se anulan) con el chat.
             "delete from chats where id in (select id from demo_chats)",
-            // Avisos de testers que nombran al demo (p. ej. NEW_CONNECTION con `actorId`).
+            // Avisos de testers que nombran al demo (p. ej. NEW_CONNECTION con `actorId`) o una simulación o un chat
+            // purgados (RESULT_READY con `simulationId`, `route: parcheu://chat/<id>`): su deep link daría 404.
             """
             delete from notifications n
-            where exists (select 1 from demo_users d where position(d.id::text in n.payload::text) > 0)
+            where exists (
+                select 1 from (
+                    select id from demo_users union all select id from demo_sims union all select id from demo_chats
+                ) d
+                where position(d.id::text in n.payload::text) > 0
+            )
             """,
             "delete from entitlements where user_id in (select id from demo_users)",
         )
