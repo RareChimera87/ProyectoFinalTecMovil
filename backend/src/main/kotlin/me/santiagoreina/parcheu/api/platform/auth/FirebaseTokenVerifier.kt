@@ -12,9 +12,9 @@ import org.slf4j.LoggerFactory
 /** Implementación real: Firebase Admin con las credenciales por defecto de la cuenta `sa-api`. */
 class FirebaseTokenVerifier(projectId: String) : TokenVerifier {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val auth: FirebaseAuth
-
-    init {
+    // Perezoso: las credenciales por defecto (ADC) se leen en la primera verificación, no al
+    // construir el contenedor. Así `AppContainer.fromConfig` no exige ADC (ni en tests ni en CI).
+    private val auth: FirebaseAuth by lazy {
         val app = FirebaseApp.getApps().firstOrNull { it.name == FirebaseApp.DEFAULT_APP_NAME }
             ?: FirebaseApp.initializeApp(
                 FirebaseOptions.builder()
@@ -22,7 +22,7 @@ class FirebaseTokenVerifier(projectId: String) : TokenVerifier {
                     .setProjectId(projectId)
                     .build(),
             )
-        auth = FirebaseAuth.getInstance(app)
+        FirebaseAuth.getInstance(app)
     }
 
     override suspend fun verify(token: String): FirebaseUser? = withContext(Dispatchers.IO) {
