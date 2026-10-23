@@ -147,9 +147,11 @@ public data class InviteDto(
 )
 
 /**
- * Alguien canjeó mi código y espera que lo acepte. [id] es el `anonId` de esa persona para mí: es lo
- * que va en `POST /v1/invites/{id}/accept`. Quien canjea un código pide conectar con su dueño, así que
- * el dueño ve su nombre (`other.label`), pero no su `id` ni su foto hasta aceptar.
+ * Alguien canjeó mi código en [mode] y espera que lo acepte. [id] identifica ese canje (persona y modo,
+ * `<anonId>:<MODO>`): es lo que va en `POST /v1/invites/{id}/accept` y acepta solo ese modo; si la misma
+ * persona canjeó en otro modo (p. ej. Pareja) es otro [PendingInvite] con otro [id]. Quien canjea un código
+ * pide conectar con su dueño, así que el dueño ve su nombre (`other.label`), pero no su `id` ni su foto
+ * hasta aceptar.
  */
 @Serializable
 public data class PendingInvite(

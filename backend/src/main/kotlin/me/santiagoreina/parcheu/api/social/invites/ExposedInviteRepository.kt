@@ -2,7 +2,9 @@ package me.santiagoreina.parcheu.api.social.invites
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.santiagoreina.parcheu.api.platform.db.tables.InviteRedeemAttempts
 import me.santiagoreina.parcheu.api.platform.db.tables.InviteRedemptions
+import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.api.platform.db.tables.Invites
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.RedeemStatus
@@ -10,9 +12,14 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -75,6 +82,24 @@ class ExposedInviteRepository(private val db: Database) : InviteRepository {
                 it[acceptedAt] = now.odt()
             }
         }
+    }
+
+    /**
+     * Bloquea la fila del usuario (`SELECT ... FOR UPDATE`, como `ExposedUsageRepository`) para que dos
+     * canjes simultáneos de la misma persona no se pasen del límite.
+     */
+    override suspend fun tryRecordAttempt(userId: UUID, since: Instant, limit: Int, now: Instant): Boolean = tx {
+        if (!Users.select(Users.id).where { Users.id eq userId }.forUpdate().any()) return@tx false
+        InviteRedeemAttempts.deleteWhere { (InviteRedeemAttempts.userId eq userId) and (InviteRedeemAttempts.createdAt lessEq since.odt()) }
+        val used = InviteRedeemAttempts.selectAll()
+            .where { (InviteRedeemAttempts.userId eq userId) and (InviteRedeemAttempts.createdAt greater since.odt()) }
+            .count()
+        if (used >= limit) return@tx false
+        InviteRedeemAttempts.insert {
+            it[InviteRedeemAttempts.userId] = userId
+            it[createdAt] = now.odt()
+        }
+        true
     }
 
     private fun ResultRow.toRedemption() = Redemption(

@@ -2,14 +2,14 @@ package me.santiagoreina.parcheu.api.social.invites
 
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
-import java.text.Normalizer
 import kotlin.random.Random
 
 /**
- * Códigos de invitación `XXXX-0000` (E6.1): cuatro letras A-Z, guion y cuatro dígitos. Las letras salen
- * del nombre de la persona cuando se puede ("Mariana" -> `MARI-4827`, como en el mockup C5) y se
- * completan al azar; los dígitos siempre son al azar. La unicidad la garantiza la clave primaria de
- * `invites`: [InviteService] reintenta con otro código si choca.
+ * Códigos de invitación `XXXX-0000` (E6.1): cuatro letras A-Z, guion y cuatro dígitos, todo al azar con
+ * `SecureRandom` (26^4 * 10^4 ≈ 4.570 millones de códigos). Las letras ya no salen del nombre (el mockup C5
+ * muestra `MARI-4827`): un prefijo predecible dejaba solo 10.000 códigos por nombre y, junto al canje, servía
+ * para averiguar quién tenía cuál. La unicidad la garantiza la clave primaria de `invites`: [InviteService]
+ * reintenta con otro código si choca.
  */
 object InviteCodes {
     val FORMAT = Regex("^[A-Z]{4}-[0-9]{4}$")
@@ -21,21 +21,11 @@ object InviteCodes {
     /** Normaliza lo que escribe o escanea una persona: sin espacios y en mayúsculas ("abcd-1234 " -> "ABCD-1234"). */
     fun normalize(raw: String): String = raw.trim().uppercase()
 
-    /**
-     * Código nuevo. Con [name] usa sus primeras letras (sin tildes ni símbolos); con [fullyRandom] ignora
-     * el nombre, para salir de un prefijo cuyos 10.000 números ya estén casi llenos.
-     */
-    fun generate(random: Random, name: String? = null, fullyRandom: Boolean = false): String {
-        val fromName = if (fullyRandom) "" else lettersOf(name).take(4)
-        val letters = fromName + buildString { repeat(4 - fromName.length) { append(LETTERS[random.nextInt(LETTERS.length)]) } }
+    /** Código nuevo, todo al azar. */
+    fun generate(random: Random): String {
+        val letters = buildString { repeat(4) { append(LETTERS[random.nextInt(LETTERS.length)]) } }
         val digits = random.nextInt(10_000).toString().padStart(4, '0')
         return "$letters-$digits"
-    }
-
-    private fun lettersOf(name: String?): String {
-        if (name.isNullOrBlank()) return ""
-        val plain = Normalizer.normalize(name, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
-        return plain.uppercase().filter { it in LETTERS }
     }
 }
 

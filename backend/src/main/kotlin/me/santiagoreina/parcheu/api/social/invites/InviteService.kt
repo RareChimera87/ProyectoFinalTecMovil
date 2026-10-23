@@ -10,6 +10,7 @@ import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.ViewContext
 import me.santiagoreina.parcheu.api.platform.errors.Blocked
+import me.santiagoreina.parcheu.api.platform.errors.Forbidden
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.api.platform.notifier.Notification
@@ -26,6 +27,7 @@ import me.santiagoreina.parcheu.contract.RedeemStatus
 import org.slf4j.LoggerFactory
 import java.security.SecureRandom
 import java.time.Clock
+import java.time.Duration
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.random.Random
@@ -43,9 +45,12 @@ data class InviteParticipant(val id: UUID, val activeModes: Set<Mode>, val delet
  * - `POST /v1/invites/redeem`: quien canjea el código de otra persona pide conectar en un modo que los dos
  *   tienen activo. La arista queda PENDING (`EdgeEvent.InterestShown`) y el dueño recibe `INVITE_PENDING`.
  *   Es idempotente: repetirlo no duplica el canje ni el aviso. Si el dueño ya había canjeado el código de
- *   quien canjea en el mismo modo, el interés es mutuo y quedan CONNECTED de una vez.
- * - `POST /v1/invites/{userId}/accept`: el dueño acepta (por `users.id` o por el `anonId` que ve en
- *   [InviteDto.pending]) y la arista pasa a CONNECTED en cada modo canjeado.
+ *   quien canjea en el mismo modo, el interés es mutuo y quedan CONNECTED de una vez. Cada persona tiene
+ *   [MAX_REDEEMS_PER_DAY] intentos por día (exista o no el código) y la respuesta nunca dice qué modos
+ *   tiene activos el dueño: si no tiene el modo pedido, se responde PENDING sin crear nada ni avisarle.
+ * - `POST /v1/invites/{id}/accept[?mode=]`: el dueño acepta un canje (por el [PendingInvite.id]
+ *   `anonId:MODO` que ve en [InviteDto.pending], o por `anonId`/`users.id` más `mode`) y la arista pasa a
+ *   CONNECTED solo en ese modo. Sin modo se acepta solo si esa persona tiene un único canje pendiente.
  *
  * Nunca hay aristas entre personas con un bloqueo (403 BLOCKED al canjear; al aceptar no se encuentra).
  */
@@ -69,18 +74,16 @@ class InviteService(
             if (r.redeemer in blocked) return@mapNotNull null
             val person = graph.person(r.redeemer)?.takeIf { it.deletedAt == null } ?: return@mapNotNull null
             val ref = requesterRef(userId, person)
-            PendingInvite(id = ref.anonId!!, other = ref, mode = r.mode, createdAt = r.createdAt.toKotlinInstant())
+            PendingInvite(id = pendingId(ref.anonId!!, r.mode), other = ref, mode = r.mode, createdAt = r.createdAt.toKotlinInstant())
         }
         return InviteDto(code = code, link = links.linkFor(code), pending = pending)
     }
 
-    /** Código de [userId]; lo crea (único) la primera vez. */
+    /** Código de [userId], todo al azar ([InviteCodes.generate]); lo crea (único) la primera vez. */
     suspend fun codeFor(userId: UUID): String {
         repo.codeOf(userId)?.let { return it }
-        val name = graph.person(userId)?.displayName
-        repeat(MAX_ATTEMPTS) { attempt ->
-            // La mitad de los intentos sin el prefijo del nombre: un nombre muy común no agota los reintentos.
-            val code = InviteCodes.generate(random, name, fullyRandom = attempt >= MAX_ATTEMPTS / 2)
+        repeat(MAX_ATTEMPTS) {
+            val code = InviteCodes.generate(random)
             if (repo.claim(code, userId)) return code
             // Otra petición concurrente de la misma persona pudo crear su código primero.
             repo.codeOf(userId)?.let { return it }
@@ -91,6 +94,11 @@ class InviteService(
     suspend fun redeem(userId: UUID, request: Redeem): RedeemResult {
         val code = InviteCodes.normalize(request.code)
         if (!InviteCodes.isValid(code)) throw ValidationFailed("El código debe tener el formato ABCD-1234")
+        // El intento cuenta antes de buscar el código: nadie puede recorrer los códigos para saber de quién son.
+        val now = clock.instant()
+        if (!repo.tryRecordAttempt(userId, since = now.minus(ATTEMPT_WINDOW), limit = MAX_REDEEMS_PER_DAY, now = now)) {
+            throw Forbidden("Llegaste al límite de $MAX_REDEEMS_PER_DAY códigos por día. Inténtalo de nuevo mañana.")
+        }
         val owner = repo.ownerOf(code) ?: throw NotFound("Ese código no existe")
         if (owner == userId) throw ValidationFailed("Ese es tu propio código: compártelo con tus amigos")
         val ownerParticipant = participants(owner)?.takeIf { !it.deleted } ?: throw NotFound("Ese código no existe")
@@ -98,9 +106,10 @@ class InviteService(
         val ownerPerson = graph.person(owner)?.takeIf { it.deletedAt == null } ?: throw NotFound("Ese código no existe")
         if (owner in graph.blockedEitherWay(userId)) throw Blocked()
         val mode = request.mode
-        if (mode !in me.activeModes || mode !in ownerParticipant.activeModes) {
-            throw ValidationFailed("El modo ${mode.label()} debe estar activo para los dos")
-        }
+        if (mode !in me.activeModes) throw ValidationFailed("Activa el modo ${mode.label()} en tu perfil para conectar en ese modo")
+        // Los modos del dueño (Pareja sobre todo) son suyos: la respuesta es la misma que la de un canje
+        // normal, pero no se crea arista ni canje y no se le avisa.
+        if (mode !in ownerParticipant.activeModes) return RedeemResult(RedeemStatus.PENDING, ownerRefBeforeAccept(userId, ownerPerson))
 
         if (isConnected(userId, owner, mode)) {
             repo.markConnected(owner, userId, mode, clock.instant())
@@ -136,18 +145,30 @@ class InviteService(
         return RedeemResult(RedeemStatus.PENDING, ownerRefBeforeAccept(userId, ownerPerson))
     }
 
-    /** El dueño del código acepta a [target] (`users.id` o el `anonId` que ve en sus canjes pendientes). */
-    suspend fun accept(ownerId: UUID, target: String): RedeemResult {
+    /**
+     * El dueño del código acepta UN canje: [target] es el [PendingInvite.id] (`anonId:MODO`) o la persona
+     * (`anonId` o `users.id`) y [mode] el modo. Solo ese modo pasa a CONNECTED; los demás canjes de la misma
+     * persona (p. ej. Pareja) siguen PENDING hasta que el dueño los acepte uno por uno.
+     */
+    suspend fun accept(ownerId: UUID, target: String, mode: Mode? = null): RedeemResult {
+        val (who, idMode) = parsePendingId(target)
+        if (idMode != null && mode != null && idMode != mode) throw ValidationFailed("El modo no coincide con la invitación")
+        val wanted = idMode ?: mode
         val blocked = graph.blockedEitherWay(ownerId)
-        val matching = repo.pendingFor(ownerId).filter { r ->
-            r.redeemer.toString() == target || anonIds.anonId(ownerId, r.redeemer) == target
+        val fromPerson = repo.pendingFor(ownerId).filter { r ->
+            r.redeemer.toString() == who || anonIds.anonId(ownerId, r.redeemer) == who
         }
-        val redeemer = matching.firstOrNull()?.redeemer ?: throw NotFound("No hay una invitación pendiente de esa persona")
+        val matching = if (wanted == null) fromPerson else fromPerson.filter { it.mode == wanted }
+        val redemption = matching.singleOrNull() ?: when {
+            matching.isEmpty() -> throw NotFound("No hay una invitación pendiente de esa persona")
+            else -> throw ValidationFailed("Esa persona te invitó en varios modos: indica cuál aceptas")
+        }
+        val redeemer = redemption.redeemer
         val person = graph.person(redeemer)?.takeIf { it.deletedAt == null }
         if (redeemer in blocked || person == null || participants(redeemer)?.deleted != false) {
             throw NotFound("No hay una invitación pendiente de esa persona")
         }
-        matching.forEach { connect(owner = ownerId, redeemer = redeemer, mode = it.mode) }
+        connect(owner = ownerId, redeemer = redeemer, mode = redemption.mode)
         return RedeemResult(RedeemStatus.CONNECTED, connectedRef(ownerId, person))
     }
 
@@ -218,7 +239,25 @@ class InviteService(
 
     companion object {
         const val MAX_ATTEMPTS = 20
+
+        /**
+         * Canjes por persona en [ATTEMPT_WINDOW] (cuentan también los códigos inexistentes). Alcanza para
+         * agregar a todo un parche en una tarde; con 26^4 * 10^4 códigos posibles hace inviable recorrerlos.
+         */
+        const val MAX_REDEEMS_PER_DAY = 20
+        val ATTEMPT_WINDOW: Duration = Duration.ofDays(1)
         const val INVITE_ROUTE = "parcheu://add-friends"
+
+        /** [PendingInvite.id]: un canje es una persona en un modo (`anonId:MODO`). */
+        fun pendingId(anonId: String, mode: Mode): String = "$anonId:${mode.name}"
+
+        /** Separa `anonId:MODO` en persona y modo; sin `:` (o un modo desconocido) es solo la persona. */
+        fun parsePendingId(id: String): Pair<String, Mode?> {
+            val who = id.substringBeforeLast(':', missingDelimiterValue = id)
+            if (who == id) return id to null
+            val mode = Mode.entries.firstOrNull { it.name == id.substringAfterLast(':') } ?: return id to null
+            return who to mode
+        }
     }
 }
 

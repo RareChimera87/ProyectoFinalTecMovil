@@ -19,6 +19,7 @@ import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.runMigrations
 import me.santiagoreina.parcheu.api.platform.db.tables.Blocks
 import me.santiagoreina.parcheu.api.platform.db.tables.Edges
+import me.santiagoreina.parcheu.api.platform.db.tables.InviteRedeemAttempts
 import me.santiagoreina.parcheu.api.platform.db.tables.InviteRedemptions
 import me.santiagoreina.parcheu.api.platform.db.tables.Invites
 import me.santiagoreina.parcheu.api.platform.db.tables.UserModes
@@ -151,6 +152,43 @@ class InviteDbTest : FunSpec({
                 shouldThrow<Blocked> { service.redeem(caro, Redeem(code, Mode.AMISTAD)) }
                 db.edgeState(ana, caro, Mode.AMISTAD) shouldBe null
                 shouldThrow<NotFound> { service.redeem(caro, Redeem("ZZZZ-9999", Mode.AMISTAD)) }
+            }
+        }
+
+    test("aceptar un modo deja los demás canjes de la misma persona PENDING")
+        .config(enabled = TestDatabase.enabled) {
+            withService {
+                val ana = db.user("Ana")
+                val beto = db.user("Beto")
+                val code = service.codeFor(ana)
+                service.redeem(beto, Redeem(code, Mode.AMISTAD))
+                service.redeem(beto, Redeem(code, Mode.PAREJA))
+                val amistad = service.me(ana).pending.single { it.mode == Mode.AMISTAD }
+                shouldThrow<ValidationFailed> { service.accept(ana, beto.toString()) }
+                service.accept(ana, amistad.id).status shouldBe RedeemStatus.CONNECTED
+                db.edgeState(ana, beto, Mode.AMISTAD) shouldBe EdgeState.CONNECTED
+                db.edgeState(ana, beto, Mode.PAREJA) shouldBe EdgeState.PENDING
+                service.me(ana).pending.single().mode shouldBe Mode.PAREJA
+            }
+        }
+
+    test("el límite diario de canjes es atómico: intentos simultáneos nunca pasan de MAX_REDEEMS_PER_DAY")
+        .config(enabled = TestDatabase.enabled) {
+            withService {
+                val beto = db.user("Beto")
+                val since = FIXED_CLOCK.instant().minus(InviteService.ATTEMPT_WINDOW)
+                val limit = InviteService.MAX_REDEEMS_PER_DAY
+                val results = coroutineScope {
+                    List(limit + 10) { async(Dispatchers.IO) { repo.tryRecordAttempt(beto, since, limit, FIXED_CLOCK.instant()) } }.awaitAll()
+                }
+                results.count { it } shouldBe limit
+                transaction(db) { InviteRedeemAttempts.selectAll().count() } shouldBe limit.toLong()
+                // Al día siguiente los viejos se borran y vuelve a haber cupo.
+                val tomorrow = FIXED_CLOCK.instant().plus(InviteService.ATTEMPT_WINDOW)
+                repo.tryRecordAttempt(beto, tomorrow.minus(InviteService.ATTEMPT_WINDOW), limit, tomorrow) shouldBe true
+                transaction(db) { InviteRedeemAttempts.selectAll().count() } shouldBe 1
+                transaction(db) { Users.deleteWhere { Users.id eq beto } }
+                transaction(db) { InviteRedeemAttempts.selectAll().count() } shouldBe 0
             }
         }
 

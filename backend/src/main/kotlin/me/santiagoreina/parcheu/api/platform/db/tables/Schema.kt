@@ -11,7 +11,7 @@ object Schema {
     val meet: List<Table> = listOf(Scenarios, MatchQueue, Simulations, Matches, ReportUnlocks, ConnectionDecisions)
     val graph: List<Table> = listOf(Edges, Communities, CommunityMembers)
     val chat: List<Table> = listOf(Chats, ChatMembers, ChatMessages)
-    val social: List<Table> = listOf(Invites, InviteRedemptions, Introductions, IntroRequests)
+    val social: List<Table> = listOf(Invites, InviteRedemptions, InviteRedeemAttempts, Introductions, IntroRequests)
     val notifications: List<Table> = listOf(Notifications, UsageEvents)
     val safety: List<Table> = listOf(Blocks, Reports)
     val billing: List<Table> = listOf(Entitlements, PurchaseEvents)

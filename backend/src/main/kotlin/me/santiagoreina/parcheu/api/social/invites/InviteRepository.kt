@@ -39,6 +39,13 @@ interface InviteRepository {
 
     /** Marca como CONNECTED el canje (si existe), con la fecha de aceptación. */
     suspend fun markConnected(owner: UUID, redeemer: UUID, mode: Mode, now: Instant)
+
+    /**
+     * Registra un intento de canje de [userId] si lleva menos de [limit] desde [since] (exclusivo) y
+     * devuelve true; si ya llegó al límite no registra nada y devuelve false. Borra sus intentos
+     * anteriores a [since], que ya no cuentan.
+     */
+    suspend fun tryRecordAttempt(userId: UUID, since: Instant, limit: Int, now: Instant): Boolean
 }
 
 /** Invitaciones en memoria con la misma semántica que Postgres (unicidad de código y de usuario). */
@@ -47,6 +54,7 @@ class InMemoryInviteRepository : InviteRepository {
     private val codes = mutableMapOf<String, UUID>()
     private val byUser = mutableMapOf<UUID, String>()
     private val redemptions = mutableMapOf<Triple<UUID, UUID, Mode>, Redemption>()
+    private val attempts = mutableMapOf<UUID, MutableList<Instant>>()
 
     override suspend fun codeOf(userId: UUID): String? = synchronized(lock) { byUser[userId] }
 
@@ -80,9 +88,18 @@ class InMemoryInviteRepository : InviteRepository {
         }
     }
 
+    override suspend fun tryRecordAttempt(userId: UUID, since: Instant, limit: Int, now: Instant): Boolean = synchronized(lock) {
+        val mine = attempts.getOrPut(userId) { mutableListOf() }
+        mine.removeAll { !it.isAfter(since) }
+        if (mine.size >= limit) return false
+        mine += now
+        true
+    }
+
     /** Borra a [userId] como lo haría la purga (on delete cascade). */
     fun purge(userId: UUID) = synchronized(lock) {
         byUser.remove(userId)?.let(codes::remove)
+        attempts.remove(userId)
         redemptions.keys.removeAll { it.first == userId || it.second == userId }
     }
 }

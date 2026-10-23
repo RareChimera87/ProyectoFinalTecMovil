@@ -83,7 +83,8 @@ class InviteApiTest : FunSpec({
         setBody(Redeem(code, mode))
     }
 
-    suspend fun HttpClient.accept(uid: String, target: String): HttpResponse = post("/v1/invites/$target/accept") { auth(uid) }
+    suspend fun HttpClient.accept(uid: String, target: String, mode: Mode? = null): HttpResponse =
+        post("/v1/invites/$target/accept" + (mode?.let { "?mode=${it.name}" } ?: "")) { auth(uid) }
 
     test("GET /v1/invites/me: código ^[A-Z]{4}-[0-9]{4}$ estable, único por persona y su App Link") {
         val w = World()
@@ -146,7 +147,8 @@ class InviteApiTest : FunSpec({
             pending.mode shouldBe Mode.AMISTAD
             pending.other.label shouldBe "Nombre Secreto de beto"
             pending.other.id.shouldBeNull()
-            pending.id shouldBe pending.other.anonId
+            // Un canje es una persona en un modo: su id es `anonId:MODO`.
+            pending.id shouldBe "${pending.other.anonId}:AMISTAD"
             client.me("beto").pending.shouldBeEmpty()
         }
     }
@@ -235,16 +237,93 @@ class InviteApiTest : FunSpec({
         }
     }
 
-    test("el modo debe estar activo para los dos (modo común) -> 400") {
+    test("el modo debe estar activo para quien canjea (400); los modos del dueño no se revelan") {
         val w = World()
         testApplication {
             val client = app(w)
-            val caroCode = client.me("caro").code
-            client.redeem("ana", caroCode, Mode.AMISTAD).apply {
+            // Caro solo tiene Estudio: canjear en Amistad es un error de ella misma.
+            client.redeem("caro", client.me("ana").code, Mode.AMISTAD).apply {
                 status shouldBe HttpStatusCode.BadRequest
                 body<ApiError>().code shouldBe ErrorCode.VALIDATION
             }
-            client.redeem("ana", caroCode, Mode.ESTUDIO).body<RedeemResult>().status shouldBe RedeemStatus.PENDING
+
+            // Ana pide Amistad o Pareja con Caro, que no los tiene: la respuesta es la de un canje normal
+            // (no dice qué modos tiene Caro), pero no hay arista, canje ni aviso.
+            val caroCode = client.me("caro").code
+            val asked = client.redeem("ana", caroCode, Mode.PAREJA).also { it.status shouldBe HttpStatusCode.OK }.body<RedeemResult>()
+            asked.status shouldBe RedeemStatus.PENDING
+            asked.other.id.shouldBeNull()
+            client.redeem("ana", caroCode, Mode.AMISTAD).body<RedeemResult>() shouldBe asked
+            w.edge(w.ana, w.caro, Mode.PAREJA).shouldBeNull()
+            w.edge(w.ana, w.caro, Mode.AMISTAD).shouldBeNull()
+            client.me("caro").pending.shouldBeEmpty()
+            w.f.notifier.sent.filter { it.userId == w.caro }.shouldBeEmpty()
+
+            // En el modo común sí queda el canje.
+            client.redeem("ana", caroCode, Mode.ESTUDIO).body<RedeemResult>() shouldBe asked
+            w.edge(w.ana, w.caro, Mode.ESTUDIO)!!.state shouldBe EdgeState.PENDING
+            client.me("caro").pending.single().mode shouldBe Mode.ESTUDIO
+        }
+    }
+
+    test("aceptar Amistad deja Pareja PENDING: cada canje se acepta por persona y modo") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val code = client.me("ana").code
+            client.redeem("beto", code, Mode.AMISTAD).status shouldBe HttpStatusCode.OK
+            client.redeem("beto", code, Mode.PAREJA).status shouldBe HttpStatusCode.OK
+            val pending = client.me("ana").pending
+            pending.map { it.mode }.toSet() shouldBe setOf(Mode.AMISTAD, Mode.PAREJA)
+            pending.map { it.id }.toSet() shouldHaveSize 2
+            val amistad = pending.single { it.mode == Mode.AMISTAD }
+            val pareja = pending.single { it.mode == Mode.PAREJA }
+
+            // Por persona sin modo es ambiguo (400) y no conecta nada; un id y un modo distintos tampoco.
+            client.accept("ana", w.beto.toString()).apply {
+                status shouldBe HttpStatusCode.BadRequest
+                body<ApiError>().code shouldBe ErrorCode.VALIDATION
+            }
+            client.accept("ana", amistad.id, Mode.PAREJA).status shouldBe HttpStatusCode.BadRequest
+            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
+            w.edge(w.ana, w.beto, Mode.PAREJA)!!.state shouldBe EdgeState.PENDING
+
+            client.accept("ana", amistad.id).body<RedeemResult>().status shouldBe RedeemStatus.CONNECTED
+            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.CONNECTED
+            w.edge(w.ana, w.beto, Mode.PAREJA)!!.state shouldBe EdgeState.PENDING
+            client.me("ana").pending.single().id shouldBe pareja.id
+            w.f.notifier.sent.count { it.notification.kind == NotificationKinds.NEW_CONNECTION } shouldBe 1
+
+            // Pareja solo con su propio sí, aquí por persona + ?mode=.
+            client.accept("ana", amistad.other.anonId!!, Mode.PAREJA).body<RedeemResult>().status shouldBe RedeemStatus.CONNECTED
+            w.edge(w.ana, w.beto, Mode.PAREJA)!!.state shouldBe EdgeState.CONNECTED
+            client.me("ana").pending.shouldBeEmpty()
+            client.accept("ana", pareja.id).status shouldBe HttpStatusCode.NotFound
+        }
+    }
+
+    test("límite diario de canjes por persona: cuenta también los códigos inexistentes -> 403") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val code = client.me("ana").code
+            repeat(InviteService.MAX_REDEEMS_PER_DAY - 1) { i ->
+                client.redeem("beto", "ZZZZ-${i.toString().padStart(4, '0')}").status shouldBe HttpStatusCode.NotFound
+            }
+            client.redeem("beto", code).status shouldBe HttpStatusCode.OK
+            // Agotado: ni un código válido responde, así que no se puede seguir probando códigos.
+            client.redeem("beto", client.me("dani").code).apply {
+                status shouldBe HttpStatusCode.Forbidden
+                body<ApiError>().code shouldBe ErrorCode.FORBIDDEN
+            }
+            w.edge(w.beto, w.dani, Mode.AMISTAD).shouldBeNull()
+            client.redeem("beto", "ZZZZ-9999").status shouldBe HttpStatusCode.Forbidden
+            // Un formato inválido no llega a buscar el código ni cuenta.
+            client.redeem("beto", "ABCD1234").status shouldBe HttpStatusCode.BadRequest
+            // Los demás no se ven afectados, y al día siguiente vuelve a haber cupo.
+            client.redeem("caro", code, Mode.ESTUDIO).status shouldBe HttpStatusCode.OK
+            w.f.clock.now = w.f.clock.now.plus(InviteService.ATTEMPT_WINDOW)
+            client.redeem("beto", client.me("dani").code).status shouldBe HttpStatusCode.OK
         }
     }
 

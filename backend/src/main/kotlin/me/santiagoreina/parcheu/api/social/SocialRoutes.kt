@@ -11,9 +11,11 @@ import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
+import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.api.platform.stubGet
 import me.santiagoreina.parcheu.api.platform.stubPost
 import me.santiagoreina.parcheu.api.social.invites.InviteService
+import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Redeem
 import java.util.UUID
 
@@ -39,7 +41,10 @@ class SocialRoutes(
         }
         post("/invites/{userId}/accept") {
             val target = call.parameters["userId"]?.takeIf { it.isNotBlank() } ?: throw NotFound("No hay una invitación pendiente de esa persona")
-            call.respond(invites.accept(call.userId(), target))
+            val mode = call.request.queryParameters["mode"]?.let { raw ->
+                Mode.entries.firstOrNull { it.name == raw.trim().uppercase() } ?: throw ValidationFailed("Modo desconocido: $raw")
+            }
+            call.respond(invites.accept(call.userId(), target, mode))
         }
     }
 

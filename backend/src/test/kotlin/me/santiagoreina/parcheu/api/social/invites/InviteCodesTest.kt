@@ -5,7 +5,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldMatch
-import io.kotest.matchers.string.shouldStartWith
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.graph.InMemoryGraphRepository
@@ -22,20 +22,28 @@ import kotlin.random.Random
 class InviteCodesTest : FunSpec({
     val format = "^[A-Z]{4}-[0-9]{4}$"
 
-    test("todo código generado cumple ^[A-Z]{4}-[0-9]{4}$, con o sin nombre") {
+    test("todo código generado cumple ^[A-Z]{4}-[0-9]{4}$") {
         val random = Random(7)
-        val names = listOf(null, "", "Mariana Gómez", "Ñoño", "Jo", "Émile-Zoë", "李小龙", "1234", "Ana María")
-        repeat(2_000) { i ->
-            val code = InviteCodes.generate(random, names[i % names.size], fullyRandom = i % 3 == 0)
+        repeat(2_000) {
+            val code = InviteCodes.generate(random)
             code shouldMatch format
             InviteCodes.isValid(code) shouldBe true
         }
     }
 
-    test("las letras salen del nombre sin tildes (como MARI-4827 del mockup)") {
-        InviteCodes.generate(Random(1), "Mariana Gómez") shouldStartWith "MARI-"
-        InviteCodes.generate(Random(1), "Éver") shouldStartWith "EVER-"
-        InviteCodes.generate(Random(1), "Ñoño") shouldStartWith "NONO-"
+    test("las letras son al azar, no salen del nombre: el prefijo no reduce el espacio de códigos") {
+        val graphRepo = InMemoryGraphRepository()
+        val graph = inMemoryGraphModule(FIXED_CLOCK, graphRepo)
+        val service = InviteService(
+            InMemoryInviteRepository(), graphRepo, graph.edges, graph.anonIds, { null }, NoopNotifier,
+            InviteLinks(InviteLinks.LOCAL_BASE), FIXED_CLOCK, Random(11),
+        )
+        val people = List(200) { UUID.randomUUID() }
+        people.forEach { graphRepo.addPerson(PersonRow(it, "Mariana Gómez", null, "UIS", Visibility.NAME, false, null)) }
+        val prefixes = runBlocking { people.map { service.codeFor(it).substringBefore('-') } }
+        // Con 26^4 prefijos posibles, 200 códigos de "Mariana" casi nunca comparten letras.
+        prefixes.count { it == "MARI" } shouldBe 0
+        prefixes.toSet().size shouldBeGreaterThan 190
     }
 
     test("isValid rechaza formatos cercanos y normalize limpia lo que escribe la persona") {

@@ -31,6 +31,17 @@ object InviteRedemptions : Table("invite_redemptions") {
     override val primaryKey = PrimaryKey(ownerId, redeemerId, mode)
 }
 
+/**
+ * Intentos de canje (E6.1, `V20261023_1300`): uno por `POST /v1/invites/redeem`, exista o no el código. Con
+ * ellos se aplica el límite diario por persona ([me.santiagoreina.parcheu.api.social.invites.InviteService]).
+ */
+object InviteRedeemAttempts : Table("invite_redeem_attempts") {
+    val id = uuidPk()
+    val userId = userRef("user_id", ReferenceOption.CASCADE)
+    val createdAt = timestampWithTimeZone("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 /** Solo Amistad o Estudio: Pareja nunca se presenta a terceros (ADR-0012). */
 object Introductions : Table("introductions") {
     val id = uuidPk()
