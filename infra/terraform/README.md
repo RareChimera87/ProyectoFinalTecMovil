@@ -49,7 +49,7 @@ ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de 
 | `SECRET_HMAC_ANON_KEY`, `SECRET_PLAY_SA` | nombre del secreto; la API lee la versión `latest` con la API de Secret Manager (no se montan, para que Cloud Run no falle mientras el secreto no tenga valor) |
 
 Trabajos de Cloud Scheduler (hora de Bogotá) → `POST /internal/jobs/<nombre>`: `communities` (lunes 03:00),
-`memories` (diario 02:00), `twin-accuracy` (domingos 23:00), `retention` (diario 03:30).
+`memories` (diario 02:00), `twin-accuracy` (domingos 23:00), `retention` (diario 03:30), `purge-sweep` (cada hora, minuto 15; E8.3).
 Pub/Sub `play-rtdn`: en prod, suscripción push OIDC a `/internal/billing/rtdn`; en dev solo el tema.
 
 **Nota para E0.4 (migraciones):** `sa-api` entra a Postgres como usuario IAM. En Postgres 16 el esquema

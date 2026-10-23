@@ -9,6 +9,7 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.cloud.FirestoreClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 /**
  * Limpia el espejo de Firestore de una cuenta borrada (arquitectura.md §8.2 y §10.2) con el Admin SDK
@@ -36,6 +37,12 @@ class FirestoreAccountMirrorCleaner(firestore: () -> Firestore) : AccountMirrorC
                 commitInChunks(own) { batch, ref -> batch.update(ref, "senderUid", null) }
                 if (chat.get().get().exists()) chat.update("members", FieldValue.arrayRemove(uid)).get()
             }
+        }
+    }
+
+    override suspend fun removeSimulations(ids: List<UUID>) {
+        withContext(Dispatchers.IO) {
+            commitInChunks(ids.map { firestore.collection(SIMULATIONS).document(it.toString()) }) { batch, ref -> batch.delete(ref) }
         }
     }
 

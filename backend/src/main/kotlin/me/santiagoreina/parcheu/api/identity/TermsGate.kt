@@ -23,9 +23,14 @@ private val EXEMPT: Set<Pair<HttpMethod, String>> = setOf(
 internal fun isExemptFromTerms(method: HttpMethod, path: String): Boolean =
     (method to path.trimEnd('/')) in EXEMPT
 
-/** Lo único que puede hacer una cuenta de menor de edad (E2.6): ver su cuenta y borrarla. */
+/**
+ * Lo único que puede hacer una cuenta de menor de edad (E2.6): ver su cuenta, descargar sus datos y
+ * borrarla. `GET /v1/me/export` va aquí porque el bloqueo por edad lleva a 'Borrar cuenta' →
+ * 'Descargar mis datos primero' (E8.3): el derecho de acceso (Ley 1581) no depende de la edad ni de los términos.
+ */
 private val UNDERAGE_EXEMPT: Set<Pair<HttpMethod, String>> = setOf(
     HttpMethod.Get to "/v1/me",
+    HttpMethod.Get to "/v1/me/export",
     HttpMethod.Delete to "/v1/me",
 )
 
@@ -37,7 +42,7 @@ internal fun isExemptFromUnderage(method: HttpMethod, path: String): Boolean =
  * `/v1`: cubre las rutas de todos los dominios sin tocar `Application.kt`. Corre después de la
  * autenticación; si el usuario no tiene TERMS y PRIVACY en la versión vigente responde 403
  * `TERMS_REQUIRED` (o `SUSPENDED` si está suspendido). Una cuenta de menor de edad (E2.6) recibe 403
- * `UNDERAGE` en todas las rutas, incluidas `session` y `terms`, salvo `GET` y `DELETE /v1/me`.
+ * `UNDERAGE` en todas las rutas, incluidas `session` y `terms`, salvo `GET` y `DELETE /v1/me` y `GET /v1/me/export`.
  */
 internal val TermsGate = createRouteScopedPlugin("TermsGate", ::TermsGateConfig) {
     val service = pluginConfig.service

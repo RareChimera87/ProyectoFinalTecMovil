@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.identity.deletion
 
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
@@ -419,6 +420,92 @@ class AccountPurgeDbTest : FunSpec({
                 val catalog = ds.connection.use { c -> catalogColumns(c, "jsonb") }.map { (t, col) -> "$t.$col" }
                 val classified = (PersonalJsonPaths.personal + PersonalJsonPaths.nonPersonal).map { "${it.table.tableName}.${it.name}" }
                 catalog shouldContainExactlyInAnyOrder classified
+            }
+        }
+
+    test("una simulación en curso queda FAILED con el cupo devuelto y el motor ya no puede guardar turnos en ella")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { ds ->
+                val db = connectExposed(ds)
+                val s = ds.connection.use { seed(it) }
+                val running = UUID.randomUUID()
+                val queued = UUID.randomUUID()
+                ds.connection.use { c ->
+                    val now = Timestamp.from(FIXED_CLOCK.instant())
+                    // Bruno pidió una simulación con Zoraida (va en el escenario 1, turno 2) y otra sigue en cola.
+                    c.exec(
+                        "insert into simulations (id, mode, user_a, user_b, requested_by, origin, status, transcript, created_at) " +
+                            "values (?, 'AMISTAD', ?, ?, ?, 'PARCHE', 'RUNNING', ?::jsonb, ?)",
+                        running, s.bruno, s.zoraida, s.bruno,
+                        """{"scenarios":[{"scenarioId":1,"title":"Plan","turns":[{"speaker":"A","text":"Hola"},{"speaker":"B","text":"Soy $name"}]}]}""", now,
+                    )
+                    c.exec(
+                        "insert into simulations (id, mode, user_a, user_b, requested_by, origin, status, created_at) " +
+                            "values (?, 'AMISTAD', ?, ?, ?, 'PARCHE', 'QUEUED', ?)",
+                        queued, s.zoraida, s.bruno, s.zoraida, now,
+                    )
+                    listOf(running to s.bruno, queued to s.zoraida).forEach { (sim, payer) ->
+                        c.exec("insert into usage_events (id, user_id, kind, ref_id, created_at) values (?, ?, 'SIMULATION', ?, ?)", UUID.randomUUID(), payer, sim.toString(), now)
+                    }
+                }
+                val mirror = RecordingAccountMirrorCleaner()
+                val service = AccountDeletionService(
+                    ExposedIdentityRepository(db), ExposedAccountPurgeRepository(db), mirror, FakeAuthAccountRemover(), FakeTaskQueue(), FIXED_CLOCK,
+                )
+                service.requestDeletion(FirebaseUser(s.zoraidaUid, null, null))
+                service.purge(s.zoraida) shouldBe PurgeOutcome.PURGED
+
+                ds.connection.use { c ->
+                    listOf(running, queued).forEach { sim ->
+                        c.one("select status, error, finished_at, transcript from simulations where id = ?", sim) { rs ->
+                            rs.getString(1) shouldBe "FAILED"
+                            rs.getString(2) shouldBe ExposedAccountPurgeRepository.SIMULATION_ERROR
+                            rs.getTimestamp(3).toInstant() shouldBe FIXED_CLOCK.instant()
+                            rs.getString(4) shouldBe null
+                        }
+                    }
+                    // A Bruno se le devuelve el cupo; el uso de Zoraida se fue con su cuenta (ON DELETE CASCADE).
+                    c.one("select refunded from usage_events where ref_id = ? and user_id = ?", running.toString(), s.bruno) { it.getBoolean(1) } shouldBe true
+                    c.count("select count(*) from usage_events where ref_id = ?", queued.toString()) shouldBe 0
+                }
+                // El motor, que seguía corriendo con el transcript de 2 turnos, ya no puede guardar el tercero.
+                val sims = me.santiagoreina.parcheu.api.simulation.ExposedSimulationRepository(db)
+                sims.saveStep(
+                    running, 2, me.santiagoreina.parcheu.api.simulation.StoredTranscript(),
+                    me.santiagoreina.parcheu.api.simulation.initialProgress(), me.santiagoreina.parcheu.api.simulation.UsageTotals(),
+                ) shouldBe false
+                // Y se borra `simulations/{id}` una segunda vez, después de Postgres.
+                mirror.removedSimulations.single().toSet() shouldBe mirror.plans.single().simulationIds.toSet()
+                mirror.plans.single().simulationIds.toSet() shouldBe setOf(s.shared, running, queued)
+            }
+        }
+
+    test("el barrido reencola solo las cuentas borradas hace más de una hora que siguen sin purgar")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { ds ->
+                val db = connectExposed(ds)
+                val s = ds.connection.use { seed(it) }
+                val purge = ExposedAccountPurgeRepository(db)
+                val identity = ExposedIdentityRepository(db)
+                AccountDeletionService(identity, purge, RecordingAccountMirrorCleaner(), FakeAuthAccountRemover(), FakeTaskQueue(), FIXED_CLOCK)
+                    .requestDeletion(FirebaseUser(s.zoraidaUid, null, null))
+
+                fun sweepAt(offset: java.time.Duration): FakeTaskQueue {
+                    val tasks = FakeTaskQueue()
+                    val clock = java.time.Clock.offset(FIXED_CLOCK, offset)
+                    runBlocking { AccountDeletionService(identity, purge, RecordingAccountMirrorCleaner(), FakeAuthAccountRemover(), tasks, clock).sweepStalled() }
+                    return tasks
+                }
+                // A los 30 minutos la primera tarea aún puede estar reintentando: no se toca.
+                sweepAt(java.time.Duration.ofMinutes(30)).tasks.shouldBeEmpty()
+                val later = FIXED_CLOCK.instant().plus(java.time.Duration.ofHours(2))
+                sweepAt(java.time.Duration.ofHours(2)).tasks.map { it.name } shouldContainExactly
+                    listOf("purge-user-${s.zoraida}-sweep-${later.epochSecond / 3600}")
+
+                // Tras la purga solo queda la lápida (también con deleted_at): el barrido no la toma.
+                AccountDeletionService(identity, purge, RecordingAccountMirrorCleaner(), FakeAuthAccountRemover(), FakeTaskQueue(), FIXED_CLOCK)
+                    .purge(s.zoraida) shouldBe PurgeOutcome.PURGED
+                sweepAt(java.time.Duration.ofHours(2)).tasks.shouldBeEmpty()
             }
         }
 

@@ -152,6 +152,8 @@ class SimulationEngine(
                 scenario = scenario.copy(turns = turns, finished = reply.ended || turns.size >= MAX_TURNS_PER_SCENARIO)
                 progress = Progress(scenarioIndex = i, turn = turns.size, of = MAX_TURNS_PER_SCENARIO)
                 transcript = save(start, transcript, i, scenario, progress, reply.usage)
+                // El turno pudo tardar: si una cuenta se borró entretanto no se recrea `simulations/{id}` (E8.3).
+                ineligibility(start)?.let { throw it }
                 publish(start, participants, SimulationStatus.RUNNING, progress, null)
             }
             if (scenario.verdict == null) {
@@ -215,6 +217,9 @@ class SimulationEngine(
         progress: Progress,
         usage: UsageTotals,
     ): StoredTranscript {
+        // Cada llamada al LLM tarda segundos: se revisa la elegibilidad antes de guardar cada paso, no solo
+        // al empezar el escenario, para no escribir el turno de un gemelo cuya cuenta se acaba de borrar (E8.3).
+        ineligibility(record)?.let { throw it }
         val next = transcript.copy(scenarios = transcript.scenarios.toMutableList().also { it[index] = scenario })
         if (!repo.saveStep(record.id, transcript.steps, next, progress, usage)) throw AlreadyAdvanced()
         return next

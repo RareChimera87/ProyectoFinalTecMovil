@@ -80,14 +80,57 @@ class AccountApiTest : FunSpec({
         }
     }
 
-    test("repetir DELETE /v1/me es idempotente: misma fecha de borrado y una sola tarea") {
+    test("repetir DELETE /v1/me conserva la fecha de borrado y reencola con un nombre propio (no lo deduplica Cloud Tasks)") {
         val f = Fixture()
         testApplication {
             val client = startApp(f.container)
             client.delete("/v1/me") { auth("ana") }.status shouldBe HttpStatusCode.Accepted
             client.delete("/v1/me") { auth("ana") }.status shouldBe HttpStatusCode.Accepted
-            f.repo.user("ana").deletedAt shouldBe FIXED_CLOCK.instant()
-            f.queue.tasks shouldHaveSize 1
+            client.delete("/v1/me") { auth("ana") }.status shouldBe HttpStatusCode.Accepted
+            val ana = f.repo.user("ana")
+            ana.deletedAt shouldBe FIXED_CLOCK.instant()
+            // La primera tarea pudo agotar sus reintentos: la repetición no puede reusar su nombre. Dentro del
+            // mismo minuto sí se deduplica (doble toque).
+            f.queue.tasks.map { it.name } shouldContainExactly listOf(
+                "purge-user-${ana.id}",
+                "purge-user-${ana.id}-retry-${FIXED_CLOCK.instant().epochSecond / 60}",
+            )
+            f.queue.tasks.map { it.body }.distinct() shouldContainExactly listOf("""{"id":"${ana.id}"}""")
+        }
+    }
+
+    test("POST /v1/session con un token anterior al borrado no recrea una cuenta purgada (lápida): 401") {
+        val f = Fixture()
+        testApplication {
+            val client = startApp(f.container)
+            // Lo que deja la purga: ya no está la fila de la persona, sí su lápida.
+            f.repo.createIfAbsent(tombstoneUid("zoraida"), email = null, displayName = null, now = FIXED_CLOCK.instant())
+            val response = client.post("/v1/session") { auth("zoraida") }
+            response.status shouldBe HttpStatusCode.Unauthorized
+            response.body<ApiError>().code shouldBe ErrorCode.UNAUTHENTICATED
+            f.repo.users.none { it.firebaseUid == "zoraida" } shouldBe true
+            // Una cuenta nueva (otro uid, como el que da Firebase Auth al volver a entrar) sí se crea.
+            client.post("/v1/session") { auth("zoraida-nueva") }.status shouldBe HttpStatusCode.OK
+        }
+    }
+
+    test("purge-sweep exige OIDC y reencola con nombre por hora las cuentas borradas que siguen sin purgar") {
+        val f = Fixture()
+        testApplication {
+            val client = startApp(f.container)
+            val id = f.repo.user("ana").id
+            f.purge.plans[id] = f.plan(id)
+
+            client.post("/internal/jobs/purge-sweep").status shouldBe HttpStatusCode.Forbidden
+            client.post("/internal/jobs/purge-sweep") { auth("ana") }.status shouldBe HttpStatusCode.Forbidden
+            f.queue.tasks.shouldBeEmpty()
+
+            client.post("/internal/jobs/purge-sweep") { tasks() }.status shouldBe HttpStatusCode.NoContent
+            val task = f.queue.tasks.single()
+            task.queue shouldBe QueueKind.MAINTENANCE
+            task.path shouldBe "/tasks/purge-user"
+            task.name shouldBe "purge-user-$id-sweep-${FIXED_CLOCK.instant().epochSecond / 3600}"
+            task.body shouldBe """{"id":"$id"}"""
         }
     }
 
@@ -133,6 +176,8 @@ class AccountApiTest : FunSpec({
                 tasks(); contentType(ContentType.Application.Json); setBody(body())
             }.status shouldBe HttpStatusCode.NoContent
             f.mirror.plans shouldContainExactly listOf(plan)
+            // Segunda pasada sobre simulations/* después de Postgres (una simulación en curso pudo republicar).
+            f.mirror.removedSimulations shouldContainExactly listOf(plan.simulationIds)
             f.auth.removed shouldContainExactly listOf("uid-x")
             f.purge.purged shouldContainExactly listOf(id)
 
@@ -169,7 +214,7 @@ class AccountApiTest : FunSpec({
         }
     }
 
-    test("GET /v1/me/export devuelve el perfil propio; exige términos como cualquier ruta") {
+    test("GET /v1/me/export devuelve el perfil propio; no exige términos (derecho de acceso)") {
         val f = Fixture()
         testApplication {
             val client = startApp(f.container)
@@ -181,9 +226,9 @@ class AccountApiTest : FunSpec({
             export.generatedAt.toString() shouldBe "2026-10-25T12:00:00Z"
 
             client.post("/v1/session") { auth("sin-terminos") }
-            val gated = client.get("/v1/me/export") { auth("sin-terminos") }
-            gated.status shouldBe HttpStatusCode.Forbidden
-            gated.body<ApiError>().code shouldBe ErrorCode.TERMS_REQUIRED
+            client.get("/v1/me/export") { auth("sin-terminos") }.status shouldBe HttpStatusCode.OK
+            // Sin sesión previa sigue respondiendo 404, como el resto de /v1/me.
+            client.get("/v1/me/export") { auth("desconocida") }.status shouldBe HttpStatusCode.NotFound
         }
     }
 })

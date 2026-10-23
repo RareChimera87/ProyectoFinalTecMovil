@@ -30,11 +30,17 @@ interface AccountPurgeRepository {
 
     /** Aplica la tabla de retención de arquitectura.md §10.2 en una sola transacción. Idempotente. */
     suspend fun purge(plan: PurgePlan, now: Instant)
+
+    /** Cuentas marcadas como borradas antes de [deletedBefore] que siguen sin purgar (no son lápidas). */
+    suspend fun stalledDeletions(deletedBefore: Instant, limit: Int): List<UUID>
 }
 
 /** Espejo de Firestore: borra `simulations/{id}` y `matchTickets/{uid}` y anonimiza los chats. Idempotente. */
-fun interface AccountMirrorCleaner {
+interface AccountMirrorCleaner {
     suspend fun clean(plan: PurgePlan)
+
+    /** Solo borra `simulations/{id}` (segunda pasada tras la purga de Postgres). Idempotente. */
+    suspend fun removeSimulations(ids: List<UUID>)
 }
 
 /** Borra el usuario de Firebase Auth. Si ya no existe no hace nada (idempotente). */
@@ -45,6 +51,8 @@ fun interface AuthAccountRemover {
 /** Sin Firestore (`ENV=local` y pruebas que no lo miran). */
 object NoopAccountMirrorCleaner : AccountMirrorCleaner {
     override suspend fun clean(plan: PurgePlan) = Unit
+
+    override suspend fun removeSimulations(ids: List<UUID>) = Unit
 }
 
 /** Registra las limpiezas pedidas para que las pruebas las verifiquen. */
@@ -52,8 +60,17 @@ class RecordingAccountMirrorCleaner : AccountMirrorCleaner {
     private val recorded = CopyOnWriteArrayList<PurgePlan>()
     val plans: List<PurgePlan> get() = recorded.toList()
 
+    private val removedIds = CopyOnWriteArrayList<List<UUID>>()
+
+    /** Cada llamada a [removeSimulations], en orden. */
+    val removedSimulations: List<List<UUID>> get() = removedIds.toList()
+
     override suspend fun clean(plan: PurgePlan) {
         recorded += plan
+    }
+
+    override suspend fun removeSimulations(ids: List<UUID>) {
+        removedIds += ids
     }
 }
 
@@ -86,6 +103,9 @@ class InMemoryAccountPurgeRepository : AccountPurgeRepository {
         recorded += plan.userId
         plans.remove(plan.userId)
     }
+
+    /** Toda cuenta con plan registrado y sin purgar cuenta como atascada. */
+    override suspend fun stalledDeletions(deletedBefore: Instant, limit: Int): List<UUID> = plans.keys.take(limit)
 }
 
 /**

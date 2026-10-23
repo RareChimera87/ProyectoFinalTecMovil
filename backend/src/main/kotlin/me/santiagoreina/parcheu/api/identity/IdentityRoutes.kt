@@ -81,6 +81,11 @@ class IdentityRoutes(
             account.deletion.purge(call.receive<TaskPayload>().uuid())
             call.respond(HttpStatusCode.NoContent)
         }
+        // Reencola las purgas que agotaron sus reintentos (Cloud Scheduler, cada hora).
+        post(AccountDeletionService.SWEEP_PATH) {
+            account.deletion.sweepStalled()
+            call.respond(HttpStatusCode.NoContent)
+        }
 
         stubPost("/jobs/retention")
     }

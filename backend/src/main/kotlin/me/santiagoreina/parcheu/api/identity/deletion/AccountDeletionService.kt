@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.identity.deletion
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import me.santiagoreina.parcheu.api.identity.IdentityRepository
@@ -10,6 +11,7 @@ import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.TaskRequest
 import org.slf4j.LoggerFactory
 import java.time.Clock
+import java.time.Duration
 import java.util.UUID
 
 /** Resultado de una ejecución de `purge-user` (para logs y pruebas). */
@@ -51,8 +53,12 @@ class AccountDeletionService(
      */
     suspend fun requestDeletion(firebase: FirebaseUser) {
         val user = users.findByFirebaseUid(firebase.uid) ?: throw NotFound("No hay una cuenta con esta sesión")
-        users.markDeleted(user.id, clock.instant())
-        tasks.enqueue(purgeTask(user.id))
+        val now = clock.instant()
+        users.markDeleted(user.id, now)
+        // Si ya estaba borrada, la primera tarea pudo agotar sus reintentos: Cloud Tasks guarda su nombre
+        // cerca de una hora, así que la repetición usa uno propio (por minuto) para que sí se encole.
+        val retry = if (user.deletedAt != null) "retry-${now.epochSecond / 60}" else null
+        tasks.enqueue(purgeTask(user.id, retry))
         log.info("Cuenta {} marcada como borrada; purga encolada", user.id)
     }
 
@@ -62,18 +68,53 @@ class AccountDeletionService(
         mirror.clean(plan)
         auth.remove(plan.firebaseUid)
         repository.purge(plan, clock.instant())
+        // Segunda pasada: una simulación en curso pudo publicar `simulations/{id}` entre la limpieza y la purga.
+        // Tras la purga queda FAILED y el motor ya no publica; si esta pasada falla no se reintenta la tarea
+        // (la cuenta ya no existe), así que solo se registra.
+        try {
+            mirror.removeSimulations(plan.simulationIds)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn("Cuenta {} purgada, pero falló la segunda limpieza de simulations/*: {}", userId, e.message)
+        }
         log.info("Cuenta {} purgada ({} simulaciones, {} chats)", userId, plan.simulationIds.size, plan.chats.size)
         return PurgeOutcome.PURGED
     }
 
+    /**
+     * `POST /internal/jobs/purge-sweep` (Cloud Scheduler, cada hora): vuelve a encolar `purge-user` para las
+     * cuentas borradas hace más de [STALLED_AFTER] que siguen en Postgres (la tarea agotó sus reintentos de
+     * la cola `maintenance`, p. ej. por una caída larga de Firestore o Firebase Auth). El nombre lleva la
+     * hora, así que no choca con la deduplicación de Cloud Tasks y cada barrido reintenta. Devuelve cuántas encoló.
+     */
+    suspend fun sweepStalled(): Int {
+        val now = clock.instant()
+        val stalled = repository.stalledDeletions(now.minus(STALLED_AFTER), SWEEP_LIMIT)
+        val attempt = "sweep-${now.epochSecond / 3600}"
+        stalled.forEach { tasks.enqueue(purgeTask(it, attempt)) }
+        if (stalled.isNotEmpty()) log.warn("Barrido de purgas: {} cuentas borradas sin purgar, reencoladas", stalled.size)
+        return stalled.size
+    }
+
     companion object {
         const val PURGE_PATH = "/tasks/purge-user"
+        const val SWEEP_PATH = "/jobs/purge-sweep"
 
-        /** Tarea `purge-user`: el id de la cuenta es el nombre de deduplicación (ADR-0019). */
-        fun purgeTask(userId: UUID) = TaskRequest(
+        /** Una purga que no terminó en este plazo se da por perdida (los reintentos de la cola duran minutos). */
+        val STALLED_AFTER: Duration = Duration.ofHours(1)
+
+        /** Máximo de cuentas por barrido (el siguiente barrido toma las demás). */
+        const val SWEEP_LIMIT = 200
+
+        /**
+         * Tarea `purge-user`: el id de la cuenta es el nombre de deduplicación (ADR-0019). [attempt]
+         * distingue un reintento (barrido o `DELETE` repetido) de la primera tarea.
+         */
+        fun purgeTask(userId: UUID, attempt: String? = null) = TaskRequest(
             queue = QueueKind.MAINTENANCE,
             path = PURGE_PATH,
-            name = "purge-user-$userId",
+            name = "purge-user-$userId" + (attempt?.let { "-$it" } ?: ""),
             body = buildJsonObject { put("id", JsonPrimitive(userId.toString())) }.toString(),
         )
     }

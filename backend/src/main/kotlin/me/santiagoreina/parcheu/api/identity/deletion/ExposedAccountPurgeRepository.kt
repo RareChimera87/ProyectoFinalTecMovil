@@ -72,6 +72,20 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
                 Timestamp.from(now), user, user,
             )
 
+            // 1b. Simulaciones en curso donde participa: FAILED y cupo devuelto a quien lo pagó. Si el motor sigue
+            //     corriendo, su siguiente `saveStep`/`markDone` ya no aplica (exigen RUNNING) y no recrea nada.
+            val stopped = sql.ids(
+                "update simulations set status = 'FAILED', error = ?, finished_at = ? " +
+                    "where status in ('QUEUED', 'RUNNING') and (user_a = ? or user_b = ? or requested_by = ?) returning id",
+                SIMULATION_ERROR, Timestamp.from(now), user, user, user,
+            )
+            if (stopped.isNotEmpty()) {
+                sql.update(
+                    "update usage_events set refunded = true where kind = 'SIMULATION' and ref_id = any(?::text[])",
+                    sql.createArrayOf("text", stopped.map { it.toString() }.toTypedArray()),
+                )
+            }
+
             // 2. Columnas jsonb con datos personales (PersonalJsonPaths), antes de mover las filas a la lápida.
             val values = mapOf(
                 PurgeParam.USER to user,
@@ -124,6 +138,15 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
         }
     }
 
+    override suspend fun stalledDeletions(deletedBefore: Instant, limit: Int): List<UUID> = tx {
+        val sql = connection.connection as Connection
+        sql.ids(
+            "select id from users where deleted_at is not null and deleted_at < ? and firebase_uid not like 'deleted:%' " +
+                "order by deleted_at limit ?",
+            Timestamp.from(deletedBefore), limit,
+        )
+    }
+
     /** Lápida de la cuenta: una por persona (las simulaciones exigen `user_a <> user_b` y `entitlements` es por usuario). */
     private fun tombstoneFor(sql: Connection, plan: PurgePlan, now: Instant): UUID {
         val uid = tombstoneUid(plan.firebaseUid)
@@ -145,6 +168,9 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
     companion object {
         /** `reports.resolution` de los reportes que se cierran porque una de las partes borró su cuenta. */
         const val RESOLUTION = "ACCOUNT_DELETED"
+
+        /** `simulations.error` de las simulaciones en curso que se detienen al purgar (mismo texto que el motor). */
+        const val SIMULATION_ERROR = "Una de las cuentas ya no existe"
     }
 }
 
@@ -158,6 +184,12 @@ private fun Connection.query(statement: String, vararg params: Any?): Boolean =
     prepareStatement(statement).use { st ->
         params.forEachIndexed { i, value -> st.bind(i + 1, value) }
         st.executeQuery().use { it.next() }
+    }
+
+private fun Connection.ids(statement: String, vararg params: Any?): List<UUID> =
+    prepareStatement(statement).use { st ->
+        params.forEachIndexed { i, value -> st.bind(i + 1, value) }
+        st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getObject(1, UUID::class.java)) } }
     }
 
 private fun java.sql.PreparedStatement.bind(index: Int, value: Any?) {
