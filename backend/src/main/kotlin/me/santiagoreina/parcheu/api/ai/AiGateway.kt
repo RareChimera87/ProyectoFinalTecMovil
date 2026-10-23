@@ -67,6 +67,17 @@ class AiGateway(
         ModelTier.LITE -> config.models.lite
     }
 
+    /**
+     * Costo en micro-USD de [tokens] con [model] según la tabla de precios de hoy. Lo usa la
+     * simulación (E4.3) para acumular `simulations.cost_micros`; el registro oficial sigue en `ai_usage`.
+     */
+    fun costMicros(model: String, tokens: LlmUsage): Long = config.prices.costMicros(model, guard.today(), tokens)
+
+    /** Lanza `AiBudgetExceeded` si hoy ya no queda presupuesto; no llama al proveedor (E4.3). */
+    suspend fun ensureBudget() {
+        guard.check(config.models.chat, config.models.lite)
+    }
+
     suspend fun text(call: AiCall): LlmTextResult {
         val decision = guard.check(modelFor(call.purpose.tier), config.models.lite)
         val result = recordingFailures(call, decision) { client.generateText(call.toRequest(decision.model)) }

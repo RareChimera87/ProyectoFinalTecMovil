@@ -138,9 +138,10 @@ class ApplicationTest : FunSpec({
         }
     }
 
-    test("POST /internal/tasks/simulate con el token Fake de la cuenta de tareas no es 403") {
+    // E4.3 implementó /internal/tasks/simulate (SimulationApiTest); judge-scenario sigue en 501 (E4.8).
+    test("POST /internal/tasks/judge-scenario con el token Fake de la cuenta de tareas no es 403") {
         testApplication {
-            val response = startApp().post("/internal/tasks/simulate", bearer(FakeOidcVerifier.VALID_TOKEN))
+            val response = startApp().post("/internal/tasks/judge-scenario", bearer(FakeOidcVerifier.VALID_TOKEN))
             response.status shouldNotBe HttpStatusCode.Forbidden
             response.status shouldBe HttpStatusCode.NotImplemented
         }

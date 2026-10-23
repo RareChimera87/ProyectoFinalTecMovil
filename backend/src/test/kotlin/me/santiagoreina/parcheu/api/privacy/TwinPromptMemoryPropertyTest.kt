@@ -9,7 +9,12 @@ import io.kotest.matchers.string.shouldNotContain
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.arbitrary
 import me.santiagoreina.parcheu.api.simulation.CandidateMemory
+import me.santiagoreina.parcheu.api.simulation.AgentPromptInput
+import me.santiagoreina.parcheu.api.simulation.DefaultScenarios
 import me.santiagoreina.parcheu.api.simulation.MemorySelection
+import me.santiagoreina.parcheu.api.simulation.TwinMemory
+import me.santiagoreina.parcheu.api.simulation.TwinPromptBuilder
+import io.kotest.matchers.string.shouldContain
 import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
 import java.time.Instant
@@ -17,9 +22,9 @@ import java.util.UUID
 import kotlin.random.Random
 
 /**
- * Propiedad de ADR-0032 contra la costura [MemorySelection], de la que el `TwinPromptBuilder` de
- * E4.3 toma sus memorias: para una simulación de modo M solo salen memorias aceptadas de modo M
- * (en particular, ninguna de Pareja fuera de Pareja).
+ * Propiedad de ADR-0032 contra la costura [MemorySelection] y contra el `TwinPromptBuilder` real
+ * de E4.3, que toma de ella sus memorias: para una simulación de modo M solo salen memorias
+ * aceptadas de modo M (en particular, ninguna de Pareja fuera de Pareja).
  */
 class TwinPromptMemoryPropertyTest : FunSpec({
 
@@ -63,6 +68,31 @@ class TwinPromptMemoryPropertyTest : FunSpec({
                     .take(MemorySelection.MAX_MEMORIES)
                     .map { it.id }
                 selected.map { it.id } shouldContainExactly expected
+            }
+        }
+        count shouldBeGreaterThanOrEqual PrivacyProperties.ITERATIONS
+    }
+
+    test("el prompt del TwinPromptBuilder real de modo M solo lleva memorias de modo M") {
+        val count = PrivacyProperties.check("prompt del builder por modo", cases) { case ->
+            // El repositorio solo entrega aceptadas, de la más reciente a la más antigua; aquí llegan
+            // de todos los modos para probar la segunda barrera (la del builder).
+            val accepted = case.memories
+                .filter { it.status == MemoryStatus.ACCEPTED }
+                .sortedWith(compareByDescending<CandidateMemory> { it.createdAt }.thenBy { it.id })
+            val input = AgentPromptInput(
+                persona = "Le gusta el café.",
+                memories = accepted.map { TwinMemory(it.mode, it.text) },
+                mode = case.mode,
+                scenario = DefaultScenarios.all.first { it.mode == case.mode },
+                transcript = emptyList(),
+                turnNumber = 1,
+            )
+            val system = TwinPromptBuilder.build(input).system
+            withClue(case.toString()) {
+                accepted.filter { it.mode != case.mode }.forEach { system shouldNotContain "recuerdo-${it.id}" }
+                accepted.filter { it.mode == case.mode }.take(MemorySelection.MAX_MEMORIES)
+                    .forEach { system shouldContain "recuerdo-${it.id}" }
             }
         }
         count shouldBeGreaterThanOrEqual PrivacyProperties.ITERATIONS

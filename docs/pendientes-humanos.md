@@ -569,6 +569,53 @@ Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/...
    capturas (`./gradlew :app:recordRoborazziDevDebug`).
 5. **Texto legal:** pide al docente revisar el aviso de A4 ("Al continuar aceptas los Términos y la Política de
    privacidad (Ley 1581 de 2012)…") junto con la revisión legal de E2.1.
+## E0.9 · Pasarela de IA
+
+Lo automatizable ya quedó hecho: API `aiplatform.googleapis.com` habilitada en `parcheu-dev`, spike de modelos con llamadas reales (resultado en ADR-0008), IDs y precios en `backend/src/main/resources/ai/modelos.properties`, y el humo `@Tag("vertex")` pasó contra Vertex dev con `gemini-3.8-flash` y `gemini-3.5-flash-lite` el 22 oct 2026.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **¿Los créditos cubren a Claude?** En la consola: Facturación → cuenta `01D4D0-42F08D-DF5FE6` → **Créditos**; abrir el crédito vigente y revisar su **alcance** (servicios/SKU incluidos). Si dice "todos los servicios excepto Marketplace/partner models" o lista solo SKU de Google, Claude **no** está cubierto. Anotar la respuesta en ADR-0008 ("Resultado del spike", línea "¿Los créditos promocionales cubren a Claude?"). | I1 | Antes del 30 oct (fecha límite del spike) |
+| 2 | **Solo si los créditos cubren a Claude y se quiere usar:** en Model Garden (`parcheu-dev`) abrir Claude Sonnet 5.5 y Claude Haiku 5.5, pulsar **Habilitar** y aceptar los términos de Anthropic; luego en IAM y administración → **Cuotas** pedir aumento de `us_multi_region_online_prediction_requests_per_base_model` para `anthropic-claude-sonnet` y `anthropic-claude-haiku` (hoy 0 → 429). Verificar con `AI_PROVIDER=claude ./gradlew test -Pvertex -PsinContenedores --tests '*VertexSmokeTest*'` desde `backend/`. Repetir en `parcheu-prod` si se activa allá. | I1 | Opcional |
+| 3 | **Habilitar Vertex en prod:** la API `aiplatform.googleapis.com` ya está en la lista de E0.5; se habilita con el `terraform apply` de prod (lo hace el usuario). La cuenta `sa-api` recibe `roles/aiplatform.user` por Terraform (E0.5): mientras el apply de dev no exista, el servicio de dev no podrá llamar a Vertex. | Usuario | Con el apply de E0.5 |
+| 4 | **Presupuesto diario de prod:** el valor por defecto es 3 USD/día (`budget.daily.usd`). Si se quiere otro, agregar `AI_DAILY_BUDGET_USD` al `run_env` de `infra/terraform/modules/platform/cloud_run.tf` (E0.5) o ajustar el archivo de propiedades. No hace falta ninguna otra variable `AI_*`: `GCP_PROJECT` ya la pone Terraform y los modelos salen del archivo. | I1 | Antes del primer despliegue con IA |
+| 5 | **Revisar precios el 1 ene 2027:** el precio introductorio de `gemini-3.8-flash` termina el 31 dic 2026; la tabla ya trae la fila de 2027 (1,65/8,25), pero conviene confirmar en la página de precios que no cambió. | I1 | Diciembre 2026 |
+| 6 | **Aprobación del revisor par** del PR (feature major, check `major-gate`): según `docs/equipo.md` el par de E0.9 es I2. **Mezclar antes E0.4 (PR #12)**: esta rama lo integra porque `ai_usage` nace ahí. | I2 | Antes del merge |
+
+## E2.3 · API del gemelo
+
+El código y las pruebas (incluidas las de Postgres real, ejecutadas localmente contra un Postgres 16 desechable) están completos. Lo único que falta es de infraestructura y de revisión:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Agregar `SERVICE_URL` al `run_env` de `infra/terraform/modules/platform/cloud_run.tf` (E0.5)** con la URL del servicio Cloud Run `api` (`google_cloud_run_v2_service.api.uri`). Cloud Tasks necesita la URL real a la que hacer el POST de `/internal/tasks/build-persona`; la audiencia OIDC (`INTERNAL_OIDC_AUDIENCE`) es una custom audience y no sirve como destino. Sin `SERVICE_URL` (o sin `TASKS_QUEUE_AI_LIGHT`) el servicio arranca, guarda las respuestas y registra `Cloud Tasks no está configurado` al encolar: el gemelo queda con `personaReady = false` hasta que se configuren y se reenvíen las respuestas. | I1 | Antes del primer despliegue con E2.3 |
+| 2 | **Verificar en dev tras el `apply` de E0.5:** `POST /v1/twin/answers` con 12 respuestas de un usuario real, esperar unos segundos y comprobar que `GET /v1/twin` devuelve `personaReady = true` (la tarea llega a `ai-light` y `sa-tasks` invoca la API). Requiere que Vertex esté habilitado (pendiente 3 de E0.9). | I1 | Después del `apply` de dev |
+| 3 | **Mezclar antes las dependencias.** Esta rama integra E0.9 (que a su vez trae E0.4 y E0.3) porque `dev` aún no las tiene. Mezclar en este orden: E0.3 (PR #7), E0.4 (#12), E0.9 (#21) y luego E2.3; al mezclar, el diff del PR queda solo con los archivos de E2.3. | I1 | Antes del merge |
+
+## E4.1 · Servicio de cuotas
+
+Lo automatizable ya quedó hecho: `QuotaService` (límites gratis y uso justo de Plus), `usage_events` idempotente con devolución, `GET /v1/quota`, la interfaz `EntitlementService` (stub 'gratis' en prod hasta E7.1) y `POST /internal/dev/grant-plus` solo fuera de prod. Las pruebas con Postgres (`QuotaDbTest`, incluida la de concurrencia) se omiten en local con `-PsinContenedores` y corren en CI.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar primero E0.3 (PR #7) y E0.4 (PR #12).** Esta rama integra `feature/db-schema-v1` porque necesita las tablas `usage_events`, `entitlements` y `users`; el PR de E4.1 muestra también esos commits hasta que se mezclen en `dev`. | I1 | Antes del merge de E4.1 |
+| 2 | **Conflicto esperado con E2.1 (PR #19)** en `AppContainer.kt` y `TestSupport.kt`: ambos agregan un parámetro al contenedor y a `allDomains(...)`. Al mezclar el segundo, conservar los dos (`identity` y `quota`). Los cambios en `Database.kt` (`failFast`) y en `PlatformTest` son idénticos a los de E2.1 y no deberían chocar. Cuando E2.1 esté en `dev`, `QuotaUserLookup` puede implementarse con su repositorio. | I1 | Al mezclar el segundo de los dos |
+| 3 | **Revisar los valores de uso justo de Plus** (por defecto 20 simulaciones, 10 matches al azar y 20 informes completos por día) y, si se cambian, fijarlos como variables del servicio `api` en Terraform: `QUOTA_PLUS_DAILY_SIMULATIONS`, `QUOTA_PLUS_DAILY_RANDOM_MATCHES`, `QUOTA_PLUS_DAILY_FULL_REPORTS`. Sin variables se usan los valores por defecto. | I1 | Antes de la 0.2 |
+| 4 | **Probar `grant-plus` en dev** (opcional). La ruta está bajo `/internal`, así que exige el token OIDC de `sa-tasks`. Quien la use necesita `roles/iam.serviceAccountTokenCreator` sobre `sa-tasks@parcheu-dev.iam.gserviceaccount.com`. Luego: `TOKEN=$(gcloud auth print-identity-token --impersonate-service-account=sa-tasks@parcheu-dev.iam.gserviceaccount.com --audiences=https://api.parcheu-dev.internal --include-email)` y `curl -X POST "$API_URL/internal/dev/grant-plus" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"userId":"<users.id>","days":30}'` (204). En prod la ruta no existe (404). | I1 | Cuando haya `deploy-dev` |
+| 5 | **Aprobación del revisor par** del PR (feature major, check `major-gate`): según `docs/equipo.md` el par de E4.1 es I3. | I3 | Ventana de revisión de la ola 5 (31 oct) |
+
+## E4.3 · Motor de simulación
+
+El código y las pruebas están completos: 31 pruebas nuevas con FakeLlm y la API, más 5 con Postgres 16 real que se ejecutaron en local contra un Postgres desechable (`PARCHEU_TEST_DB_URL`) y corren en CI con Testcontainers. Además, el 22 oct 2026 se ejecutaron contra GCP dev los humos manuales `SimulationVertexSmokeTest`: una simulación real con `gemini-3.8-flash` terminó en DONE (puntaje 82, 27 llamadas, unos 2 centavos de USD, turnos de 480 caracteres como máximo) y el espejo escribió y borró `simulations/{id}` en el Firestore de `parcheu-dev`. Lo que falta depende de infraestructura, de otras features o de revisión:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar antes las dependencias.** `dev` aún no tiene E0.3, E0.4, E0.9, E2.1, E2.3, E4.1 ni E3.1, así que esta rama las integra. Orden sugerido: E0.3 (PR #7), E0.4 (#12), E0.9 (#21), E2.1 (#19), E2.3 (#27), E4.1 (#22), E3.1 (#31) y luego E4.3. Al mezclarlas, el diff del PR queda solo con `backend/.../simulation/**`, el cableado en `AppContainer.kt` y los ajustes de pruebas. Los conflictos de `AppContainer.kt`/`TestSupport.kt` entre E2.3, E4.1 y E3.1 ya están resueltos en esta rama (sirve de referencia). | I1 | Antes del merge |
+| 2 | **`terraform apply` de dev (E0.5).** Hoy la API de Cloud Tasks ni siquiera está habilitada en `parcheu-dev` (`gcloud tasks queues list` responde `SERVICE_DISABLED`). Sin el apply no existen la cola `simulations`, `TASKS_QUEUE_SIM`, `SERVICE_URL` (pendiente 1 de E2.3) ni el permiso de Vertex para `sa-api`: `POST /v1/simulations` respondería 500 al encolar y el cupo se devuelve solo. Con el apply listo, `TASKS_QUEUE_SIM` sale del Terraform de E0.5 (`cloud_run.tf`) y no hace falta nada más del lado del código. | Usuario | Antes del primer despliegue con E4.3 |
+| 3 | **Primera simulación real en dev (hito del 6 nov).** Con 2 y el despliegue listos: dos cuentas con gemelo listo y el modo Amistad activo (E2.5), `POST /v1/simulations {"otherUserId":"<users.id de la otra>","mode":"AMISTAD"}`. Comprobar que responde 202, que `GET /v1/simulations/{id}` pasa a DONE en uno o dos minutos, que el documento `simulations/{id}` aparece en Firestore y que la arista SIMULATED sale en `GET /v1/graph`. Mientras E2.5 no esté, activar el modo a mano: `insert into user_modes (user_id, mode, enabled, enabled_at) values ('<id>', 'AMISTAD', true, now()) on conflict (user_id, mode) do update set enabled = true;`. | I1 | 6 nov |
+| 4 | ~~**Avisos al terminar.**~~ Hecho al integrar `dev` (con E5.3): `NotifierSimulationNotifier` entrega `SIMULATION_READY` (`parcheu://results/{id}`) y `SIMULATION_FAILED` (`parcheu://simulation/{id}`) al `Notifier` del contenedor. | I1 | Hecho |
+| 5 | **`refunded` para F5 (E4.5).** El criterio de E4.5 pide mostrar "No se descontó de tu cupo" solo si el resumen trae `refunded = true`, pero `SimulationSummary` del contrato no tiene ese campo. El servidor ya devuelve el cupo; falta agregar `refunded: Boolean = false` al contrato (cambio compatible) y llenarlo desde `usage_events`. Decidir si lo hace E4.5 o un PR corto del contrato. | I1 + I2 | Antes de E4.5 |
+| 6 | **Aprobación del revisor par** del PR (feature major, check `major-gate`): según `docs/equipo.md` el par de E4.3 es I2. | I2 | Ventana de revisión de la ola 7 (6 nov) |
 
 ## E3.4 · Pantalla Tu parche
 

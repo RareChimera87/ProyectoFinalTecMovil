@@ -18,8 +18,8 @@ data class CandidateMemory(
  * Costura única que decide qué memorias pueden entrar al prompt de un `TwinAgent` (ADR-0032):
  * solo ACEPTADAS **del modo de la simulación**, como máximo [MAX_MEMORIES] (las más recientes) y
  * saneadas como datos. El `TwinPromptBuilder` del motor de simulación (E4.3) es el dueño del
- * prompt y DEBE obtener sus memorias de [select]; así la suite de privacidad (E3.5) cubre al
- * builder real sin que este PR declare otro `TwinPromptBuilder` ni otro `TwinMemory`.
+ * prompt y obtiene sus memorias de [select] y [sanitize] (`TwinPromptBuilder.memoriesFor`); así la
+ * suite de privacidad (E3.5) cubre al builder real.
  */
 object MemorySelection {
     const val MAX_MEMORIES = 10
