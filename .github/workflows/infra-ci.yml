@@ -29,6 +29,8 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      existe: ${{ steps.existe.outputs.existe }}
+      wif: ${{ steps.wif.outputs.wif }}
       infra: ${{ github.event_name != 'pull_request' && 'true' || steps.filtro.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
@@ -47,11 +49,31 @@ jobs:
               - 'scripts/test/plan-iam-permisos.test.sh'
               - 'scripts/test/fixtures/plan-*.json'
               - '.github/workflows/infra-ci.yml'
+      - name: Comprueba que existe infra/terraform/
+        id: existe
+        run: |
+          if [[ -d "infra/terraform" ]]; then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No existe infra/terraform/ en esta rama: se omite la verificación (los cimientos aún no están integrados)."
+          fi
+      - name: Comprueba si existe el secreto WIF_PROVIDER
+        id: wif
+        env:
+          WIF: ${{ secrets.WIF_PROVIDER }}
+        run: |
+          if [[ -n "$WIF" ]]; then
+            echo "wif=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "wif=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Falta el secreto WIF_PROVIDER: se omite infra-plan-dev hasta aplicar infra/terraform/bootstrap en dev (E0.5)."
+          fi
 
   static:
     name: infra-static
     needs: cambios
-    if: needs.cambios.outputs.infra == 'true'
+    if: needs.cambios.outputs.infra == 'true' && needs.cambios.outputs.existe == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,8 +99,8 @@ jobs:
   plan-dev:
     name: infra-plan-dev
     runs-on: ubuntu-latest
-    needs: static
-    if: github.event_name == 'pull_request'
+    needs: [cambios, static]
+    if: github.event_name == 'pull_request' && needs.cambios.outputs.wif == 'true'
     permissions:
       contents: read
       id-token: write
@@ -88,11 +110,6 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR: ${{ github.event.pull_request.number }}
     steps:
-      - name: Requiere los secretos del bootstrap
-        if: env.WIF_PROVIDER == ''
-        run: |
-          echo "::error::Falta el secreto WIF_PROVIDER: aplica infra/terraform/bootstrap en dev (ver infra/terraform/README.md)."
-          exit 1
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
         with:

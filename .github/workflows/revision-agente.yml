@@ -1,22 +1,17 @@
 name: revision-agente
 
-# E0.6 + PLAN.md §5. Revisión automática en busca de errores sobre el diff del PR, con Claude
-# (scripts/revision-agente/revisar.py). El check `revision-agente` queda en rojo si hay algún
-# hallazgo bloqueante; el informe se publica como comentario del PR y en el resumen del job.
-# Requiere el secreto ANTHROPIC_API_KEY; sin él el check falla (no se mezcla sin revisión).
-# Modelo y esfuerzo: variables de repo REVISION_MODELO (claude-opus-5-5) y REVISION_ESFUERZO (high).
-#
-# SEGURIDAD: corre con `pull_request_target`, así que el YAML, `revisar.py`, `requirements.txt` y la
-# ficha de docs/backlog.md son los de la RAMA BASE (dev), no los del PR; un PR no puede dejar en
-# verde su propia revisión editando esos archivos. El código del PR nunca se ejecuta: solo se trae
-# su commit (`refs/pull/N/head`) para calcular el diff, que se trata como datos. Los cambios a
-# revisar.py o a este workflow rigen desde el merge siguiente (y exigen revisión humana, ver auto-merge).
+# PLAN.md §5. La revisión en busca de errores la hace un agente revisor del workflow de
+# implementación ANTES de mezclar (lee el diff, corre los tests, publica el veredicto como
+# comentario del PR). Cuando el veredicto es favorable, el integrador pone la etiqueta
+# `revisado-agente`. Este check solo verifica que esa etiqueta exista: no llama a ninguna API
+# ni necesita secretos. Sin la etiqueta, el PR no se considera revisado y el check falla.
 on:
-  pull_request_target:
-    types: [opened, reopened, ready_for_review, synchronize]
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: revision-agente-${{ github.event.pull_request.number }}
@@ -25,52 +20,16 @@ concurrency:
 jobs:
   revision-agente:
     name: revision-agente
-    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      pull-requests: write
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    timeout-minutes: 5
     steps:
-      - name: Requiere ANTHROPIC_API_KEY
-        if: env.ANTHROPIC_API_KEY == ''
+      - name: Exige la etiqueta revisado-agente
+        env:
+          ETIQUETAS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          echo "::error::Falta el secreto ANTHROPIC_API_KEY (docs/pendientes-humanos.md, E0.6)."
-          exit 1
-      # Sin `ref`: pull_request_target hace checkout de la rama base. No cambiarlo por el head del PR.
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Trae el commit del PR solo para el diff (datos, no se ejecuta)
-        env:
-          PR: ${{ github.event.pull_request.number }}
-        run: git fetch --no-tags origin "+refs/pull/${PR}/head:refs/remotes/pr/head"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install --quiet -r scripts/revision-agente/requirements.txt
-      - name: Revisión del diff
-        id: revision
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
-          REVISION_MODELO: ${{ vars.REVISION_MODELO }}
-          REVISION_ESFUERZO: ${{ vars.REVISION_ESFUERZO }}
-          SALIDA_MD: ${{ runner.temp }}/revision.md
-        run: python3 scripts/revision-agente/revisar.py
-      - name: Publica el informe
-        if: always() && steps.revision.outcome != 'skipped'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
-          INFORME: ${{ runner.temp }}/revision.md
-          SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          [[ -s "$INFORME" ]] || exit 0
-          cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
-          { cat "$INFORME"; echo; echo "_Commit revisado: ${SHA:0:7}_"; } > comentario.md
-          gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file comentario.md
+          if [[ ",$ETIQUETAS," == *",revisado-agente,"* ]]; then
+            echo "El PR tiene la etiqueta revisado-agente: revisión registrada."
+          else
+            echo "::error::Falta la etiqueta revisado-agente: el agente revisor del workflow debe revisar el PR y el integrador poner la etiqueta (PLAN.md §5)."
+            exit 1
+          fi

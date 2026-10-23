@@ -26,7 +26,11 @@ permissions:
 jobs:
   auto-merge:
     name: auto-merge
+    # Apagado: los merges feature→dev los hace el agente integrador del workflow tras la revisión
+    # (PLAN.md §5). Para reactivarlo: variable de repo AUTO_MERGE_ENABLED=true y protección de dev
+    # con los checks obligatorios.
     if: >-
+      vars.AUTO_MERGE_ENABLED == 'true' &&
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       (startsWith(github.head_ref, 'feature/') || startsWith(github.head_ref, 'fix/'))

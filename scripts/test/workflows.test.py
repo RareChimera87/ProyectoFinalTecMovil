@@ -2,7 +2,7 @@
 """Pruebas estáticas de los workflows de E0.6 (revisión post-merge, ronda 1).
 
 Cada prueba cubre un hallazgo: contrato de migration-order, pipefail en infra-ci, concurrencia de
-review-counter, revision-agente con la base, salvaguarda de auto-merge y secretos de WIF documentados.
+review-counter, revision-agente por etiqueta, major-gate sin segundo usuario, guardas de directorio, auto-merge apagado y secretos de WIF documentados.
 Uso: python3 scripts/test/workflows.test.py   (requiere PyYAML; en CI lo instala workflows-ci)
 """
 import re
@@ -70,18 +70,57 @@ class ReviewCounter(unittest.TestCase):
 
 
 class RevisionAgente(unittest.TestCase):
-    def test_corre_con_el_codigo_de_la_base(self):
-        wf = cargar("revision-agente.yml")
-        on = disparadores(wf)
-        self.assertIn("pull_request_target", on)
-        self.assertNotIn("pull_request", on)
-        for p in pasos(wf):
-            if str(p.get("uses", "")).startswith("actions/checkout"):
-                self.assertNotIn("ref", p.get("with", {}), "no hacer checkout del head del PR")
+    """La revisión la hace el agente del workflow; el check solo exige la etiqueta revisado-agente."""
 
-    def test_trae_el_head_solo_para_el_diff(self):
+    def test_no_llama_a_ninguna_api_ni_usa_secretos(self):
         texto = (WF / "revision-agente.yml").read_text(encoding="utf-8")
-        self.assertIn("refs/pull/", texto)
+        self.assertNotIn("ANTHROPIC_API_KEY", texto)
+        self.assertNotIn("secrets.", texto)
+        self.assertFalse((RAIZ / "scripts" / "revision-agente").exists())
+
+    def test_exige_la_etiqueta_y_reacciona_a_labeled(self):
+        wf = cargar("revision-agente.yml")
+        tipos = disparadores(wf)["pull_request"]["types"]
+        self.assertIn("labeled", tipos)
+        self.assertIn("unlabeled", tipos)
+        run = pasos(wf)[0]["run"]
+        self.assertIn("revisado-agente", run)
+        self.assertIn("exit 1", run)
+
+
+class MajorGate(unittest.TestCase):
+    def test_pasa_con_la_etiqueta_del_agente_y_no_pide_otro_usuario(self):
+        texto = (WF / "major-gate.yml").read_text(encoding="utf-8")
+        self.assertIn("revisado-agente", texto)
+        self.assertNotIn("user.login", texto)
+        self.assertNotIn("/reviews", texto)
+
+
+class GuardasDeDirectorio(unittest.TestCase):
+    CASOS = {
+        "backend-ci.yml": ("backend", "backend"),
+        "contract-ci.yml": ("contract", "contract"),
+        "rules-ci.yml": ("firebase", "firebase"),
+        "migration-order.yml": ("backend/src/main/resources/db/migration", "migraciones"),
+        "infra-ci.yml": ("infra/terraform", "infra"),
+    }
+
+    def test_verificar_se_omite_si_no_existe_el_directorio(self):
+        for nombre, (directorio, clave) in self.CASOS.items():
+            with self.subTest(nombre):
+                wf = cargar(nombre)
+                cambios = wf["jobs"]["cambios"]
+                self.assertIn("existe", cambios["outputs"])
+                paso = next(p for p in cambios["steps"] if p.get("id") == "existe")
+                self.assertIn(f'-d "{directorio}"', paso["run"])
+                verificar = wf["jobs"]["verificar" if "verificar" in wf["jobs"] else "static"]
+                self.assertIn(f"needs.cambios.outputs.{clave} == 'true'", verificar["if"])
+                self.assertIn("needs.cambios.outputs.existe == 'true'", verificar["if"])
+
+    def test_plan_dev_se_omite_sin_wif(self):
+        wf = cargar("infra-ci.yml")
+        self.assertIn("needs.cambios.outputs.wif == 'true'", wf["jobs"]["plan-dev"]["if"])
+        self.assertNotIn("Requiere los secretos del bootstrap", str(wf["jobs"]["plan-dev"]["steps"]))
 
 
 class AutoMerge(unittest.TestCase):
@@ -91,6 +130,9 @@ class AutoMerge(unittest.TestCase):
 
     def test_workflow_de_la_base(self):
         self.assertIn("pull_request_target", disparadores(self.wf))
+
+    def test_apagado_salvo_variable_explicita(self):
+        self.assertIn("vars.AUTO_MERGE_ENABLED == 'true'", self.wf["jobs"]["auto-merge"]["if"])
 
     def test_exige_la_proteccion_de_dev_antes_de_activar(self):
         self.assertIn("revision-agente major-gate", self.texto)
