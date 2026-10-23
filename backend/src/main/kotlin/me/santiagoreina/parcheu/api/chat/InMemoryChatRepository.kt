@@ -57,6 +57,10 @@ class InMemoryChatRepository : ChatRepository {
         } else CreatedChat(insert(NewChat(ChatType.DIRECT, mode, listOf(a, b), now)), created = true)
     }
 
+    override suspend fun findDirect(a: UUID, b: UUID, mode: Mode): ChatRecord? = synchronized(lock) {
+        chats.values.firstOrNull { it.type == ChatType.DIRECT && it.mode == mode && it.members.keys == setOf(a, b) }?.toRecord()
+    }
+
     override suspend fun create(chat: NewChat): ChatRecord = synchronized(lock) { insert(chat) }
 
     override suspend fun chat(chatId: UUID): ChatRecord? = synchronized(lock) { chats[chatId]?.toRecord() }

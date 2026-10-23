@@ -13,6 +13,10 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.chat.ChatModule
+import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
+import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
+import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
@@ -123,7 +127,9 @@ class MatchingDbTest : FunSpec({
     class World(val db: Database, val clock: MovableClock = MovableClock(start), flags: MatchingFlags = MatchingFlags(true, false)) {
         val quota = quotaModule(Env.DEV, db, clock)
         val graph = GraphModule(ExposedGraphRepository(db), AnonIdSigner.forTests(), clock)
-        val simulation = simulationModule(Env.DEV, db, clock, testGateway(), quota, graph, FakeTaskQueue(), firebaseProjectId = null, notifier = NoopSimulationNotifier)
+        val simulation = simulationModule(Env.DEV, db, clock, testGateway(), quota, graph, FakeTaskQueue(), firebaseProjectId = null, notifier = NoopSimulationNotifier,
+            chat = ChatModule(ExposedChatRepository(db), InMemoryChatMirror(), NoopNotifier, graph.policy, clock), push = NoopNotifier,
+        )
         val repo = ExposedMatchingRepository(db)
         val mirror = RecordingMatchTicketMirror()
         val notifier = FakeNotifier()

@@ -20,7 +20,9 @@
     "summary": "Buen parche",
     "locked": true,
     "unlockAvailable": true,
-    "otherDecided": false
+    "otherDecided": false,
+    "reasonsCount": 0,
+    "frictionsCount": 0
   },
   "myResponse": true
 }

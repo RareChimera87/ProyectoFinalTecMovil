@@ -70,7 +70,7 @@ fun testContainer(
     twin: TwinModule = inMemoryTwinModule(clock, ai),
     graph: GraphModule = inMemoryGraphModule(clock),
     chat: ChatModule = inMemoryChatModule(clock, graph.policy),
-    simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
+    simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph, chat = chat),
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),

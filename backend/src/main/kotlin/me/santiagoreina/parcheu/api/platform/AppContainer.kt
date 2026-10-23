@@ -96,9 +96,13 @@ class AppContainer(
     val notifier: Notifier = NoopNotifier,
     /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
     val chat: ChatModule = inMemoryChatModule(clock, graph.policy, notifier),
-    /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
-    val simulation: SimulationModule =
-        inMemorySimulationModule(clock, ai, quota, graph, notifier = NotifierSimulationNotifier(notifier)),
+    /**
+     * Simulación (E4.3) e informe y decisión mutua (E4.6, con [chat] y [notifier]). Por defecto en
+     * memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore.
+     */
+    val simulation: SimulationModule = inMemorySimulationModule(
+        clock, ai, quota, graph, notifier = NotifierSimulationNotifier(notifier), chat = chat, push = notifier,
+    ),
     /** Fila de match (E4.2). Por defecto en memoria: solo [fromConfig] cablea Postgres y Firestore. */
     val matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
     /**
@@ -147,9 +151,10 @@ class AppContainer(
                 if (local) InMemoryChatMirror() else FirestoreChatMirror.forProject(requireNotNull(config.firebaseProjectId))
             val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
             // Simulación (E4.3): misma base, cola y avisos; el espejo de progreso va a Firestore fuera de local.
+            // El informe y la decisión mutua (E4.6) reutilizan el chat (DIRECT) y el notifier (NEW_CONNECTION).
             val simulation = simulationModule(
                 config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId,
-                notifier = NotifierSimulationNotifier(notifier),
+                notifier = NotifierSimulationNotifier(notifier), chat = chat, push = notifier,
             )
             // Fila de match (E4.2): misma base, cuotas, simulación, grafo y avisos; espejo matchTickets en Firestore fuera de local.
             val matching = matchingModule(

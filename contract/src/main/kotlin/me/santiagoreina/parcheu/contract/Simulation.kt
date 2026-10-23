@@ -68,7 +68,14 @@ public data class Dimension(
     val note: String? = null,
 )
 
-/** GET /v1/simulations/{id}/report y POST .../report:unlock */
+/**
+ * GET /v1/simulations/{id}/report y POST .../report:unlock (E4.6). El servidor redacta: con
+ * [locked] = true (gratis sin desbloquear) no envía `reasons`, `frictions` ni `dimensions`, solo
+ * puntaje, resumen y los conteos [reasonsCount] y [frictionsCount] (F7 los muestra bajo el candado).
+ * [unlockAvailable] = queda el informe completo gratis del mes. [otherName] y [chatId] (el chat
+ * DIRECT creado por la decisión) solo con conexión mutua. [otherDecided] también: es true solo con
+ * conexión mutua; un "Ahora no" de la otra persona nunca se revela (E6.6 reserva "quién decidió" para Plus).
+ */
 @Serializable
 public data class ReportDto(
     val score: Int,
@@ -81,6 +88,9 @@ public data class ReportDto(
     val myDecision: Boolean? = null,
     val otherDecided: Boolean = false,
     val otherName: String? = null,
+    val reasonsCount: Int = 0,
+    val frictionsCount: Int = 0,
+    val chatId: String? = null,
 )
 
 @Serializable

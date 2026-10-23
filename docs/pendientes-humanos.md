@@ -789,6 +789,20 @@ No hay pasos bloqueantes: la feature no crea recursos en GCP, Firebase ni consol
 5. **Reintentar con una persona anónima:** `POST /v1/simulations` pide `otherUserId`; en un match al azar la
    otra persona sigue anónima, así que F5 oculta "Reintentar" y deja "Volver al inicio". Decide con I1 si el
    servidor ofrece un reintento por `simulationId`.
+
+## E4.6 · Resultados y decisión mutua
+
+Lo automatizable ya quedó hecho: API de informe, desbloqueo y decisión (`backend/.../simulation/report/`), pantalla de resultados (`android/app/.../feature/results/`), pruebas (incluidas las de Postgres 16 real, ejecutadas en local contra un Postgres desechable con `PARCHEU_TEST_DB_URL`) y capturas de Roborazzi. No crea recursos en GCP.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | ~~**Mezclar antes las dependencias.**~~ Hecho: `dev` ya tiene E4.3, E5.1, E4.5 y E5.3, y esta rama los integra en su forma definitiva. El diff del PR queda con `simulation/report/**`, `feature/results/**`, `data/results/**`, el contrato, el cableado y los ajustes de pruebas. | I1 | Hecho |
+| 2 | ~~**Push de conexión.**~~ Hecho al integrar `dev` (con E5.3): la decisión mutua usa el `FcmNotifier` del contenedor para `NEW_CONNECTION`. | I1 | Hecho |
+| 3 | **Probar en dev con dos cuentas** (después del `apply` de E0.5 y de la primera simulación real de E4.3): abrir el resultado en las dos, desbloquear el informe en una cuenta gratis (el segundo desbloqueo del mes debe mostrar 'Ya usaste tu informe gratis…'), pulsar Conectar en ambas y comprobar que la segunda abre el chat y que el nombre aparece solo entonces. | I2 | Con el despliegue de dev |
+| 4 | **Comparación lado a lado** de F7, F8 e I3 con los PNG de Claude Design (`scripts/lado-a-lado.sh`, ADR-0022). Las capturas de esta rama están en `android/app/src/test/screenshots/results/` (I3 = `i3_light.png`). Iconos de candado, conectar y avisos son vectores locales (ver el paso 6); el mascot es el de E4.5. | I2 | Ventana de revisión de la ola 8 |
+| 5 | **Aprobación del revisor par** del PR (feature major, check `major-gate`): según `docs/equipo.md` el par de E4.6 es I3; la parte de `backend/` la aprueba además I1. | I3 + I1 | Ventana de revisión de la ola 8 (8 nov) |
+| 6 | **Pasar F7/F8 a los compuestos de E1.4.** `feature/results/ResultsParts.kt` trae versiones locales de AffinityRing, LockedOverlay y DecisionFooter, y sus iconos, porque se escribió antes de que E1.4 y E1.2 llegaran a `dev`. Cambiarlas por las de `designsystem` (`components/compound/Locked.kt` y demás) en un PR aparte y volver a grabar las capturas de `results/`. No bloquea: el aspecto ya se compara en el paso 4. | I2 | Después del merge |
+
 ## E1.4 · Componentes compuestos
 
 Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/.../components/compound/`, pruebas de semántica, de LockedOverlay (sdk 30 y 35) y de avatares, y capturas Roborazzi en ambos temas (`android/designsystem/src/test/screenshots/compound/`).

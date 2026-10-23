@@ -33,11 +33,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
         HttpMethod.Get to "/v1/twin/feedback-prompts", HttpMethod.Post to "/v1/twin/feedback",
     ),
     // E4.2 implementó todo el dominio matching (MatchingApiTest); ya no queda ningún stub.
-    // E4.3 implementó crear, listar, consultar y transcript (SimulationApiTest); informe y decisión son de E4.6.
-    "simulation" to listOf(
-        HttpMethod.Get to "/v1/simulations/s1/report", HttpMethod.Post to "/v1/simulations/s1/report:unlock",
-        HttpMethod.Post to "/v1/simulations/s1/decision",
-    ),
+    // Simulation: E4.3 (SimulationApiTest) y E4.6 (ReportApiTest) implementaron todas sus rutas /v1.
     "scenario" to listOf(HttpMethod.Get to "/v1/scenarios", HttpMethod.Post to "/v1/scenario-sessions/c1/agreement"),
     "graph" to listOf(
         // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest).
