@@ -17,10 +17,10 @@ import me.santiagoreina.parcheu.BuildConfig
 import me.santiagoreina.parcheu.ParcheUApp
 import me.santiagoreina.parcheu.contract.OnboardingStep
 import me.santiagoreina.parcheu.core.network.ApiResult
-import me.santiagoreina.parcheu.core.ui.stubTag
 import me.santiagoreina.parcheu.data.auth.AuthRepository
 import me.santiagoreina.parcheu.data.auth.FakeAuthRepository
 import me.santiagoreina.parcheu.data.auth.sessionDto
+import me.santiagoreina.parcheu.feature.home.HomeTags
 import me.santiagoreina.parcheu.feature.onboarding.OnboardingTags
 import me.santiagoreina.parcheu.navigation.AppRoute
 import me.santiagoreina.parcheu.navigation.Home
@@ -85,7 +85,7 @@ class SplashNavigationTest {
     @Test
     fun withSessionAndTwinSplashOpensHome() {
         launch(session(OnboardingStep.DONE))
-        composeRule.onNodeWithTag(stubTag(Home)).assertIsDisplayed()
+        composeRule.onNodeWithTag(HomeTags.ROOT).assertIsDisplayed()
         assertOnlyDestination { it.hasRoute<Home>() }
     }
 
