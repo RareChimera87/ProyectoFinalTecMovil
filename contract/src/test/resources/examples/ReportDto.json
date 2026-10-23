@@ -1,0 +1,24 @@
+{
+  "score": 82,
+  "summary": "Tienen un ritmo parecido y planes compatibles.",
+  "reasons": [
+    "Mismo humor",
+    "Planes de fin de semana",
+    "Valoran la puntualidad"
+  ],
+  "frictions": [
+    "Uno es más madrugador"
+  ],
+  "dimensions": [
+    {
+      "name": "Humor",
+      "score": 88,
+      "note": "Se ríen de lo mismo"
+    }
+  ],
+  "locked": false,
+  "unlockAvailable": false,
+  "myDecision": true,
+  "otherDecided": false,
+  "otherName": "Laura"
+}
