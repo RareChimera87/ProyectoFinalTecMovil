@@ -61,7 +61,8 @@ internal fun categoryOf(kind: String): String = when (kind) {
     NotificationKinds.MATCH_FOUND, NotificationKinds.MATCH_EXPIRED -> "Conocer"
     NotificationKinds.CONNECT_REQUEST, NotificationKinds.NEW_CONNECTION,
     NotificationKinds.INVITE_PENDING -> "Tu parche"
-    NotificationKinds.INTRODUCTION_PROPOSAL -> "Presentación"
+    NotificationKinds.INTRODUCTION_PROPOSAL, NotificationKinds.INTRODUCTION_READY,
+    NotificationKinds.INTRODUCTION_REQUEST -> "Presentación"
     NotificationKinds.CHAT_MESSAGE -> "Chat"
     NotificationKinds.TWIN_MEMORIES, NotificationKinds.TWIN_FEEDBACK -> "Gemelo"
     NotificationKinds.COMMUNITY -> "Comunidades"

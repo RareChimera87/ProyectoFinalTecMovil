@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.feature.notifications
 
 import kotlin.time.Instant
+import me.santiagoreina.parcheu.contract.NotificationKinds
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -35,5 +36,15 @@ class NotificationsTextsTest {
             "Míralas con ParcheU+ · sáb",
             footerOf(NotificationsSamples.lockedConnect, now)
         )
+    }
+
+    @Test
+    fun introductionKindsShareTheirCategory() {
+        // E6.2: propuesta (E3), simulación lista para quien presenta (E2) y 'Pedir presentación' (E1).
+        listOf(
+            NotificationKinds.INTRODUCTION_PROPOSAL,
+            NotificationKinds.INTRODUCTION_READY,
+            NotificationKinds.INTRODUCTION_REQUEST
+        ).forEach { assertEquals("Presentación", categoryOf(it)) }
     }
 }

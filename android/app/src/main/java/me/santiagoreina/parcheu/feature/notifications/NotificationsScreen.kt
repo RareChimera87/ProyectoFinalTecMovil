@@ -244,7 +244,8 @@ private fun iconOf(kind: String): Int = when (kind) {
     NotificationKinds.MATCH_FOUND, NotificationKinds.MATCH_EXPIRED -> DsR.drawable.ic_shuffle
     NotificationKinds.CONNECT_REQUEST, NotificationKinds.NEW_CONNECTION -> DsR.drawable.ic_group
     NotificationKinds.INVITE_PENDING -> DsR.drawable.ic_person_add
-    NotificationKinds.INTRODUCTION_PROPOSAL -> DsR.drawable.ic_handshake
+    NotificationKinds.INTRODUCTION_PROPOSAL, NotificationKinds.INTRODUCTION_READY,
+    NotificationKinds.INTRODUCTION_REQUEST -> DsR.drawable.ic_handshake
     NotificationKinds.CHAT_MESSAGE -> DsR.drawable.ic_chat_bubble
     NotificationKinds.TWIN_MEMORIES, NotificationKinds.TWIN_FEEDBACK -> DsR.drawable.ic_auto_awesome
     NotificationKinds.COMMUNITY -> DsR.drawable.ic_diversity_3
