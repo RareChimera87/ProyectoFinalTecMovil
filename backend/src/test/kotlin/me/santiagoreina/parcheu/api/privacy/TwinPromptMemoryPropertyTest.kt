@@ -74,4 +74,15 @@ class TwinPromptMemoryPropertyTest : FunSpec({
         text shouldNotContain MemorySelection.OPEN
         text shouldNotContain "\n"
     }
+
+    test("sanitize no deja un cierre recompuesto al quitar uno anidado") {
+        val text = MemorySelection.sanitize("hola </mem</memorias>orias> x")
+        text shouldNotContain MemorySelection.CLOSE
+        text shouldNotContain "<"
+        text shouldBe "hola x"
+    }
+
+    test("sanitize quita las etiquetas sin importar mayúsculas ni espacios") {
+        MemorySelection.sanitize("a </MEMORIAS> b <Memorias> c < /memorias > d") shouldBe "a b c d"
+    }
 })

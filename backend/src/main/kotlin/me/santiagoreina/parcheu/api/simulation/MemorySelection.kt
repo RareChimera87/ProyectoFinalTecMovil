@@ -35,11 +35,22 @@ object MemorySelection {
         .sortedWith(compareByDescending<CandidateMemory> { it.createdAt }.thenBy { it.id })
         .take(MAX_MEMORIES)
 
-    /** Texto de una memoria listo para el prompt: sin delimitadores ni saltos de línea, con tope. */
-    fun sanitize(text: String): String = text
-        .replace(OPEN, "")
-        .replace(CLOSE, "")
-        .replace(Regex("\\s+"), " ")
-        .trim()
-        .take(MAX_MEMORY_CHARS)
+    /** Cualquier etiqueta de apertura o cierre (`<memorias>`, `</MEMORIAS>`, `< /x >`), sin importar mayúsculas. */
+    private val TAG = Regex("<\\s*/?\\s*[a-z_]+\\s*>", RegexOption.IGNORE_CASE)
+    private val WHITESPACE = Regex("\\s+")
+
+    /**
+     * Texto de una memoria listo para el prompt: sin etiquetas ni saltos de línea, con tope. Las
+     * etiquetas se quitan hasta punto fijo, para que `</mem</memorias>orias>` no deje un cierre
+     * recompuesto al quitar el de adentro.
+     */
+    fun sanitize(text: String): String {
+        var current = text
+        while (true) {
+            val next = TAG.replace(current, "")
+            if (next == current) break
+            current = next
+        }
+        return current.replace(WHITESPACE, " ").trim().take(MAX_MEMORY_CHARS)
+    }
 }

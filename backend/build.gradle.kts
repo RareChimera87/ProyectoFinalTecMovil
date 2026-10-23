@@ -67,6 +67,8 @@ dependencies {
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
+    // E3.5: TwinPromptBuilderDelegationTest lee las invocaciones reales de los .class con ASM.
+    testImplementation(libs.asm)
 }
 
 // Los tests con Testcontainers solo corren en CI; en local se omiten con -PsinContenedores.
