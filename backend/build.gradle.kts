@@ -47,6 +47,11 @@ dependencies {
     implementation(libs.firebase.admin)
     implementation(libs.google.api.client)
 
+    // Pasarela de IA (E0.9, ADR-0008): Gemini (Gen AI SDK en modo Vertex) y Claude en Vertex.
+    implementation(libs.google.genai)
+    implementation(libs.anthropic.java.vertex)
+    implementation(libs.anthropic.java.client.okhttp)
+
     implementation(libs.logback.classic)
     runtimeOnly(libs.logstash.logback.encoder)
 
@@ -58,13 +63,18 @@ dependencies {
     testImplementation(libs.kotest.property)
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
 }
 
 // Los tests con Testcontainers solo corren en CI; en local se omiten con -PsinContenedores.
 val sinContenedores = providers.gradleProperty("sinContenedores").isPresent
 
 tasks.test {
-    useJUnitPlatform()
+    // El humo contra Vertex real (@Tag("vertex")) es manual: solo corre con -Pvertex.
+    useJUnitPlatform {
+        if (!providers.gradleProperty("vertex").isPresent) excludeTags("vertex")
+    }
     if (sinContenedores) systemProperty("sinContenedores", "true")
     testLogging {
         events("failed")

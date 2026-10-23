@@ -4,6 +4,7 @@ import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import me.santiagoreina.parcheu.api.Mode
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
@@ -113,11 +114,21 @@ class PlatformTest : FunSpec({
                 "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu",
             ),
         )
-        val c = AppContainer.fromConfig(config)
+        val c = AppContainer.fromConfig(config, mapOf("GCP_PROJECT" to "parcheu-prod"))
         (c.tokenVerifier is FakeTokenVerifier) shouldBe false
         (c.oidcVerifier is FakeOidcVerifier) shouldBe false
         // E4.1: en prod no existe la concesión de Plus de desarrollo.
         c.quota.devPlus shouldBe null
+    }
+
+    test("fromConfig sin base de datos falla con un mensaje claro") {
+        val config = AppConfig.fromEnv(mapOf("ENV" to "local"))
+        shouldThrow<IllegalArgumentException> { AppContainer.fromConfig(config) }.message shouldContain "DB_NAME"
+    }
+
+    test("LEGAL_TEXT_VERSION se lee del entorno y tiene un valor por defecto") {
+        AppConfig.fromEnv(mapOf("ENV" to "local")).legalTextVersion shouldBe AppConfig.DEFAULT_LEGAL_TEXT_VERSION
+        AppConfig.fromEnv(mapOf("ENV" to "local", "LEGAL_TEXT_VERSION" to "2027-01-01")).legalTextVersion shouldBe "2027-01-01"
     }
 
     test("FirebaseTokenVerifier no resuelve credenciales al construirse (ADC diferido)") {

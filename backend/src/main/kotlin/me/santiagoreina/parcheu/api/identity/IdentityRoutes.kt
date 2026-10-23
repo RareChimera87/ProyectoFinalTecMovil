@@ -1,31 +1,61 @@
 package me.santiagoreina.parcheu.api.identity
 
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.install
+import io.ktor.server.auth.principal
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
+import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
+import io.ktor.server.routing.post
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
+import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
+import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
 import me.santiagoreina.parcheu.api.platform.stubDelete
 import me.santiagoreina.parcheu.api.platform.stubGet
 import me.santiagoreina.parcheu.api.platform.stubPatch
 import me.santiagoreina.parcheu.api.platform.stubPost
 import me.santiagoreina.parcheu.api.platform.stubPut
+import me.santiagoreina.parcheu.contract.AcceptTerms
+import me.santiagoreina.parcheu.contract.ConsentChange
+import me.santiagoreina.parcheu.contract.FcmToken
+import me.santiagoreina.parcheu.contract.UpdateMe
 
-/** Rutas del dominio identity: stubs 501 de E0.3; las rellena su feature. */
-class IdentityRoutes : DomainRoutes {
+/**
+ * Rutas del dominio identity. E2.1 implementa sesión, términos, `GET/PATCH /me`, consentimientos y
+ * tokens FCM; el resto sigue como stub 501 hasta su feature (catálogo, modos, edad y privacidad:
+ * E2.5/E2.6/E8.x; `DELETE /me` y exportación: E8.x).
+ */
+class IdentityRoutes(private val service: IdentityService) : DomainRoutes {
     override fun Route.v1() {
-        stubPost("/session")
-        stubPost("/me/terms")
+        // Puerta de términos para todas las rutas /v1 autenticadas (ver TermsGate).
+        install(TermsGate) { service = this@IdentityRoutes.service }
+
+        post("/session") { call.respond(service.session(call.firebaseUser())) }
+        post("/me/terms") { call.respond(service.acceptTerms(call.firebaseUser(), call.receive<AcceptTerms>())) }
+        get("/me") { call.respond(service.me(call.firebaseUser())) }
+        patch("/me") { call.respond(service.updateMe(call.firebaseUser(), call.receive<UpdateMe>())) }
+        post("/me/consent") { call.respond(service.changeConsent(call.firebaseUser(), call.receive<ConsentChange>())) }
+        get("/me/consents") { call.respond(service.consents(call.firebaseUser())) }
+        post("/me/fcm-token") {
+            service.registerFcmToken(call.firebaseUser(), call.receive<FcmToken>())
+            call.respond(HttpStatusCode.NoContent)
+        }
+        delete("/me/fcm-token") {
+            service.removeFcmToken(call.firebaseUser(), call.receive<FcmToken>())
+            call.respond(HttpStatusCode.NoContent)
+        }
+
         stubGet("/catalog")
-        stubGet("/me")
-        stubPatch("/me")
         stubDelete("/me")
         stubGet("/me/export")
         stubPut("/me/modes")
         stubPost("/me/age-verification")
-        stubPost("/me/consent")
-        stubGet("/me/consents")
         stubGet("/me/privacy")
         stubPatch("/me/privacy")
-        stubPost("/me/fcm-token")
-        stubDelete("/me/fcm-token")
     }
 
     override fun Route.internal() {
@@ -33,3 +63,5 @@ class IdentityRoutes : DomainRoutes {
         stubPost("/jobs/retention")
     }
 }
+
+private fun ApplicationCall.firebaseUser(): FirebaseUser = principal<FirebaseUser>() ?: throw Unauthenticated()

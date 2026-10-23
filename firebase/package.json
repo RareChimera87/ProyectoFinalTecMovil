@@ -1,0 +1,14 @@
+{
+  "name": "parcheu-firebase",
+  "private": true,
+  "description": "Reglas, índices y Hosting de Firebase de ParcheU",
+  "type": "module",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-parcheu \"node --test test/*.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.1.0",
+    "firebase-tools": "15.34.0"
+  }
+}
