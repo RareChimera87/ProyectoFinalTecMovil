@@ -39,7 +39,10 @@ import me.santiagoreina.parcheu.api.matching.MatchingModule
 import me.santiagoreina.parcheu.api.matching.MatchingRoutes
 import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
 import me.santiagoreina.parcheu.api.matching.matchingModule
-import me.santiagoreina.parcheu.api.notifications.NotificationsRoutes
+import me.santiagoreina.parcheu.api.notifications.center.NotificationCenterModule
+import me.santiagoreina.parcheu.api.notifications.center.NotificationsRoutes
+import me.santiagoreina.parcheu.api.notifications.center.exposedNotificationCenter
+import me.santiagoreina.parcheu.api.notifications.center.inMemoryNotificationCenter
 import me.santiagoreina.parcheu.api.notifications.push.ExposedPushStore
 import me.santiagoreina.parcheu.api.notifications.push.FakeFcmClient
 import me.santiagoreina.parcheu.api.notifications.push.FcmNotifier
@@ -124,10 +127,16 @@ class AppContainer(
      * Postgres, la cola `maintenance`, Firestore y Firebase Auth.
      */
     val account: AccountModule = inMemoryAccountModule(identity, graph, twin, clock),
-    /** No leídas de la campana de Inicio (E4.7). Por defecto sin base: 0; [fromConfig] cuenta en Postgres. */
-    val unread: UnreadCounter = UnreadCounter.NONE,
+    /** Centro de notificaciones C2 (E5.4). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
+    /**
+     * No leídas de la campana de Inicio (E4.7). Por defecto cuenta en la bandeja de [notifications] (E5.4),
+     * así 'Marcar leídas' deja la campana en 0; [fromConfig] cuenta en Postgres.
+     */
+    val unread: UnreadCounter = UnreadCounter { notifications.store.unread(it) },
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread),
+    val domains: List<DomainRoutes> =
+        allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications),
 ) {
     companion object {
         /**
@@ -190,7 +199,9 @@ class AppContainer(
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
-                matching = matching, safety = safety, account = account, unread = ExposedUnreadCounter(database),
+                matching = matching, safety = safety, account = account,
+                notifications = exposedNotificationCenter(database, clock, quota, graph),
+                unread = ExposedUnreadCounter(database),
             )
         }
 
@@ -235,6 +246,7 @@ fun allDomains(
     safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
     unread: UnreadCounter = UnreadCounter.NONE,
+    notifications: NotificationCenterModule = inMemoryNotificationCenter(systemClock(), quota, graph),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -245,7 +257,8 @@ fun allDomains(
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
-    NotificationsRoutes(),
+    // Centro de notificaciones C2 (E5.4): bandeja agrupada por fecha de Bogotá y 'Marcar leídas'.
+    NotificationsRoutes(notifications.service) { firebase -> identity.requireUser(firebase).id },
     BillingRoutes(),
     SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
     AdminRoutes(),
