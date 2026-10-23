@@ -7,6 +7,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldMatch
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -24,7 +25,18 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
+import kotlinx.serialization.json.JsonObject
+import me.santiagoreina.parcheu.api.matching.MATCH_START
 import me.santiagoreina.parcheu.api.matching.MatchFixture
+import me.santiagoreina.parcheu.api.notifications.center.InMemoryNotificationStore
+import me.santiagoreina.parcheu.api.notifications.center.NotificationCenterModule
+import me.santiagoreina.parcheu.api.notifications.center.inMemoryNotificationCenter
+import me.santiagoreina.parcheu.api.notifications.center.notificationCenterModule
+import me.santiagoreina.parcheu.api.notifications.push.FakeFcmClient
+import me.santiagoreina.parcheu.api.notifications.push.FcmNotifier
+import me.santiagoreina.parcheu.api.notifications.push.PushStore
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
+import me.santiagoreina.parcheu.api.quota.MovableClock
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
@@ -32,19 +44,22 @@ import me.santiagoreina.parcheu.contract.ApiError
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.ErrorCode
 import me.santiagoreina.parcheu.contract.GraphDto
+import me.santiagoreina.parcheu.contract.HomeDto
 import me.santiagoreina.parcheu.contract.InviteDto
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NotificationKinds
+import me.santiagoreina.parcheu.contract.NotificationsDto
 import me.santiagoreina.parcheu.contract.Redeem
 import me.santiagoreina.parcheu.contract.RedeemResult
 import me.santiagoreina.parcheu.contract.RedeemStatus
+import java.time.Instant
 import java.util.UUID
 
 /** Criterios de E6.1 de punta a punta: rutas, servicio, grafo en memoria y avisos. */
 class InviteApiTest : FunSpec({
     val uids = listOf("ana", "beto", "caro", "dani")
 
-    class World {
+    class World(notifier: Notifier? = null) {
         val identity = InMemoryIdentityRepository().also { repo -> uids.forEach { repo.seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val f = MatchFixture(idFor = { name -> identity.user(name).id }).also { f ->
             f.person("ana")
@@ -56,7 +71,12 @@ class InviteApiTest : FunSpec({
         val beto: UUID = identity.user("beto").id
         val caro: UUID = identity.user("caro").id
         val dani: UUID = identity.user("dani").id
-        val invites = inMemoryInviteModule(f.clock, f.graph, f.simulation, f.notifier)
+        val invites = inMemoryInviteModule(f.clock, f.graph, f.simulation, notifier ?: f.notifier)
+
+        /** Cambia los modos activos de [name] como lo haría `PUT /v1/me/modes` en `user_modes`. */
+        fun setModes(name: String, modes: Set<Mode>) {
+            f.person(name, modes = modes)
+        }
 
         fun edge(a: UUID, b: UUID, mode: Mode) = f.graphRepo.edge(a, b, mode)
 
@@ -68,10 +88,11 @@ class InviteApiTest : FunSpec({
 
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")
 
-    fun ApplicationTestBuilder.app(w: World): HttpClient = startApp(
+    fun ApplicationTestBuilder.app(w: World, notifications: NotificationCenterModule? = null): HttpClient = startApp(
         testContainer(
             repo = w.identity, quota = w.f.quota, graph = w.f.graph, simulation = w.f.simulation, matching = w.f.module,
             clock = w.f.clock, notifier = w.f.notifier, invites = w.invites,
+            notifications = notifications ?: inMemoryNotificationCenter(w.f.clock, w.f.quota, w.f.graph),
         ),
     )
 
@@ -340,6 +361,94 @@ class InviteApiTest : FunSpec({
             w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.CONNECTED
             client.me("ana").pending.shouldBeEmpty()
             client.me("beto").pending.shouldBeEmpty()
+        }
+    }
+
+    test("aceptar un canje cuyo modo apagó quien canjeó -> 404, sin conectar ni avisar, y el canje se descarta") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val code = client.me("ana").code
+            client.redeem("beto", code, Mode.PAREJA).status shouldBe HttpStatusCode.OK
+            val pareja = client.me("ana").pending.single()
+            pareja.mode shouldBe Mode.PAREJA
+            w.edge(w.ana, w.beto, Mode.PAREJA)!!.state shouldBe EdgeState.PENDING
+
+            // Beto apaga Pareja: Ana deja de ver el canje y, si acepta con el id que ya tenía, no se conecta.
+            w.setModes("beto", setOf(Mode.AMISTAD, Mode.ESTUDIO))
+            client.me("ana").pending.shouldBeEmpty()
+            client.accept("ana", pareja.id).apply {
+                status shouldBe HttpStatusCode.NotFound
+                body<ApiError>().code shouldBe ErrorCode.NOT_FOUND
+            }
+            client.accept("ana", w.beto.toString(), Mode.PAREJA).status shouldBe HttpStatusCode.NotFound
+            w.edge(w.ana, w.beto, Mode.PAREJA).shouldBeNull()
+            w.f.notifier.sent.count { it.notification.kind == NotificationKinds.NEW_CONNECTION } shouldBe 0
+            w.invites.repository.redemption(w.ana, w.beto, Mode.PAREJA).shouldBeNull()
+
+            // Aunque Beto reactive Pareja, el canje descartado no vuelve: tiene que canjear de nuevo.
+            w.setModes("beto", Mode.entries.toSet())
+            client.me("ana").pending.shouldBeEmpty()
+            client.redeem("beto", code, Mode.PAREJA).status shouldBe HttpStatusCode.OK
+            client.accept("ana", client.me("ana").pending.single().id).body<RedeemResult>().status shouldBe RedeemStatus.CONNECTED
+            w.edge(w.ana, w.beto, Mode.PAREJA)!!.state shouldBe EdgeState.CONNECTED
+        }
+    }
+
+    test("aceptar un canje cuyo modo apagó el dueño -> 404; los canjes en modos activos siguen aceptándose") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val code = client.me("ana").code
+            client.redeem("beto", code, Mode.AMISTAD).status shouldBe HttpStatusCode.OK
+            client.redeem("beto", code, Mode.PAREJA).status shouldBe HttpStatusCode.OK
+            val pareja = client.me("ana").pending.single { it.mode == Mode.PAREJA }
+
+            w.setModes("ana", setOf(Mode.AMISTAD, Mode.ESTUDIO))
+            client.me("ana").pending.map { it.mode } shouldBe listOf(Mode.AMISTAD)
+            client.accept("ana", pareja.id).status shouldBe HttpStatusCode.NotFound
+            w.edge(w.ana, w.beto, Mode.PAREJA).shouldBeNull()
+
+            // Por persona sin modo ya no es ambiguo: el único canje vivo es Amistad.
+            client.accept("ana", w.beto.toString()).body<RedeemResult>().status shouldBe RedeemStatus.CONNECTED
+            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.CONNECTED
+            w.edge(w.ana, w.beto, Mode.PAREJA).shouldBeNull()
+            w.f.notifier.sent.filter { it.notification.kind == NotificationKinds.NEW_CONNECTION }
+                .single().notification.body shouldContain "Amistad"
+        }
+    }
+
+    test("INVITE_PENDING y NEW_CONNECTION llegan a la bandeja de C2 (GET /v1/notifications) y a la campana") {
+        val inbox = InMemoryNotificationStore()
+        // El mismo FcmNotifier de producción: guarda el aviso para C2 (aquí en la bandeja en memoria) y manda push.
+        val notifier = FcmNotifier(
+            object : PushStore {
+                override suspend fun saveNotification(userId: UUID, kind: String, payload: JsonObject, now: Instant): UUID =
+                    inbox.add(userId, kind, payload, now)
+
+                override suspend fun tokensOf(userId: UUID): List<String> = emptyList()
+
+                override suspend fun deleteTokens(tokens: Collection<String>) = Unit
+            },
+            FakeFcmClient(),
+            MovableClock(MATCH_START),
+        )
+        val w = World(notifier)
+        testApplication {
+            val client = app(w, notificationCenterModule(inbox, w.f.clock, w.f.quota, w.f.graph))
+            client.redeem("beto", client.me("ana").code).status shouldBe HttpStatusCode.OK
+            val anaInbox = client.get("/v1/notifications") { auth("ana") }.body<NotificationsDto>()
+            val invite = (anaInbox.today + anaInbox.week + anaInbox.older).single()
+            invite.kind shouldBe NotificationKinds.INVITE_PENDING
+            invite.route shouldBe InviteService.INVITE_ROUTE
+            invite.read shouldBe false
+            client.get("/v1/home") { auth("ana") }.body<HomeDto>().unread shouldBe 1
+
+            client.accept("ana", client.me("ana").pending.single().id).status shouldBe HttpStatusCode.OK
+            val betoInbox = client.get("/v1/notifications") { auth("beto") }.body<NotificationsDto>()
+            val connected = (betoInbox.today + betoInbox.week + betoInbox.older).single()
+            connected.kind shouldBe NotificationKinds.NEW_CONNECTION
+            connected.body shouldContain "Amistad"
         }
     }
 

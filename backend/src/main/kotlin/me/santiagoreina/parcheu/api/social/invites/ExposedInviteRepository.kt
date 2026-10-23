@@ -84,6 +84,15 @@ class ExposedInviteRepository(private val db: Database) : InviteRepository {
         }
     }
 
+    override suspend fun removeRedemption(owner: UUID, redeemer: UUID, mode: Mode) {
+        tx {
+            InviteRedemptions.deleteWhere {
+                (InviteRedemptions.ownerId eq owner) and (InviteRedemptions.redeemerId eq redeemer) and
+                    (InviteRedemptions.mode eq mode) and (InviteRedemptions.status eq RedeemStatus.PENDING)
+            }
+        }
+    }
+
     /**
      * Bloquea la fila del usuario (`SELECT ... FOR UPDATE`, como `ExposedUsageRepository`) para que dos
      * canjes simultáneos de la misma persona no se pasen del límite.

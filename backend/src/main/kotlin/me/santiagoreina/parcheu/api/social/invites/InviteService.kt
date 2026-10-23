@@ -52,6 +52,9 @@ data class InviteParticipant(val id: UUID, val activeModes: Set<Mode>, val delet
  *   `anonId:MODO` que ve en [InviteDto.pending], o por `anonId`/`users.id` más `mode`) y la arista pasa a
  *   CONNECTED solo en ese modo. Sin modo se acepta solo si esa persona tiene un único canje pendiente.
  *
+ * Un canje solo sigue vivo mientras su modo esté activo para los dos: si alguno apagó el modo después de
+ * canjear (p. ej. Pareja), `me` no lo muestra y aceptarlo responde 404 y lo descarta (`EdgeEvent.Declined`).
+ *
  * Nunca hay aristas entre personas con un bloqueo (403 BLOCKED al canjear; al aceptar no se encuentra).
  */
 class InviteService(
@@ -70,8 +73,11 @@ class InviteService(
     suspend fun me(userId: UUID): InviteDto {
         val code = codeFor(userId)
         val blocked = graph.blockedEitherWay(userId)
+        val modes = ModesLookup(userId)
         val pending = repo.pendingFor(userId).mapNotNull { r ->
             if (r.redeemer in blocked) return@mapNotNull null
+            // El modo ya no está activo para alguno de los dos: no se ofrece (aceptarlo lo descarta).
+            if (!modes.activeForBoth(r)) return@mapNotNull null
             val person = graph.person(r.redeemer)?.takeIf { it.deletedAt == null } ?: return@mapNotNull null
             val ref = requesterRef(userId, person)
             PendingInvite(id = pendingId(ref.anonId!!, r.mode), other = ref, mode = r.mode, createdAt = r.createdAt.toKotlinInstant())
@@ -155,10 +161,12 @@ class InviteService(
         if (idMode != null && mode != null && idMode != mode) throw ValidationFailed("El modo no coincide con la invitación")
         val wanted = idMode ?: mode
         val blocked = graph.blockedEitherWay(ownerId)
+        val modes = ModesLookup(ownerId)
         val fromPerson = repo.pendingFor(ownerId).filter { r ->
             r.redeemer.toString() == who || anonIds.anonId(ownerId, r.redeemer) == who
         }
-        val matching = if (wanted == null) fromPerson else fromPerson.filter { it.mode == wanted }
+        // Sin modo, los canjes cuyo modo ya no está activo para los dos no cuentan para la ambigüedad.
+        val matching = if (wanted == null) fromPerson.filter { modes.activeForBoth(it) } else fromPerson.filter { it.mode == wanted }
         val redemption = matching.singleOrNull() ?: when {
             matching.isEmpty() -> throw NotFound("No hay una invitación pendiente de esa persona")
             else -> throw ValidationFailed("Esa persona te invitó en varios modos: indica cuál aceptas")
@@ -166,6 +174,13 @@ class InviteService(
         val redeemer = redemption.redeemer
         val person = graph.person(redeemer)?.takeIf { it.deletedAt == null }
         if (redeemer in blocked || person == null || participants(redeemer)?.deleted != false) {
+            throw NotFound("No hay una invitación pendiente de esa persona")
+        }
+        // Alguno apagó el modo después del canje (p. ej. Pareja): nunca se conecta en un modo inactivo.
+        // La arista PENDING se descarta y el canje se borra; si reactivan el modo, pueden volver a canjear.
+        if (!modes.activeForBoth(redemption)) {
+            edges.apply(EdgeEvent.Declined(redeemer, ownerId, redemption.mode, EdgeSource.INVITE))
+            repo.removeRedemption(ownerId, redeemer, redemption.mode)
             throw NotFound("No hay una invitación pendiente de esa persona")
         }
         connect(owner = ownerId, redeemer = redeemer, mode = redemption.mode)
@@ -188,6 +203,16 @@ class InviteService(
                 actorId = owner,
             ),
         )
+    }
+
+    /** Modos activos del dueño [owner] y de cada persona que canjeó su código, leídos una vez por petición. */
+    private inner class ModesLookup(private val owner: UUID) {
+        private val cache = mutableMapOf<UUID, Set<Mode>>()
+
+        private suspend fun of(id: UUID): Set<Mode> =
+            cache[id] ?: (participants(id)?.takeIf { !it.deleted }?.activeModes.orEmpty()).also { cache[id] = it }
+
+        suspend fun activeForBoth(r: Redemption): Boolean = r.mode in of(owner) && r.mode in of(r.redeemer)
     }
 
     private suspend fun isConnected(a: UUID, b: UUID, mode: Mode): Boolean =

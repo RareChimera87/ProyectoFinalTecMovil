@@ -41,6 +41,7 @@ import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
@@ -169,6 +170,28 @@ class InviteDbTest : FunSpec({
                 db.edgeState(ana, beto, Mode.AMISTAD) shouldBe EdgeState.CONNECTED
                 db.edgeState(ana, beto, Mode.PAREJA) shouldBe EdgeState.PENDING
                 service.me(ana).pending.single().mode shouldBe Mode.PAREJA
+            }
+        }
+
+    test("un canje cuyo modo se apagó después (user_modes) no se muestra ni se acepta, y se descarta")
+        .config(enabled = TestDatabase.enabled) {
+            withService {
+                val ana = db.user("Ana")
+                val beto = db.user("Beto")
+                val code = service.codeFor(ana)
+                service.redeem(beto, Redeem(code, Mode.PAREJA))
+                val pareja = service.me(ana).pending.single()
+                db.edgeState(ana, beto, Mode.PAREJA) shouldBe EdgeState.PENDING
+
+                // Beto apaga Pareja como lo hace PUT /v1/me/modes.
+                transaction(db) {
+                    UserModes.update({ (UserModes.userId eq beto) and (UserModes.mode eq Mode.PAREJA) }) { it[enabled] = false }
+                }
+                service.me(ana).pending.shouldBeEmpty()
+                shouldThrow<NotFound> { service.accept(ana, pareja.id) }
+                db.edgeState(ana, beto, Mode.PAREJA) shouldBe null
+                transaction(db) { InviteRedemptions.selectAll().count() } shouldBe 0
+                notifier.sent.filter { it.notification.kind == NotificationKinds.NEW_CONNECTION }.shouldBeEmpty()
             }
         }
 
