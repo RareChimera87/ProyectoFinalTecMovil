@@ -14,5 +14,7 @@ val authModule =
         single { FirebaseAuthSource(androidContext()) }
         single<TokenProvider> { FirebaseTokenProvider.fromSource(get<FirebaseAuthSource>()) }
         single<SessionApi> { get<Retrofit>().create(SessionApi::class.java) }
-        single<AuthRepository> { FirebaseAuthRepository(get(), get(), get()) }
+        single<AuthRepository> {
+            FirebaseAuthRepository(get(), get(), get(), getAll<SessionCleaner>())
+        }
     }

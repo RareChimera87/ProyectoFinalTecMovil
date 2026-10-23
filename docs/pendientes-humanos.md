@@ -569,6 +569,16 @@ Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/...
    capturas (`./gradlew :app:recordRoborazziDevDebug`).
 5. **Texto legal:** pide al docente revisar el aviso de A4 ("Al continuar aceptas los Términos y la Política de
    privacidad (Ley 1581 de 2012)…") junto con la revisión legal de E2.1.
+
+## E3.4 · Pantalla Tu parche
+
+No hay pasos humanos en consolas externas. Quedan decisiones de contrato para I1 y la dueña de E3.1/E6.3:
+
+- **`NodeDetail.chatId` sin llenar en el servidor.** El contrato ya trae `chatId?` y D2 solo muestra "Chatear" cuando viene con valor. I1 debe devolverlo en `GET /v1/graph/nodes/{id}` para nodos `CONNECTED` (E4.6/E5.1); mientras tanto el botón permanece oculto.
+- **`GraphFof.parentId`.** D1 no pinta la capa de amigos de amigos (es de D6, ParcheU+); el hueco `viaId` de `FofCandidate` sigue abierto para E3.1/E6.3.
+- **Comunidades.** `GraphDto` no trae la lista de comunidades: el chip "Comunidad" abre D8 (ParcheU+) o el paywall (gratis) y D8 vuelve a D1 con `Parche(community)`, que pasa `?community=` a la API.
+- **Iconos.** D1-D5 usan iconos vectoriales propios (`ParcheIcons.kt`) hasta que exista la biblioteca de Material Symbols del sistema de diseño (E1.4).
+- **Cierre de sesión (E8.2).** Debe llamar `GraphCache.clear()` para borrar el último grafo guardado.
 ## E0.8 · Configuración de Firebase
 
 Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,
