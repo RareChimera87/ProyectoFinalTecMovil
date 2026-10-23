@@ -68,8 +68,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
 
         /**
          * Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest), B1-B2 (E2.4,
-         * TwinQuestions), B3-B5 (E2.5: Modes, Consent, TwinReady), F1-F2 (E4.4, MatchQueueViewModelTest),
-         * F4-F6 (E4.5, feature/simulation) y lista de chats y F9 (E5.2).
+         * TwinQuestions), B3-B5 (E2.5: Modes, Consent, TwinReady), D1-D5 (E3.4, ParcheViewModelTest),
+         * F1-F2 (E4.4, MatchQueueViewModelTest), F4-F6 (E4.5, feature/simulation) y lista de chats y F9 (E5.2).
          */
         val implementedRoutes =
             setOf(
@@ -79,6 +79,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 Modes::class,
                 Consent::class,
                 TwinReady::class,
+                Parche::class,
                 MatchQueue::class,
                 MatchFound::class,
                 Simulation::class,
