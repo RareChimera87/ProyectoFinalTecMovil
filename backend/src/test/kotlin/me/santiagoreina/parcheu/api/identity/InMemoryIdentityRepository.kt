@@ -104,5 +104,6 @@ class InMemoryIdentityRepository : IdentityRepository {
     override suspend fun markDeleted(userId: UUID, now: Instant) {
         val user = users.first { it.id == userId }
         if (user.deletedAt == null) replace(user.copy(deletedAt = now))
+        fcmTokens.entries.removeIf { it.value == userId }
     }
 }

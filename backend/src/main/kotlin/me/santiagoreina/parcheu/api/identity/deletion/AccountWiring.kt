@@ -29,12 +29,13 @@ fun accountModule(
     tasks: TaskQueue,
     firebaseProjectId: String?,
     clock: Clock,
+    closedMatches: ClosedMatchesListener = ClosedMatchesListener {},
 ): AccountModule {
     val cloud = env != Env.LOCAL && firebaseProjectId != null
     val mirror = if (cloud) FirestoreAccountMirrorCleaner.forProject(requireNotNull(firebaseProjectId)) else NoopAccountMirrorCleaner
     val auth = if (cloud) FirebaseAuthAccountRemover(requireNotNull(firebaseProjectId)) else FakeAuthAccountRemover()
     return AccountModule(
-        deletion = AccountDeletionService(identity.repo, ExposedAccountPurgeRepository(database), mirror, auth, tasks, clock),
+        deletion = AccountDeletionService(identity.repo, ExposedAccountPurgeRepository(database), mirror, auth, tasks, clock, closedMatches),
         export = AccountExportService(identity, ExposedExportRepository(database), graph.anonIds, twin.repository::state, clock),
     )
 }
@@ -49,8 +50,9 @@ fun inMemoryAccountModule(
     purge: AccountPurgeRepository = InMemoryAccountPurgeRepository(),
     mirror: AccountMirrorCleaner = NoopAccountMirrorCleaner,
     auth: AuthAccountRemover = FakeAuthAccountRemover(),
+    closedMatches: ClosedMatchesListener = ClosedMatchesListener {},
     exportRepository: ExportRepository = ExportRepository { ExportRows() },
 ): AccountModule = AccountModule(
-    deletion = AccountDeletionService(identity.repo, purge, mirror, auth, tasks, clock),
+    deletion = AccountDeletionService(identity.repo, purge, mirror, auth, tasks, clock, closedMatches),
     export = AccountExportService(identity, exportRepository, graph.anonIds, twin.repository::state, clock),
 )

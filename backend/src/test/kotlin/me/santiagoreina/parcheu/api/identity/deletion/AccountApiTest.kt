@@ -47,10 +47,14 @@ class AccountApiTest : FunSpec({
         val purge = InMemoryAccountPurgeRepository()
         val mirror = RecordingAccountMirrorCleaner()
         val auth = FakeAuthAccountRemover()
+        val closed = java.util.concurrent.CopyOnWriteArrayList<ClosedMatch>()
+
+        /** Lo que hace matching con los matches cerrados; la prueba puede reemplazarlo (p. ej. para que falle). */
+        var closedMatches = ClosedMatchesListener { closed += it }
         private val graph = inMemoryGraphModule(FIXED_CLOCK)
         private val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())
         val container = testContainer(repo = repo, graph = graph, twin = twin) { identity ->
-            inMemoryAccountModule(identity, graph, twin, FIXED_CLOCK, queue, purge, mirror, auth) { id ->
+            inMemoryAccountModule(identity, graph, twin, FIXED_CLOCK, queue, purge, mirror, auth, closedMatches = { closedMatches.onClosed(it) }) { id ->
                 ExportRows(consents = repo.consents.filter { it.first == id }.map { it.second })
             }
         }
@@ -62,9 +66,13 @@ class AccountApiTest : FunSpec({
         val f = Fixture()
         testApplication {
             val client = startApp(f.container)
+            f.repo.fcmTokens["tok-ana"] = f.repo.user("ana").id
+            f.repo.fcmTokens["tok-otro"] = UUID.randomUUID()
             client.delete("/v1/me") { auth("ana") }.status shouldBe HttpStatusCode.Accepted
             val ana = f.repo.user("ana")
             ana.deletedAt shouldBe FIXED_CLOCK.instant()
+            // Sus tokens FCM se borran ya: aunque la purga tarde, el dispositivo no recibe más push.
+            f.repo.fcmTokens.keys shouldContainExactly setOf("tok-otro")
             f.queue.tasks shouldHaveSize 1
             val task = f.queue.tasks.single()
             task.queue shouldBe QueueKind.MAINTENANCE
@@ -162,6 +170,8 @@ class AccountApiTest : FunSpec({
             val id = f.repo.user("ana").id
             val plan = f.plan(id)
             f.purge.plans[id] = plan
+            val closedMatch = ClosedMatch(UUID.randomUUID(), UUID.randomUUID(), notify = true)
+            f.purge.closedMatches += closedMatch
 
             fun body() = """{"id":"$id"}"""
             client.post("/internal/tasks/purge-user") {
@@ -180,6 +190,8 @@ class AccountApiTest : FunSpec({
             f.mirror.removedSimulations shouldContainExactly listOf(plan.simulationIds)
             f.auth.removed shouldContainExactly listOf("uid-x")
             f.purge.purged shouldContainExactly listOf(id)
+            // Y después de Postgres, matching republica el ticket de la contraparte y le avisa.
+            f.closed shouldContainExactly listOf(closedMatch)
 
             // Reintento de Cloud Tasks: ya no hay nada que purgar.
             client.post("/internal/tasks/purge-user") {
@@ -202,6 +214,21 @@ class AccountApiTest : FunSpec({
             }.status shouldBe HttpStatusCode.InternalServerError
             f.purge.purged.shouldBeEmpty()
             f.purge.plans[id] shouldNotBe null
+        }
+    }
+
+    test("si avisar a la contraparte de un match falla, la purga igual termina (204): la cuenta ya no existe") {
+        val f = Fixture()
+        testApplication {
+            val client = startApp(f.container)
+            val id = f.repo.user("ana").id
+            f.purge.plans[id] = f.plan(id)
+            f.purge.closedMatches += ClosedMatch(UUID.randomUUID(), UUID.randomUUID(), notify = true)
+            f.closedMatches = ClosedMatchesListener { error("Firestore caído") }
+            client.post("/internal/tasks/purge-user") {
+                tasks(); contentType(ContentType.Application.Json); setBody("""{"id":"$id"}""")
+            }.status shouldBe HttpStatusCode.NoContent
+            f.purge.purged shouldContainExactly listOf(id)
         }
     }
 

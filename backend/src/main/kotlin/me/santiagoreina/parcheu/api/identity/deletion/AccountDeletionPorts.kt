@@ -23,13 +23,31 @@ data class PurgePlan(
 
 data class ChatPurge(val chatId: UUID, val ownMessageIds: List<UUID>)
 
+/**
+ * Match de la cuenta borrada que la purga cerró en Postgres (E4.2): [counterpart] es la otra persona,
+ * cuyo ticket quedó EXPIRED. [notify] es true si el match seguía esperando la elección: entonces se le
+ * devolvió el cupo `RANDOM_MATCH` y hay que avisarle que el parche ya no está disponible.
+ */
+data class ClosedMatch(val matchId: UUID, val counterpart: UUID, val notify: Boolean)
+
+/**
+ * Efectos fuera de Postgres de los matches cerrados por una purga: republicar `matchTickets/{uid}` de la
+ * contraparte y avisarle (lo implementa `MatchingService`). Si falla solo se registra: la purga ya terminó.
+ */
+fun interface ClosedMatchesListener {
+    suspend fun onClosed(matches: List<ClosedMatch>)
+}
+
 /** Postgres: plan y purga (implementación real en [ExposedAccountPurgeRepository]). */
 interface AccountPurgeRepository {
     /** Plan de purga, o null si la cuenta ya no existe (purga terminada) o no está marcada como borrada. */
     suspend fun plan(userId: UUID): PurgePlan?
 
-    /** Aplica la tabla de retención de arquitectura.md §10.2 en una sola transacción. Idempotente. */
-    suspend fun purge(plan: PurgePlan, now: Instant)
+    /**
+     * Aplica la tabla de retención de arquitectura.md §10.2 en una sola transacción. Idempotente.
+     * Devuelve los matches que cerró (vacío si no había nada que purgar).
+     */
+    suspend fun purge(plan: PurgePlan, now: Instant): List<ClosedMatch>
 
     /** Cuentas marcadas como borradas antes de [deletedBefore] que siguen sin purgar (no son lápidas). */
     suspend fun stalledDeletions(deletedBefore: Instant, limit: Int): List<UUID>
@@ -99,9 +117,13 @@ class InMemoryAccountPurgeRepository : AccountPurgeRepository {
 
     override suspend fun plan(userId: UUID): PurgePlan? = plans[userId]
 
-    override suspend fun purge(plan: PurgePlan, now: Instant) {
+    /** Matches que devuelve la próxima purga (la prueba los fija). */
+    val closedMatches = CopyOnWriteArrayList<ClosedMatch>()
+
+    override suspend fun purge(plan: PurgePlan, now: Instant): List<ClosedMatch> {
         recorded += plan.userId
         plans.remove(plan.userId)
+        return closedMatches.toList().also { closedMatches.clear() }
     }
 
     /** Toda cuenta con plan registrado y sin purgar cuenta como atascada. */

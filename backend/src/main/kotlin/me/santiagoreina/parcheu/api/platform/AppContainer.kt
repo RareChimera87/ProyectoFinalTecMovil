@@ -183,7 +183,10 @@ class AppContainer(
             // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
             val safety = safetyModule(database, chat, graph, matching, clock)
             // Borrado y exportación (E8.3): purga por la cola `maintenance`; Firestore y Auth reales fuera de local.
-            val account = accountModule(config.env, database, identity, graph, twin, tasks, config.firebaseProjectId, clock)
+            val account = accountModule(
+                config.env, database, identity, graph, twin, tasks, config.firebaseProjectId, clock,
+                closedMatches = matching.service::onMatchesClosedByDeletion,
+            )
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,

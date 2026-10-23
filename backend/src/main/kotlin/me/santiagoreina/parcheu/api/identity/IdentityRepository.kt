@@ -44,7 +44,9 @@ interface IdentityRepository : ModesRepository {
 
     /**
      * Borrado lógico (E8.3): fija `deleted_at` si aún no lo tenía; la cuenta queda invisible en todo
-     * desde ese momento. Repetirlo no cambia la fecha del primer borrado.
+     * desde ese momento. Repetirlo no cambia la fecha del primer borrado. En la misma transacción borra
+     * sus tokens FCM: aunque la purga tarde, el dispositivo ya no recibe push (ni vistas previas de
+     * mensajes de terceros).
      */
     suspend fun markDeleted(userId: UUID, now: Instant)
 }

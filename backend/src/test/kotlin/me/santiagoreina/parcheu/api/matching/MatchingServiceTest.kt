@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import me.santiagoreina.parcheu.api.identity.deletion.ClosedMatch
 import me.santiagoreina.parcheu.api.platform.errors.AgeRequired
 import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
@@ -546,5 +547,29 @@ class MatchingServiceTest : FunSpec({
         f.service.match(ana, id).other.anonId shouldBe dto.other.anonId
         f.service.match(beto, id).other.anonId shouldBe f.service.match(beto, id).other.anonId
         (f.service.match(beto, id).other.anonId == dto.other.anonId) shouldBe false
+    }
+
+    test("borrado de cuenta (E8.3): la contraparte recibe su ticket republicado y el aviso solo si el match esperaba elección") {
+        val f = MatchFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        f.service.enqueue(ana, Mode.AMISTAD)
+        val matchId = UUID.fromString(f.service.enqueue(beto, Mode.AMISTAD).matchId!!)
+        val before = f.notifier.sent.size
+        val publishedBefore = f.mirror.docs.count { it.firebaseUid == "uid-beto" }
+
+        f.service.onMatchesClosedByDeletion(listOf(ClosedMatch(matchId, beto, notify = true)))
+        f.mirror.docs.count { it.firebaseUid == "uid-beto" } shouldBe publishedBefore + 1
+        f.notifier.sent.drop(before).let { sent ->
+            sent.map { it.userId } shouldBe listOf(beto)
+            sent.single().notification.kind shouldBe NotificationKinds.MATCH_EXPIRED
+            sent.single().notification.title shouldBe "Este parche ya no está disponible"
+        }
+
+        // Un match ya cerrado solo republica el ticket, sin aviso; una contraparte que ya no existe se ignora.
+        val anaBefore = f.mirror.docs.count { it.firebaseUid == "uid-ana" }
+        f.service.onMatchesClosedByDeletion(listOf(ClosedMatch(matchId, ana, notify = false), ClosedMatch(matchId, UUID.randomUUID(), notify = true)))
+        f.mirror.docs.count { it.firebaseUid == "uid-ana" } shouldBe anaBefore + 1
+        f.notifier.sent.size shouldBe before + 1
     }
 })

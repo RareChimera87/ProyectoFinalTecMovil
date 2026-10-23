@@ -32,7 +32,8 @@ enum class PurgeOutcome {
  * 1. arma el plan desde Postgres (uid de Firebase, simulaciones y chats);
  * 2. limpia Firestore ([AccountMirrorCleaner]);
  * 3. borra el usuario de Firebase Auth ([AuthAccountRemover]);
- * 4. purga Postgres en una transacción ([AccountPurgeRepository]); al final ya no queda la fila de `users`.
+ * 4. purga Postgres en una transacción ([AccountPurgeRepository]); al final ya no queda la fila de `users`;
+ * 5. avisa a la contraparte de cada match que se cerró ([ClosedMatchesListener]).
  *
  * Si falla el paso 2 o 3, Cloud Tasks reintenta y todo sigue en Postgres; si falla el 4, los pasos 2 y
  * 3 son idempotentes. La suscripción de Play no se cancela aquí: la app avisa que se cancela en Play.
@@ -44,6 +45,7 @@ class AccountDeletionService(
     private val auth: AuthAccountRemover,
     private val tasks: TaskQueue,
     private val clock: Clock,
+    private val closedMatches: ClosedMatchesListener = ClosedMatchesListener {},
 ) {
     private val log = LoggerFactory.getLogger(AccountDeletionService::class.java)
 
@@ -67,7 +69,17 @@ class AccountDeletionService(
         val plan = repository.plan(userId) ?: return PurgeOutcome.NOTHING_TO_DO
         mirror.clean(plan)
         auth.remove(plan.firebaseUid)
-        repository.purge(plan, clock.instant())
+        val closed = repository.purge(plan, clock.instant())
+        // La contraparte de un match que se cerró: ticket republicado y aviso (la cuenta ya no existe, sin reintento).
+        if (closed.isNotEmpty()) {
+            try {
+                closedMatches.onClosed(closed)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.warn("Cuenta {} purgada, pero no se pudo avisar a las contrapartes de {} matches: {}", userId, closed.size, e.message)
+            }
+        }
         // Segunda pasada: una simulación en curso pudo publicar `simulations/{id}` entre la limpieza y la purga.
         // Tras la purga queda FAILED y el motor ya no publica; si esta pasada falla no se reintenta la tarea
         // (la cuenta ya no existe), así que solo se registra.

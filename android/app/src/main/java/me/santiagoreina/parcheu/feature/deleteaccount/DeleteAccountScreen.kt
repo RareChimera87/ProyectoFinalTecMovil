@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -18,7 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.core.error.AppError
@@ -36,6 +41,7 @@ object DeleteAccountTags {
     const val SCREEN = "delete-account"
     const val CONFIRM = "delete-account:confirm"
     const val DELETE = "delete-account:delete"
+    const val ERROR = "delete-account:error"
     const val DOWNLOAD_FIRST = "delete-account:download"
     const val PLAY = "delete-account:play"
     const val DONE = "delete-account:done"
@@ -144,24 +150,44 @@ private fun ConfirmScreen(
             Modifier.fillMaxWidth().padding(spacing.footer),
             verticalArrangement = Arrangement.spacedBy(spacing.xs)
         ) {
+            // La fila entera es la casilla (Role.Checkbox): TalkBack lee la frase una vez y tocar el
+            // texto también la marca.
             Row(
+                modifier = Modifier
+                    .testTag(DeleteAccountTags.CONFIRM)
+                    .toggleable(
+                        value = state.confirmed,
+                        enabled = !state.deleting,
+                        role = Role.Checkbox,
+                        onValueChange = actions.onConfirmChange
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 ParcheUCheckbox(
                     checked = state.confirmed,
                     onCheckedChange = actions.onConfirmChange,
-                    contentDescription = CONFIRM_LABEL,
+                    contentDescription = "",
                     enabled = !state.deleting,
-                    modifier = Modifier.testTag(DeleteAccountTags.CONFIRM)
+                    // Solo dibujo: la semántica la aporta la fila, así no se lee dos veces.
+                    modifier = Modifier.clearAndSetSemantics {}
                 )
-                Text(CONFIRM_LABEL, style = MaterialTheme.typography.bodyMedium, color = colors.tx)
+                Text(
+                    CONFIRM_LABEL,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.tx,
+                    modifier = Modifier.weight(1f)
+                )
             }
             state.error?.let {
                 Text(
                     deleteErrorMessage(it),
                     style = MaterialTheme.typography.bodySmall,
-                    color = colors.coralt
+                    color = colors.coralt,
+                    // Se anuncia al aparecer: si el borrado falla, TalkBack lo dice sin mover el foco.
+                    modifier = Modifier
+                        .testTag(DeleteAccountTags.ERROR)
+                        .semantics { liveRegion = LiveRegionMode.Polite }
                 )
             }
             PrimaryButton(

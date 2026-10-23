@@ -40,7 +40,7 @@ sealed interface ExportDataEffect {
 /**
  * 'Descargar mis datos' (E8.3, Ley 1581). Pide `GET /v1/me/export` y lo guarda donde la persona elija
  * (`ACTION_CREATE_DOCUMENT` con `parcheu-datos-<fecha>.json`) o lo comparte con la hoja del sistema.
- * El JSON solo vive en memoria mientras se elige el destino.
+ * El JSON solo vive en memoria mientras se elige el destino (si el proceso muere, se vuelve a pedir).
  */
 class ExportDataViewModel(
     private val account: AccountRepository,
@@ -95,18 +95,33 @@ class ExportDataViewModel(
         }
     }
 
-    /** Resultado de `ACTION_CREATE_DOCUMENT`: [uri] nulo si la persona canceló. */
+    /**
+     * Resultado de `ACTION_CREATE_DOCUMENT`: [uri] nulo si la persona canceló. Si el sistema mató el
+     * proceso mientras el selector estaba abierto, el ViewModel es nuevo y ya no tiene el JSON, pero el
+     * documento ya existe (vacío): se vuelve a pedir la exportación y se escribe en ese [uri].
+     */
     fun onDocumentCreated(uri: String?) {
         val json = pending
         pending = null
-        if (uri == null || json == null) {
+        if (uri == null) {
             _state.update { it.copy(outcome = ExportOutcome.CANCELLED) }
             return
         }
+        if (json == null) _state.update { it.copy(loading = ExportTarget.SAVE, error = null) }
         viewModelScope.launch {
-            val ok = files.writeTo(uri, json)
+            val content = json ?: when (val result = account.exportJson()) {
+                is ApiResult.Failure -> {
+                    _state.update { it.copy(loading = null, error = result.error) }
+                    return@launch
+                }
+                is ApiResult.Success -> result.value
+            }
+            val ok = files.writeTo(uri, content)
             _state.update {
-                it.copy(outcome = if (ok) ExportOutcome.SAVED else ExportOutcome.WRITE_FAILED)
+                it.copy(
+                    loading = null,
+                    outcome = if (ok) ExportOutcome.SAVED else ExportOutcome.WRITE_FAILED
+                )
             }
         }
     }

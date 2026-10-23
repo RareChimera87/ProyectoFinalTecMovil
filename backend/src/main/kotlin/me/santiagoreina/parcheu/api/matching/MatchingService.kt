@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.api.matching
 import kotlinx.coroutines.CancellationException
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
+import me.santiagoreina.parcheu.api.identity.deletion.ClosedMatch
 import me.santiagoreina.parcheu.api.identity.profile.AgeRules
 import me.santiagoreina.parcheu.api.platform.errors.AgeRequired
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
@@ -319,7 +320,26 @@ class MatchingService(
      */
     private suspend fun refundAndNotifyUnavailable(match: MatchRecord, causedBy: Set<UUID>) {
         listOf(match.userA, match.userB).filterNot { it in causedBy }.forEach { safely("devolver el cupo del match ${match.id}") { quota.refund(QuotaKind.RANDOM_MATCH, "${match.id}:$it") } }
-        notifyMatchExpired(match, title = "Este parche ya no está disponible", body = "El match se canceló. Puedes buscar otro parche cuando quieras.")
+        notifyMatchExpired(match, title = UNAVAILABLE_TITLE, body = UNAVAILABLE_BODY)
+    }
+
+    /**
+     * La purga de una cuenta (E8.3) cerró en Postgres estos matches: el PENDING_CHOICE ya está EXPIRED, el cupo
+     * devuelto y el ticket de la contraparte EXPIRED. Aquí se republica `matchTickets/{uid}` de la contraparte y,
+     * si el match esperaba la elección, se le avisa que ya no está disponible (como en un bloqueo).
+     */
+    suspend fun onMatchesClosedByDeletion(closed: List<ClosedMatch>) {
+        for (match in closed) {
+            val person = repo.person(match.counterpart) ?: continue
+            publish(person.firebaseUid, match.counterpart)
+            if (!match.notify) continue
+            safely("avisar el cierre del match ${match.matchId}") {
+                notifier.notify(
+                    match.counterpart,
+                    Notification(kind = NotificationKinds.MATCH_EXPIRED, title = UNAVAILABLE_TITLE, body = UNAVAILABLE_BODY, route = "parcheu://match"),
+                )
+            }
+        }
     }
 
     private suspend fun notifyMatchExpired(match: MatchRecord, title: String, body: String) {
@@ -445,4 +465,9 @@ class MatchingService(
     }
 
     private fun Instant.kotlin(): KInstant = KInstant.fromEpochSeconds(epochSecond, nano)
+
+    private companion object {
+        const val UNAVAILABLE_TITLE = "Este parche ya no está disponible"
+        const val UNAVAILABLE_BODY = "El match se canceló. Puedes buscar otro parche cuando quieras."
+    }
 }

@@ -522,4 +522,116 @@ class AccountPurgeDbTest : FunSpec({
             ds.connection.use { c -> c.count("select count(*) from users where id = ?", s.zoraida) shouldBe 1 }
         }
     }
+
+    test("el nombre visible solo borra avisos de sus contrapartes: un tercero con un amigo homónimo conserva los suyos")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { ds ->
+                val db = connectExposed(ds)
+                val s = ds.connection.use { seed(it) }
+                val now = Timestamp.from(FIXED_CLOCK.instant())
+                val diego = UUID.randomUUID()
+                val diegoChat = UUID.randomUUID()
+                val diegoNotice = UUID.randomUUID()
+                val brunoNotice = UUID.randomUUID()
+                ds.connection.use { c ->
+                    // Diego no tiene relación con Zoraida, pero su amiga (otra persona) se llama igual.
+                    c.exec("insert into users (id, firebase_uid, display_name, created_at, updated_at) values (?, ?, 'Diego', ?, ?)", diego, "uid-diego-$diego", now, now)
+                    c.exec(
+                        "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'CHAT_MESSAGE', ?::jsonb, ?)",
+                        diegoNotice, diego, """{"title":"$name","body":"¿Vamos al cine?","route":"parcheu://chat/$diegoChat"}""", now,
+                    )
+                    // Bruno sí la conoce: el aviso de mensaje con su nombre como título se borra.
+                    c.exec(
+                        "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'CHAT_MESSAGE', ?::jsonb, ?)",
+                        brunoNotice, s.bruno, """{"title":"$name","body":"Hola","route":"parcheu://chat/${UUID.randomUUID()}"}""", now,
+                    )
+                }
+                val service = AccountDeletionService(
+                    ExposedIdentityRepository(db), ExposedAccountPurgeRepository(db), RecordingAccountMirrorCleaner(), FakeAuthAccountRemover(), FakeTaskQueue(), FIXED_CLOCK,
+                )
+                service.requestDeletion(FirebaseUser(s.zoraidaUid, null, null))
+                service.purge(s.zoraida) shouldBe PurgeOutcome.PURGED
+
+                ds.connection.use { c ->
+                    c.count("select count(*) from notifications where id = ?", diegoNotice) shouldBe 1
+                    c.count("select count(*) from notifications where id = ?", brunoNotice) shouldBe 0
+                }
+            }
+        }
+
+    test("un nombre visible igual al título de un aviso del sistema no borra esos avisos, ni siquiera a sus contrapartes")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { ds ->
+                val db = connectExposed(ds)
+                val s = ds.connection.use { seed(it) }
+                val now = Timestamp.from(FIXED_CLOCK.instant())
+                val title = "Tu simulación está lista"
+                val diego = UUID.randomUUID()
+                ds.connection.use { c ->
+                    c.exec("update users set display_name = ? where id = ?", title, s.zoraida)
+                    c.exec("insert into users (id, firebase_uid, created_at, updated_at) values (?, ?, ?, ?)", diego, "uid-diego-$diego", now, now)
+                    c.exec(
+                        "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'SIMULATION_READY', ?::jsonb, ?)",
+                        UUID.randomUUID(), diego, """{"title":"$title","body":"Mira cómo les fue."}""", now,
+                    )
+                }
+                val service = AccountDeletionService(
+                    ExposedIdentityRepository(db), ExposedAccountPurgeRepository(db), RecordingAccountMirrorCleaner(), FakeAuthAccountRemover(), FakeTaskQueue(), FIXED_CLOCK,
+                )
+                service.requestDeletion(FirebaseUser(s.zoraidaUid, null, null))
+                service.purge(s.zoraida) shouldBe PurgeOutcome.PURGED
+
+                ds.connection.use { c ->
+                    c.count("select count(*) from notifications where kind = 'SIMULATION_READY' and user_id = ?", diego) shouldBe 1
+                    c.count("select count(*) from notifications where kind = 'SIMULATION_READY' and user_id = ?", s.bruno) shouldBe 1
+                }
+            }
+        }
+
+    test("un match PENDING_CHOICE se cierra: la contraparte recupera el cupo, su ticket queda EXPIRED y se le avisa")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { ds ->
+                val db = connectExposed(ds)
+                val s = ds.connection.use { seed(it) }
+                val now = Timestamp.from(FIXED_CLOCK.instant())
+                val pending = UUID.randomUUID()
+                val old = UUID.randomUUID()
+                ds.connection.use { c ->
+                    // Zoraida y Carla emparejadas, esperando elegir; las dos pagaron RANDOM_MATCH.
+                    c.exec(
+                        "insert into matches (id, mode, user_a, user_b, status, created_at, decide_by) values (?, 'AMISTAD', ?, ?, 'PENDING_CHOICE', ?, ?)",
+                        pending, s.zoraida, s.carla, now, Timestamp.from(FIXED_CLOCK.instant().plusSeconds(600)),
+                    )
+                    listOf(s.zoraida, s.carla).forEach { u ->
+                        c.exec("insert into usage_events (id, user_id, kind, ref_id, created_at) values (?, ?, 'RANDOM_MATCH', ?, ?)", UUID.randomUUID(), u, "$pending:$u", now)
+                    }
+                    c.exec("insert into match_queue (user_id, mode, enqueued_at, expires_at, status, match_id) values (?, 'AMISTAD', ?, ?, 'MATCHED', ?)", s.carla, now, now, pending)
+                    // Un match viejo con Bruno que ya se cerró (p. ej. por un bloqueo) y cuyo ticket seguía MATCHED.
+                    c.exec(
+                        "insert into matches (id, mode, user_a, user_b, status, created_at, decide_by) values (?, 'AMISTAD', ?, ?, 'EXPIRED', ?, ?)",
+                        old, s.bruno, s.zoraida, now, now,
+                    )
+                    c.exec("insert into match_queue (user_id, mode, enqueued_at, expires_at, status, match_id) values (?, 'AMISTAD', ?, ?, 'MATCHED', ?)", s.bruno, now, now, old)
+                }
+                val closed = java.util.concurrent.CopyOnWriteArrayList<ClosedMatch>()
+                val service = AccountDeletionService(
+                    ExposedIdentityRepository(db), ExposedAccountPurgeRepository(db), RecordingAccountMirrorCleaner(), FakeAuthAccountRemover(),
+                    FakeTaskQueue(), FIXED_CLOCK, closedMatches = { closed += it },
+                )
+                service.requestDeletion(FirebaseUser(s.zoraidaUid, null, null))
+                service.purge(s.zoraida) shouldBe PurgeOutcome.PURGED
+
+                closed shouldContainExactlyInAnyOrder listOf(ClosedMatch(pending, s.carla, notify = true), ClosedMatch(old, s.bruno, notify = false))
+                ds.connection.use { c ->
+                    c.one("select refunded from usage_events where ref_id = ?", "$pending:${s.carla}") { it.getBoolean(1) } shouldBe true
+                    listOf(s.carla, s.bruno).forEach { u ->
+                        c.one("select status, match_id from match_queue where user_id = ?", u) { rs ->
+                            rs.getString(1) shouldBe "EXPIRED"
+                            rs.getObject(2) shouldBe null
+                        }
+                    }
+                }
+            }
+        }
 })
+

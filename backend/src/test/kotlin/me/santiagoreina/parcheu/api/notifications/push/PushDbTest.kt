@@ -42,4 +42,26 @@ class PushDbTest : FunSpec({
                 }
             } }
         }
+
+    test("borrar la cuenta (E8.3) borra sus tokens FCM y una cuenta borrada no recibe push aunque registre uno")
+        .config(enabled = TestDatabase.enabled) {
+            TestDatabase.withCleanDatabase { ds -> runBlocking {
+                runMigrations(ds)
+                val db = connectExposed(ds)
+                val repo = ExposedIdentityRepository(db)
+                val ana = repo.createIfAbsent("ana", "ana@example.com", "Ana", FIXED_CLOCK.instant())
+                val beto = repo.createIfAbsent("beto", "beto@example.com", "Beto", FIXED_CLOCK.instant())
+                repo.upsertFcmToken(ana.id, "tok-ana", FIXED_CLOCK.instant())
+                repo.upsertFcmToken(beto.id, "tok-beto", FIXED_CLOCK.instant())
+
+                repo.markDeleted(ana.id, FIXED_CLOCK.instant())
+                transaction(db) { FcmTokens.selectAll().map { it[FcmTokens.token] } shouldBe listOf("tok-beto") }
+
+                // Un token que llegue después (carrera con la app) tampoco sirve mientras espera la purga.
+                repo.upsertFcmToken(ana.id, "tok-tarde", FIXED_CLOCK.instant())
+                val store = ExposedPushStore(db)
+                store.tokensOf(ana.id) shouldBe emptyList()
+                store.tokensOf(beto.id) shouldBe listOf("tok-beto")
+            } }
+        }
 })
