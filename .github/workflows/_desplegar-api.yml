@@ -1,0 +1,105 @@
+name: desplegar-api
+
+# E0.6 + ADR-0011. Flujo reutilizable de deploy-dev y deploy-prod:
+#   Jib -> Artifact Registry -> Cloud Run Job `migrate` (si falla, se detiene aquí y la API
+#   no se despliega) -> imagen de los jobs seed-demo/purge-demo -> servicio `api` -> humo de
+#   /v1/health, que debe responder con el SHA del commit (APP_VERSION lo fija Jib).
+# Autenticación con WIF (sa-deployer): sin llaves JSON.
+on:
+  workflow_call:
+    inputs:
+      entorno:
+        description: "Environment de GitHub (dev o production)"
+        type: string
+        required: true
+      proyecto:
+        description: "ID del proyecto de GCP"
+        type: string
+        required: true
+      region:
+        type: string
+        default: us-central1
+    secrets:
+      wif_provider:
+        required: true
+      wif_service_account:
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  desplegar:
+    name: desplegar-api
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.entorno }}
+    timeout-minutes: 45
+    concurrency:
+      group: desplegar-api-${{ inputs.proyecto }}
+      cancel-in-progress: false
+    env:
+      PROYECTO: ${{ inputs.proyecto }}
+      REGION: ${{ inputs.region }}
+      IMAGEN: ${{ inputs.region }}-docker.pkg.dev/${{ inputs.proyecto }}/parcheu/api
+      WIF_PROVIDER: ${{ secrets.wif_provider }}
+      WIF_SA: ${{ secrets.wif_service_account }}
+    steps:
+      - name: Requiere los secretos de WIF
+        if: env.WIF_PROVIDER == '' || env.WIF_SA == ''
+        run: |
+          echo "::error::Faltan los secretos de WIF de $PROYECTO (WIF_PROVIDER*/WIF_SERVICE_ACCOUNT_*): ver docs/pendientes-humanos.md."
+          exit 1
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          workload_identity_provider: ${{ secrets.wif_provider }}
+          service_account: ${{ secrets.wif_service_account }}
+          token_format: access_token
+      - uses: google-github-actions/setup-gcloud@v2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Jib -> Artifact Registry
+        working-directory: backend
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          # GITHUB_SHA queda como APP_VERSION dentro de la imagen (build.gradle.kts).
+          ./gradlew --stacktrace jib -Pimagen="$IMAGEN:$GITHUB_SHA" \
+            -Djib.to.auth.username=oauth2accesstoken -Djib.to.auth.password="$TOKEN"
+      - name: Job migrate (antes de la API)
+        run: |
+          gcloud run jobs update migrate --project "$PROYECTO" --region "$REGION" --image "$IMAGEN:$GITHUB_SHA" --quiet
+          # --wait devuelve error si la ejecución falla: el job se detiene y la API no se despliega.
+          gcloud run jobs execute migrate --project "$PROYECTO" --region "$REGION" --wait
+      - name: Imagen de seed-demo y purge-demo
+        run: |
+          for job in seed-demo purge-demo; do
+            gcloud run jobs update "$job" --project "$PROYECTO" --region "$REGION" --image "$IMAGEN:$GITHUB_SHA" --quiet
+          done
+      - name: Despliega la API
+        run: |
+          # Variables, cuenta de servicio y escalado vienen de Terraform; aquí solo cambia la imagen.
+          gcloud run deploy api --project "$PROYECTO" --region "$REGION" --image "$IMAGEN:$GITHUB_SHA" --quiet
+      - name: Humo de /v1/health
+        run: |
+          url="$(gcloud run services describe api --project "$PROYECTO" --region "$REGION" --format 'value(status.url)')"
+          for i in $(seq 1 10); do
+            if cuerpo="$(curl -fsS "$url/v1/health")"; then
+              version="$(jq -r .version <<<"$cuerpo")"
+              echo "intento $i: $cuerpo"
+              if [[ "$version" == "$GITHUB_SHA" ]]; then
+                echo "### $PROYECTO: /v1/health responde con $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+            fi
+            sleep 6
+          done
+          echo "::error::/v1/health de $PROYECTO no responde con el SHA $GITHUB_SHA"
+          exit 1

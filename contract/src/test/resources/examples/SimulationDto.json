@@ -1,0 +1,20 @@
+{
+  "summary": {
+    "id": "7a6b5c4d-3e2f-4011-9223-344556677889",
+    "status": "RUNNING",
+    "mode": "ESTUDIO",
+    "other": {
+      "id": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
+      "label": "Laura Pinzón",
+      "initials": "LP",
+      "photoUrl": "https://lh3.googleusercontent.com/a/laura",
+      "isDemo": false
+    },
+    "createdAt": "2026-10-23T15:30:00Z"
+  },
+  "progress": {
+    "scenarioIndex": 1,
+    "turn": 5,
+    "of": 8
+  }
+}
