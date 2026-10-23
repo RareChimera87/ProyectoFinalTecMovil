@@ -1,0 +1,23 @@
+{
+  "id": "c1a2b3c4-d5e6-4f70-8192-a3b4c5d6e7f8",
+  "type": "SCENARIO",
+  "mode": "AMISTAD",
+  "other": {
+    "id": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
+    "label": "Laura Pinzón",
+    "initials": "LP",
+    "photoUrl": "https://lh3.googleusercontent.com/a/laura",
+    "isDemo": false
+  },
+  "lastMessage": {
+    "id": "m-01",
+    "senderId": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
+    "text": "¿Nos vemos mañana en la biblioteca?",
+    "createdAt": "2026-10-23T15:30:00Z",
+    "hidden": false
+  },
+  "unread": 1,
+  "muted": false,
+  "endsAt": "2026-10-23T15:45:00Z",
+  "status": "OPEN"
+}

@@ -1,0 +1,30 @@
+{
+  "node": {
+    "id": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
+    "label": "Laura Pinzón",
+    "initials": "LP",
+    "photoUrl": "https://lh3.googleusercontent.com/a/laura",
+    "affinity": 87,
+    "mode": "AMISTAD",
+    "state": "CONNECTED",
+    "anonymous": false
+  },
+  "lastSimulation": {
+    "id": "5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+    "status": "DONE",
+    "mode": "AMISTAD",
+    "other": {
+      "anonId": "h7Kq2xP9",
+      "label": "Alguien de la UIS",
+      "initials": "A",
+      "isDemo": false
+    },
+    "createdAt": "2026-10-23T15:30:00Z",
+    "origin": "PARCHE",
+    "score": 82
+  },
+  "sharedModes": [
+    "AMISTAD",
+    "ESTUDIO"
+  ]
+}

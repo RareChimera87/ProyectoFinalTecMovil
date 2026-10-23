@@ -1,0 +1,26 @@
+{
+  "id": "intro-1",
+  "mode": "AMISTAD",
+  "introducer": {
+    "id": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
+    "label": "Laura Pinzón",
+    "initials": "LP",
+    "isDemo": false
+  },
+  "other": {
+    "id": "3c5e7a9b-2d4f-4b6c-8e0a-1f3b5d7c9e2a",
+    "label": "Camilo Torres",
+    "initials": "CT",
+    "isDemo": false
+  },
+  "status": "PROPOSED",
+  "simulationId": "5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+  "report": {
+    "score": 82,
+    "summary": "Buen parche",
+    "locked": true,
+    "unlockAvailable": true,
+    "otherDecided": false
+  },
+  "myResponse": true
+}
