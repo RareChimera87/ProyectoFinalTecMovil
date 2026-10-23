@@ -8,7 +8,6 @@ import me.santiagoreina.parcheu.contract.EntitlementState
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -34,7 +33,8 @@ data class EntitlementRow(
 interface BillingStore {
     fun entitlement(userId: UUID): EntitlementRow?
 
-    fun entitlementByToken(purchaseToken: String): EntitlementRow?
+    /** Con [forUpdate] bloquea la fila (`select ... for update`) hasta que termine la transacción en curso. */
+    fun entitlementByToken(purchaseToken: String, forUpdate: Boolean = false): EntitlementRow?
 
     /** Inserta o reemplaza la fila del usuario ([EntitlementRow.userId] es la llave). */
     fun save(row: EntitlementRow)
@@ -47,8 +47,12 @@ interface BillingStore {
      */
     fun claimEvent(messageId: String, purchaseToken: String?, payload: JsonElement, receivedAt: Instant): Boolean
 
-    /** Deshace [claimEvent] cuando el procesamiento falla, para que el reintento de Pub/Sub lo vuelva a procesar. */
-    fun releaseEvent(messageId: String)
+    /**
+     * Ejecuta [block] en una sola transacción: las llamadas a este store dentro de [block] se unen a ella.
+     * Si [block] lanza (o el proceso muere antes de confirmar) no queda nada de lo que hizo, ni siquiera el
+     * [claimEvent], así que el reintento de Pub/Sub vuelve a procesar el mensaje.
+     */
+    fun <T> atomically(block: () -> T): T
 }
 
 class ExposedBillingStore(private val db: Database) : BillingStore {
@@ -56,8 +60,9 @@ class ExposedBillingStore(private val db: Database) : BillingStore {
         Entitlements.selectAll().where { Entitlements.userId eq userId }.singleOrNull()?.toRow()
     }
 
-    override fun entitlementByToken(purchaseToken: String): EntitlementRow? = transaction(db) {
-        Entitlements.selectAll().where { Entitlements.purchaseToken eq purchaseToken }.singleOrNull()?.toRow()
+    override fun entitlementByToken(purchaseToken: String, forUpdate: Boolean): EntitlementRow? = transaction(db) {
+        val query = Entitlements.selectAll().where { Entitlements.purchaseToken eq purchaseToken }
+        (if (forUpdate) query.forUpdate() else query).singleOrNull()?.toRow()
     }
 
     override fun save(row: EntitlementRow) {
@@ -90,9 +95,9 @@ class ExposedBillingStore(private val db: Database) : BillingStore {
             }.insertedCount == 1
         }
 
-    override fun releaseEvent(messageId: String) {
-        transaction(db) { PurchaseEvents.deleteWhere { PurchaseEvents.messageId eq messageId } }
-    }
+    // Exposed reutiliza la transacción abierta en los `transaction(db)` anidados (sin nested transactions),
+    // así que todo lo que el bloque hace con este store se confirma o se deshace junto.
+    override fun <T> atomically(block: () -> T): T = transaction(db) { block() }
 
     private fun ResultRow.toRow() = EntitlementRow(
         userId = this[Entitlements.userId],
@@ -119,7 +124,7 @@ class InMemoryBillingStore(private val knownUser: (UUID) -> Boolean = { true }) 
     override fun entitlement(userId: UUID): EntitlementRow? = rows[userId]
 
     @Synchronized
-    override fun entitlementByToken(purchaseToken: String): EntitlementRow? =
+    override fun entitlementByToken(purchaseToken: String, forUpdate: Boolean): EntitlementRow? =
         rows.values.firstOrNull { it.purchaseToken == purchaseToken }
 
     @Synchronized
@@ -140,9 +145,20 @@ class InMemoryBillingStore(private val knownUser: (UUID) -> Boolean = { true }) 
         return true
     }
 
+    /** Copia el estado y lo restaura si [block] lanza: el mismo efecto que el rollback de Postgres. */
     @Synchronized
-    override fun releaseEvent(messageId: String) {
-        events.remove(messageId)
+    override fun <T> atomically(block: () -> T): T {
+        val rowsBefore = rows.toMap()
+        val eventsBefore = events.toMap()
+        return try {
+            block()
+        } catch (e: Throwable) {
+            rows.clear()
+            rows.putAll(rowsBefore)
+            events.clear()
+            events.putAll(eventsBefore)
+            throw e
+        }
     }
 }
 

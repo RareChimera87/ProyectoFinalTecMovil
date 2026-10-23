@@ -27,7 +27,10 @@ private class World {
     val clock = MovableClock(NOW)
     val play = FakePlayApi()
     val store = InMemoryBillingStore()
-    val service = BillingService(store, play.client, clock)
+
+    /** Lo que usa el servicio: el mismo [store], pero su `save` puede fallar a pedido. */
+    val flaky = FlakyBillingStore(store)
+    val service = BillingService(flaky, play.client, clock)
     val entitlements = StoredEntitlementService(store)
     val ana: UUID = UUID.fromString("3f0e8c1a-6b2d-4e9f-9a7c-1d2e3f4a5b6c")
     val beto: UUID = UUID.fromString("0b7f1d2e-3c4a-4b5d-8e6f-7a8b9c0d1e2f")
@@ -260,7 +263,7 @@ class BillingServiceTest : FunSpec({
             w.service.entitlement(w.ana).state shouldBe EntitlementState.REVOKED
         }
 
-        test("si el procesamiento falla, el mensaje se libera y el reintento de Pub/Sub lo procesa") {
+        test("si Play falla, el reclamo se deshace y el reintento de Pub/Sub lo procesa") {
             val w = World()
             w.play.purchase("tok-f", "active-anual-acknowledged", owner = w.ana)
             w.verify(w.ana, "tok-f")
@@ -270,6 +273,62 @@ class BillingServiceTest : FunSpec({
             w.store.eventIds shouldBe emptySet()
             w.rtdn("m-f", "tok-f", 13) shouldBe BillingService.RtdnOutcome.PROCESSED
             w.store.entitlement(w.ana)!!.state shouldBe EntitlementState.EXPIRED
+        }
+
+        test("si la base falla al guardar una renovación, no queda reclamo ni escritura y el reintento la procesa") {
+            val w = World()
+            w.play.purchase("tok-ren", "active", owner = w.ana)
+            w.verify(w.ana, "tok-ren")
+            val antes = w.store.entitlement(w.ana)!!
+            w.play.update("tok-ren", "active-anual-acknowledged", owner = w.ana)
+            w.flaky.failSaves = true
+
+            shouldThrow<IllegalStateException> { w.rtdn("m-ren", "tok-ren", RtdnTypes.SUBSCRIPTION_RENEWED) }
+
+            w.store.eventIds shouldBe emptySet()
+            w.store.entitlement(w.ana) shouldBe antes
+            w.flaky.failSaves = false
+            w.rtdn("m-ren", "tok-ren", RtdnTypes.SUBSCRIPTION_RENEWED) shouldBe BillingService.RtdnOutcome.PROCESSED
+            w.store.entitlement(w.ana)!!.expiresAt shouldBe Instant.parse("2027-10-01T14:20:43.655Z")
+            w.store.eventIds shouldBe setOf("m-ren")
+        }
+
+        test("si la base falla al guardar una revocación, el reintento la procesa y quita Plus") {
+            val w = World()
+            w.play.purchase("tok-rv", "active-anual-acknowledged", owner = w.ana)
+            w.verify(w.ana, "tok-rv").plus shouldBe true
+            w.flaky.failSaves = true
+
+            shouldThrow<IllegalStateException> { w.rtdn("m-rv", "tok-rv", RtdnTypes.SUBSCRIPTION_REVOKED) }
+
+            w.entitlements.isPlus(w.ana, NOW) shouldBe true
+            w.flaky.failSaves = false
+            w.rtdn("m-rv", "tok-rv", RtdnTypes.SUBSCRIPTION_REVOKED) shouldBe BillingService.RtdnOutcome.PROCESSED
+            w.store.entitlement(w.ana)!!.state shouldBe EntitlementState.REVOKED
+            w.entitlements.isPlus(w.ana, NOW) shouldBe false
+        }
+
+        test("una revocación que se guarda mientras verify consulta a Play no se pisa con el ACTIVE de Play") {
+            val w = World()
+            w.play.purchase("tok-race", "active-anual-acknowledged", owner = w.ana)
+            w.verify(w.ana, "tok-race").plus shouldBe true
+            var armed = true
+            val racing = object : PlaySubscriptions by w.play.client {
+                override fun get(purchaseToken: String): PlaySubscription? {
+                    val sub = w.play.client.get(purchaseToken) // Play aún responde ACTIVE (periodo pagado)
+                    if (armed) {
+                        armed = false
+                        w.rtdn("m-race", "tok-race", RtdnTypes.SUBSCRIPTION_REVOKED) // llega y guarda REVOKED
+                    }
+                    return sub
+                }
+            }
+
+            val dto = BillingService(w.store, racing, w.clock).verify(w.ana, VerifyPurchase("tok-race", BillingService.PLUS_PRODUCT_ID))
+
+            dto.state shouldBe EntitlementState.REVOKED
+            dto.plus shouldBe false
+            w.store.entitlement(w.ana)!!.state shouldBe EntitlementState.REVOKED
         }
 
         test("compra aún sin verificar: se registra y se ignora (la app la verificará)") {

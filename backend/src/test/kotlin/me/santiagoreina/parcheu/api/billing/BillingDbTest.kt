@@ -4,6 +4,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -107,7 +108,7 @@ class BillingDbTest : FunSpec({
             }
         }
 
-    test("Postgres: claimEvent es atómico (10 entregas simultáneas, un solo reclamo) y releaseEvent lo libera")
+    test("Postgres: claimEvent es atómico (10 entregas simultáneas, un solo reclamo) y un rollback lo deshace")
         .config(enabled = TestDatabase.enabled) {
             withBilling { w ->
                 val payload = decodeRtdn(rtdnBody("msg-c", "tok", 4)).raw
@@ -116,8 +117,36 @@ class BillingDbTest : FunSpec({
                         .awaitAll()
                 }
                 claims.count { it } shouldBe 1
-                w.store.releaseEvent("msg-c")
-                w.store.claimEvent("msg-c", "tok", payload, FIXED_CLOCK.instant()) shouldBe true
+                shouldThrow<IllegalStateException> {
+                    w.store.atomically {
+                        w.store.claimEvent("msg-d", "tok", payload, FIXED_CLOCK.instant()) shouldBe true
+                        error("la instancia muere a mitad")
+                    }
+                }
+                w.store.claimEvent("msg-d", "tok", payload, FIXED_CLOCK.instant()) shouldBe true
+            }
+        }
+
+    test("Postgres: si la base falla al guardar la renovación, el reclamo se deshace y el reintento la procesa")
+        .config(enabled = TestDatabase.enabled) {
+            withBilling { w ->
+                w.play.purchase("tok-ren", "active", owner = w.ana)
+                w.verify(w.ana, "tok-ren")
+                val antes = w.store.entitlement(w.ana)!!
+                w.play.update("tok-ren", "active-anual-acknowledged", owner = w.ana)
+                val flaky = FlakyBillingStore(w.store)
+                val service = BillingService(flaky, w.play.client, FIXED_CLOCK)
+                val rtdn = decodeRtdn(rtdnBody("msg-ren", "tok-ren", RtdnTypes.SUBSCRIPTION_RENEWED))
+                flaky.failSaves = true
+
+                shouldThrow<IllegalStateException> { service.handleRtdn(rtdn) }
+
+                transaction(w.db) { PurchaseEvents.selectAll().count() } shouldBe 0
+                w.store.entitlement(w.ana) shouldBe antes
+                flaky.failSaves = false
+                service.handleRtdn(rtdn) shouldBe BillingService.RtdnOutcome.PROCESSED
+                w.store.entitlement(w.ana)!!.expiresAt shouldNotBe antes.expiresAt
+                transaction(w.db) { PurchaseEvents.selectAll().count() } shouldBe 1
             }
         }
 

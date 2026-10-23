@@ -52,6 +52,7 @@ data class SubscriptionNotification(
 
 /** Tipos de `SubscriptionNotification.notificationType` que el servidor trata aparte. */
 object RtdnTypes {
+    const val SUBSCRIPTION_RENEWED = 2
     const val SUBSCRIPTION_PURCHASED = 4
     /** Reembolso o revocación: se quita Plus de inmediato, aunque Play diga que aún no vence. */
     const val SUBSCRIPTION_REVOKED = 12
