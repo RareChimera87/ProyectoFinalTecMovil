@@ -53,89 +53,125 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
         )
     }
 
-    override suspend fun purge(plan: PurgePlan, now: Instant) {
-        tx {
-            val sql = connection.connection as Connection
-            val user = plan.userId
-            // Candado de la fila: dos entregas simultáneas de la misma tarea no purgan a la vez.
-            val exists = sql.query("select 1 from users where id = ? and deleted_at is not null for update", user)
-            if (!exists) {
-                log.info("Purga de {}: la cuenta ya no existe o no está borrada", user)
-                return@tx
-            }
-            val tombstone = tombstoneFor(sql, plan, now)
-
-            // 1. Reportes abiertos donde la persona reporta o es reportada: se resuelven antes de perder el contexto.
-            sql.update(
-                "update reports set status = 'RESOLVED', resolution = coalesce(resolution, '$RESOLUTION'), " +
-                    "resolved_at = coalesce(resolved_at, ?) where status = 'OPEN' and (reporter_id = ? or target_id = ?)",
-                Timestamp.from(now), user, user,
-            )
-
-            // 1b. Simulaciones en curso donde participa: FAILED y cupo devuelto a quien lo pagó. Si el motor sigue
-            //     corriendo, su siguiente `saveStep`/`markDone` ya no aplica (exigen RUNNING) y no recrea nada.
-            val stopped = sql.ids(
-                "update simulations set status = 'FAILED', error = ?, finished_at = ? " +
-                    "where status in ('QUEUED', 'RUNNING') and (user_a = ? or user_b = ? or requested_by = ?) returning id",
-                SIMULATION_ERROR, Timestamp.from(now), user, user, user,
-            )
-            if (stopped.isNotEmpty()) {
-                sql.update(
-                    "update usage_events set refunded = true where kind = 'SIMULATION' and ref_id = any(?::text[])",
-                    sql.createArrayOf("text", stopped.map { it.toString() }.toTypedArray()),
-                )
-            }
-
-            // 2. Columnas jsonb con datos personales (PersonalJsonPaths), antes de mover las filas a la lápida.
-            val values = mapOf(
-                PurgeParam.USER to user,
-                PurgeParam.USER_TEXT to user.toString(),
-                PurgeParam.PATTERN to "%$user%",
-                PurgeParam.HASH_PATTERN to "%${sha256Hex(user.toString())}%",
-                PurgeParam.NAME to plan.displayName?.takeIf { it.isNotBlank() },
-                PurgeParam.CHAT_ROUTES to sql.createArrayOf("text", plan.chats.map { "parcheu://chat/${it.chatId}" }.toTypedArray()),
-            )
-            JsonbPurgeRules.rules.forEach { rule -> sql.update(rule.sql, *rule.params.map { values[it] }.toTypedArray()) }
-
-            // 3. Consentimientos: prueba de la autorización (Ley 1581). La tabla solo admite INSERT, así que
-            //    se copian a la lápida y luego se borran los originales con la excepción del trigger (E0.4).
-            sql.update(
-                "insert into consents (user_id, kind, granted, text_version, created_at) " +
-                    "select ?, kind, granted, text_version, created_at from consents where user_id = ? order by id",
-                tombstone, user,
-            )
-            sql.update("set local parcheu.consents_purge = 'on'")
-            sql.update("delete from consents where user_id = ?", user)
-            sql.update("set local parcheu.consents_purge = 'off'")
-
-            // 4. Lo que sobrevive pasa a la lápida: simulaciones del otro (solo puntaje y fecha), reportes y compras.
-            listOf("user_a", "user_b", "requested_by").forEach { col ->
-                sql.update("update simulations set $col = ? where $col = ?", tombstone, user)
-            }
-            listOf("reporter_id", "target_id", "resolved_by").forEach { col ->
-                sql.update("update reports set $col = ? where $col = ?", tombstone, user)
-            }
-            // El token de una concesión de dev (`dev-grant:<uuid>`, E4.1) lleva el uuid: se reescribe con el de la lápida.
-            sql.update(
-                "update purchase_events set purchase_token = replace(purchase_token, ?, ?) where purchase_token like ?",
-                user.toString(), tombstone.toString(), "%$user%",
-            )
-            sql.update(
-                "update entitlements set user_id = ?, purchase_token = replace(purchase_token, ?, ?) where user_id = ?",
-                tombstone, user.toString(), tombstone.toString(), user,
-            )
-
-            // 5. Mensajes propios en chats compartidos: sin autor ('Usuario eliminado'); los del otro no se tocan.
-            sql.update(
-                "update chat_messages set sender_id = null, client_id = null, learnable = false where sender_id = ?",
-                user,
-            )
-
-            // 6. La fila de users: ON DELETE CASCADE borra perfil, modos, tokens FCM, gemelo, memorias, fila,
-            //    matches, aristas, comunidades, invitaciones, presentaciones, avisos, cuotas y bloqueos;
-            //    ai_usage.user_id queda en null (ON DELETE SET NULL).
-            sql.update("delete from users where id = ?", user)
+    override suspend fun purge(plan: PurgePlan, now: Instant): List<ClosedMatch> = tx {
+        val sql = connection.connection as Connection
+        val user = plan.userId
+        // Candado de la fila: dos entregas simultáneas de la misma tarea no purgan a la vez.
+        val exists = sql.query("select 1 from users where id = ? and deleted_at is not null for update", user)
+        if (!exists) {
+            log.info("Purga de {}: la cuenta ya no existe o no está borrada", user)
+            return@tx emptyList()
         }
+        val tombstone = tombstoneFor(sql, plan, now)
+
+        // 1. Reportes abiertos donde la persona reporta o es reportada: se resuelven antes de perder el contexto.
+        sql.update(
+            "update reports set status = 'RESOLVED', resolution = coalesce(resolution, '$RESOLUTION'), " +
+                "resolved_at = coalesce(resolved_at, ?) where status = 'OPEN' and (reporter_id = ? or target_id = ?)",
+            Timestamp.from(now), user, user,
+        )
+
+        // 1b. Simulaciones en curso donde participa: FAILED y cupo devuelto a quien lo pagó. Si el motor sigue
+        //     corriendo, su siguiente `saveStep`/`markDone` ya no aplica (exigen RUNNING) y no recrea nada.
+        val stopped = sql.ids(
+            "update simulations set status = 'FAILED', error = ?, finished_at = ? " +
+                "where status in ('QUEUED', 'RUNNING') and (user_a = ? or user_b = ? or requested_by = ?) returning id",
+            SIMULATION_ERROR, Timestamp.from(now), user, user, user,
+        )
+        if (stopped.isNotEmpty()) {
+            sql.update(
+                "update usage_events set refunded = true where kind = 'SIMULATION' and ref_id = any(?::text[])",
+                sql.createArrayOf("text", stopped.map { it.toString() }.toTypedArray()),
+            )
+        }
+
+        // 1c. Matches donde participa: la fila se va por ON DELETE CASCADE con `users`, así que antes se cierran
+        //     como lo haría matching (E4.2) ante un borrado: el PENDING_CHOICE pasa a EXPIRED y la contraparte
+        //     recupera su cupo RANDOM_MATCH. El ticket MATCHED de la contraparte que apunta a un match de ella
+        //     (pendiente o ya cerrado) pasa a EXPIRED: si no, quedaría MATCHED con `match_id` null. El aviso y
+        //     `matchTickets/{uid}` los publica AccountDeletionService después de la transacción.
+        val pending = sql.pairs(
+            "update matches set status = 'EXPIRED' where status = 'PENDING_CHOICE' and (user_a = ? or user_b = ?) " +
+                "returning id, case when user_a = ? then user_b else user_a end",
+            user, user, user,
+        )
+        pending.forEach { (match, other) ->
+            sql.update("update usage_events set refunded = true where kind = 'RANDOM_MATCH' and ref_id = ?", "$match:$other")
+        }
+        val expiredTickets = sql.pairs(
+            "update match_queue q set status = 'EXPIRED', match_id = null from matches m " +
+                "where q.match_id = m.id and q.status = 'MATCHED' and q.user_id <> ? and m.status = 'EXPIRED' " +
+                "and (m.user_a = ? or m.user_b = ?) returning m.id, q.user_id",
+            user, user, user,
+        )
+        val pendingIds = pending.map { it.first }.toSet()
+        val closed = pending.map { (match, other) -> ClosedMatch(match, other, notify = true) } +
+            expiredTickets.filter { it.first !in pendingIds }.map { (match, other) -> ClosedMatch(match, other, notify = false) }
+
+        // 2. Columnas jsonb con datos personales (PersonalJsonPaths), antes de mover las filas a la lápida.
+        //    Contrapartes: quienes compartieron con ella chat, arista, simulación o match (para el nombre visible).
+        val counterparts = sql.ids(
+            "select user_id from chat_members where chat_id = any(?::uuid[]) and user_id <> ? " +
+                "union select case when user_low = ? then user_high else user_low end from edges where user_low = ? or user_high = ? " +
+                "union select case when user_a = ? then user_b else user_a end from simulations where user_a = ? or user_b = ? " +
+                "union select requested_by from simulations where requested_by is not null and requested_by <> ? and (user_a = ? or user_b = ?) " +
+                "union select case when user_a = ? then user_b else user_a end from matches where user_a = ? or user_b = ?",
+            sql.createArrayOf("uuid", plan.chats.map { it.chatId }.toTypedArray()), user,
+            user, user, user,
+            user, user, user,
+            user, user, user,
+            user, user, user,
+        )
+        val values = mapOf(
+            PurgeParam.USER to user,
+            PurgeParam.USER_TEXT to user.toString(),
+            PurgeParam.PATTERN to "%$user%",
+            PurgeParam.HASH_PATTERN to "%${sha256Hex(user.toString())}%",
+            PurgeParam.NAME to plan.displayName?.takeIf { it.isNotBlank() },
+            PurgeParam.CHAT_ROUTES to sql.createArrayOf("text", plan.chats.map { "parcheu://chat/${it.chatId}" }.toTypedArray()),
+            PurgeParam.COUNTERPARTS to sql.createArrayOf("uuid", counterparts.toTypedArray()),
+        )
+        JsonbPurgeRules.rules.forEach { rule -> sql.update(rule.sql, *rule.params.map { values[it] }.toTypedArray()) }
+
+        // 3. Consentimientos: prueba de la autorización (Ley 1581). La tabla solo admite INSERT, así que
+        //    se copian a la lápida y luego se borran los originales con la excepción del trigger (E0.4).
+        sql.update(
+            "insert into consents (user_id, kind, granted, text_version, created_at) " +
+                "select ?, kind, granted, text_version, created_at from consents where user_id = ? order by id",
+            tombstone, user,
+        )
+        sql.update("set local parcheu.consents_purge = 'on'")
+        sql.update("delete from consents where user_id = ?", user)
+        sql.update("set local parcheu.consents_purge = 'off'")
+
+        // 4. Lo que sobrevive pasa a la lápida: simulaciones del otro (solo puntaje y fecha), reportes y compras.
+        listOf("user_a", "user_b", "requested_by").forEach { col ->
+            sql.update("update simulations set $col = ? where $col = ?", tombstone, user)
+        }
+        listOf("reporter_id", "target_id", "resolved_by").forEach { col ->
+            sql.update("update reports set $col = ? where $col = ?", tombstone, user)
+        }
+        // El token de una concesión de dev (`dev-grant:<uuid>`, E4.1) lleva el uuid: se reescribe con el de la lápida.
+        sql.update(
+            "update purchase_events set purchase_token = replace(purchase_token, ?, ?) where purchase_token like ?",
+            user.toString(), tombstone.toString(), "%$user%",
+        )
+        sql.update(
+            "update entitlements set user_id = ?, purchase_token = replace(purchase_token, ?, ?) where user_id = ?",
+            tombstone, user.toString(), tombstone.toString(), user,
+        )
+
+        // 5. Mensajes propios en chats compartidos: sin autor ('Usuario eliminado'); los del otro no se tocan.
+        sql.update(
+            "update chat_messages set sender_id = null, client_id = null, learnable = false where sender_id = ?",
+            user,
+        )
+
+        // 6. La fila de users: ON DELETE CASCADE borra perfil, modos, tokens FCM, gemelo, memorias, fila,
+        //    matches (ya cerrados en 1c), aristas, comunidades, invitaciones, presentaciones, avisos, cuotas y bloqueos;
+        //    ai_usage.user_id queda en null (ON DELETE SET NULL).
+        sql.update("delete from users where id = ?", user)
+        closed
     }
 
     override suspend fun stalledDeletions(deletedBefore: Instant, limit: Int): List<UUID> = tx {
@@ -190,6 +226,15 @@ private fun Connection.ids(statement: String, vararg params: Any?): List<UUID> =
     prepareStatement(statement).use { st ->
         params.forEachIndexed { i, value -> st.bind(i + 1, value) }
         st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getObject(1, UUID::class.java)) } }
+    }
+
+/** Filas de dos columnas uuid (p. ej. `returning id, otro`). */
+private fun Connection.pairs(statement: String, vararg params: Any?): List<Pair<UUID, UUID>> =
+    prepareStatement(statement).use { st ->
+        params.forEachIndexed { i, value -> st.bind(i + 1, value) }
+        st.executeQuery().use { rs ->
+            buildList { while (rs.next()) add(rs.getObject(1, UUID::class.java) to rs.getObject(2, UUID::class.java)) }
+        }
     }
 
 private fun java.sql.PreparedStatement.bind(index: Int, value: Any?) {

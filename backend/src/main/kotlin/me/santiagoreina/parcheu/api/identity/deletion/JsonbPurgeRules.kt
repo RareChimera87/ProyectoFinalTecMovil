@@ -5,14 +5,16 @@ import me.santiagoreina.parcheu.api.platform.db.tables.PersonalJsonPaths
 import me.santiagoreina.parcheu.api.platform.db.tables.PurchaseEvents
 import me.santiagoreina.parcheu.api.platform.db.tables.Reports
 import me.santiagoreina.parcheu.api.platform.db.tables.Simulations
+import me.santiagoreina.parcheu.contract.NotificationKinds
 import org.jetbrains.exposed.v1.core.Column
 
 /**
  * Parámetros con nombre de las reglas: `:user` (uuid), `:userText` (uuid como texto), `:pattern`
  * (`%<uuid>%`), `:hashPattern` (`%sha256(uuid)%`, el `obfuscatedAccountId` de Play), `:name` (nombre
- * visible o null) y `:chatRoutes` (arreglo `parcheu://chat/<id>` de sus chats).
+ * visible o null), `:chatRoutes` (arreglo `parcheu://chat/<id>` de sus chats) y `:counterparts` (uuid[] de
+ * quienes compartieron con ella chat, arista, simulación o match).
  */
-enum class PurgeParam { USER, USER_TEXT, PATTERN, HASH_PATTERN, NAME, CHAT_ROUTES }
+enum class PurgeParam { USER, USER_TEXT, PATTERN, HASH_PATTERN, NAME, CHAT_ROUTES, COUNTERPARTS }
 
 /**
  * Cómo se limpia una columna jsonb con datos personales (registro [PersonalJsonPaths]) al borrar una
@@ -36,15 +38,19 @@ object JsonbPurgeRules {
         ),
         simulationRule(Simulations.transcript),
         simulationRule(Simulations.report),
+        // El nombre visible es texto libre: solo cuenta en avisos cuyo título es el nombre de una persona
+        // (mensajes y solicitudes) y que recibió alguien que la conoce. Así no se borran avisos de terceros
+        // sin relación con un amigo homónimo, ni avisos del sistema de nadie aunque se llame como su título.
         JsonbPurgeRule(
             Notifications.payload,
-            "Avisos propios y de terceros que la nombran, la tienen como actor o citan sus mensajes: se borran",
+            "Avisos propios y de sus contrapartes que la nombran, la tienen como actor o citan sus mensajes: se borran",
             "delete from notifications where user_id = ? or payload->>'actorId' = ? or payload::text like ? " +
-                "or (?::text is not null and payload->>'title' = ?::text) " +
-                "or (kind = 'CHAT_MESSAGE' and payload->>'route' = any(?::text[]))",
+                "or (?::text is not null and kind in ('${NotificationKinds.CHAT_MESSAGE}', '${NotificationKinds.CONNECT_REQUEST}') " +
+                "and payload->>'title' = ?::text and user_id = any(?::uuid[])) " +
+                "or (kind = '${NotificationKinds.CHAT_MESSAGE}' and payload->>'route' = any(?::text[]))",
             listOf(
                 PurgeParam.USER, PurgeParam.USER_TEXT, PurgeParam.PATTERN,
-                PurgeParam.NAME, PurgeParam.NAME, PurgeParam.CHAT_ROUTES,
+                PurgeParam.NAME, PurgeParam.NAME, PurgeParam.COUNTERPARTS, PurgeParam.CHAT_ROUTES,
             ),
         ),
         JsonbPurgeRule(

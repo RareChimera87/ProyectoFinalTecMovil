@@ -138,6 +138,7 @@ class ExposedIdentityRepository(private val db: Database) :
                 it[deletedAt] = now.odt()
                 it[updatedAt] = now.odt()
             }
+            FcmTokens.deleteWhere { FcmTokens.userId eq userId }
         }
     }
 }

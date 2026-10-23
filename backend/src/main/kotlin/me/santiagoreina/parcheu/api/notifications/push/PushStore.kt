@@ -5,12 +5,16 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import me.santiagoreina.parcheu.api.platform.db.tables.FcmTokens
 import me.santiagoreina.parcheu.api.platform.db.tables.Notifications
+import me.santiagoreina.parcheu.api.platform.db.tables.Users
+import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -22,6 +26,7 @@ interface PushStore {
     /** Inserta el aviso (para C2) y devuelve su id. */
     suspend fun saveNotification(userId: UUID, kind: String, payload: JsonObject, now: Instant): UUID
 
+    /** Tokens del usuario; ninguno si la cuenta está borrada (E8.3: no recibe push mientras espera la purga). */
     suspend fun tokensOf(userId: UUID): List<String>
 
     suspend fun deleteTokens(tokens: Collection<String>)
@@ -43,7 +48,10 @@ class ExposedPushStore(private val db: Database) : PushStore {
     }
 
     override suspend fun tokensOf(userId: UUID): List<String> = tx {
-        FcmTokens.selectAll().where { FcmTokens.userId eq userId }.map { it[FcmTokens.token] }
+        FcmTokens.join(Users, JoinType.INNER, FcmTokens.userId, Users.id)
+            .select(FcmTokens.token)
+            .where { (FcmTokens.userId eq userId) and Users.deletedAt.isNull() }
+            .map { it[FcmTokens.token] }
     }
 
     override suspend fun deleteTokens(tokens: Collection<String>) {
