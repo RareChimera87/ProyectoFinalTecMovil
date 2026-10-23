@@ -169,64 +169,6 @@ internal fun InitialsAvatar(initials: String, size: Dp, modifier: Modifier = Mod
     }
 }
 
-/** Ilustración de A4: un ego-grafo pequeño con anillos punteados y nodos por modo. */
-@Composable
-internal fun OnboardingGraph(size: Dp, modifier: Modifier = Modifier) {
-    val colors = ParcheUTheme.colors
-    Canvas(modifier.size(size).clearAndSetSemantics { }) {
-        val c = Offset(this.size.width / 2, this.size.height / 2)
-        val k = this.size.width / 328f
-        val dash = PathEffect.dashPathEffect(floatArrayOf(2f * k * 2, 5f * k * 2))
-        listOf(62f, 102f, 140f).forEach {
-            drawCircle(
-                colors.ln,
-                radius = it * k,
-                center = c,
-                style = Stroke(width = 1.5f * k, pathEffect = dash)
-            )
-        }
-        val nodes =
-            listOf(
-                Triple(-40f, 62f, ParcheUPalette.Mint),
-                Triple(70f, 62f, ParcheUPalette.Violet),
-                Triple(160f, 102f, ParcheUPalette.Coral),
-                Triple(230f, 102f, ParcheUPalette.ElectricBlue),
-                Triple(15f, 140f, ParcheUPalette.ElectricBlue),
-                Triple(120f, 140f, ParcheUPalette.Mint),
-                Triple(285f, 140f, ParcheUPalette.Violet)
-            )
-        nodes.forEachIndexed { i, (deg, r, color) ->
-            val rad = Math.toRadians(deg.toDouble())
-            val p = Offset(
-                c.x + (r * k * kotlin.math.cos(rad)).toFloat(),
-                c.y + (r * k * kotlin.math.sin(rad)).toFloat()
-            )
-            val solid = i < 4
-            drawLine(
-                color.copy(alpha = if (solid) 0.95f else 0.3f),
-                c,
-                p,
-                strokeWidth = (if (solid) 2.5f else 1.5f) * k * 2,
-                pathEffect = if (i in
-                    2..3
-                ) {
-                    PathEffect.dashPathEffect(floatArrayOf(10f * k, 10f * k))
-                } else {
-                    null
-                }
-            )
-            drawCircle(color, radius = (if (r < 100f) 20f else 16f) * k, center = p)
-        }
-        drawCircle(ParcheUPalette.Violet, radius = 28f * k, center = c)
-        drawCircle(
-            Color.White,
-            radius = 28f * k,
-            center = c,
-            style = Stroke(width = 3f * k, join = StrokeJoin.Round)
-        )
-    }
-}
-
 /** Indicador de página de A2-A4: la activa mide 22 x 8, las demás 8 x 8 en `ln`. */
 @Composable
 internal fun PageIndicator(count: Int, current: Int, modifier: Modifier = Modifier) {

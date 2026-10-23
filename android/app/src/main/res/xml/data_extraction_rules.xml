@@ -1,11 +1,20 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Copia de seguridad y transferencia de Android 12 o posterior. -->
+<?xml version="1.0" encoding="utf-8"?><!--
+   Reglas de extracción para API 31 o superior. No se respalda ni se transfiere nada: la sesión de Firebase
+   Auth y los datos locales no deben salir del dispositivo (revisión de la ola 6).
+-->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- El último grafo contiene aristas de Pareja de la persona: no sale del teléfono. -->
-        <exclude domain="file" path="datastore/parche.preferences_pb" />
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="file" path="datastore/parche.preferences_pb" />
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
     </device-transfer>
 </data-extraction-rules>
