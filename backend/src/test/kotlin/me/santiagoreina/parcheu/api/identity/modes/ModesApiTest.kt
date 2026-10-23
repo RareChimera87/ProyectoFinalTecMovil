@@ -79,6 +79,22 @@ class ModesApiTest : FunSpec({
         }
     }
 
+    test("activar Pareja con age_verified_at pero una birth_date de menos de 18 años responde 403 AGE_REQUIRED") {
+        val repo = InMemoryIdentityRepository().apply {
+            seedAcceptedUser("ana", TEST_LEGAL_VERSION)
+            // Cumple 18 mañana (2026-10-26) según el reloj fijo: el servidor no debe dejarla activar Pareja.
+            replace(user("ana").copy(birthDate = LocalDate.of(2008, 10, 26), ageVerifiedAt = FIXED_CLOCK.instant()))
+        }
+        testApplication {
+            val client = startApp(testContainer(repo = repo))
+            val response = client.putModes("ana", UpdateModes(pareja, parejaConfirmed = true))
+            response.status shouldBe HttpStatusCode.Forbidden
+            response.error() shouldBe ErrorCode.AGE_REQUIRED
+            repo.enabledModes[repo.user("ana").id].orEmpty().shouldBeEmpty()
+            repo.user("ana").parejaConfirmedAt.shouldBeNull()
+        }
+    }
+
     test("activar Pareja con la edad verificada pero sin confirmación explícita responde 400 VALIDATION") {
         val repo = repoWithAna(ageVerified = true)
         testApplication {

@@ -99,7 +99,7 @@ class IdentityService(
             throw ValidationFailed("La versión del texto vigente es $legalTextVersion")
         }
         // Aprender de los chats de Pareja exige Pareja activo y +18 confirmado (E2.5).
-        LearningConsentPolicy.checkGrant(change.kind, change.granted, user, repo.modes(user.id))
+        LearningConsentPolicy.checkGrant(change.kind, change.granted, user, repo.modes(user.id), clock.instant())
         val current = repo.latestConsents(user.id).firstOrNull { it.kind == change.kind }
         val unchanged = current != null && current.granted == change.granted && current.textVersion == change.textVersion
         if (!unchanged) repo.appendConsents(user.id, listOf(NewConsent(change.kind, change.granted, change.textVersion)), clock.instant())
