@@ -85,10 +85,10 @@ object CompoundGalleries {
                     AvatarSpec("Luis Pérez", 70),
                     AvatarSpec("", 0, anonymous = true),
                     AvatarSpec("Marta Gil", 55),
-                    AvatarSpec("Pablo Ruiz", 60),
+                    AvatarSpec("Pablo Ruiz", 60)
                 ),
                 size = AvatarSizes.List,
-                borderColor = ParcheUTheme.colors.bg,
+                borderColor = ParcheUTheme.colors.bg
             )
         }
         GalleryRow("AffinityRing 112 (82 %) / 120 (35 %)") {
@@ -118,21 +118,21 @@ object CompoundGalleries {
             "Tu gemelo aprende de tus respuestas.",
             icon = icon,
             actionLabel = "Entendido",
-            onActionClick = {},
+            onActionClick = {}
         )
         InfoNote("Puedes cambiar esto cuando quieras.", icon = icon)
         ConsentBanner(
             "Tratamos tus datos según la Ley 1581 de 2012.",
             linkLabel = "Política de privacidad",
-            onLinkClick = {},
+            onLinkClick = {}
         )
         InfoListCard(
             "Qué verá tu pareja",
             listOf(
                 InfoListItem("Tu nombre y tu foto", icon),
                 InfoListItem("Tus intereses en común", icon),
-                InfoListItem("Nada de tus chats", icon),
-            ),
+                InfoListItem("Nada de tus chats", icon)
+            )
         )
     }
 
@@ -143,7 +143,7 @@ object CompoundGalleries {
                 "Aún no hay nadie",
                 "Invita a un amigo para empezar a armar tu parche.",
                 ctaLabel = "Invitar",
-                onCtaClick = {},
+                onCtaClick = {}
             )
         }
         GalleryRow("ErrorState") {
@@ -153,7 +153,7 @@ object CompoundGalleries {
                 retryLabel = "Reintentar",
                 onRetryClick = {},
                 secondaryLabel = "Volver",
-                onSecondaryClick = {},
+                onSecondaryClick = {}
             )
         }
         GalleryRow("GraphSkeleton") {
@@ -201,7 +201,7 @@ object CompoundGalleries {
                     Text(
                         "¡Conectaron!",
                         color = ParcheUTheme.colors.tx,
-                        modifier = Modifier.padding(24.dp),
+                        modifier = Modifier.padding(24.dp)
                     )
                 }
             }
@@ -219,7 +219,7 @@ object CompoundGalleries {
                 points = listOf(42f, 48f, 55f, 53f, 64f, 72f, 80f),
                 contentDescription = "Precisión del gemelo: de 42 % a 80 %",
                 startLabel = "Sem 1",
-                endLabel = "Sem 7",
+                endLabel = "Sem 7"
             )
         }
     }

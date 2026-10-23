@@ -16,7 +16,16 @@ class TwinReadyViewModelTest {
 
     @Test
     fun showsOnlyTheActiveModesInOrder() {
-        val repo = FakeModesRepository(ApiResult.Success(meDto(mapOf(Mode.ESTUDIO to true, Mode.AMISTAD to true))))
+        val repo = FakeModesRepository(
+            ApiResult.Success(
+                meDto(
+                    mapOf(
+                        Mode.ESTUDIO to true,
+                        Mode.AMISTAD to true
+                    )
+                )
+            )
+        )
         assertEquals(listOf(Mode.AMISTAD, Mode.ESTUDIO), TwinReadyViewModel(repo).state.value.modes)
     }
 

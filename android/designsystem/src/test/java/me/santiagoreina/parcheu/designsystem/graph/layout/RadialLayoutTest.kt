@@ -28,9 +28,9 @@ class RadialLayoutTest {
             listOf(
                 LayoutNode("a", "X", 85),
                 LayoutNode("b", "X", 84),
-                LayoutNode("c", "X", 69),
+                LayoutNode("c", "X", 69)
             ),
-            328f,
+            328f
         )
         val ring = l.nodes.associate { it.id to it.ring }
         assertEquals(1, ring["a"])

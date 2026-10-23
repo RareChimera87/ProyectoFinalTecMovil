@@ -44,7 +44,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         val tag = stubTag(entry.route)
         composeRule.onNodeWithTag(tag).assertIsDisplayed()
         composeRule.onAllNodes(
-            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag)),
+            hasText(entry.title) and hasAnyAncestor(hasTestTag(tag))
         ).onFirst().assertIsDisplayed()
         // Los argumentos llegan intactos a la pantalla (round-trip de la ruta tipada).
         composeRule
@@ -55,7 +55,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
         assertEquals(
             "NavBar solo en las raíces",
             TopLevelDestination.entries.any { it.routeClass == entry.route::class },
-            shown.isTopLevel(),
+            shown.isTopLevel()
         )
     }
 
@@ -67,9 +67,17 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
             .map { arrayOf<Any>(it) }
 
         /**
-         * Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest) y B2-B5 (E2.5,
-         * ModesScreenTest y ModesScreenshotTest).
+         * Rutas cuya pantalla real ya existe: A1 y A2-A4 (E2.2, SplashNavigationTest), las preguntas del
+         * gemelo (E2.4, TwinQuestions) y modos, confirmación +18, consentimiento y gemelo listo (E2.5,
+         * ModesScreenTest, ConsentTest y ModesScreenshotTest).
          */
-        val implementedRoutes = setOf(Splash::class, Onboarding::class, Modes::class, Consent::class, TwinReady::class)
+        val implementedRoutes = setOf(
+            Splash::class,
+            Onboarding::class,
+            TwinQuestions::class,
+            Modes::class,
+            Consent::class,
+            TwinReady::class
+        )
     }
 }

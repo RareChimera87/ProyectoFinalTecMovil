@@ -19,3 +19,8 @@ Las reglas exigen infraestructura como código, entornos dev y prod y secretos f
 ## Consecuencias
 - Aislamiento real entre dev y prod; doble configuración de Firebase y SHA.
 - El bootstrap requiere al usuario una vez (con su ADC ya autenticado).
+
+## Enmienda (E10.2, 22 oct 2026): cuenta de servicio de Play
+- La cuenta de servicio para la API de Play es `sa-play` en **`parcheu-prod`** (la misma que usará E7.1); no existe una cuenta de Play en `parcheu-dev`, porque el perímetro de IAM de dev es más amplio que el de prod y publica en la app real.
+- La publicación (workflow `android-release`) se autentica por WIF suplantando a `sa-play`, sin llaves, con Gradle Play Publisher y credenciales por defecto. El proveedor de WIF restringe la suplantación a los environments `play` y `play-alpha`.
+- **Excepción temporal:** mientras el bootstrap de WIF de prod no exista, se admite una llave JSON de `sa-play` guardada solo como secreto del environment `play` / `play-alpha` (`PLAY_SERVICE_ACCOUNT_JSON`). Se elimina (llave y secreto) al activarse el WIF; el workflow prefiere WIF cuando el secreto no existe. Verificar la compatibilidad de WIF con GPP queda pendiente de la primera corrida real (criterio de aceptación de E10.2).

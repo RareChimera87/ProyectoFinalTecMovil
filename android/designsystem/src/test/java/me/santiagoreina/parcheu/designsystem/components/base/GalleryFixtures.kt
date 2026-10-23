@@ -28,7 +28,7 @@ private val TestIconVector: ImageVector =
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = 24f,
-        viewportHeight = 24f,
+        viewportHeight = 24f
     ).apply {
         path(fill = SolidColor(Color.Black)) {
             moveTo(12f, 3f)
@@ -54,6 +54,6 @@ fun GalleryRow(label: String, content: @Composable () -> Unit) {
 fun GalleryCanvas(content: @Composable () -> Unit) {
     Column(
         Modifier.width(360.dp).background(ParcheUTheme.colors.bg).padding(16.dp).fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) { content() }
 }

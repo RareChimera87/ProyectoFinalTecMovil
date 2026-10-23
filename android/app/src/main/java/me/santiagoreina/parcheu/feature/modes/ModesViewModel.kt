@@ -16,7 +16,11 @@ import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 
 /** Diálogo B3 abierto. [birthDate] y [age] son de solo lectura (la fecha la verificó B0, E2.6). */
-data class ParejaDialogState(val birthDate: String?, val age: Int?, val confirmed: Boolean = false) {
+data class ParejaDialogState(
+    val birthDate: String?,
+    val age: Int?,
+    val confirmed: Boolean = false
+) {
     /** Sin fecha verificada no se puede confirmar: el servidor respondería AGE_REQUIRED. */
     val canConfirm: Boolean get() = birthDate != null && confirmed
 }
@@ -28,10 +32,11 @@ data class ModesUiState(
     val modes: Map<Mode, Boolean> = Mode.entries.associateWith { false },
     val dialog: ParejaDialogState? = null,
     val saving: Boolean = false,
-    val saveError: AppError? = null,
+    val saveError: AppError? = null
 ) {
     /** Continuar exige al menos un modo activo (validación de B2). */
-    val canContinue: Boolean get() = !loading && loadError == null && !saving && modes.values.any { it }
+    val canContinue: Boolean get() = !loading && loadError == null && !saving &&
+        modes.values.any { it }
 }
 
 sealed interface ModesEffect {
@@ -40,12 +45,13 @@ sealed interface ModesEffect {
 }
 
 /**
- * B2 y B3 (E2.5). Encender Pareja abre B3 y solo queda encendido al confirmar la casilla; cancelar lo
- * deja apagado. Continuar envía `PUT /v1/me/modes` con `parejaConfirmed` si la casilla se marcó aquí.
+ * B2 y B3 (E2.5). Encender Pareja abre B3 y solo queda encendido al confirmar la casilla;
+ * cancelar lo deja apagado. Continuar envía `PUT /v1/me/modes` con `parejaConfirmed` si la casilla
+ * se marcó aquí.
  */
 class ModesViewModel(
     private val repository: ModesRepository,
-    private val today: () -> CivilDate = CivilDate::todayInBogota,
+    private val today: () -> CivilDate = CivilDate::todayInBogota
 ) : ViewModel() {
     private val _state = MutableStateFlow(ModesUiState())
     val state: StateFlow<ModesUiState> = _state.asStateFlow()
@@ -66,13 +72,18 @@ class ModesViewModel(
         _state.update { it.copy(loading = true, loadError = null) }
         viewModelScope.launch {
             when (val result = repository.me()) {
-                is ApiResult.Failure -> _state.update { it.copy(loading = false, loadError = result.error) }
+                is ApiResult.Failure -> _state.update {
+                    it.copy(loading = false, loadError = result.error)
+                }
                 is ApiResult.Success -> {
                     me = result.value
                     _state.update {
                         it.copy(
                             loading = false,
-                            modes = Mode.entries.associateWith { mode -> result.value.modes[mode] == true },
+                            modes = Mode.entries.associateWith { mode ->
+                                result.value.modes[mode] ==
+                                    true
+                            }
                         )
                     }
                 }
@@ -85,7 +96,10 @@ class ModesViewModel(
         if (mode == Mode.PAREJA && enabled) {
             val birth = me?.takeIf { it.ageVerified }?.birthDate?.let(CivilDate::of)
             _state.update {
-                it.copy(dialog = ParejaDialogState(birth?.display(), birth?.ageOn(today())), saveError = null)
+                it.copy(
+                    dialog = ParejaDialogState(birth?.display(), birth?.ageOn(today())),
+                    saveError = null
+                )
             }
             return
         }
@@ -116,7 +130,9 @@ class ModesViewModel(
         _state.update { it.copy(saving = true, saveError = null) }
         viewModelScope.launch {
             when (val result = repository.updateModes(current.modes, parejaConfirmedHere)) {
-                is ApiResult.Failure -> _state.update { it.copy(saving = false, saveError = result.error) }
+                is ApiResult.Failure -> _state.update {
+                    it.copy(saving = false, saveError = result.error)
+                }
                 is ApiResult.Success -> {
                     me = result.value
                     _state.update { it.copy(saving = false) }
@@ -130,7 +146,11 @@ class ModesViewModel(
 /** Mensaje de error de B2. */
 fun modesErrorMessage(error: AppError): String = when (error) {
     AppError.Network -> "No hay conexión. Revisa tu internet e inténtalo de nuevo."
-    AppError.AgeRequired -> "Para activar Pareja primero verificamos tu fecha de nacimiento en tu perfil."
-    is AppError.Validation -> "Revisa tus modos: activa al menos uno y confirma Pareja si lo elegiste."
+    AppError.AgeRequired ->
+        "Para activar Pareja primero verificamos " +
+            "tu fecha de nacimiento en tu perfil."
+    is AppError.Validation ->
+        "Revisa tus modos: activa al menos uno " +
+            "y confirma Pareja si lo elegiste."
     else -> "No pudimos guardar tus modos. Inténtalo de nuevo."
 }

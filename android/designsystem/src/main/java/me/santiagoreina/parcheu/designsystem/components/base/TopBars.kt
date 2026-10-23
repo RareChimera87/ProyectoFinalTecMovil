@@ -36,7 +36,7 @@ fun ParcheUIconButton(
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true,
+    enabled: Boolean = true
 ) {
     val colors = ParcheUTheme.colors
     Box(
@@ -44,13 +44,13 @@ fun ParcheUIconButton(
         modifier
             .size(ParcheUSizes.IconButton)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
         Icon(
             painter = icon,
             contentDescription = contentDescription,
             tint = if (enabled) colors.tx else colors.tx.disabled(),
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(24.dp)
         )
     }
 }
@@ -61,7 +61,7 @@ private fun BarFrame(
     modifier: Modifier,
     start: @Composable RowScope.() -> Unit,
     center: @Composable RowScope.() -> Unit,
-    end: @Composable RowScope.() -> Unit,
+    end: @Composable RowScope.() -> Unit
 ) {
     Row(
         modifier =
@@ -71,7 +71,7 @@ private fun BarFrame(
             .windowInsetsPadding(WindowInsets.statusBars)
             .height(ParcheUSizes.AppBar)
             .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         start()
         center()
@@ -87,7 +87,7 @@ private fun RowScope.BarTitle(title: String) {
         color = ParcheUTheme.colors.tx,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+        modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
     )
 }
 
@@ -99,7 +99,7 @@ private fun RowScope.BarTitle(title: String) {
 fun ParcheUHomeTopBar(
     wordmark: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    actions: @Composable RowScope.() -> Unit = {},
+    actions: @Composable RowScope.() -> Unit = {}
 ) {
     BarFrame(
         modifier = modifier,
@@ -108,18 +108,22 @@ fun ParcheUHomeTopBar(
         end = {
             actions()
             Spacer(Modifier.width(12.dp))
-        },
+        }
     )
 }
 
 /** Barra de pantalla raíz: título Sora 19/600 y hasta dos iconos de acción. */
 @Composable
-fun ParcheURootTopBar(title: String, modifier: Modifier = Modifier, actions: @Composable RowScope.() -> Unit = {}) {
+fun ParcheURootTopBar(
+    title: String,
+    modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {}
+) {
     BarFrame(
         modifier = modifier,
         start = { Spacer(Modifier.width(12.dp)) },
         center = { BarTitle(title) },
-        end = actions,
+        end = actions
     )
 }
 
@@ -134,7 +138,7 @@ fun ParcheUChildTopBar(
     navigationContentDescription: String,
     onNavigationClick: () -> Unit,
     modifier: Modifier = Modifier,
-    action: @Composable RowScope.() -> Unit = {},
+    action: @Composable RowScope.() -> Unit = {}
 ) {
     BarFrame(
         modifier = modifier,
@@ -145,7 +149,7 @@ fun ParcheUChildTopBar(
         end = {
             action()
             Spacer(Modifier.width(8.dp))
-        },
+        }
     )
 }
 
@@ -159,7 +163,7 @@ fun ParcheUChatTopBar(
     avatar: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    actions: @Composable RowScope.() -> Unit = {},
+    actions: @Composable RowScope.() -> Unit = {}
 ) {
     BarFrame(
         modifier = modifier,
@@ -170,14 +174,14 @@ fun ParcheUChatTopBar(
         center = {
             Column(
                 Modifier.weight(1f).padding(horizontal = 10.dp),
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = name,
                     style = MaterialTheme.typography.titleMedium,
                     color = ParcheUTheme.colors.tx,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (subtitle != null) {
                     Text(
@@ -185,11 +189,11 @@ fun ParcheUChatTopBar(
                         style = MaterialTheme.typography.bodySmall,
                         color = ParcheUTheme.colors.mu,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         },
-        end = actions,
+        end = actions
     )
 }

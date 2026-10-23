@@ -41,8 +41,8 @@ class TwinMascotScreenshotTest {
             filePath = "src/test/screenshots/$name.png",
             roborazziOptions =
             RoborazziOptions(
-                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f),
-            ),
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+            )
         )
     }
 
@@ -50,17 +50,17 @@ class TwinMascotScreenshotTest {
     private fun Sheet() {
         Column(
             Modifier.background(ParcheUTheme.colors.bg).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.Bottom,
+                verticalAlignment = Alignment.Bottom
             ) {
                 TwinMascotSize.entries.forEach { TwinMascot(size = it, animationsEnabled = false) }
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.Bottom,
+                verticalAlignment = Alignment.Bottom
             ) {
                 TwinMascotTone.entries.forEach {
                     TwinMascot(size = TwinMascotSize.M, tone = it, animationsEnabled = false)
@@ -68,14 +68,14 @@ class TwinMascotScreenshotTest {
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.Bottom,
+                verticalAlignment = Alignment.Bottom
             ) {
                 TwinMascot(size = TwinMascotSize.L, error = true, animationsEnabled = false)
                 TwinMascot(
                     size = TwinMascotSize.XL,
                     tone = TwinMascotTone.Couple,
                     error = true,
-                    animationsEnabled = false,
+                    animationsEnabled = false
                 )
             }
         }

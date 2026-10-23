@@ -41,7 +41,7 @@ internal fun SheetHandle(modifier: Modifier = Modifier) {
             .clip(RoundedCornerShape(2.dp))
             .background(ParcheUTheme.colors.ln)
             // Decorativa: el lector de pantalla no debe anunciarla.
-            .clearAndSetSemantics { },
+            .clearAndSetSemantics { }
     )
 }
 
@@ -51,7 +51,10 @@ internal fun SheetHandle(modifier: Modifier = Modifier) {
  * capturarla sin ventana.
  */
 @Composable
-fun ParcheUBottomSheetContent(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun ParcheUBottomSheetContent(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -59,7 +62,7 @@ fun ParcheUBottomSheetContent(modifier: Modifier = Modifier, content: @Composabl
             .background(ParcheUTheme.colors.s1, ParcheUTheme.shapes.bottomSheet)
             .padding(PaddingValues(start = 20.dp, top = 10.dp, end = 20.dp, bottom = 30.dp)),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         SheetHandle()
         content()
@@ -76,7 +79,7 @@ fun ParcheUBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     skipPartiallyExpanded: Boolean = true,
-    content: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = ParcheUTheme.colors
     ModalBottomSheet(
@@ -90,21 +93,24 @@ fun ParcheUBottomSheet(
         tonalElevation = 0.dp,
         dragHandle = {
             Box(Modifier.padding(top = 10.dp, bottom = 2.dp)) { SheetHandle() }
-        },
+        }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(PaddingValues(start = 20.dp, top = 0.dp, end = 20.dp, bottom = 30.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            content = content,
+            content = content
         )
     }
 }
 
 /** Tarjeta del diálogo: s1, radio 28 y margen lateral de 24dp. */
 @Composable
-fun ParcheUModalDialogContent(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun ParcheUModalDialogContent(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
     val shape = RoundedCornerShape(ParcheURadius.HeroLarge)
     Column(
         modifier = modifier
@@ -114,7 +120,7 @@ fun ParcheUModalDialogContent(modifier: Modifier = Modifier, content: @Composabl
             .background(ParcheUTheme.colors.s1, shape)
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        content = content,
+        content = content
     )
 }
 
@@ -127,14 +133,14 @@ fun ParcheUModalDialog(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     dismissOnScrimClick: Boolean = true,
-    content: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit
 ) {
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
+            decorFitsSystemWindows = false
+        )
     ) {
         Box(
             modifier = Modifier
@@ -144,14 +150,14 @@ fun ParcheUModalDialog(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     enabled = dismissOnScrimClick,
-                    onClick = onDismissRequest,
+                    onClick = onDismissRequest
                 ),
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.Center
         ) {
             // El clic sobre la tarjeta no debe llegar al scrim.
             ParcheUModalDialogContent(
                 modifier = modifier.pointerInput(Unit) { detectTapGestures { } },
-                content = content,
+                content = content
             )
         }
     }

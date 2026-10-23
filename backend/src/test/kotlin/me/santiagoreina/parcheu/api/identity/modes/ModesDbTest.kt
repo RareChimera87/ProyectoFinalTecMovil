@@ -21,6 +21,7 @@ import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TASKS_ACCOUNT
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.consent.LearningConsentPolicy
@@ -34,8 +35,10 @@ import me.santiagoreina.parcheu.api.platform.db.runMigrations
 import me.santiagoreina.parcheu.api.platform.db.tables.Consents
 import me.santiagoreina.parcheu.api.platform.db.tables.UserModes
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testConfig
+import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.contract.AcceptTerms
 import me.santiagoreina.parcheu.contract.ApiError
 import me.santiagoreina.parcheu.contract.ConsentChange
@@ -65,7 +68,18 @@ class ModesDbTest : FunSpec({
 
     fun container(db: Database): AppContainer {
         val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, TEST_LEGAL_VERSION)
-        return AppContainer(testConfig(), FIXED_CLOCK, FakeTokenVerifier(), FakeOidcVerifier(TASKS_ACCOUNT), identity, allDomains(identity))
+        val quota = inMemoryQuotaModule(FIXED_CLOCK)
+        val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())
+        return AppContainer(
+            config = testConfig(),
+            clock = FIXED_CLOCK,
+            tokenVerifier = FakeTokenVerifier(),
+            oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
+            identity = identity,
+            quota = quota,
+            twin = twin,
+            domains = allDomains(identity, quota, twin),
+        )
     }
 
     suspend fun HttpClient.onboard(uid: String): UUID {

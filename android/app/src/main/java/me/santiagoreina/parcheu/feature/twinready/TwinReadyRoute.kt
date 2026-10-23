@@ -19,7 +19,7 @@ fun TwinReadyRoute(
     @Suppress("UNUSED_PARAMETER") route: TwinReady,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
-    viewModel: TwinReadyViewModel = koinViewModel(),
+    viewModel: TwinReadyViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     TwinReadyScreen(
@@ -29,6 +29,6 @@ fun TwinReadyRoute(
             navigator.navigateToTopLevel(Parche())
         },
         onGoHome = { navigator.replaceAll(Home) },
-        modifier = modifier,
+        modifier = modifier
     )
 }

@@ -63,7 +63,8 @@ object ModesTags {
 const val PAREJA_CONFIRM_TEXT = "Confirmo que soy mayor de 18 y quiero activar Pareja"
 
 /**
- * B2 'Elegir modos' con el diálogo B3 superpuesto. Sin estado propio: todo llega en [state]. El diálogo
+ * B2 'Elegir modos' con el diálogo B3 superpuesto. Sin estado propio: todo llega en [state].
+ * El diálogo
  * se dibuja dentro de la pantalla (no en otra ventana) para que las capturas y las pruebas lo vean.
  */
 @Composable
@@ -78,7 +79,7 @@ fun ModesScreen(
     onDialogConfirm: () -> Unit,
     onDialogCancel: () -> Unit,
     modifier: Modifier = Modifier,
-    animateLoading: Boolean = true,
+    animateLoading: Boolean = true
 ) {
     val colors = ParcheUTheme.colors
     Box(modifier.fillMaxSize().background(colors.bg).testTag(ModesTags.SCREEN)) {
@@ -88,7 +89,7 @@ fun ModesScreen(
                     title = "",
                     navigationIcon = rememberVectorPainter(FlowIcons.Back),
                     navigationContentDescription = "Volver",
-                    onNavigationClick = onBack,
+                    onNavigationClick = onBack
                 )
             } else {
                 Spacer(Modifier.height(56.dp))
@@ -102,19 +103,24 @@ fun ModesScreen(
                     message = modesErrorMessage(state.loadError),
                     retryLabel = "Reintentar",
                     onRetryClick = onRetry,
-                    modifier = Modifier.weight(1f).testTag(ModesTags.ERROR),
+                    modifier = Modifier.weight(1f).testTag(ModesTags.ERROR)
                 )
                 else -> ModesContent(state, onToggle, Modifier.weight(1f))
             }
             Column(
-                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                Modifier.fillMaxWidth().padding(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 12.dp,
+                    bottom = 28.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 PrimaryButton(
                     text = if (state.saving) "Guardando…" else "Continuar",
                     onClick = onContinue,
                     enabled = state.canContinue,
-                    modifier = Modifier.fillMaxWidth().testTag(ModesTags.CONTINUE),
+                    modifier = Modifier.fillMaxWidth().testTag(ModesTags.CONTINUE)
                 )
             }
         }
@@ -125,23 +131,28 @@ fun ModesScreen(
 }
 
 @Composable
-private fun ModesContent(state: ModesUiState, onToggle: (Mode, Boolean) -> Unit, modifier: Modifier = Modifier) {
+private fun ModesContent(
+    state: ModesUiState,
+    onToggle: (Mode, Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val colors = ParcheUTheme.colors
     Column(
         modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 "¿Para qué quieres tu parche?",
                 style = MaterialTheme.typography.headlineMedium,
                 color = colors.tx,
-                modifier = Modifier.semantics { heading() },
+                modifier = Modifier.semantics { heading() }
             )
             Text(
-                "Activa los modos que quieras. Puedes cambiarlos cuando quieras en Ajustes.",
+                "Activa los modos que quieras. Puedes cambiarlos " +
+                    "cuando quieras en Ajustes.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = colors.mu,
+                color = colors.mu
             )
         }
         Mode.entries.forEach { mode ->
@@ -149,7 +160,7 @@ private fun ModesContent(state: ModesUiState, onToggle: (Mode, Boolean) -> Unit,
         }
         InfoBanner(
             text = "Solo te emparejamos con personas que tengan el mismo modo activo.",
-            icon = rememberVectorPainter(FlowIcons.Info),
+            icon = rememberVectorPainter(FlowIcons.Info)
         )
         if (!state.modes.values.any { it }) {
             InfoNote("Activa al menos un modo para continuar.")
@@ -165,15 +176,18 @@ private fun ModeRow(mode: Mode, checked: Boolean, enabled: Boolean, onChange: (B
     Row(
         Modifier.fillMaxWidth().clip(shape).background(colors.s1, shape).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         ModeIconBox(mode)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(
                     mode.label,
                     style = MaterialTheme.typography.titleMedium,
-                    color = colors.tx,
+                    color = colors.tx
                 )
                 if (mode == Mode.PAREJA) AdultBadge()
             }
@@ -184,7 +198,7 @@ private fun ModeRow(mode: Mode, checked: Boolean, enabled: Boolean, onChange: (B
             onCheckedChange = onChange,
             contentDescription = "Modo ${mode.label}",
             enabled = enabled,
-            modifier = Modifier.testTag(ModesTags.switch(mode)),
+            modifier = Modifier.testTag(ModesTags.switch(mode))
         )
     }
 }
@@ -196,9 +210,14 @@ internal fun ModeIconBox(mode: Mode) {
     val shape = RoundedCornerShape(16.dp)
     Box(
         Modifier.size(48.dp).clip(shape).background(modeColors.solid, shape),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.Center
     ) {
-        Icon(mode.icon(), contentDescription = null, tint = modeColors.onSolid, modifier = Modifier.size(26.dp))
+        Icon(
+            mode.icon(),
+            contentDescription = null,
+            tint = modeColors.onSolid,
+            modifier = Modifier.size(26.dp)
+        )
     }
 }
 
@@ -211,7 +230,7 @@ private fun AdultBadge() {
         color = colors.tx,
         modifier = Modifier
             .border(1.dp, colors.ln, RoundedCornerShape(6.dp))
-            .padding(horizontal = 7.dp, vertical = 2.dp),
+            .padding(horizontal = 7.dp, vertical = 2.dp)
     )
 }
 
@@ -221,38 +240,44 @@ private fun ParejaDialog(
     dialog: ParejaDialogState,
     onConfirmedChange: (Boolean) -> Unit,
     onConfirm: () -> Unit,
-    onCancel: () -> Unit,
+    onCancel: () -> Unit
 ) {
     val colors = ParcheUTheme.colors
-    // Dialog real (ventana propia): los servicios de accesibilidad no alcanzan B2 mientras B3 está abierto,
+    // Dialog real (ventana propia): los servicios de accesibilidad no alcanzan B2 mientras B3 está
+    // abierto,
     // y atrás o tocar el scrim equivalen a Cancelar (Pareja queda apagado).
     ParcheUModalDialog(
         onDismissRequest = onCancel,
-        // Con fuente grande la tarjeta puede exceder la pantalla: se desplaza en lugar de recortarse.
+        // Con fuente grande la tarjeta puede exceder la pantalla: se desplaza en lugar de
+        // recortarse.
         modifier = Modifier
             .testTag(ModesTags.DIALOG)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
     ) {
         ModeIconBox(Mode.PAREJA)
         Text(
             "Activar modo Pareja",
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
             color = colors.tx,
-            modifier = Modifier.semantics { heading() },
+            modifier = Modifier.semantics { heading() }
         )
         Text(
             if (dialog.birthDate != null) {
-                "Este modo es solo para mayores de 18 años. Esta es la fecha de nacimiento que verificamos en tu perfil."
+                "Este modo es solo para mayores de 18 años. " +
+                    "Esta es la fecha de nacimiento que " +
+                    "verificamos en tu perfil."
             } else {
-                "Este modo es solo para mayores de 18 años y aún no verificamos tu fecha de nacimiento. " +
-                    "Complétala en tu perfil para activarlo."
+                "Este modo es solo para mayores de 18 años " +
+                    "y aún no verificamos tu fecha de " +
+                    "nacimiento. Complétala en tu perfil para activarlo."
             },
             style = MaterialTheme.typography.bodyMedium,
-            color = colors.mu,
+            color = colors.mu
         )
         if (dialog.birthDate != null) ReadOnlyBirthDate(dialog.birthDate, dialog.age)
         val canCheck = dialog.birthDate != null
-        // La fila entera es la casilla (Role.Checkbox): TalkBack lee la frase una vez y tocar el texto la marca.
+        // La fila entera es la casilla (Role.Checkbox): TalkBack lee la frase una vez y tocar el
+        // texto la marca.
         Row(
             modifier = Modifier
                 .testTag(ModesTags.DIALOG_CHECK)
@@ -260,10 +285,10 @@ private fun ParejaDialog(
                     value = dialog.confirmed,
                     enabled = canCheck,
                     role = Role.Checkbox,
-                    onValueChange = onConfirmedChange,
+                    onValueChange = onConfirmedChange
                 ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ParcheUCheckbox(
                 checked = dialog.confirmed,
@@ -271,26 +296,26 @@ private fun ParejaDialog(
                 contentDescription = "",
                 enabled = canCheck,
                 // Solo dibujo: la semántica la aporta la fila, así no se lee dos veces.
-                modifier = Modifier.clearAndSetSemantics {},
+                modifier = Modifier.clearAndSetSemantics {}
             )
             Text(
                 PAREJA_CONFIRM_TEXT,
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (canCheck) colors.tx else colors.mu,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f)
             )
         }
         Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ParcheUTextButton(
                 text = "Cancelar",
                 onClick = onCancel,
-                modifier = Modifier.weight(1f).testTag(ModesTags.DIALOG_CANCEL),
+                modifier = Modifier.weight(1f).testTag(ModesTags.DIALOG_CANCEL)
             )
             PrimaryButton(
                 text = "Confirmar",
                 onClick = onConfirm,
                 enabled = dialog.canConfirm,
-                modifier = Modifier.weight(1.3f).testTag(ModesTags.DIALOG_CONFIRM),
+                modifier = Modifier.weight(1.3f).testTag(ModesTags.DIALOG_CONFIRM)
             )
         }
     }
@@ -305,18 +330,18 @@ private fun ReadOnlyBirthDate(date: String, age: Int?) {
         Text(
             "Fecha de nacimiento (verificada)",
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = colors.prt,
+            color = colors.prt
         )
         Row(
             Modifier.fillMaxWidth().height(56.dp).clip(shape).background(colors.s2, shape)
                 .border(1.dp, colors.ln, shape).padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 date,
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.tx,
-                modifier = Modifier.weight(1f).testTag(ModesTags.DIALOG_DATE),
+                modifier = Modifier.weight(1f).testTag(ModesTags.DIALOG_DATE)
             )
             if (age != null) {
                 Text("$age años", style = MaterialTheme.typography.bodySmall, color = colors.mu)
