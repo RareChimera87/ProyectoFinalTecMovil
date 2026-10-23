@@ -139,7 +139,7 @@ scripts/demo-mutacion-privacidad.sh ninguna    # control: suite en verde
 scripts/test/demo-mutacion-privacidad.test.sh  # comprobación rápida de las anclas, sin Gradle
 ```
 
-La mutación `memorias` hoy se ancla en `MemorySelection`; `TwinPromptBuilderDelegationTest` obliga a que el `TwinPromptBuilder` de E4.3 delegue en ella, y al entrar E4.3 el ancla debe moverse al builder real.
+La mutación `memorias` se ancla en el filtro por modo de `MemorySelection.select`, que es la selección que usa el `TwinPromptBuilder` real de E4.3 (`memoriesFor` delega en `select` y `sanitize`; `TwinPromptBuilderDelegationTest` lo exige con ASM). El builder no repite ese filtro, así que la mutación llega a su prompt y la detecta también la propiedad "prompt del builder por modo" de `TwinPromptMemoryPropertyTest`, que arma el prompt con el builder real.
 
 La demo exige que el archivo a mutar no tenga cambios sin commit (lo restaura con `git checkout`).
 Una vista de terceros nueva se agrega en `ThirdPartyViews.registered` y con su sonda en
@@ -160,3 +160,15 @@ JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
 - La edad se verifica solo en el servidor: `POST /v1/me/age-verification` guarda `birth_date` una sola vez (inmutable) y calcula los 18 años con la fecha de hoy en America/Bogota. La app nunca decide la edad.
 - Una cuenta de menor queda con `underage_at` y la puerta de `identity/TermsGate.kt` le responde 403 `UNDERAGE` en toda ruta, incluidas `session` y `terms`, salvo `GET` y `DELETE /v1/me`. Para probarlo en local, envía una fecha de menos de 18 años desde B0 o con `curl`.
 - El catálogo de B0 (`GET /v1/catalog`) sale de las semillas de V2 más `V20261022_0745__universidad_unipaz.sql`; `universityId` se valida en `1..32767` (la columna es `smallint`).
+## Simulación (E4.3)
+
+- La tarea `simulate` va a la cola `simulations` de Cloud Tasks: además de lo que pide el gemelo necesita `TASKS_QUEUE_SIM`. Con `ENV=local` la cola es Fake y no ejecuta en línea: para correr una simulación local llama `POST /internal/tasks/simulate` con `{"id":"<simulationId>"}` y el token Fake de tareas (`oidc-tasks-fake`).
+- El espejo `simulations/{id}` escribe en Firestore con Firebase Admin (ADC de `sa-api`) solo si hay `FIREBASE_PROJECT_ID` y `ENV` no es `local`.
+- Al terminar (DONE o FAILED) se avisa a los dos participantes por el `Notifier` de E5.3 (`SIMULATION_READY` → `parcheu://results/{id}`, `SIMULATION_FAILED` → `parcheu://simulation/{id}`).
+- Humos manuales contra GCP dev (no corren en CI; una simulación real cuesta 1-3 centavos de USD):
+
+  ```bash
+  cd backend && ./gradlew test -Pvertex -PsinContenedores --tests '*SimulationVertexSmokeTest*'
+  ```
+
+- `SimulationDbTest` usa Postgres real: en local, `PARCHEU_TEST_DB_URL` apuntando a un Postgres 16 desechable (ver `TestDatabase`).

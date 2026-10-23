@@ -251,6 +251,7 @@ dependencies {
     implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.androidx.datastore.preferences)
     // Login con Google (E2.2, ADR-0021): Credential Manager + googleid → Firebase Auth.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)

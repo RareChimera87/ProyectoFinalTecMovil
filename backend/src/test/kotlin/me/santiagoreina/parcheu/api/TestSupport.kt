@@ -16,6 +16,8 @@ import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
+import me.santiagoreina.parcheu.api.simulation.SimulationModule
+import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
@@ -62,6 +64,7 @@ fun testContainer(
     twin: TwinModule = inMemoryTwinModule(clock, ai),
     graph: GraphModule = inMemoryGraphModule(clock),
     chat: ChatModule = inMemoryChatModule(clock, graph.policy),
+    simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph),
 ): AppContainer {
     val identity = IdentityService(repo, clock, legalTextVersion)
     val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
@@ -77,7 +80,8 @@ fun testContainer(
         twin = twin,
         graph = graph,
         chat = chat,
-        domains = allDomains(identity, profile, quota, twin, graph, chat) + extra,
+        simulation = simulation,
+        domains = allDomains(identity, profile, quota, twin, graph, chat, simulation) + extra,
     )
 }
 

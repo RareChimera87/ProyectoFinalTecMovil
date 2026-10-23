@@ -504,6 +504,13 @@ Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes 
 8. **Cierre:** DONE → arista SIMULATED (si no hay CONNECTED) con la afinidad, notificación a ambos. FAILED (3 reintentos agotados) → `refunded = true`, notificación de error (F5).
 9. **Idempotencia:** la tarea usa el id de la simulación; si el estado es DONE no hace nada; los turnos ya guardados no se repiten.
 10. **Costo:** unas 25 llamadas cortas (24 turnos + juez por escenario); del orden de 1-3 centavos de USD por simulación con Flash (verificar con los precios vigentes en E0.9).
+11. **Implementación (E4.3, `backend/.../simulation/`).** `SimulationService` (API), `SimulationEngine` (tarea), `TwinAgent`, `TwinPromptBuilder`, `SimulationJudge` y `SimulationScoring`. Decisiones:
+    - Los escenarios se eligen al aceptar la simulación y se guardan en `simulations.transcript` (escenario, turnos con lado A/B, veredicto del juez); cada turno y cada veredicto se guarda con `SELECT ... FOR UPDATE` comprobando el número de pasos, así que un reintento retoma sin repetir turnos y dos entregas simultáneas no los duplican.
+    - "≤ 120 tokens por turno" se aplica al texto visible (se recorta a 480 caracteres en la última oración completa); `maxOutputTokens` del turno es 768 porque en Gemini 3.x el razonamiento cuenta dentro de ese techo.
+    - Cada turno y cada juez se intentan 3 veces; si se agotan, o si el presupuesto diario se acaba a mitad de camino, la simulación queda FAILED y el cupo se devuelve. `POST /v1/simulations` consulta el presupuesto **antes** de cobrar.
+    - `progress` = `{scenarioIndex, turn, of = 8}`; el espejo de Firestore se crea en QUEUED antes de encolar y se actualiza tras cada turno; si falla, se registra y la simulación sigue.
+    - El informe guardado (`simulations.report`) trae puntaje, similitud de rasgos, promedio del juez, un resumen (el del escenario más cercano al promedio), 3 razones, 2 choques y las dimensiones promediadas; E4.6 decide qué ve cada plan.
+    - `SimulationSummary.other` lo arma `GraphVisibilityPolicy` (nombre solo con conexión mutua). `otherUserId` debe ser el `users.id` (el `id` de un nodo conectado del grafo); un `anonId` da 404.
 
 ### 7.3 Presupuesto y modelos
 - Configuración: `AI_PROVIDER` (gemini | claude; `fake` solo con `ENV=local`), `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`, `AI_DAILY_BUDGET_USD`, `AI_VERTEX_PROJECT` (o `GCP_PROJECT`), `AI_VERTEX_LOCATION` (`us`). Los IDs y la tabla de precios viven en `backend/src/main/resources/ai/modelos.properties` (fijados en el spike de E0.9, ADR-0008: `gemini-3.8-flash` para chat y juez, `gemini-3.5-flash-lite` para lite, multirregión `us`); las variables los sobrescriben. Un `AI_PROVIDER` inválido, un modelo sin precio o un presupuesto ≤ 0 hacen fallar el arranque.
@@ -788,6 +795,8 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Cloud SQL Java Connector (`postgres-socket-factory`) | 1.30.1 (fijada en E0.3) | Conexión IAM |
 | Flyway (`flyway-core`, `flyway-database-postgresql`) | 13.11.1 (fijada en E0.3) | Migraciones |
 | Firebase Admin Java | 9.11.0 (fijada en E0.3) | Auth, FCM, Firestore |
+| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
+| Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |

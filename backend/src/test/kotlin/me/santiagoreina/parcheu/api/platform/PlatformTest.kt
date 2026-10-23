@@ -110,8 +110,8 @@ class PlatformTest : FunSpec({
             mapOf(
                 "ENV" to "prod", "K_SERVICE" to "api", "SERVICE_URL" to "https://api.example.run.app",
                 "FIREBASE_PROJECT_ID" to "parcheu-prod", "TASKS_SERVICE_ACCOUNT" to "sa-tasks@p.iam.gserviceaccount.com",
-                // Sin conexión real: el pool no se cae al construirse (initializationFailTimeout = -1).
-                "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu",
+                // E0.9: la pasarela de IA registra el uso en Postgres (conexión perezosa: aquí no se abre).
+                "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://localhost:1/parcheu",
             ),
         )
         val c = AppContainer.fromConfig(config, mapOf("GCP_PROJECT" to "parcheu-prod"))

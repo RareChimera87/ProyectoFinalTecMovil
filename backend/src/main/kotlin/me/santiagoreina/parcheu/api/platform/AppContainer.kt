@@ -49,7 +49,11 @@ import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.quota.quotaModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
+import me.santiagoreina.parcheu.api.simulation.NotifierSimulationNotifier
+import me.santiagoreina.parcheu.api.simulation.SimulationModule
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
+import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
+import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.api.social.SocialRoutes
 import me.santiagoreina.parcheu.api.platform.tasks.CloudTasksQueue
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
@@ -85,8 +89,11 @@ class AppContainer(
     val notifier: Notifier = NoopNotifier,
     /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
     val chat: ChatModule = inMemoryChatModule(clock, graph.policy, notifier),
+    /** Simulación (E4.3). Por defecto en memoria: solo [fromConfig] cablea Postgres, Cloud Tasks y Firestore. */
+    val simulation: SimulationModule =
+        inMemorySimulationModule(clock, ai, quota, graph, notifier = NotifierSimulationNotifier(notifier)),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
-    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat),
+    val domains: List<DomainRoutes> = allDomains(identity, profile, quota, twin, graph, chat, simulation),
 ) {
     companion object {
         /**
@@ -125,9 +132,14 @@ class AppContainer(
             val chatMirror =
                 if (local) InMemoryChatMirror() else FirestoreChatMirror.forProject(requireNotNull(config.firebaseProjectId))
             val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
+            // Simulación (E4.3): misma base, cola y avisos; el espejo de progreso va a Firestore fuera de local.
+            val simulation = simulationModule(
+                config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId,
+                notifier = NotifierSimulationNotifier(notifier),
+            )
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
-                ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
+                ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
             )
         }
 
@@ -152,7 +164,7 @@ class AppContainer(
             return AiModule.gateway(aiConfig, usage, clock)
         }
 
-        private fun localAiGateway(clock: Clock): AiGateway {
+        internal fun localAiGateway(clock: Clock): AiGateway {
             val config = AiConfig.fromEnv(emptyMap(), Env.LOCAL)
             return AiModule.gateway(config, InMemoryAiUsageStore(), clock, FakeLlmClient())
         }
@@ -167,12 +179,13 @@ fun allDomains(
     twin: TwinModule,
     graph: GraphModule = inMemoryGraphModule(systemClock()),
     chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
+    simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile),
     TwinRoutes(twin),
     QuotaRoutes(quota),
     MatchingRoutes(),
-    SimulationRoutes(),
+    SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
     GraphRoutes(graph.service) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(),

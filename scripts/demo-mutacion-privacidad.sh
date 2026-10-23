@@ -7,7 +7,7 @@
 #
 # Uso: scripts/demo-mutacion-privacidad.sh [pareja|memorias|ninguna|--verificar-anclas]
 #   pareja    (por defecto) GraphVisibilityPolicy deja de filtrar las aristas de Pareja ajenas.
-#   memorias  MemorySelection deja de filtrar las memorias por modo.
+#   memorias  MemorySelection (de la que el TwinPromptBuilder toma sus memorias) deja de filtrar por modo.
 #   ninguna   corre la suite sin tocar nada (debe terminar en 0).
 #   --verificar-anclas  solo comprueba que el texto a mutar existe una vez (sin Gradle).
 # Variables: PRIVACY_SEED=<n> reproduce una corrida; GRADLE_ARGS agrega opciones a Gradle.
@@ -17,10 +17,10 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKG="backend/src/main/kotlin/me/santiagoreina/parcheu/api"
 POLICY="$PKG/graph/GraphVisibilityPolicy.kt"
-BUILDER="$PKG/simulation/MemorySelection.kt"
+SELECCION="$PKG/simulation/MemorySelection.kt"   # la usa el TwinPromptBuilder real (E4.3)
 
 # mutacion -> archivo, texto original, texto mutado
-declare -A ARCHIVO=([pareja]="$POLICY" [memorias]="$BUILDER")
+declare -A ARCHIVO=([pareja]="$POLICY" [memorias]="$SELECCION")
 declare -A ORIGINAL=(
   [pareja]='mode != Mode.PAREJA || viewer == endpointA || viewer == endpointB'
   [memorias]='.filter { it.mode == mode }'
