@@ -123,6 +123,14 @@ variable "rtdn_push_enabled" {
   type        = bool
 }
 
+# --- Google Play (E7.1) ------------------------------------------------------
+
+variable "play_service_account_enabled" {
+  description = "Crea sa-play (API de Google Play Developer) y deja que sa-api la suplante. Solo en prod."
+  type        = bool
+  default     = false
+}
+
 # --- Usuarios demo (ADR-0027, E4.9) --------------------------
 
 variable "demo_users_enabled" {

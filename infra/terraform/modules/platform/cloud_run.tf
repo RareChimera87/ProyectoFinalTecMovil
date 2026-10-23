@@ -1,5 +1,5 @@
 locals {
-  run_env = {
+  base_run_env = {
     ENV                    = var.environment
     GCP_PROJECT            = var.project_id
     GCP_REGION             = var.region
@@ -19,6 +19,11 @@ locals {
     SECRET_HMAC_ANON_KEY = google_secret_manager_secret.this["hmac-anon-key"].id
     SECRET_PLAY_SA       = google_secret_manager_secret.this["play-sa"].id
   }
+
+  # Cuenta que la API suplanta para la API de Play (E7.1, solo prod); sin ella usa SECRET_PLAY_SA.
+  play_run_env = var.play_service_account_enabled ? { PLAY_SERVICE_ACCOUNT = google_service_account.play[0].email } : {}
+
+  run_env = merge(local.base_run_env, local.play_run_env)
 
   jobs = {
     "migrate"    = { args = ["migrate"], timeout = "600s" }
