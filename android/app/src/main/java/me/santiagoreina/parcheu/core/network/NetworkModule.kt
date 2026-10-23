@@ -39,13 +39,12 @@ fun createRetrofit(baseUrl: String, client: OkHttpClient, json: Json = ContractJ
 
 /**
  * Red compartida. Cada feature crea su servicio con `get<Retrofit>().create(XApi::class.java)` en su
- * propio módulo. E2.2 reemplaza el [TokenProvider] por el de Firebase.
+ * propio módulo. El [TokenProvider] lo aporta `authModule` (E2.2, sesión de Firebase).
  */
 val networkModule =
     module {
         single<Json> { ContractJson }
         single { ApiErrorMapper(get()) }
-        single<TokenProvider> { NoSessionTokenProvider }
         single {
             createOkHttpClient(
                 get(),
