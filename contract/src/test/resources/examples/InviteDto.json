@@ -1,4 +1,17 @@
 {
   "code": "PRCH-0427",
-  "link": "https://parcheu.web.app/i/PRCH-0427"
+  "link": "https://parcheu.web.app/i/PRCH-0427",
+  "pending": [
+    {
+      "id": "a_Qm9yb3NjaGl0b0ZhbHNvMTI",
+      "other": {
+        "anonId": "a_Qm9yb3NjaGl0b0ZhbHNvMTI",
+        "label": "Laura Pérez",
+        "initials": "LP",
+        "isDemo": false
+      },
+      "mode": "AMISTAD",
+      "createdAt": "2026-11-10T15:00:00Z"
+    }
+  ]
 }

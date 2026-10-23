@@ -135,11 +135,28 @@ public data class IntroRequest(
     val anonId: String,
 )
 
-/** GET /v1/invites/me; código `XXXX-0000`. */
+/**
+ * GET /v1/invites/me; código `XXXX-0000` y su App Link `https://<hosting>/i/{codigo}`. [pending] son los
+ * canjes de mi código que esperan que yo los acepte (E6.1), los más recientes primero.
+ */
 @Serializable
 public data class InviteDto(
     val code: String,
     val link: String,
+    val pending: List<PendingInvite> = emptyList(),
+)
+
+/**
+ * Alguien canjeó mi código y espera que lo acepte. [id] es el `anonId` de esa persona para mí: es lo
+ * que va en `POST /v1/invites/{id}/accept`. Quien canjea un código pide conectar con su dueño, así que
+ * el dueño ve su nombre (`other.label`), pero no su `id` ni su foto hasta aceptar.
+ */
+@Serializable
+public data class PendingInvite(
+    val id: String,
+    val other: PersonRef,
+    val mode: Mode,
+    val createdAt: Instant,
 )
 
 /** POST /v1/invites/redeem */
