@@ -185,7 +185,8 @@ class MatchQueueViewModelTest {
     @Test
     fun matchedTicketOfExpiredMatchEnqueuesAgain() {
         repository.currentTicketResult = ApiResult.Success(matchedTicket("m1"))
-        repository.matchResults = mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
 
         val vm = viewModel()
 
@@ -197,7 +198,9 @@ class MatchQueueViewModelTest {
     fun matchedTicketOfSimulationMatchEnqueuesAgain() {
         repository.currentTicketResult = ApiResult.Success(matchedTicket("m1"))
         repository.matchResults = mutableListOf(
-            ApiResult.Success(testMatch(status = MatchStatus.SIMULATION, myChoice = MatchChoice.SIMULATION))
+            ApiResult.Success(
+                testMatch(status = MatchStatus.SIMULATION, myChoice = MatchChoice.SIMULATION)
+            )
         )
 
         val vm = viewModel()
@@ -209,7 +212,8 @@ class MatchQueueViewModelTest {
     @Test
     fun matchedTicketWithOwnChoiceEnqueuesAgain() {
         repository.currentTicketResult = ApiResult.Success(matchedTicket("m1"))
-        repository.matchResults = mutableListOf(ApiResult.Success(testMatch(myChoice = MatchChoice.SCENARIO)))
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(myChoice = MatchChoice.SCENARIO)))
 
         viewModel()
 

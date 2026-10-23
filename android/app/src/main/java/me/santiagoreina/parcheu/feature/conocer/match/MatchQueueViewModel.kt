@@ -5,12 +5,12 @@ import androidx.lifecycle.viewModelScope
 import kotlin.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -170,7 +170,11 @@ class MatchQueueViewModel(
             TicketStatus.MATCHED -> {
                 val id = ticket.matchId ?: return false
                 val match = (repository.match(id) as? ApiResult.Success)?.value ?: return false
-                if (match.status != MatchStatus.PENDING_CHOICE || match.myChoice != null) return false
+                if (match.status != MatchStatus.PENDING_CHOICE ||
+                    match.myChoice != null
+                ) {
+                    return false
+                }
             }
         }
         _state.update { it.copy(mode = ticket.mode) }

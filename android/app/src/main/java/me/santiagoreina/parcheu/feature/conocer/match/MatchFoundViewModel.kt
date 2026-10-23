@@ -49,6 +49,7 @@ sealed interface MatchFoundEffect {
     data class OpenSimulation(val matchId: String) : MatchFoundEffect
 
     /** Vuelve a F1 para buscar de nuevo. */
+
     /** Vuelve a F1 con el modo del match que venció. */
     data class SearchAgain(val mode: Mode) : MatchFoundEffect
 

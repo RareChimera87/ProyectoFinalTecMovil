@@ -37,18 +37,21 @@ class PuGraphScreenshotTest {
 
     @Test fun allLight() = capture("g0_todos_light", false) { PuGraph(all) }
 
-    @Test fun filteredDark() =
-        capture("g0_filtrado_dark", true) { PuGraph(all, modeFilter = GraphMode.AMISTAD) }
+    @Test fun filteredDark() = capture("g0_filtrado_dark", true) {
+        PuGraph(all, modeFilter = GraphMode.AMISTAD)
+    }
 
-    @Test fun filteredLight() =
-        capture("g0_filtrado_light", false) { PuGraph(all, modeFilter = GraphMode.AMISTAD) }
+    @Test fun filteredLight() = capture("g0_filtrado_light", false) {
+        PuGraph(all, modeFilter = GraphMode.AMISTAD)
+    }
 
     @Test fun selectedDark() = capture("g0_seleccionado_dark", true) {
         PuGraph(all, selectedId = "lau")
     }
 
-    @Test fun selectedLight() =
-        capture("g0_seleccionado_light", false) { PuGraph(all, selectedId = "lau") }
+    @Test fun selectedLight() = capture("g0_seleccionado_light", false) {
+        PuGraph(all, selectedId = "lau")
+    }
 
     @Test fun fofDark() = capture("g0_fof_dark", true) { PuGraph(all, fof = PuGraphSamples.fof) }
 
