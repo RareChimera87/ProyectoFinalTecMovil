@@ -92,6 +92,7 @@ object Examples {
         "IntroResponse" to IntroResponse.serializer(),
         "IntroRequest" to IntroRequest.serializer(),
         "InviteDto" to InviteDto.serializer(),
+        "PendingInvite" to PendingInvite.serializer(),
         "Redeem" to Redeem.serializer(),
         "RedeemResult" to RedeemResult.serializer(),
         // Notifications

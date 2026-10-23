@@ -76,6 +76,10 @@ import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
 import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.api.social.SocialRoutes
+import me.santiagoreina.parcheu.api.social.invites.InviteLinks
+import me.santiagoreina.parcheu.api.social.invites.InviteModule
+import me.santiagoreina.parcheu.api.social.invites.exposedInviteModule
+import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.platform.tasks.CloudTasksQueue
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.twin.TwinModule
@@ -136,9 +140,14 @@ class AppContainer(
      * con [fromConfig]): 'Marcar leídas' deja la campana en 0 y los avisos de bloqueados no cuentan.
      */
     val unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
+    /** Invitaciones por QR y código (E6.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
     val domains: List<DomainRoutes> =
-        allDomains(identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications),
+        allDomains(
+            identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread,
+            notifications, invites,
+        ),
 ) {
     companion object {
         /**
@@ -200,11 +209,14 @@ class AppContainer(
                 config.env, database, identity, graph, twin, tasks, config.firebaseProjectId, clock,
                 closedMatches = matching.service::onMatchesClosedByDeletion,
             )
+            // Invitaciones (E6.1): aristas por EdgeService, modos de user_modes y enlace https://<hosting>/i/{codigo}.
+            val invites = exposedInviteModule(database, graph, simulation, notifier, InviteLinks.fromConfig(config, vars), clock)
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat, simulation = simulation,
                 matching = matching, safety = safety, account = account,
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
+                invites = invites,
             )
         }
 
@@ -250,6 +262,7 @@ fun allDomains(
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
     unread: UnreadCounter = UnreadCounter.NONE,
     notifications: NotificationCenterModule = inMemoryNotificationCenter(systemClock(), quota, graph),
+    invites: InviteModule = inMemoryInviteModule(systemClock(), graph, simulation, NoopNotifier),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -260,7 +273,7 @@ fun allDomains(
     GraphRoutes(graph.service, fofService(graph, twin, quota, matching.flags.demoUsersEnabled)) { firebase ->
         identity.requireUser(firebase).id
     },
-    SocialRoutes(),
+    SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
     // Centro de notificaciones C2 (E5.4): bandeja agrupada por fecha de Bogotá y 'Marcar leídas'.
     NotificationsRoutes(notifications.service) { firebase -> identity.requireUser(firebase).id },

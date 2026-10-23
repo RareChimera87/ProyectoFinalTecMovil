@@ -12,9 +12,19 @@
 <nav class="top"><strong>ParcheU</strong><a href="/privacidad">Privacidad</a><a href="/terminos">Términos</a><a href="/borrar-cuenta">Borrar mi cuenta</a></nav>
 <h1>Te invitaron a ParcheU</h1>
 <p>Esta invitación se abre en la app ParcheU. Si la tienes instalada, vuelve a tocar el enlace o ábrela desde el código que te compartieron.</p>
+<p id="codigo" hidden>Código de invitación: <strong id="valor"></strong>. En la app, ve a <em>Agregar amigos</em> y escríbelo en «o ingresa un código».</p>
 <p class="aviso">Si aún no la tienes, ParcheU está en prueba cerrada en Google Play. Pide a quien te invitó el acceso de tester y luego abre este enlace de nuevo.</p>
 <p>ParcheU es solo para mayores de 18 años. Lee los <a href="/terminos">términos</a> y la <a href="/privacidad">política de privacidad</a>.</p>
 <footer>ParcheU · Bucaramanga, Colombia · Contacto: <a href="mailto:sanctireinadiaz@gmail.com">sanctireinadiaz@gmail.com</a> · Versión del texto: <span class="v">2026-10-29</span></footer>
 </main>
+<script>
+// Muestra el código de /i/{codigo} (formato ABCD-1234) para escribirlo a mano si la app no abrió el enlace.
+(function () {
+  var m = /^\/i\/([A-Za-z]{4}-[0-9]{4})\/?$/.exec(window.location.pathname);
+  if (!m) return;
+  document.getElementById('valor').textContent = m[1].toUpperCase();
+  document.getElementById('codigo').hidden = false;
+})();
+</script>
 </body>
 </html>

@@ -23,7 +23,7 @@ val routeCatalog: List<RouteEntry> =
         RouteEntry(Notifications, "C2", "Notificaciones"),
         RouteEntry(Profile, "C3", "Perfil y gemelo"),
         RouteEntry(TrainTwin, "C4", "Entrena a tu gemelo"),
-        RouteEntry(AddFriends(code = "PARCHE"), "C5", "Agregar amigos"),
+        RouteEntry(AddFriends(code = "ABCD-1234"), "C5", "Agregar amigos"),
         RouteEntry(Parche(), "D1-D5, I2", "Tu parche"),
         RouteEntry(FriendsOfFriends, "D6-D7", "Amigos de amigos"),
         RouteEntry(Communities, "D8", "Comunidades"),

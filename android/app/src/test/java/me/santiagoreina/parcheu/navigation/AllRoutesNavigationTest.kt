@@ -76,8 +76,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * lista de chats y F9 (E5.2), H2 con sus confirmaciones (E8.1, ReportScreenTest y
          * SafetyScreenshotTest), el borrado y 'Descargar mis datos' (E8.3, DeleteAccountScreenTest,
          * ExportDataRouteTest y AccountScreenshotTest), C1/I1 (E4.7, HomeScreenTest y HomeScreenshotTest),
-         * C2 (E5.4, NotificationsRouteTest y NotificationsScreenshotTest) y D6/D7 (E6.3, FofScreenTest y
-         * FofScreenshotTest).
+         * C2 (E5.4, NotificationsRouteTest y NotificationsScreenshotTest), C5 (E6.1, InviteAppLinkTest,
+         * InvitesScreenTest e InvitesScreenshotTest) y D6/D7 (E6.3, FofScreenTest y FofScreenshotTest).
          */
         val implementedRoutes =
             setOf(
@@ -102,7 +102,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 DeleteAccount::class,
                 ExportData::class,
                 Home::class,
-                Notifications::class
+                Notifications::class,
+                AddFriends::class
             )
     }
 }

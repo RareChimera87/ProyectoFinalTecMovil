@@ -1201,6 +1201,7 @@ Reportar y bloquear desde todas partes (incluido contenido de IA), ajustes de pr
 - **Depende de:** E5.1, E3.1
 - **En paralelo con:** E4.9
 - **Pantallas del inventario:** H3 (borrado y descarga de datos; pantallas nuevas)
+- Mockup: H4 Exportar mis datos y H5 Borrar cuenta (inventario §1.1)
 - **Archivos y módulos:** backend/.../identity/deletion/**, backend/.../identity/export/**, android/app/.../feature/settings/delete/**, android/app/.../feature/settings/export/**
 
 **Descripción.** `DELETE /v1/me`: borrado lógico inmediato (`deleted_at`, invisible en todo) y tarea `purge-user` (cola `maintenance`) que sigue la tabla de arquitectura.md §10.2: filas personales en Postgres; mensajes en chats compartidos anonimizados ('Usuario eliminado') en Postgres y Firestore; **simulaciones compartidas**: se conserva para el otro solo el puntaje y la fecha, con `transcript` y `report` puestos en `null` y el participante como 'Usuario eliminado'; documentos Firestore `simulations/{id}` y `matchTickets/{uid}` borrados; datos personales en **jsonb** limpiados según el registro `PersonalJsonPaths` (`reports.snapshot`, `simulations.transcript/report`, `notifications.payload`, `purchase_events.payload`); tokens FCM y usuario de Firebase Auth. Se conserva lo que exige la ley (consentimientos y eventos de compra sin datos de contacto, ADR-0025). Aviso de que la suscripción se cancela en Play. `GET /v1/me/export` (JSON con perfil, respuestas, memorias, consentimientos, conexiones y mensajes propios). En la app: confirmación de borrado y **'Descargar mis datos'** (descarga el JSON y lo guarda con `ACTION_CREATE_DOCUMENT` o lo comparte con la hoja del sistema).
@@ -1213,6 +1214,13 @@ Reportar y bloquear desde todas partes (incluido contenido de IA), ajustes de pr
 - [ ] Test: la exportación no incluye datos privados de otros usuarios (solo su id anónimo).
 - [ ] Test UI (Fakes): 'Descargar mis datos' pide el JSON y lanza el intent de crear documento con nombre `parcheu-datos-<fecha>.json`.
 - [ ] Roborazzi de la confirmación de borrado y de 'Descargar mis datos'.
+
+**Implementación futura (decisión 2026-10-23):** lo vigente para E8.3 es lo implementado en #59 y #62 (exportación como JSON local guardado con `ACTION_CREATE_DOCUMENT` o compartido con la hoja del sistema; borrado lógico inmediato con purga en cola, confirmado con una casilla). Los criterios de aceptación de arriba no cambian. El mockup H4 'Exportar mis datos' y H5 'Borrar cuenta' (inventario §1.1 y §6.3) queda como pendiente post-1.0:
+
+- (a) Exportación por correo con enlace válido 7 días (requiere un servicio de envío de correo que hoy no existe en la arquitectura) y formato PDF legible además de JSON.
+- (b) Selección de categorías a exportar: perfil y modos, gemelo, parche, simulaciones y chats (chats desmarcado por defecto).
+- (c) Confirmación del borrado escribiendo "BORRAR" y botón destructivo coral pleno (#FF5C7A con texto #14111F) con lista de consecuencias (`DestructiveButton`, `ConsequenceList` y `DestructiveHeroIcon` del inventario).
+- (d) Periodo de gracia de 14 días recuperable al iniciar sesión (hoy el borrado es inmediato; cambiarlo implica revisar la purga de arquitectura.md §10.2 y la declaración de Play).
 
 #### E8.4 · Páginas web legales
 
