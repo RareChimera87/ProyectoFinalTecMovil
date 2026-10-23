@@ -14,6 +14,8 @@ import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
 import me.santiagoreina.parcheu.api.chat.FirestoreChatMirror
 import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
+import me.santiagoreina.parcheu.api.demo.DemoConnectPolicy
+import me.santiagoreina.parcheu.api.demo.DemoSettings
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
@@ -158,9 +160,12 @@ class AppContainer(
             val chat = ChatModule(ExposedChatRepository(database), chatMirror, notifier, graph.policy, clock)
             // Simulación (E4.3): misma base, cola y avisos; el espejo de progreso va a Firestore fuera de local.
             // El informe y la decisión mutua (E4.6) reutilizan el chat (DIRECT) y el notifier (NEW_CONNECTION).
+            // Los demo deciden con `DEMO_CONNECT_PROBABILITY` (E4.9, ADR-0027).
+            val demo = DemoSettings.fromEnv(config.env, vars)
             val simulation = simulationModule(
                 config.env, database, clock, ai, quota, graph, tasks, config.firebaseProjectId,
                 notifier = NotifierSimulationNotifier(notifier), chat = chat, push = notifier,
+                demo = DemoConnectPolicy(demo.connectProbability),
             )
             // Fila de match (E4.2): misma base, cuotas, simulación, grafo y avisos; espejo matchTickets en Firestore fuera de local.
             val matching = matchingModule(

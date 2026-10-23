@@ -77,6 +77,9 @@ module "platform" {
   }
 
   rtdn_push_enabled = false
+
+  # Usuarios demo siempre disponibles en dev (ADR-0027).
+  demo_users_enabled = true
 }
 
 output "api_url" {

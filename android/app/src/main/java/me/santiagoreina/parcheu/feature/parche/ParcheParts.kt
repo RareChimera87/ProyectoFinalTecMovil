@@ -53,6 +53,7 @@ import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChipSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUPlusBadge
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
+import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
@@ -62,6 +63,10 @@ import me.santiagoreina.parcheu.designsystem.theme.avatarColors
 const val PARCHE_SHEET_TAG = "parche_sheet"
 const val PARCHE_BANNER_TAG = "parche_banner"
 const val PARCHE_SKELETON_TAG = "parche_skeleton"
+const val PARCHE_DEMO_TAG = "parche_demo"
+
+/** Insignia de D2 cuando el nodo es un perfil de demostración (ADR-0027). */
+const val PARCHE_DEMO_BADGE = "Perfil de demostración"
 
 /** Etiqueta de un modo para la UI ("Amistad", "Pareja", "Estudio"). */
 fun Mode.label(): String = toGraphMode().label
@@ -451,6 +456,7 @@ fun NodeDetailSheet(
                         size = ModeChipSize.S,
                         icon = parcheIconPainter(node.mode.icon())
                     )
+                    if (node.isDemo) PillChip(PARCHE_DEMO_BADGE, Modifier.testTag(PARCHE_DEMO_TAG))
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(

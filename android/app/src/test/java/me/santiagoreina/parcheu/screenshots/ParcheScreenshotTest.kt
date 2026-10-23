@@ -98,6 +98,12 @@ class ParcheScreenshotTest(private val dark: Boolean) {
     fun d2Pending() = capture("d2_pendiente", loaded.copy(sheet = sheetFor("mat")))
 
     @Test
+    fun d2Demo() = capture(
+        "d2_demo",
+        loaded.copy(sheet = sheetFor("and").let { it.copy(node = it.node.copy(isDemo = true)) })
+    )
+
+    @Test
     fun d3Empty() = capture("d3_vacio", ParcheUiState.Empty)
 
     @Test

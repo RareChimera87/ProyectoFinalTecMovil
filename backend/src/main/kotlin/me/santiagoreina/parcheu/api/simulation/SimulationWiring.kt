@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.api.simulation
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
+import me.santiagoreina.parcheu.api.demo.DemoConnectPolicy
 import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.simulation.report.ExposedReportRepository
@@ -69,11 +70,12 @@ fun simulationModule(
     notifier: SimulationNotifier,
     chat: ChatModule,
     push: Notifier,
+    demo: DemoConnectPolicy = DemoConnectPolicy.DEFAULT,
 ): SimulationModule {
     val mirror = if (env == Env.LOCAL || firebaseProjectId == null) NoopSimulationMirror else FirestoreSimulationMirror(firebaseProjectId)
     return assemble(
         ExposedSimulationRepository(db), clock, ai, quota, graph, tasks, mirror, notifier,
-        ExposedReportRepository(db), chat, push,
+        ExposedReportRepository(db), chat, push, demo,
     )
 }
 
@@ -94,8 +96,9 @@ fun inMemorySimulationModule(
     reportRepo: ReportRepository = InMemoryReportRepository(),
     push: Notifier = NoopNotifier,
     chat: ChatModule = inMemoryChatModule(clock, graph.policy, push),
+    demo: DemoConnectPolicy = DemoConnectPolicy.DEFAULT,
 ): SimulationModule {
-    val module = assemble(repo, clock, ai, quota, graph, queue, mirror, notifier, reportRepo, chat, push)
+    val module = assemble(repo, clock, ai, quota, graph, queue, mirror, notifier, reportRepo, chat, push, demo)
     if (runInline) queue.inline = { task -> module.engine.run(ContractJson.decodeFromString<TaskPayload>(task.body).uuid()) }
     return module
 }
@@ -112,10 +115,11 @@ private fun assemble(
     reportRepo: ReportRepository,
     chat: ChatModule,
     push: Notifier,
+    demo: DemoConnectPolicy,
 ): SimulationModule {
     val people = graphPersonPresenter(graph)
     val engine = SimulationEngine(repo, ai, quota.service, graph.edges, mirror, notifier, clock)
-    val report = ReportService(repo, reportRepo, quota.service, graph.edges, chat.service, push, people, clock)
+    val report = ReportService(repo, reportRepo, quota.service, graph.edges, chat.service, push, people, clock, demo)
     val service = SimulationService(repo, quota.service, ai, tasks, people, mirror, clock, report)
     return SimulationModule(service, engine, repo, report)
 }

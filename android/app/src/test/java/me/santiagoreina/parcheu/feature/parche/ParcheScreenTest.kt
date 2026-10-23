@@ -49,6 +49,25 @@ class ParcheScreenTest {
     }
 
     @Test
+    fun demoNodeSheetShowsDemoBadge() {
+        val node = ParcheSamples.nodes.first { it.id == "and" }.copy(isDemo = true)
+        show(
+            ParcheUiState.Loaded(
+                ParcheSamples.content,
+                sheet = NodeSheet(node, ParcheSamples.detail(node), loadingDetail = false)
+            )
+        )
+        composeRule.onNode(hasTestTag(PARCHE_DEMO_TAG)).assertIsDisplayed()
+        composeRule.onNodeWithText(PARCHE_DEMO_BADGE).assertIsDisplayed()
+    }
+
+    @Test
+    fun regularNodeSheetHasNoDemoBadge() {
+        show(ParcheUiState.Loaded(ParcheSamples.content, sheet = sheet("and")))
+        composeRule.onAllNodes(hasTestTag(PARCHE_DEMO_TAG)).assertCountEquals(0)
+    }
+
+    @Test
     fun connectedSheetOffersSimulateAndChat() {
         var simulated = 0
         var chatted = 0
