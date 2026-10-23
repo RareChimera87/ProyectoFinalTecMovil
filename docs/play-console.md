@@ -139,3 +139,72 @@ Registro:
 | Estado en prod | _pendiente: se despliega con el tag `v0.1.0`_ |
 | Versión del texto | 2026-10-29 |
 | Verificada con `curl -I` (200) | _pendiente tras el despliegue de dev y de prod_ |
+
+## 11. Billing mínimo, primera subida y suscripción `parcheu_plus` (E7.0)
+
+Responsable: I3 · Revisor par: I1 · Fecha límite de la subida: **28 oct 2026**. Play solo deja crear suscripciones cuando la app tiene un AAB subido que incluye Play Billing Library; la primera subida de una app nueva se hace **a mano** desde la consola (las siguientes las hace E10.2 por API).
+
+### 11.1 Lo que ya quedó hecho por CLI (22 oct)
+
+- `billing-ktx` 8.3.0 en `android/app` (versión fijada en E0.7; compilada con Kotlin 2.2.10, compatible). Su manifiesto aporta `com.android.vending.BILLING`; la tarea `./gradlew :app:verifyProdReleaseBillingPermission` (también en `check` y en `android-ci`) falla si el manifiesto fusionado de `prodRelease` no lo declara.
+- `BillingClientProvider` (`android/app/.../data/billing/`): conecta, reintenta con backoff exponencial (1 s, 2 s, 4 s; máx. 3 reintentos), reconecta si Play corta el servicio y consulta los `ProductDetails` de `parcheu_plus`. Sin UI de compra (E7.2/E7.3).
+- **AAB 0.0.1 construido y firmado con la llave de subida**, fuera del repo: `~/.parcheu/parcheu-0.0.1-prod-release.aab` (flavor `prod`, `me.santiagoreina.parcheu`, `versionCode` 1, `versionName` 0.0.1, R8 activo, contiene `com.android.vending.BILLING`). Firma verificada con `jarsigner -verify`: certificado `CN=ParcheU Upload`, SHA-256 `7F:51:20:F3:06:45:12:A5:B4:A5:6C:0D:44:E1:67:2B:18:A4:BA:1F:EA:CB:62:1F:B5:E3:A2:AE:FF:8F:03:D3` (la misma huella de la §2). Sin `google-services.json` de prod (la 0.0.1 no usa Firebase ni backend).
+- Para reconstruirlo (por ejemplo si cambia algo antes del 28 oct), desde `android/`:
+
+  ```bash
+  set -a && . ~/.parcheu/upload-key.env && set +a
+  ./gradlew :app:bundleProdRelease \
+    -Pandroid.injected.signing.store.file=$HOME/.parcheu/upload-keystore.jks \
+    -Pandroid.injected.signing.store.password="$UPLOAD_KEYSTORE_PASSWORD" \
+    -Pandroid.injected.signing.key.alias="$UPLOAD_KEY_ALIAS" \
+    -Pandroid.injected.signing.key.password="$UPLOAD_KEY_PASSWORD"
+  jarsigner -verify -certs app/build/outputs/bundle/prodRelease/app-prod-release.aab   # debe decir CN=ParcheU Upload
+  ```
+
+  **No subas un AAB firmado con la llave de debug** (el `signingConfig` por defecto de `release` hasta E10.2): en una app nueva la llave del primer AAB queda registrada como llave de subida.
+- Lo que **no** se puede por CLI: la primera subida de una app nueva, crear la suscripción sin AAB previo, los license testers y la configuración de RTDN (no hay API pública para esos dos últimos). Además `parcheu-prod` aún no existe (22 oct), así que el tema `play-rtdn` de prod tampoco.
+
+### 11.2 Pasos en la consola (I3, 28 oct)
+
+Requisitos: app creada (§4), perfil de pagos verificado (§5) y verificación de identidad aprobada.
+
+1. **Subida a la pista interna.** *Pruebas > Pruebas internas > Crear versión* → sube `~/.parcheu/parcheu-0.0.1-prod-release.aab`. Si Play pide elegir la llave de firma, usa **la llave generada por Google** (Play App Signing). Nombre de la versión: `0.0.1`; notas (es-419): `Primera versión interna: esqueleto y Play Billing.` Agrega como testers internos al menos a los 3 integrantes. *Revisar versión > Iniciar lanzamiento en pruebas internas*. Registra la fecha en la tabla 11.3.
+2. **Huellas del certificado de firma de la app** (*Integridad de la app > Firma de apps*): copia SHA-1 y SHA-256 del certificado de **firma de la app** (no el de subida) para Firebase prod (E10.3). Son públicas; regístralas en la tabla 11.3.
+3. **Suscripción.** *Monetizar > Productos > Suscripciones > Crear suscripción*: ID de producto `parcheu_plus` (no se puede cambiar después), nombre `ParcheU+`. Dentro, *Agregar plan base*:
+   - `mensual`: renovación automática, período **1 mes (P1M)**, precio base **COP 5.000** (*Establecer precios* → Colombia 5.000; deja que Play convierta los demás países o restringe la disponibilidad a Colombia).
+   - `anual`: renovación automática, período **1 año (P1Y)**, precio base **COP 45.000**.
+   - Sin ofertas ni pruebas gratis por ahora (las decide ADR-0029 antes del 10 nov). Período de gracia y suspensión: valores por defecto.
+   - **Activa** ambos planes base (quedan en estado *Activo*). La app los lee con `ProductDetails`: el texto de precio nunca se escribe a mano (arquitectura §9).
+4. **License testers.** *Configuración (de la cuenta) > Pruebas de licencia*: agrega ≥ 3 cuentas de Google (los 3 integrantes) con respuesta `RESPOND_NORMALLY`. Registra solo la cantidad.
+5. **RTDN.** Requiere que el usuario haya aplicado Terraform de prod (E0.5): el módulo `platform` crea el tema `play-rtdn` y le da `roles/pubsub.publisher` a `google-play-developer-notifications@system.gserviceaccount.com`. En *Monetizar > Configuración de monetización > Notificaciones de desarrolladores en tiempo real*: tema `projects/<ID real de parcheu-prod>/topics/play-rtdn` (ID real en arquitectura §12), tipo de notificación *Suscripciones, compras anuladas y todas las compras únicas*, **Enviar mensaje de prueba** y confirma que llegó:
+
+   ```bash
+   gcloud pubsub topics describe play-rtdn --project <ID de prod>   # el tema existe
+   gcloud pubsub topics get-iam-policy play-rtdn --project <ID de prod> \
+     --format='value(bindings.members)' | grep google-play-developer-notifications
+   ```
+
+   Si el `apply` de prod aún no está el 28 oct, crea igual la suscripción y los license testers y deja RTDN para cuando exista el tema. No crees el tema a mano: quedaría fuera del estado de Terraform (si no hay otra salida, créalo con `gcloud pubsub topics create play-rtdn`, da el rol de publicador a la cuenta de Play y luego `terraform import` del tema y del binding).
+6. **Captura para el PR de E7.0** (sin correos ni datos personales): la lista de planes base de `parcheu_plus` mostrando `mensual` y `anual` *Activos*, y la pantalla de RTDN con el tema configurado. Recorta o tapa correos de license testers.
+
+### 11.3 Registro de E7.0
+
+| Dato | Valor | Fecha | Quién |
+|---|---|---|---|
+| AAB 0.0.1 subido a la pista interna | _pendiente (meta 28 oct)_ | | I3 |
+| SHA-256 del AAB subido | `44f441274702f8faa3053cf014dc555ca667830f376ea80fffaf9e9ad5f492f7` (construido el 22 oct) | 22 oct | agente |
+| Huellas SHA-1 / SHA-256 del certificado de firma de la app (Play) | _pendiente_ | | I3 |
+| `parcheu_plus` creada; `mensual` (P1M, COP 5.000) y `anual` (P1Y, COP 45.000) activos | _pendiente_ | | I3 |
+| License testers (cantidad, ≥ 3) | _pendiente_ | | I3 |
+| RTDN → `projects/<prod>/topics/play-rtdn`, mensaje de prueba recibido | _pendiente_ | | I3 |
+
+### 11.4 Lista de verificación de E7.0
+
+- [x] `billing-ktx` en el AAB; `com.android.vending.BILLING` verificado en el manifiesto fusionado de `prodRelease`.
+- [x] `BillingClientProvider` con reintentos, reconexión y consulta de `parcheu_plus` (tests con `FakeBillingClient`).
+- [x] AAB 0.0.1 `prod` firmado con la llave de subida, listo en `~/.parcheu/`.
+- [ ] AAB 0.0.1 en la pista interna (≤ 28 oct).
+- [ ] `parcheu_plus` con `mensual` y `anual` activos.
+- [ ] ≥ 3 license testers.
+- [ ] RTDN apuntando a `play-rtdn` de prod, mensaje de prueba recibido.
+- [ ] Capturas en el PR.
