@@ -3,10 +3,12 @@ package me.santiagoreina.parcheu.feature.home
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -67,6 +69,23 @@ class HomeScreenTest {
         composeRule.onNodeWithText("Simula sin límite con ParcheU+").performClick()
         composeRule.onNodeWithTag(HomeTags.PLUS_CHIP).performClick()
         assertEquals(2, plus)
+    }
+
+    @Test
+    fun runningWithoutProgressHidesTheBar() {
+        show(HomeSamples.inProgress.copy(progress = null))
+        composeRule.onNodeWithText("En curso · Estudio").assertIsDisplayed()
+        composeRule
+            .onAllNodesWithContentDescription("Avance de la simulación", substring = true)
+            .assertCountEquals(0)
+    }
+
+    @Test
+    fun runningWithProgressShowsTheBar() {
+        show(HomeSamples.inProgress)
+        composeRule
+            .onNodeWithContentDescription("Avance de la simulación: 60 %")
+            .assertIsDisplayed()
     }
 
     @Test

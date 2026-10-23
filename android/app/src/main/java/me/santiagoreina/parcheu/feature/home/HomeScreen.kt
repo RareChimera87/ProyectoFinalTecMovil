@@ -368,10 +368,14 @@ private fun RunningRow(
                 )
             }
         }
-        ParcheULinearProgress(
-            progress = (progress?.percent ?: 0) / 100f,
-            contentDescription = "Avance de la simulación: ${progress?.percent ?: 0} %"
-        )
+        // Sin detalle del avance (GET /v1/simulations/{id} falló) no se pinta una barra al 0 % que
+        // engañe a la vista y a TalkBack: basta el texto "En curso".
+        if (progress != null) {
+            ParcheULinearProgress(
+                progress = progress.percent / 100f,
+                contentDescription = "Avance de la simulación: ${progress.percent} %"
+            )
+        }
     }
 }
 
