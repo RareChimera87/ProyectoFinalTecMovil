@@ -442,6 +442,7 @@ Nota: tras un match, `GET /v1/match/queue` sigue devolviendo el ticket `MATCHED`
 - La visibilidad del usuario (NAME / ANONYMOUS / HIDDEN) aplica a contextos de segundo grado (fof, comunidades de otros, presentaciones, sugerencias). Una conexión directa mutua siempre ve el nombre.
 - Detalles de E3.1: un `NodeDto` por persona; su `id` es el `users.id` si hay CONNECTED en algún modo y el `anonId` (`a_` + 22 caracteres base64url de la HMAC-SHA256) si no, y `GET /v1/graph/nodes/{id}` solo acepta ese mismo id (el uuid de un anónimo da 404). El modo, estado y afinidad del nodo son los de su arista principal (CONNECTED > PENDING > SIMULATED, luego mayor afinidad). `stats` describe el subgrafo filtrado y cuenta personas (`connections` = personas con alguna arista CONNECTED; `avgAffinity` promedia las aristas con afinidad). `community` solo filtra si el observador es miembro (si no, grafo vacío).
 - `EdgeService` (E3.1) es la única puerta de escritura de `edges`: `Simulated` (crea SIMULATED o actualiza afinidad y `last_simulation_id`), `InterestShown` (decisión unilateral o invitación: PENDING), `Connected` (decisión mutua, invitación o presentación aceptada: CONNECTED con `connected_at`) y `Declined` (PENDING vuelve a SIMULATED, o se borra si nunca hubo simulación). CONNECTED nunca baja de estado por estos eventos y no se crean aristas entre usuarios con un bloqueo.
+- **Suite de invariantes (E3.5, ADR-0012):** `ThirdPartyViews.registered` es un conjunto declarativo de clases (`KClass<out ThirdPartyView>`). Cada feature de vista de terceros (fof E6.3, comunidades E6.2, presentaciones E6.4, sugerencias E4.7) agrega allí su clase **y** una sonda en `backend/src/test/.../privacy/ThirdPartyViewProbes.byView` que carga un mundo aleatorio en sus repositorios en memoria y traduce su respuesta a una `Exposure`. `ThirdPartyViewRegistryTest` escanea `build/classes/kotlin/main` y falla si una implementación no está registrada o no tiene sonda. `PrivacyInvariantsTest` corre 1.000 mundos por sonda (más la sonda de referencia "nodos de terceros" que solo filtra con la policy, y el ego-grafo) e imprime la semilla (`PRIVACY_SEED=<n>` la reproduce). `scripts/demo-mutacion-privacidad.sh [pareja|memorias|ninguna]` aplica una mutación, corre la suite y restaura el archivo.
 
 ### 6.2 Amigos de amigos (2 saltos)
 
@@ -788,6 +789,7 @@ Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.0
 | Flyway (`flyway-core`, `flyway-database-postgresql`) | 13.11.1 (fijada en E0.3) | Migraciones |
 | Firebase Admin Java | 9.11.0 (fijada en E0.3) | Auth, FCM, Firestore |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
+| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
 | Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |

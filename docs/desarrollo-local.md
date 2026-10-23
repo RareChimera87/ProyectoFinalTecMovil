@@ -124,3 +124,23 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
 ## Grafo (E3.1)
 
 - Clave de `anonId` del grafo: `HMAC_ANON_KEY` (valor directo) o `SECRET_HMAC_ANON_KEY` (nombre del secreto `projects/<p>/secrets/hmac-anon-key`, que define el Terraform de E0.5; se lee la versión `latest` en el primer uso). Con `ENV=local` y sin ninguna de las dos se usa una clave fija de desarrollo; en dev y prod, sin clave, `GET /v1/graph` falla con 500 en vez de usar una clave débil.
+
+## Suite de invariantes de privacidad (E3.5)
+
+```bash
+# Solo la suite (≥ 1.000 casos por propiedad; la semilla queda en build/test-results)
+cd backend && ./gradlew test -PsinContenedores --tests 'me.santiagoreina.parcheu.api.privacy.*'
+# Reproducir una corrida concreta
+PRIVACY_SEED=-6985993149784619260 ./gradlew test -PsinContenedores --tests 'me.santiagoreina.parcheu.api.privacy.*'
+# Demo de mutación para la sustentación (sale ≠ 0 con mutación, 0 sin ella; deja el árbol limpio)
+scripts/demo-mutacion-privacidad.sh            # quita el filtro de Pareja de GraphVisibilityPolicy
+scripts/demo-mutacion-privacidad.sh memorias   # MemorySelection deja de filtrar memorias por modo
+scripts/demo-mutacion-privacidad.sh ninguna    # control: suite en verde
+scripts/test/demo-mutacion-privacidad.test.sh  # comprobación rápida de las anclas, sin Gradle
+```
+
+La mutación `memorias` hoy se ancla en `MemorySelection`; `TwinPromptBuilderDelegationTest` obliga a que el `TwinPromptBuilder` de E4.3 delegue en ella, y al entrar E4.3 el ancla debe moverse al builder real.
+
+La demo exige que el archivo a mutar no tenga cambios sin commit (lo restaura con `git checkout`).
+Una vista de terceros nueva se agrega en `ThirdPartyViews.registered` y con su sonda en
+`ThirdPartyViewProbes.byView`; sin ambas, `ThirdPartyViewRegistryTest` falla.
