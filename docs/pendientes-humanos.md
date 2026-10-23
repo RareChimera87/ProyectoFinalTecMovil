@@ -570,6 +570,26 @@ Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/...
 5. **Texto legal:** pide al docente revisar el aviso de A4 ("Al continuar aceptas los Términos y la Política de
    privacidad (Ley 1581 de 2012)…") junto con la revisión legal de E2.1.
 
+## E1.4 · Componentes compuestos
+
+Lo automatizable ya quedó hecho: los 25 compuestos en `android/designsystem/.../components/compound/`, pruebas de semántica, de LockedOverlay (sdk 30 y 35) y de avatares, y capturas Roborazzi en ambos temas (`android/designsystem/src/test/screenshots/compound/`).
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar primero E1.3 (PR #20).** Esta rama parte de `feature/components-base` porque los compuestos reutilizan los botones, tarjetas y `touchTarget()` de E1.3; el PR muestra también su commit hasta que #20 se mezcle en `dev`. | I2 | Antes del merge de E1.4 |
+| 2 | **Revisión visual lado a lado.** Comparar las capturas de `screenshots/compound/*.png` con los mockups B-H de Claude Design (radios, paddings, colores de burbujas, anillo de afinidad, QR). Diferencias aceptadas: el QR de las capturas es sintético (el codificador llega con E6.1) y los iconos son círculos de prueba hasta que E1.2 se mezcle. | I2 | Ventana de revisión de la ola 6 |
+| 3 | **Prueba del blur en un dispositivo real.** Robolectric no renderiza `RenderEffect`, así que el desenfoque de `LockedOverlay` solo se verifica por rama (etiqueta `locked_overlay_blur`) y no por píxeles. Abrir una pantalla que lo use (D7 o F7, cuando existan) en un dispositivo/emulador con API >= 31 y en otro con API < 31 y confirmar blur y scrim opaco respectivamente. | I2 | Cuando exista la primera pantalla con LockedOverlay |
+
+## E4.4 · UI de match al azar
+
+Lo automatizable ya quedó hecho: F1, F2 y la hoja de límite de match diario en `android/app/.../feature/conocer/match/`, pruebas de ViewModel con `FakeMatchRepository`, pruebas de la pantalla y capturas Roborazzi en ambos temas (`android/app/src/test/screenshots/match/`).
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Mezclar primero #20 (E1.3), #26 (E1.4) y #18 (E1.5).** E4.4 depende de E1.4 y E1.5, que aún no estaban en `dev`: esta rama los mezcla para poder compilar y el PR muestra también sus commits hasta que esos PR entren a `dev`. | I2 | Antes del merge de E4.4 |
+| 2 | **Confirmar con I1 los ids de F3 y F4.** `MatchDto` no trae el id del chat de escenario ni de la simulación; F2 navega a `ScenarioChat(matchId)` y `Simulation(matchId)` y E5.2/E4.5 deben resolverlos por el id del match, o el contrato debe agregar `simulationId`/`chatId` a `MatchDto` o a la respuesta de `POST /v1/matches/{id}/choice`. | I1 e I2 | Antes de integrar E4.5 y F3 |
+| 3 | **Revisión visual lado a lado** de `screenshots/match/*.png` con los mockups 13a y 13b. Diferencias conocidas: sin iconos de modo ni de intereses (E1.2 no está en `dev`), sin la ciudad en la línea de edad (el contrato no la trae) y la hoja de límite de match diario es nueva (el inventario no la diseñó: G2 cubre solo simulaciones). | I2 | Ventana de revisión de la ola 7 |
+| 4 | **Probar contra dev con dos cuentas**: entrar a la fila con dos usuarios del mismo modo y comprobar que el listener de `matchTickets/{uid}` abre F2 en ambos. Requiere `google-services.json` de dev y las reglas de Firestore desplegadas (E0.8). Docker y Firestore real no están disponibles en CI. | I2 | Con la primera prueba cerrada |
 ### Corrección de la revisión de la ola 6 (E2.2)
 
 - **Release 0.1 (E10.3):** cortar `release/0.1.0` desde `d7989af`, no desde `dev` (ver ficha E10.3 en backlog.md).

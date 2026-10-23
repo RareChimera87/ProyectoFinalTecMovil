@@ -256,6 +256,8 @@ dependencies {
     implementation(libs.firebase.auth)
     // E5.3: push con FCM.
     implementation(libs.firebase.messaging)
+    // E4.4: fila de match en tiempo real (Firestore de solo lectura).
+    implementation(libs.firebase.firestore)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
