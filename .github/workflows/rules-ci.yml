@@ -37,11 +37,11 @@ jobs:
       - name: Comprueba que existe firebase/
         id: existe
         run: |
-          if [[ -d "firebase" ]]; then
+          if [[ -f "firebase/package.json" ]]; then
             echo "existe=true" >> "$GITHUB_OUTPUT"
           else
             echo "existe=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No existe firebase/ en esta rama: se omite la verificación (los cimientos aún no están integrados)."
+            echo "::notice::No existe firebase/package.json en esta rama (solo un README o nada): se omite la verificación hasta que lleguen los cimientos."
           fi
 
   verificar:

@@ -52,11 +52,11 @@ jobs:
       - name: Comprueba que existe infra/terraform/
         id: existe
         run: |
-          if [[ -d "infra/terraform" ]]; then
+          if [[ -f "infra/terraform/envs/dev/main.tf" ]]; then
             echo "existe=true" >> "$GITHUB_OUTPUT"
           else
             echo "existe=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No existe infra/terraform/ en esta rama: se omite la verificación (los cimientos aún no están integrados)."
+            echo "::notice::No existe infra/terraform/envs/dev/main.tf en esta rama (solo un README o nada): se omite la verificación hasta que lleguen los cimientos."
           fi
       - name: Comprueba si existe el secreto WIF_PROVIDER
         id: wif

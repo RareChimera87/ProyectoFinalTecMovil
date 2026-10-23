@@ -35,11 +35,11 @@ jobs:
       - name: Comprueba que existe contract/
         id: existe
         run: |
-          if [[ -d "contract" ]]; then
+          if [[ -f "contract/gradlew" ]]; then
             echo "existe=true" >> "$GITHUB_OUTPUT"
           else
             echo "existe=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No existe contract/ en esta rama: se omite la verificación (los cimientos aún no están integrados)."
+            echo "::notice::No existe contract/gradlew en esta rama (solo un README o nada): se omite la verificación hasta que lleguen los cimientos."
           fi
 
   verificar:
