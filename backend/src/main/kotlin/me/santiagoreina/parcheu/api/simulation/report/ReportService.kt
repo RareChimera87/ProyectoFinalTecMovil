@@ -34,8 +34,13 @@ import java.util.UUID
  *   resumen y conteos; `reasons`, `frictions` y `dimensions` no viajan (el borroso de F7 es decorativo).
  * - **Desbloqueo:** gasta el informe completo del mes (`usage_events` FULL_REPORT con
  *   `ref_id = report:<simulación>:<usuario>`) y queda en `report_unlocks`. Plus no gasta nada.
- * - **Decisión:** se guarda una vez por persona. Si las dos conectan: arista CONNECTED, chat DIRECT con
- *   [ChatService] y aviso a ambas; el nombre se revela solo entonces. "Ahora no" no avisa a nadie ni se revela: quien conecta después ve WAITING.
+ * - **Decisión:** se guarda una vez por persona en `connection_decisions` y no toca la arista: la fila
+ *   de `edges` es una sola por par y modo (ADR-0003), así que marcarla PENDING le diría a quien aún no
+ *   decidió (o dijo "Ahora no") que la otra persona quiere conectar, y eso es de Plus (E6.6). Si las dos
+ *   conectan: arista CONNECTED, chat DIRECT con [ChatService] y aviso a ambas; el nombre se revela solo
+ *   entonces. "Ahora no" no avisa a nadie ni se revela: quien conecta después ve WAITING.
+ * - **409 puro:** repetir una decisión ya resuelta no escribe nada (ni reabre un chat cerrado por un
+ *   bloqueo, E8.1). La única excepción es el par completo sin chat (la conexión falló a medias).
  */
 class ReportService(
     private val simulations: SimulationRepository,
@@ -86,33 +91,23 @@ class ReportService(
             DecideOutcome.AlreadyDecided -> {
                 // Reintento de quien completó el par cuando la conexión falló a medias (arista/chat/avisos):
                 // si todavía no hay chat DIRECT, se repara de forma idempotente en vez de responder 409.
+                // Con el chat ya creado (abierto o cerrado) el 409 es puro: solo lecturas, nada se reabre ni
+                // se reescribe. Si el espejo de Firestore falló al conectar, lo repara el primer `send`.
                 val decisions = repo.decisions(record.id)
                 val mutual = body.connect && decisions[viewer] == true && decisions[other] == true
-                val existing = if (mutual) chat.findDirect(viewer, other, record.mode) else null
-                // Par completo y chat ya creado: se reintenta el espejo de Firestore (idempotente, tolerante) antes del 409.
-                if (existing != null) chat.createDirectTolerant(viewer, other, record.mode)
-                val incomplete = mutual && existing == null
+                val incomplete = mutual && chat.findDirect(viewer, other, record.mode) == null
                 if (!incomplete) throw Conflict("Ya decidiste sobre esta simulación")
                 return DecisionResult(DecisionStatus.CONNECTED, connect(record, viewer, other).toString())
             }
             is DecideOutcome.Saved -> outcome.all
         }
         val otherChoice = saved[other]
+        // Las decisiones unilaterales no tocan la arista (§5.2): ni el interés de quien conecta llega al grafo
+        // de la otra persona (contenido de Plus, E6.6) ni un "Ahora no" llega al de quien conectó.
         return when {
-            !body.connect -> {
-                // La arista no cambia: bajar PENDING a SIMULATED revelaría el rechazo en el grafo de quien conectó (§5.2).
-                DecisionResult(DecisionStatus.DECLINED)
-            }
-            otherChoice == null -> {
-                edges.apply(EdgeEvent.InterestShown(viewer, other, record.mode, EdgeSource.DECISION))
-                DecisionResult(DecisionStatus.WAITING)
-            }
-            // La otra persona dijo "Ahora no": no se revela. Quien conecta ve lo mismo que si nadie hubiera respondido
-            // (también en el grafo: arista PENDING, igual que en el caso normal).
-            otherChoice == false -> {
-                edges.apply(EdgeEvent.InterestShown(viewer, other, record.mode, EdgeSource.DECISION))
-                DecisionResult(DecisionStatus.WAITING)
-            }
+            !body.connect -> DecisionResult(DecisionStatus.DECLINED)
+            // Nadie más decidió, o la otra persona dijo "Ahora no" (no se revela): WAITING en ambos casos.
+            otherChoice != true -> DecisionResult(DecisionStatus.WAITING)
             else -> {
                 // Solo la decisión que completa el par llega aquí (repo.decide las serializa): un único
                 // chat, una única arista CONNECTED y un único aviso por persona.

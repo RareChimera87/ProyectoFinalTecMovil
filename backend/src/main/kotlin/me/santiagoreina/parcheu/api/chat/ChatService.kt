@@ -61,7 +61,8 @@ class ChatService(
 
     /**
      * Como [createDirect], pero un fallo del espejo de Firestore no se propaga: el chat ya existe en Postgres
-     * (fuente de verdad) y aparece en `GET /v1/chats`. Lo usa la decisión mutua (E4.6) para no perder los avisos.
+     * (fuente de verdad) y aparece en `GET /v1/chats`. Lo usa la decisión mutua (E4.6) para no perder los avisos;
+     * el primer `send` del chat repara el documento que falte.
      */
     suspend fun createDirectTolerant(a: UUID, b: UUID, mode: Mode): ChatRecord {
         if (a == b) throw ValidationFailed("Un chat necesita dos personas distintas")
@@ -140,7 +141,7 @@ class ChatService(
 
         repo.findByClientId(sender.id, clientId)?.let { existing ->
             if (existing.chatId != chatId) throw Conflict("clientId ya se usó en otro chat")
-            mirror.upsertChat(chat.toDoc())
+            repairChatMirror(chatId)
             mirror.upsertMessage(chatId, existing.toDoc(sender.firebaseUid))
             return toOwnDto(existing)
         }
@@ -155,8 +156,7 @@ class ChatService(
         val learnable = repo.learningConsent(sender.id, chat.mode)
         val saved = repo.saveMessage(NewMessage(chatId, sender.id, clientId, text, learnable, now))
         if (saved.message.chatId != chatId) throw Conflict("clientId ya se usó en otro chat")
-        // Repara el espejo del chat si la conexión lo dejó sin documento (las reglas de messages leen el chat padre).
-        mirror.upsertChat(chat.toDoc())
+        repairChatMirror(chatId)
         mirror.upsertMessage(chatId, saved.message.toDoc(sender.firebaseUid))
         if (saved.inserted) notifyOthers(chat, sender, others, saved.message)
         return toOwnDto(saved.message)
@@ -175,6 +175,15 @@ class ChatService(
     }
 
     // --- internos ----------------------------------------------------------------------------
+
+    /**
+     * Repara el documento `chats/{id}` si la conexión lo dejó sin escribir (las reglas de `messages`
+     * leen el chat padre). Relee el chat justo antes: con la lectura del inicio de `send`, un `close`
+     * concurrente podría quedar pisado y el espejo volvería a OPEN.
+     */
+    private suspend fun repairChatMirror(chatId: UUID) {
+        repo.chat(chatId)?.let { mirror.upsertChat(it.toDoc()) }
+    }
 
     private suspend fun requireMember(user: UserRecord, chatId: UUID): ChatRecord {
         val chat = repo.chat(chatId) ?: throw NotFound("El chat no existe")

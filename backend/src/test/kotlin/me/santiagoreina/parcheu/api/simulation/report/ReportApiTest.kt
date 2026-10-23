@@ -47,12 +47,14 @@ import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.contract.ApiError
+import me.santiagoreina.parcheu.contract.ChatStatus
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.Decision
 import me.santiagoreina.parcheu.contract.DecisionResult
 import me.santiagoreina.parcheu.contract.DecisionStatus
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.ErrorCode
+import me.santiagoreina.parcheu.contract.GraphDto
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.QuotaKind
@@ -68,8 +70,10 @@ class ReportApiTest : FunSpec({
 
     class FlakyMirror(var failing: Boolean = false) : ChatMirror {
         val chats = mutableSetOf<UUID>()
+        var chatWrites = 0
         override suspend fun upsertChat(doc: ChatDoc) {
             if (failing) error("Firestore no disponible")
+            chatWrites++
             chats += doc.id
         }
         override suspend fun upsertMessage(chatId: UUID, doc: MessageDoc) { if (failing) error("Firestore no disponible") }
@@ -199,7 +203,8 @@ class ReportApiTest : FunSpec({
         testApplication {
             val client = app(w)
             client.decide("ana", id, connect = true).body<DecisionResult>() shouldBe DecisionResult(DecisionStatus.WAITING)
-            w.sim.graphRepo.edge(w.id("ana"), w.id("beto"), Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
+            // La decisión unilateral no toca la arista compartida (sigue SIMULATED): ver la prueba del grafo.
+            w.sim.graphRepo.edge(w.id("ana"), w.id("beto"), Mode.AMISTAD)!!.state shouldBe EdgeState.SIMULATED
             val waiting = client.report("ana", id).body<ReportDto>()
             waiting.myDecision shouldBe true
             waiting.otherName shouldBe null
@@ -245,8 +250,8 @@ class ReportApiTest : FunSpec({
             val reopened = client.report("caro", second).body<ReportDto>()
             reopened.otherDecided shouldBe false
             reopened.chatId shouldBe null
-            // El rechazo no se filtra por el grafo: la arista sigue PENDING.
-            w.sim.graphRepo.edge(w.id("ana"), w.id("caro"), Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
+            // Ni el interés de Caro ni el rechazo de Ana llegan al grafo: la arista sigue SIMULATED.
+            w.sim.graphRepo.edge(w.id("ana"), w.id("caro"), Mode.AMISTAD)!!.state shouldBe EdgeState.SIMULATED
 
             w.push.sent.shouldBeEmpty()
             w.chatRepo.chatsOf(w.id("ana")).shouldBeEmpty()
@@ -254,7 +259,32 @@ class ReportApiTest : FunSpec({
         }
     }
 
-    test("el grafo de quien conecta es igual si el otro rechazó antes o después (PENDING en ambos casos)") {
+    test("las decisiones unilaterales no cambian GET /v1/graph de nadie: ni el interés ni el 'Ahora no' se revelan") {
+        val w = World()
+        val id = w.done("ana", "beto")
+        testApplication {
+            val client = app(w)
+            suspend fun graph(uid: String) = client.get("/v1/graph") { auth(uid) }.also { it.status shouldBe HttpStatusCode.OK }.bodyAsText()
+            val anaBefore = graph("ana")
+            val betoBefore = graph("beto")
+            client.get("/v1/graph") { auth("ana") }.body<GraphDto>().let { g ->
+                g.stats.pending shouldBe 0
+                g.nodes.single().state shouldBe EdgeState.SIMULATED
+            }
+
+            // Beto conecta: el grafo de Ana (que no ha decidido) no cambia. Saber que quiere conectar es de Plus (E6.6).
+            client.decide("beto", id, connect = true).body<DecisionResult>().status shouldBe DecisionStatus.WAITING
+            graph("ana") shouldBe anaBefore
+            graph("beto") shouldBe betoBefore
+
+            // Ana dice "Ahora no": el grafo de Beto (que conectó) tampoco cambia.
+            client.decide("ana", id, connect = false).body<DecisionResult>().status shouldBe DecisionStatus.DECLINED
+            graph("beto") shouldBe betoBefore
+            graph("ana") shouldBe anaBefore
+        }
+    }
+
+    test("el grafo de quien conecta es igual si el otro rechazó antes o después (SIMULATED en ambos casos)") {
         val w = World()
         val before = w.done("ana", "beto")
         val after = w.done("ana", "caro")
@@ -264,12 +294,12 @@ class ReportApiTest : FunSpec({
             client.decide("beto", before, connect = true)
             client.decide("caro", after, connect = true)
             client.decide("ana", after, connect = false)
-            w.sim.graphRepo.edge(w.id("ana"), w.id("beto"), Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
-            w.sim.graphRepo.edge(w.id("ana"), w.id("caro"), Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
+            w.sim.graphRepo.edge(w.id("ana"), w.id("beto"), Mode.AMISTAD)!!.state shouldBe EdgeState.SIMULATED
+            w.sim.graphRepo.edge(w.id("ana"), w.id("caro"), Mode.AMISTAD)!!.state shouldBe EdgeState.SIMULATED
         }
     }
 
-    test("espejo caído al conectar: repetir la decisión o enviar un mensaje repara el documento del chat") {
+    test("espejo caído al conectar: el 409 no escribe nada y el primer mensaje repara el documento del chat") {
         val w = World()
         val id = w.done("ana", "beto")
         w.mirror.failing = true
@@ -279,27 +309,35 @@ class ReportApiTest : FunSpec({
             val chatId = client.decide("beto", id, connect = true).body<DecisionResult>().chatId!!
             w.mirror.chats.shouldBeEmpty()
             w.mirror.failing = false
-            // Reintento de la decisión: 409, pero el espejo se repara.
+            // Reintento de la decisión: 409 puro (ni Postgres ni Firestore).
             client.decide("beto", id, connect = true).status shouldBe HttpStatusCode.Conflict
-            w.mirror.chats shouldBe setOf(UUID.fromString(chatId))
+            w.mirror.chats.shouldBeEmpty()
             w.push.sent shouldHaveSize 2
-        }
-        // Y también al escribir un mensaje.
-        val w2 = World()
-        val id2 = w2.done("ana", "beto")
-        w2.mirror.failing = true
-        testApplication {
-            val client = app(w2)
-            client.decide("ana", id2, connect = true)
-            val chatId = client.decide("beto", id2, connect = true).body<DecisionResult>().chatId!!
-            w2.mirror.failing = false
-            w2.mirror.chats.shouldBeEmpty()
             client.post("/v1/chats/$chatId/messages") {
                 auth("ana")
                 contentType(ContentType.Application.Json)
                 setBody(me.santiagoreina.parcheu.contract.SendMessage("c1", "hola"))
             }.status shouldBe HttpStatusCode.OK
-            w2.mirror.chats shouldBe setOf(UUID.fromString(chatId))
+            w.mirror.chats shouldBe setOf(UUID.fromString(chatId))
+        }
+    }
+
+    test("repetir una decisión ya resuelta (409) no reabre un chat DIRECT cerrado por un bloqueo levantado") {
+        val w = World()
+        val id = w.done("ana", "beto")
+        testApplication {
+            val client = app(w)
+            client.decide("ana", id, connect = true)
+            val chatId = UUID.fromString(client.decide("beto", id, connect = true).body<DecisionResult>().chatId!!)
+            // Bloqueo (E8.1) y luego desbloqueo: el chat queda CLOSED.
+            w.chat.service.close(chatId)
+            val writes = w.mirror.chatWrites
+            listOf("ana", "beto").forEach { uid ->
+                client.decide(uid, id, connect = true).status shouldBe HttpStatusCode.Conflict
+            }
+            w.chatRepo.chat(chatId)!!.status shouldBe ChatStatus.CLOSED
+            w.mirror.chatWrites shouldBe writes
+            w.push.sent shouldHaveSize 2
         }
     }
 
