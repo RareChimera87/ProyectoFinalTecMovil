@@ -2,19 +2,16 @@ package me.santiagoreina.parcheu.feature.managesubscription
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import me.santiagoreina.parcheu.core.ui.StubScreen
+import me.santiagoreina.parcheu.feature.plus.ManageSubscriptionEntry
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.ManageSubscription
 
-/**
- * Punto de entrada de la ruta [ManageSubscription] (stub de E0.7). La feature dueña reemplaza solo este archivo y
- * [manageSubscriptionModule]; AppNavHost.kt no cambia.
- */
+/** Punto de entrada de la ruta [ManageSubscription] (G4). La pantalla vive en `feature/plus` (E7.3). */
 @Composable
 fun ManageSubscriptionRoute(
     route: ManageSubscription,
     navigator: AppNavigator,
     modifier: Modifier = Modifier
 ) {
-    StubScreen(route = route, navigator = navigator, modifier = modifier)
+    ManageSubscriptionEntry(navigator = navigator, modifier = modifier)
 }

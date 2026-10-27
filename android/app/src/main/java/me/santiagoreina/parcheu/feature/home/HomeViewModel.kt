@@ -15,10 +15,10 @@ import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.data.simulation.SimulationRepository
 import me.santiagoreina.parcheu.data.simulation.toSnapshot
+import me.santiagoreina.parcheu.feature.plus.PlusErrorRouter
 import me.santiagoreina.parcheu.feature.simulation.SCENARIO_COUNT
 import me.santiagoreina.parcheu.feature.simulation.progressPercent
 import me.santiagoreina.parcheu.navigation.AppRoute
-import me.santiagoreina.parcheu.navigation.Paywall
 import me.santiagoreina.parcheu.navigation.Simulation
 
 /** Origen del paywall cuando se abre desde C1 (analítica de G1). */
@@ -122,11 +122,11 @@ class HomeViewModel(
                 is ApiResult.Failure -> {
                     val error = result.error
                     val plus = (_state.value as? HomeUiState.Loaded)?.home?.plus == true
-                    if (!plus &&
-                        (error is AppError.QuotaExceeded || error == AppError.PlusRequired)
-                    ) {
+                    val premiumRoute = PlusErrorRouter.route(error, PAYWALL_SOURCE_HOME)
+                    if (!plus && premiumRoute != null) {
+                        // PLUS_REQUIRED abre G1; QUOTA_EXCEEDED(kind) abre la hoja G2 de ese cupo (E7.3).
                         update { it.copy(startingId = null) }
-                        _effects.send(HomeEffect.Navigate(Paywall(PAYWALL_SOURCE_HOME)))
+                        _effects.send(HomeEffect.Navigate(premiumRoute))
                     } else {
                         update { it.copy(startingId = null, actionError = error) }
                     }

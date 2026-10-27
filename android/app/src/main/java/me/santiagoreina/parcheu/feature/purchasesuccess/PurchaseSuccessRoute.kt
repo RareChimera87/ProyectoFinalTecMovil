@@ -2,19 +2,16 @@ package me.santiagoreina.parcheu.feature.purchasesuccess
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import me.santiagoreina.parcheu.core.ui.StubScreen
+import me.santiagoreina.parcheu.feature.plus.PurchaseSuccessEntry
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.PurchaseSuccess
 
-/**
- * Punto de entrada de la ruta [PurchaseSuccess] (stub de E0.7). La feature dueña reemplaza solo este archivo y
- * [purchaseSuccessModule]; AppNavHost.kt no cambia.
- */
+/** Punto de entrada de la ruta [PurchaseSuccess] (G3). La pantalla vive en `feature/plus` (E7.3). */
 @Composable
 fun PurchaseSuccessRoute(
     route: PurchaseSuccess,
     navigator: AppNavigator,
     modifier: Modifier = Modifier
 ) {
-    StubScreen(route = route, navigator = navigator, modifier = modifier)
+    PurchaseSuccessEntry(route = route, navigator = navigator, modifier = modifier)
 }

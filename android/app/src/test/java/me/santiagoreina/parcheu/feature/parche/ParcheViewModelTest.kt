@@ -1,13 +1,17 @@
 package me.santiagoreina.parcheu.feature.parche
 
 import app.cash.turbine.test
+import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
+import me.santiagoreina.parcheu.feature.plus.PlusSources
 import me.santiagoreina.parcheu.navigation.Chat
+import me.santiagoreina.parcheu.navigation.Paywall
 import me.santiagoreina.parcheu.navigation.Results
 import me.santiagoreina.parcheu.navigation.Simulation
 import org.junit.Assert.assertEquals
@@ -195,7 +199,7 @@ class ParcheViewModelTest {
     @Test
     fun simulateAgainFailureIsShownInSheet() {
         val fake = repo(ApiResult.Success(ParcheSamples.content))
-        fake.startResult = failure(AppError.PlusRequired)
+        fake.startResult = failure(AppError.Network)
         val vm = ParcheViewModel(fake)
         vm.start()
         vm.onNodeClick("and")
@@ -203,8 +207,46 @@ class ParcheViewModelTest {
         vm.onSimulateAgain()
 
         val sheet = loaded(vm).sheet!!
-        assertEquals(AppError.PlusRequired, sheet.actionError)
+        assertEquals(AppError.Network, sheet.actionError)
         assertFalse(sheet.starting)
+    }
+
+    @Test
+    fun simulateAgainQuotaExceededOpensG2() = runTest {
+        val fake = repo(ApiResult.Success(ParcheSamples.content))
+        val resetsAt = Instant.fromEpochSeconds(1_800_000_000)
+        fake.startResult = failure(AppError.QuotaExceeded(QuotaKind.SIMULATION, resetsAt))
+        val vm = ParcheViewModel(fake)
+        vm.start()
+        vm.onNodeClick("and")
+        vm.effects.test {
+            vm.onSimulateAgain()
+            assertEquals(
+                ParcheEffect.Navigate(
+                    Paywall(PlusSources.limit(QuotaKind.SIMULATION, resetsAt))
+                ),
+                awaitItem()
+            )
+        }
+        val sheet = loaded(vm).sheet!!
+        assertNull(sheet.actionError)
+        assertFalse(sheet.starting)
+    }
+
+    @Test
+    fun simulateAgainPlusRequiredOpensG1() = runTest {
+        val fake = repo(ApiResult.Success(ParcheSamples.content))
+        fake.startResult = failure(AppError.PlusRequired)
+        val vm = ParcheViewModel(fake)
+        vm.start()
+        vm.onNodeClick("and")
+        vm.effects.test {
+            vm.onSimulateAgain()
+            assertEquals(
+                ParcheEffect.Navigate(Paywall(PAYWALL_SOURCE_PARCHE)),
+                awaitItem()
+            )
+        }
     }
 
     @Test
