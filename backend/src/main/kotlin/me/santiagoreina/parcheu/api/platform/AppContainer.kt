@@ -237,7 +237,9 @@ class AppContainer(
                 config.env, database, identity, graph, twin, tasks, config.firebaseProjectId, clock,
                 closedMatches = matching.service::onMatchesClosedByDeletion,
             )
-            val introductions = introductionModule(introductionStore, simulation, graph, chat, quota, notifier, clock)
+            val introductions = introductionModule(
+                introductionStore, simulation, graph, chat, quota, notifier, clock, matching.flags.demoUsersEnabled,
+            )
             // Invitaciones (E6.1): aristas por EdgeService, modos de user_modes y enlace https://<hosting>/i/{codigo}.
             val invites = exposedInviteModule(database, graph, simulation, notifier, InviteLinks.fromConfig(config, vars), clock)
             // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.

@@ -4,11 +4,13 @@ import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.Mode
 import java.util.UUID
@@ -58,5 +60,37 @@ class FofViaIdPropertyTest : FunSpec({
         }
         cases shouldBeGreaterThanOrEqual PrivacyProperties.ITERATIONS
         withCandidates shouldBeGreaterThan 0
+    }
+
+    /**
+     * 'Pedir presentación' (E6.2) y D6 (E6.3) comparten la definición de amigos de amigos: `resolveFof`
+     * da un resultado solo para los `anonId` que fof lista, y con el mismo `viaId`. Si no, el 202 frente
+     * al 404 sería un oráculo sobre las aristas de un usuario HIDDEN (ADR-0012, regla 2).
+     */
+    test("resolveFof(anonId) es no nulo solo si fof lo lista y con el mismo viaId") {
+        var resolved = 0
+        PrivacyProperties.check("resolveFof coherente con fof", PrivacyWorld.arb()) { world ->
+            val graph = world.toGraphRepository()
+            val policy = GraphVisibilityPolicy(signer)
+            val fof = FofService(InMemoryFofRepository(graph), graph, policy, isPlus = { true })
+            val people = IntroductionPeople(graph, policy, fof)
+            world.observers().forEach { viewer ->
+                val listed = fof.fof(viewer).items.orEmpty().associateBy { it.anonId }
+                world.people.forEach { person ->
+                    val anon = signer.anonId(viewer, person.id)
+                    val result = people.resolveFof(viewer, anon)
+                    withClue("observador ${world.people.indexOfFirst { it.id == viewer }}, candidato $anon en $world") {
+                        if (anon in listed) {
+                            result?.second?.toString() shouldBe listed.getValue(anon).viaId
+                            result?.first shouldBe person.id
+                            resolved++
+                        } else {
+                            result shouldBe null
+                        }
+                    }
+                }
+            }
+        }
+        resolved shouldBeGreaterThan 0
     }
 })

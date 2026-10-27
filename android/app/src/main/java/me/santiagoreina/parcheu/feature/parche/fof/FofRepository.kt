@@ -19,7 +19,7 @@ interface FofApi {
     @GET("v1/graph/fof")
     suspend fun fof(): FofDto
 
-    /** "Pedir presentación" (E6.4): 202 sin cuerpo; gratis → 402 PLUS_REQUIRED. */
+    /** "Pedir presentación" (E6.2): 202 sin cuerpo; gratis → 402 PLUS_REQUIRED. */
     @POST("v1/introductions/request")
     suspend fun requestIntroduction(@Body body: IntroRequest)
 }

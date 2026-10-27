@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import org.koin.compose.viewmodel.koinViewModel
@@ -18,6 +19,11 @@ fun FofRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) { viewModel.start() }
+    // Volver de G1 con ParcheU+ recién comprado: D7 se recarga y pasa a D6.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refreshIfLocked()
+        onPauseOrDispose {}
+    }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {

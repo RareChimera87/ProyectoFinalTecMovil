@@ -29,7 +29,7 @@ interface ThirdPartyViewProbe {
  * Sondas de la suite.
  *
  * Cada clase de [me.santiagoreina.parcheu.api.graph.ThirdPartyViews.registered] necesita su sonda
- * en [byView] (fof E6.3, comunidades E6.2, presentaciones E6.4, sugerencias de inicio E4.7): el
+ * en [byView] (fof E6.3, comunidades E6.4, presentaciones E6.2, sugerencias de inicio E4.7): el
  * test de registro falla si falta. [reference] se verifica siempre, haya o no vistas registradas.
  */
 object ThirdPartyViewProbes {
@@ -128,12 +128,14 @@ object IntroductionsProbe : ThirdPartyViewProbe {
     override val context = ViewContext.THIRD_PARTY
 
     override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
-        val view = IntroductionPeople(world.toGraphRepository(), GraphVisibilityPolicy(signer), signer)
+        val graph = world.toGraphRepository()
+        val policy = GraphVisibilityPolicy(signer)
+        val view = IntroductionPeople(graph, policy, FofService(InMemoryFofRepository(graph), graph, policy, isPlus = { true }))
         val others = world.people
             .filter { it.id != viewer && !world.connected(viewer, it.id) }
             .mapNotNull { view.presentOther(viewer, it.id) }
             .map { checkNotNull(it.id ?: it.anonId) { "Una persona presentada sin id público" } }
-        val fof = view.friendsOfFriends(viewer).keys.map { signer.anonId(viewer, it) }
+        val fof = view.friendsOfFriends(viewer).map { it.person.id }
         return Exposure(personIds = others + fof, edges = emptyList())
     }
 }

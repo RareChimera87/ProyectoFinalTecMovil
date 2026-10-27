@@ -44,6 +44,25 @@ class FofViewModelTest {
     }
 
     @Test
+    fun lockedReloadsOnResumeAndUnlocksAfterPurchase() {
+        val repo = FakeFofRepository(ApiResult.Success(FofSamples.free))
+        val vm = FofViewModel(repo)
+        vm.start()
+        assertEquals(FofUiState.Locked(12), vm.state.value)
+        // Vuelve de G1 sin haber comprado: sigue bloqueado.
+        vm.refreshIfLocked()
+        assertEquals(FofUiState.Locked(12), vm.state.value)
+        // Compró ParcheU+ en G1 y volvió con Atrás.
+        repo.loadResult = ApiResult.Success(FofSamples.plus)
+        vm.refreshIfLocked()
+        assertEquals(FofUiState.Unlocked(FofSamples.plus), vm.state.value)
+        assertEquals(3, repo.loads)
+        // Ya desbloqueado, reanudar no vuelve a pedir nada.
+        vm.refreshIfLocked()
+        assertEquals(3, repo.loads)
+    }
+
+    @Test
     fun unlockOpensPaywall() = runTest {
         val vm = FofViewModel(FakeFofRepository(ApiResult.Success(FofSamples.free)))
         vm.start()

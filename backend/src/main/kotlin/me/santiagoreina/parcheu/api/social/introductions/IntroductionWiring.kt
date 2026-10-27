@@ -2,6 +2,8 @@ package me.santiagoreina.parcheu.api.social.introductions
 
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
+import me.santiagoreina.parcheu.api.graph.fof.FofService
+import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
 import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.simulation.SimulationModule
@@ -28,8 +30,15 @@ fun introductionModule(
     quota: QuotaModule,
     notifier: Notifier,
     clock: Clock,
+    demoUsersEnabled: Boolean = true,
 ): IntroductionModule {
-    val people = IntroductionPeople(graph.repository, graph.policy, graph.anonIds)
+    // Los candidatos de 'Pedir presentación' salen de FofService (E6.3), la misma lista que D6; ParcheU+ lo
+    // decide el servicio de presentaciones, y la afinidad (rasgos) no cambia quién es candidato.
+    val fof = FofService(
+        graph.fofRepository ?: InMemoryFofRepository(graph.repository),
+        graph.repository, graph.policy, { true }, demoUsersEnabled,
+    )
+    val people = IntroductionPeople(graph.repository, graph.policy, fof)
     val service = IntroductionService(
         repo = repository,
         simulations = simulation.service,

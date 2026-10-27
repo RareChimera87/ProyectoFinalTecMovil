@@ -54,6 +54,8 @@ class FofService(
         val edges: List<MutualEdge>,
         /** Amigo en común por el que se llega (id público para el observador: `users.id`). */
         val viaId: String,
+        /** `users.id` real del candidato: solo para uso interno del backend (p. ej. resolver un `anonId`); nunca viaja. */
+        val userId: UUID,
     )
 
     /** Todos los candidatos visibles de [viewer] (hasta [MAX_CANDIDATES]) en el orden de la vista. */
@@ -89,6 +91,7 @@ class FofService(
                     estimatedAffinity = estimate(myTraits, row.traits),
                     edges = links.map { MutualEdge(view.id, it.mutual.toString(), it.mode) },
                     viaId = viaOf(links, mode).toString(),
+                    userId = row.person.id,
                 )
             }
             .sortedWith(
