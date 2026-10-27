@@ -55,13 +55,14 @@ class NotificationsRequestsRouteTest {
                     ApiResult.Success(NotificationsSamples.withUnread.inbox)
                 )
             )
+        val requestsViewModel = ConnectRequestsViewModel(requests)
         composeRule.setContent {
             ParcheUTheme(darkTheme = true) {
                 NotificationsRoute(
                     Notifications,
                     navigator,
                     viewModel = notifications,
-                    requestsViewModel = ConnectRequestsViewModel(requests)
+                    requestsViewModel = requestsViewModel
                 )
             }
         }
