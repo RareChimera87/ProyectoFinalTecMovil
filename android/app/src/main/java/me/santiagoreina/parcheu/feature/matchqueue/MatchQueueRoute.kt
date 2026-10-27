@@ -12,12 +12,8 @@ import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Home
 import me.santiagoreina.parcheu.navigation.MatchFound
 import me.santiagoreina.parcheu.navigation.MatchQueue
-import me.santiagoreina.parcheu.navigation.Paywall
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
-
-/** Origen de la hoja de límite de match diario al abrir G1 (analítica y regreso). */
-const val PAYWALL_SOURCE_MATCH_LIMIT = "match_limit"
 
 /** F1 (E4.4): ver `feature/conocer/match`. Cancelar o cerrar vuelve a donde estaba, o a Inicio (C1). */
 @Composable
@@ -40,9 +36,8 @@ fun MatchQueueRoute(
                             Home
                         )
                     }
-                MatchQueueEffect.OpenPaywall -> navigator.navigate(
-                    Paywall(PAYWALL_SOURCE_MATCH_LIMIT)
-                )
+                is MatchQueueEffect.OpenLimit ->
+                    navigator.navigateReplacing(effect.route, MatchQueue::class)
             }
         }
     }
@@ -52,8 +47,6 @@ fun MatchQueueRoute(
         onCancel = viewModel::onCancel,
         onRetry = viewModel::onRetry,
         onOpenMatch = viewModel::onOpenMatchAgain,
-        onLimitSeePlus = viewModel::onLimitSeePlus,
-        onLimitDismiss = viewModel::onLimitDismissed,
         modifier = modifier
     )
 }

@@ -12,6 +12,8 @@ import me.santiagoreina.parcheu.contract.TicketStatus
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
+import me.santiagoreina.parcheu.feature.plus.PlusSources
+import me.santiagoreina.parcheu.navigation.Paywall
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -90,39 +92,33 @@ class MatchQueueViewModelTest {
     }
 
     @Test
-    fun quotaExceededForRandomMatchOpensLimitSheet() {
+    fun quotaExceededForRandomMatchOpensG2OfThatQuota() = runTest {
         val resets = Instant.parse("2026-11-05T05:00:00Z")
         repository.enqueueResult =
             ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.RANDOM_MATCH, resets))
 
         val vm = viewModel()
 
-        assertEquals(MatchLimitSheet(resets), vm.state.value.limitSheet)
+        vm.effects.test {
+            assertEquals(
+                MatchQueueEffect.OpenLimit(
+                    Paywall(PlusSources.limit(QuotaKind.RANDOM_MATCH, resets))
+                ),
+                awaitItem()
+            )
+        }
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
     }
 
     @Test
-    fun quotaExceededForOtherKindDoesNotOpenMatchLimitSheet() {
+    fun quotaExceededForOtherKindShowsTheErrorInsteadOfG2() = runTest {
         repository.enqueueResult =
             ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.SIMULATION, null))
 
         val vm = viewModel()
 
-        assertNull(vm.state.value.limitSheet)
+        vm.effects.test { expectNoEvents() }
         assertTrue(vm.state.value.phase is QueuePhase.Error)
-    }
-
-    @Test
-    fun limitSheetActionsEmitEffects() = runTest {
-        repository.enqueueResult =
-            ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.RANDOM_MATCH, null))
-        val vm = viewModel()
-        vm.effects.test {
-            vm.onLimitSeePlus()
-            assertEquals(MatchQueueEffect.OpenPaywall, awaitItem())
-            assertNull(vm.state.value.limitSheet)
-            vm.onLimitDismissed()
-            assertEquals(MatchQueueEffect.Close, awaitItem())
-        }
     }
 
     @Test

@@ -12,6 +12,7 @@ import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.data.simulation.FakeSimulationRepository
 import me.santiagoreina.parcheu.data.simulation.summary
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
+import me.santiagoreina.parcheu.feature.plus.PlusSources
 import me.santiagoreina.parcheu.navigation.Paywall
 import me.santiagoreina.parcheu.navigation.Simulation
 import org.junit.Assert.assertEquals
@@ -90,9 +91,22 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun simulateWithoutQuotaOpensThePaywall() = runTest {
+    fun simulateWithoutQuotaOpensTheSimulationLimitSheet() = runTest {
+        // E7.3: QUOTA_EXCEEDED(SIMULATION) abre la hoja G2 (ruta Paywall con source de límite).
         simulations.startResult =
             ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.SIMULATION, null))
+        val vm = viewModel(ApiResult.Success(HomeSamples.noneLeft.home))
+        vm.load()
+        vm.onSimulate(HomeSamples.suggestions(plus = false).first())
+        assertEquals(
+            HomeEffect.Navigate(Paywall(PlusSources.limit(QuotaKind.SIMULATION))),
+            vm.effects.first()
+        )
+    }
+
+    @Test
+    fun simulateWithPlusRequiredOpensThePaywall() = runTest {
+        simulations.startResult = ApiResult.Failure(AppError.PlusRequired)
         val vm = viewModel(ApiResult.Success(HomeSamples.noneLeft.home))
         vm.load()
         vm.onSimulate(HomeSamples.suggestions(plus = false).first())

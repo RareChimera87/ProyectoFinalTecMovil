@@ -36,13 +36,6 @@ internal object MatchStrings {
     const val MATCH_EXPIRED_MESSAGE = "Nadie eligió a tiempo. Puedes buscar a alguien más."
     const val LOADING = "Cargando match…"
 
-    const val LIMIT_TITLE = "Ya usaste tu match de hoy"
-    const val LIMIT_MESSAGE =
-        "Con el plan gratis tienes 1 match al azar al día. Vuelve mañana o pásate a ParcheU+ " +
-            "para tener más."
-    const val SEE_PLUS = "Ver ParcheU+"
-    const val UNDERSTOOD = "Entendido"
-
     fun searching(modeName: String) = "Buscando a alguien con $modeName activo…"
 
     fun ageRange(range: String) = "$range años"

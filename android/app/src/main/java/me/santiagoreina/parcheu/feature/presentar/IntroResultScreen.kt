@@ -41,8 +41,6 @@ import me.santiagoreina.parcheu.feature.simulation.SimulationMascot
 import me.santiagoreina.parcheu.feature.simulation.forMode
 import me.santiagoreina.parcheu.feature.simulation.label
 
-private const val REPORT_USED_TEXT = "Ya usaste el informe completo gratis de este mes."
-
 /** Etiquetas de prueba de E2. */
 object IntroResultTags {
     const val LOADING = "introResult:loading"
@@ -121,7 +119,6 @@ private fun Loaded(content: IntroResultContent, actions: IntroResultActions) {
             content.notice?.let { notice ->
                 PresentarNotice(
                     when (notice) {
-                        IntroResultNotice.ReportAlreadyUsed -> REPORT_USED_TEXT
                         is IntroResultNotice.Failed -> presentarErrorText(notice.error)
                     },
                     actions.onDismissNotice

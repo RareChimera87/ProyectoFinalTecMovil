@@ -356,7 +356,6 @@ private fun Footer(content: ResultsContent, actions: ResultsActions) {
 @Composable
 private fun Notice(notice: ResultsNotice, onDismiss: () -> Unit) {
     val text = when (notice) {
-        ResultsNotice.ReportAlreadyUsed -> "Ya usaste el informe completo gratis de este mes."
         is ResultsNotice.Failed -> errorText(notice.error)
     }
     ParcheUCard(Modifier.fillMaxWidth(), onClick = onDismiss) {
