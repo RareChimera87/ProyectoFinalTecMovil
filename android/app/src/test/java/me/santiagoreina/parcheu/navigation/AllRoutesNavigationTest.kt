@@ -79,7 +79,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * C2 (E5.4, NotificationsRouteTest y NotificationsScreenshotTest), C5 (E6.1, InviteAppLinkTest,
          * InvitesScreenTest e InvitesScreenshotTest), D6/D7 (E6.3, FofScreenTest y FofScreenshotTest) y
          * E1-E3 (E6.2, feature/presentar: IntroduceViewModelTest, IntroResultViewModelTest,
-         * IntroProposalViewModelTest y PresentarScreenshotTest).
+         * IntroProposalViewModelTest y PresentarScreenshotTest) y G1-G4/I4 (E7.3, feature/plus:
+         * PlusNavigationTest, PlusScreenTest y PlusScreenshotTest).
          */
         val implementedRoutes =
             setOf(
@@ -108,7 +109,10 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 Introduce::class,
                 IntroResult::class,
                 IntroProposal::class,
-                AddFriends::class
+                AddFriends::class,
+                Paywall::class,
+                PurchaseSuccess::class,
+                ManageSubscription::class
             )
     }
 }
