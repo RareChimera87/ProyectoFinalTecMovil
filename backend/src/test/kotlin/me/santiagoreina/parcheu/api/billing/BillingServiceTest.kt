@@ -469,6 +469,15 @@ class BillingServiceTest : FunSpec({
             w.store.eventIds shouldBe setOf("m-s")
         }
 
+        test("verify liga a la cuenta las RTDN que llegaron antes sin dueño (para redactarlas al borrar)") {
+            val w = World()
+            w.play.purchase("tok-ant", "active", owner = w.ana)
+            w.rtdn("m-ant", "tok-ant", RtdnTypes.SUBSCRIPTION_PURCHASED) shouldBe BillingService.RtdnOutcome.IGNORED
+            w.store.eventOf("m-ant")!!.second.shouldBeNull()
+            w.verify(w.ana, "tok-ant")
+            w.store.eventOf("m-ant")!!.second shouldBe w.ana
+        }
+
         test("cambio de plan: el token nuevo con linkedPurchaseToken pasa al mismo dueño") {
             val w = World()
             w.play.purchase("tok-mensual", "active-anual-acknowledged", owner = w.ana)

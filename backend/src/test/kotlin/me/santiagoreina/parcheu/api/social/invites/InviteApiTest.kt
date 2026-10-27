@@ -139,7 +139,7 @@ class InviteApiTest : FunSpec({
         }
     }
 
-    test("canje -> arista PENDING y aviso INVITE_PENDING al dueño; canjear dos veces es idempotente") {
+    test("canje -> canje PENDING sin arista y aviso INVITE_PENDING al dueño; canjear dos veces es idempotente") {
         val w = World()
         testApplication {
             val client = app(w)
@@ -151,11 +151,11 @@ class InviteApiTest : FunSpec({
             first.other.photoUrl.shouldBeNull()
             first.other.anonId.shouldNotBeNull()
             first.other.label shouldBe "Nombre Secreto de ana"
-            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
+            w.edge(w.ana, w.beto, Mode.AMISTAD).shouldBeNull()
 
             val second = client.redeem("beto", code).also { it.status shouldBe HttpStatusCode.OK }.body<RedeemResult>()
             second shouldBe first
-            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
+            w.edge(w.ana, w.beto, Mode.AMISTAD).shouldBeNull()
 
             val sent = w.f.notifier.sent.filter { it.notification.kind == NotificationKinds.INVITE_PENDING }
             sent shouldHaveSize 1
@@ -190,7 +190,7 @@ class InviteApiTest : FunSpec({
                 body<ApiError>().code shouldBe ErrorCode.NOT_FOUND
             }
             client.accept("ana", UUID.randomUUID().toString()).status shouldBe HttpStatusCode.NotFound
-            w.edge(w.ana, w.beto, Mode.ESTUDIO)!!.state shouldBe EdgeState.PENDING
+            w.edge(w.ana, w.beto, Mode.ESTUDIO).shouldBeNull()
 
             val accepted = client.accept("ana", pending.id).also { it.status shouldBe HttpStatusCode.OK }.body<RedeemResult>()
             accepted.status shouldBe RedeemStatus.CONNECTED
@@ -254,7 +254,7 @@ class InviteApiTest : FunSpec({
             w.block(w.beto, w.ana)
             client.me("ana").pending.shouldBeEmpty()
             client.accept("ana", pending.id).status shouldBe HttpStatusCode.NotFound
-            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldNotBe EdgeState.CONNECTED
+            w.edge(w.ana, w.beto, Mode.AMISTAD).shouldBeNull()
         }
     }
 
@@ -282,7 +282,7 @@ class InviteApiTest : FunSpec({
 
             // En el modo común sí queda el canje.
             client.redeem("ana", caroCode, Mode.ESTUDIO).body<RedeemResult>() shouldBe asked
-            w.edge(w.ana, w.caro, Mode.ESTUDIO)!!.state shouldBe EdgeState.PENDING
+            w.edge(w.ana, w.caro, Mode.ESTUDIO).shouldBeNull()
             client.me("caro").pending.single().mode shouldBe Mode.ESTUDIO
         }
     }
@@ -306,12 +306,12 @@ class InviteApiTest : FunSpec({
                 body<ApiError>().code shouldBe ErrorCode.VALIDATION
             }
             client.accept("ana", amistad.id, Mode.PAREJA).status shouldBe HttpStatusCode.BadRequest
-            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
-            w.edge(w.ana, w.beto, Mode.PAREJA)!!.state shouldBe EdgeState.PENDING
+            w.edge(w.ana, w.beto, Mode.AMISTAD).shouldBeNull()
+            w.edge(w.ana, w.beto, Mode.PAREJA).shouldBeNull()
 
             client.accept("ana", amistad.id).body<RedeemResult>().status shouldBe RedeemStatus.CONNECTED
             w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.CONNECTED
-            w.edge(w.ana, w.beto, Mode.PAREJA)!!.state shouldBe EdgeState.PENDING
+            w.edge(w.ana, w.beto, Mode.PAREJA).shouldBeNull()
             client.me("ana").pending.single().id shouldBe pareja.id
             w.f.notifier.sent.count { it.notification.kind == NotificationKinds.NEW_CONNECTION } shouldBe 1
 
@@ -372,7 +372,7 @@ class InviteApiTest : FunSpec({
             client.redeem("beto", code, Mode.PAREJA).status shouldBe HttpStatusCode.OK
             val pareja = client.me("ana").pending.single()
             pareja.mode shouldBe Mode.PAREJA
-            w.edge(w.ana, w.beto, Mode.PAREJA)!!.state shouldBe EdgeState.PENDING
+            w.edge(w.ana, w.beto, Mode.PAREJA).shouldBeNull()
 
             // Beto apaga Pareja: Ana deja de ver el canje y, si acepta con el id que ya tenía, no se conecta.
             w.setModes("beto", setOf(Mode.AMISTAD, Mode.ESTUDIO))
@@ -430,7 +430,7 @@ class InviteApiTest : FunSpec({
             // La arista deja de estar conectada (p. ej. un futuro 'desconectar'); la fila CONNECTED sigue ahí.
             w.f.graphRepo.putEdge(w.ana, w.beto, Mode.AMISTAD, EdgeState.SIMULATED, affinity = null)
             client.redeem("beto", code).body<RedeemResult>().status shouldBe RedeemStatus.PENDING
-            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.PENDING
+            w.edge(w.ana, w.beto, Mode.AMISTAD)!!.state shouldBe EdgeState.SIMULATED
             w.f.notifier.sent.count { it.notification.kind == NotificationKinds.INVITE_PENDING } shouldBe 2
             val again = client.me("ana").pending.single()
             client.accept("ana", again.id).body<RedeemResult>().status shouldBe RedeemStatus.CONNECTED
@@ -469,6 +469,54 @@ class InviteApiTest : FunSpec({
             val connected = (betoInbox.today + betoInbox.week + betoInbox.older).single()
             connected.kind shouldBe NotificationKinds.NEW_CONNECTION
             connected.body shouldContain "Amistad"
+        }
+    }
+
+    test("canjear en Pareja no revela si el dueño la tiene: el ego-grafo y D6 de quien canjea son iguales en los dos casos") {
+        val w = World()
+        w.setModes("dani", setOf(Mode.AMISTAD))
+        testApplication {
+            val client = app(w)
+            val betoCode = client.me("beto").code
+            val daniCode = client.me("dani").code
+            val conPareja = client.redeem("ana", betoCode, Mode.PAREJA).body<RedeemResult>()
+            val sinPareja = client.redeem("ana", daniCode, Mode.PAREJA).body<RedeemResult>()
+            conPareja.status shouldBe sinPareja.status
+            val graph = client.get("/v1/graph?mode=PAREJA") { auth("ana") }.body<GraphDto>()
+            graph.edges.shouldBeEmpty()
+            w.edge(w.ana, w.beto, Mode.PAREJA).shouldBeNull()
+            w.edge(w.ana, w.dani, Mode.PAREJA).shouldBeNull()
+            // El dueño que sí tiene el modo recibe el canje; el que no, nada.
+            client.me("beto").pending.single().mode shouldBe Mode.PAREJA
+            client.me("dani").pending.shouldBeEmpty()
+        }
+    }
+
+    test("un canje PENDING no se ofrece ni se repite el aviso si el par ya se conectó por otro camino") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val code = client.me("ana").code
+            client.redeem("beto", code).status shouldBe HttpStatusCode.OK
+            val pending = client.me("ana").pending.single()
+            // Se conectan por otra vía (presentación, decisión mutua).
+            w.f.graphRepo.putEdge(w.ana, w.beto, Mode.AMISTAD, EdgeState.CONNECTED, affinity = null)
+            client.me("ana").pending.shouldBeEmpty()
+            client.accept("ana", pending.id).status shouldBe HttpStatusCode.NotFound
+            w.f.notifier.sent.count { it.notification.kind == NotificationKinds.NEW_CONNECTION } shouldBe 0
+        }
+    }
+
+    test("un canje en un modo apagado se borra al consultar C5: no reaparece al reactivar el modo") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            client.redeem("beto", client.me("ana").code, Mode.PAREJA).status shouldBe HttpStatusCode.OK
+            w.setModes("beto", setOf(Mode.AMISTAD, Mode.ESTUDIO))
+            client.me("ana").pending.shouldBeEmpty()
+            w.setModes("beto", Mode.entries.toSet())
+            client.me("ana").pending.shouldBeEmpty()
+            w.invites.repository.redemption(w.ana, w.beto, Mode.PAREJA).shouldBeNull()
         }
     }
 

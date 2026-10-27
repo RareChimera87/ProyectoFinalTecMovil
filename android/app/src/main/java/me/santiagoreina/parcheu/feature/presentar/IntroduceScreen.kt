@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -241,6 +242,8 @@ private fun FriendSelectRow(
             checked = checked,
             onCheckedChange = { onToggle() },
             contentDescription = "Elegir a ${friend.label}",
+            // La fila ya es el único objetivo para TalkBack (toggleable con rol Checkbox): la casilla es solo visual.
+            modifier = Modifier.clearAndSetSemantics {},
             enabled = enabled
         )
     }

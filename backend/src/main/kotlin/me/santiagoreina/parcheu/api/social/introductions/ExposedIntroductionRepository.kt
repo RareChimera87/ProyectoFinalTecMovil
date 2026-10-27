@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -82,11 +83,12 @@ class ExposedIntroductionRepository(private val db: Database) : IntroductionRepo
         before to after
     }
 
-    override suspend fun pendingRequest(requesterId: UUID, targetUserId: UUID): IntroRequestRecord? = tx {
+    override suspend fun pendingRequest(requesterId: UUID, targetUserId: UUID, since: Instant): IntroRequestRecord? = tx {
         IntroRequests.selectAll()
             .where {
                 (IntroRequests.requesterId eq requesterId) and (IntroRequests.targetUserId eq targetUserId) and
-                    (IntroRequests.status eq IntroRequestStatus.PENDING)
+                    (IntroRequests.status eq IntroRequestStatus.PENDING) and
+                    (IntroRequests.createdAt greaterEq since.atOffset(ZoneOffset.UTC))
             }
             .limit(1)
             .singleOrNull()

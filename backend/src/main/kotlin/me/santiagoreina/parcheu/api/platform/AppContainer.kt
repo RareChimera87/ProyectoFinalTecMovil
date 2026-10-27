@@ -238,7 +238,8 @@ class AppContainer(
                 closedMatches = matching.service::onMatchesClosedByDeletion,
             )
             val introductions = introductionModule(
-                introductionStore, simulation, graph, chat, quota, notifier, clock, matching.flags.demoUsersEnabled,
+                introductionStore, simulation, graph, chat, quota, notifier, clock,
+                demo = DemoConnectPolicy(demo.connectProbability), demoUsersEnabled = demo.enabled,
             )
             // Invitaciones (E6.1): aristas por EdgeService, modos de user_modes y enlace https://<hosting>/i/{codigo}.
             val invites = exposedInviteModule(database, graph, simulation, notifier, InviteLinks.fromConfig(config, vars), clock)

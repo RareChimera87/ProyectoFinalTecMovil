@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.social.introductions
 
 import me.santiagoreina.parcheu.api.chat.ChatModule
+import me.santiagoreina.parcheu.api.demo.DemoConnectPolicy
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
@@ -30,6 +31,7 @@ fun introductionModule(
     quota: QuotaModule,
     notifier: Notifier,
     clock: Clock,
+    demo: DemoConnectPolicy = DemoConnectPolicy.DEFAULT,
     demoUsersEnabled: Boolean = true,
 ): IntroductionModule {
     // Los candidatos de 'Pedir presentación' salen de FofService (E6.3), la misma lista que D6; ParcheU+ lo
@@ -52,6 +54,8 @@ fun introductionModule(
         chat = chat.service,
         notifier = notifier,
         clock = clock,
+        demo = demo,
+        demoUsersEnabled = demoUsersEnabled,
     )
     return IntroductionModule(repository, people, service)
 }

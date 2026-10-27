@@ -110,11 +110,14 @@ class NotificationsViewModel(private val repository: NotificationsRepository) : 
     fun onMarkAllRead() {
         val loaded = _state.value as? NotificationsUiState.Loaded ?: return
         if (loaded.unread == 0) return
-        val wasUnread = loaded.all.filterNot { it.read }.map { it.id }.toSet()
+        // Solo los no leídos que la persona tiene en pantalla: un aviso que llegó después de cargar C2 y que
+        // nunca vio no se marca (ids = null significaría 'todas' en el servidor).
+        val shown = loaded.all.filterNot { it.read }.map { it.id }
+        val wasUnread = shown.toSet()
         _state.value =
             loaded.copy(inbox = loaded.inbox.mapItems { it.copy(read = true) }, actionError = null)
         viewModelScope.launch {
-            val result = repository.markRead(null)
+            val result = repository.markRead(shown)
             if (result is ApiResult.Failure) {
                 update {
                     it.copy(

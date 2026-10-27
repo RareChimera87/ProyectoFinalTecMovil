@@ -126,7 +126,7 @@ class InviteDbTest : FunSpec({
                 val first = service.redeem(beto, Redeem(code, Mode.ESTUDIO))
                 first.status shouldBe RedeemStatus.PENDING
                 service.redeem(beto, Redeem(code, Mode.ESTUDIO)) shouldBe first
-                db.edgeState(ana, beto, Mode.ESTUDIO) shouldBe EdgeState.PENDING
+                db.edgeState(ana, beto, Mode.ESTUDIO) shouldBe null
                 transaction(db) { InviteRedemptions.selectAll().count() } shouldBe 1
                 notifier.sent.filter { it.notification.kind == NotificationKinds.INVITE_PENDING }.map { it.userId } shouldBe listOf(ana)
 
@@ -168,7 +168,7 @@ class InviteDbTest : FunSpec({
                 shouldThrow<ValidationFailed> { service.accept(ana, beto.toString()) }
                 service.accept(ana, amistad.id).status shouldBe RedeemStatus.CONNECTED
                 db.edgeState(ana, beto, Mode.AMISTAD) shouldBe EdgeState.CONNECTED
-                db.edgeState(ana, beto, Mode.PAREJA) shouldBe EdgeState.PENDING
+                db.edgeState(ana, beto, Mode.PAREJA) shouldBe null
                 service.me(ana).pending.single().mode shouldBe Mode.PAREJA
             }
         }
@@ -181,7 +181,7 @@ class InviteDbTest : FunSpec({
                 val code = service.codeFor(ana)
                 service.redeem(beto, Redeem(code, Mode.PAREJA))
                 val pareja = service.me(ana).pending.single()
-                db.edgeState(ana, beto, Mode.PAREJA) shouldBe EdgeState.PENDING
+                db.edgeState(ana, beto, Mode.PAREJA) shouldBe null
 
                 // Beto apaga Pareja como lo hace PUT /v1/me/modes.
                 transaction(db) {

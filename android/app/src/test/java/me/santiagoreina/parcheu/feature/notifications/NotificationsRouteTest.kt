@@ -99,7 +99,11 @@ class NotificationsRouteTest {
         show(repo)
         composeRule.onNodeWithTag(NotificationsTags.MARK_ALL).performClick()
         composeRule.waitForIdle()
-        assertEquals(listOf<List<String>?>(null), repo.markReadCalls)
+        assertEquals(1, repo.markReadCalls.size)
+        assertEquals(
+            setOf("n-result", "n-intro", "n-locked"),
+            repo.markReadCalls.single()!!.toSet()
+        )
         listOf("n-result", "n-intro", "n-locked").forEach { id ->
             composeRule.onNodeWithTag(
                 NotificationsTags.item(id)

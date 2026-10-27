@@ -35,6 +35,7 @@ import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
+import me.santiagoreina.parcheu.api.demo.DemoConnectPolicy
 import me.santiagoreina.parcheu.api.platform.db.tables.IntroRequestStatus
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.api.simulation.SimFixture
@@ -68,10 +69,10 @@ class IntroductionApiTest : FunSpec({
     // mari presenta; vale y sebas son amigos de mari (Amistad) que no se conocen; juli no es amiga de mari.
     val uids = listOf("mari", "vale", "sebas", "juli", "nico")
 
-    class World {
+    class World(demos: Set<String> = emptySet()) {
         val identity = InMemoryIdentityRepository().also { repo -> uids.forEach { repo.seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val sim = SimFixture()
-        val ids = uids.associateWith { uid -> sim.person(uid, id = identity.user(uid).id) }
+        val ids = uids.associateWith { uid -> sim.person(uid, id = identity.user(uid).id, isDemo = uid in demos) }
         val chatRepo = InMemoryChatRepository().also { repo ->
             ids.forEach { (uid, id) -> repo.addUser(PersonRow(id, uid, null, "UIS", Visibility.ANONYMOUS, false, null), uid) }
         }
@@ -542,6 +543,49 @@ class IntroductionApiTest : FunSpec({
             client.requestIntro("juli", w.id("vale").toString()).status shouldBe HttpStatusCode.NotFound
             client.requestIntro("juli", "a_desconocido").status shouldBe HttpStatusCode.NotFound
         }
+    }
+
+    test("un demo presentado responde por su cuenta con la decisión determinista: la persona real no se queda esperando") {
+        val w = World(demos = setOf("vale"))
+        testApplication {
+            val client = app(w)
+            val id = client.proposed(w)
+            // El demo ya respondió al enviarse la propuesta.
+            val wants = DemoConnectPolicy.DEFAULT.wantsToConnect(UUID.fromString(id))
+            val result = client.respond("sebas", id, interested = true).body<IntroductionDto>()
+            if (wants) {
+                result.status shouldBe IntroductionStatus.CONNECTED
+                w.sim.graphRepo.edge(w.id("vale"), w.id("sebas"), Mode.AMISTAD)?.state shouldBe EdgeState.CONNECTED
+            } else {
+                // El 'No' del demo no se revela: sebas sigue viendo su propia respuesta, sin conexión.
+                w.sim.graphRepo.edge(w.id("vale"), w.id("sebas"), Mode.AMISTAD) shouldBe null
+            }
+            client.respond("vale", id, interested = true).status shouldBe HttpStatusCode.Conflict
+        }
+    }
+
+    test("si uno apagó el modo después de la propuesta, 'Me interesa' → 409 y no se conecta") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            val id = client.proposed(w)
+            w.sim.person("sebas", modes = setOf(Mode.ESTUDIO), id = w.id("sebas"))
+            client.respond("vale", id, interested = true).status shouldBe HttpStatusCode.Conflict
+            val blocked = client.respond("sebas", id, interested = true)
+            blocked.status shouldBe HttpStatusCode.Conflict
+            w.sim.graphRepo.edge(w.id("vale"), w.id("sebas"), Mode.AMISTAD) shouldBe null
+            w.chatRepo.chatsOf(w.id("vale")).shouldBeEmpty()
+        }
+    }
+
+    test("una solicitud PENDING vieja deja de contar: repetir 'Pedir presentación' después del vencimiento vuelve a avisar") {
+        val w = World()
+        val requester = w.id("juli")
+        val target = w.id("mari")
+        val old = FIXED_CLOCK.instant().minus(IntroductionService.REQUEST_TTL).minusSeconds(60)
+        w.store.insertRequest(IntroRequestRecord(UUID.randomUUID(), requester, w.id("sebas"), target, IntroRequestStatus.PENDING, old))
+        w.store.pendingRequest(requester, target, FIXED_CLOCK.instant().minus(IntroductionService.REQUEST_TTL)) shouldBe null
+        w.store.pendingRequest(requester, target, old.minusSeconds(1)) shouldNotBe null
     }
 
     test("pedir presentación nunca pasa por una arista de Pareja ni llega a un bloqueado") {
