@@ -15,7 +15,7 @@ interface IdentityRepository : ModesRepository, PrivacyRepository {
     suspend fun findByFirebaseUid(uid: String): UserRecord?
 
     /** Alta idempotente por `firebase_uid`: dos llamadas (incluso concurrentes) dejan un solo usuario. */
-    suspend fun createIfAbsent(uid: String, email: String?, displayName: String?, now: Instant): UserRecord
+    suspend fun createIfAbsent(uid: String, email: String?, displayName: String?, now: Instant, isTest: Boolean = false): UserRecord
 
     suspend fun updateEmail(userId: UUID, email: String, now: Instant)
 

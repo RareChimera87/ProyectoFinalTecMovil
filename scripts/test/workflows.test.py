@@ -125,6 +125,33 @@ class GuardasDeDirectorio(unittest.TestCase):
         self.assertNotIn("Requiere los secretos del bootstrap", str(wf["jobs"]["plan-dev"]["steps"]))
 
 
+class SmokeE2e(unittest.TestCase):
+    """E10.6: deploy-dev corre el smoke e2e tras desplegar y falla si el smoke falla."""
+
+    def setUp(self):
+        self.wf = cargar("deploy-dev.yml")
+        self.job = self.wf["jobs"]["e2e"]
+        self.texto = (WF / "deploy-dev.yml").read_text(encoding="utf-8")
+
+    def test_corre_despues_del_despliegue_y_sin_tolerar_fallos(self):
+        self.assertEqual(self.job["needs"], "api")
+        self.assertNotIn("continue-on-error", self.texto)
+        corridas = [p.get("run", "") for p in self.job["steps"]]
+        self.assertTrue(any("./gradlew --stacktrace e2eTest" in c for c in corridas))
+
+    def test_con_secretos_el_smoke_es_obligatorio_y_sin_ellos_se_omite(self):
+        self.assertIn("E2E_REQUIRED=true", self.texto)
+        guarda = next(p for p in self.job["steps"] if p.get("id") == "guarda")
+        self.assertIn("listo=false", guarda["run"])
+        self.assertNotIn("exit 1", guarda["run"])
+        gradle = next(p for p in self.job["steps"] if p.get("name") == "Smoke e2e")
+        self.assertIn("steps.guarda.outputs.listo == 'true'", gradle["if"])
+
+    def test_no_expone_credenciales_en_el_flujo(self):
+        self.assertNotRegex(self.texto, r"credentials_json")
+        self.assertIn("::add-mask::", self.texto)
+
+
 class AutoMerge(unittest.TestCase):
     def setUp(self):
         self.wf = cargar("auto-merge.yml")

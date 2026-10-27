@@ -19,6 +19,11 @@ data class PurgePlan(
     val simulationIds: List<UUID>,
     /** Chats donde es miembro o escribió: sus mensajes se anonimizan en el espejo. */
     val chats: List<ChatPurge>,
+    /**
+     * Cuenta de prueba (`users.is_test`, smoke e2e de E10.6): su purga no deja lápida ni conserva nada;
+     * borra consentimientos, simulaciones, chats y mensajes, y en Firestore los chats completos.
+     */
+    val isTest: Boolean = false,
 )
 
 data class ChatPurge(val chatId: UUID, val ownMessageIds: List<UUID>)

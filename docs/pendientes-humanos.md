@@ -981,3 +981,17 @@ No hay acciones obligatorias de consola. Revisión manual recomendada con el bac
    grafo, progreso de B1). El borrado del token necesita red: si falla (sin conexión) el token queda en el servidor
    hasta que otro usuario lo reasigne o se purgue por inactividad.
 3. **Pantalla 'Personas bloqueadas'**: el enlace de H3 abre la ruta `BlockedUsers`, que sigue siendo stub hasta E8.7.
+
+## E10.6 · Smoke e2e
+
+Todo el código quedó hecho y probado en local: el recorrido (`backend/src/e2eTest/`), el job `smoke-e2e` de `deploy-dev` y el permiso de Terraform. El smoke no se puede correr contra dev hasta que exista el entorno vivo, así que estos pasos son tuyos y van **después** del bootstrap y del `apply` de E0.5 (hasta entonces el job se omite con un aviso, no falla):
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Aplicar el bootstrap de dev** para que `sa-deployer` pueda firmar tokens de Firebase: el cambio agrega `google_service_account_iam_member.deployer_signs_own_tokens` (`roles/iam.serviceAccountTokenCreator` sobre `sa-deployer`, solo en dev). `cd infra/terraform/bootstrap && terraform apply -var environment=dev` (con tu ADC, como el resto del bootstrap). | Usuario | Con el bootstrap de E0.5 |
+| 2 | **Secretos que el job necesita** (ya documentados en E0.5 y E0.8, no hay secretos nuevos): `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_DEV` y `GOOGLE_SERVICES_JSON_DEV` (de ahí sale la clave web de Firebase con `jq`; no hay que crearla aparte). Si falta alguno, `smoke-e2e` imprime `Smoke e2e omitido` y termina en verde. | Usuario | Antes del primer push a `dev` tras el apply |
+| 3 | **Primera corrida**: tras el primer `deploy-dev` verde, revisar que `smoke-e2e` pasó y dura menos de 5 min (el resumen del job lo dice). Si falla en `signInWithCustomToken` con `API_KEY_...` o 403, la clave web de `google-services.json` está restringida a la app Android: en la consola de Google Cloud (APIs y servicios > Credenciales) agrega **Identity Toolkit API** a las restricciones de esa clave o crea una clave sin restricción de app y guárdala como `E2E_FIREBASE_API_KEY` en el `env` del job. Si falla en `createCustomToken` con `iam.serviceAccounts.signBlob`, el paso 1 no se aplicó. | I3 | Primer despliegue de dev |
+| 4 | **Presupuesto de IA**: cada corrida hace una simulación real con Flash (unos 27 llamados, centavos de dólar) y reconstruye dos personas. Si `DAILY_AI_BUDGET` de dev está agotado, el smoke falla con 503 en la creación de la simulación; es una falla legítima, no del smoke. | I3 | Si ocurre |
+| 5 | **Cuentas de prueba huérfanas** (solo si una corrida murió sin limpiar, p. ej. cancelada a mano): llevan el uid `e2e-<hex>-a|b` y `users.is_test = true`. Se borran con `DELETE /v1/me` (purga completa) o desde la consola de Firebase Authentication; el barrido horario `purge-sweep` reintenta las purgas atascadas. | I3 | Si ocurre |
+
+Para correrlo a mano contra dev con tu propio `gcloud`: ver "Smoke e2e (E10.6)" en `docs/desarrollo-local.md`.

@@ -445,6 +445,45 @@ class AccountPurgeDbTest : FunSpec({
             }
         }
 
+    test("una cuenta is_test se purga sin lápida ni restos: sin consentimientos, simulaciones, chats ni mensajes")
+        .config(enabled = TestDatabase.enabled) {
+            withDb { ds ->
+                val db = connectExposed(ds)
+                val s = ds.connection.use { c ->
+                    seed(c).also {
+                        c.exec("update users set is_test = true where id in (?, ?)", it.zoraida, it.bruno)
+                    }
+                }
+                if (FirestoreEmulator.enabled) seedFirestore(s)
+                val mirror = if (FirestoreEmulator.enabled) FirestoreAccountMirrorCleaner { FirestoreEmulator.firestore } else RecordingAccountMirrorCleaner()
+                val service = AccountDeletionService(
+                    ExposedIdentityRepository(db), ExposedAccountPurgeRepository(db), mirror, FakeAuthAccountRemover(), FakeTaskQueue(), FIXED_CLOCK,
+                )
+                listOf(s.zoraida to s.zoraidaUid, s.bruno to s.brunoUid).forEach { (id, uid) ->
+                    service.requestDeletion(FirebaseUser(uid, null, null))
+                    service.purge(id)
+                }
+
+                ds.connection.use { c ->
+                    c.count("select count(*) from users where id in (?, ?) or firebase_uid like 'deleted:%'", s.zoraida, s.bruno) shouldBe 0
+                    c.count("select count(*) from simulations") shouldBe 0
+                    c.count("select count(*) from report_unlocks where simulation_id = ?", s.shared) shouldBe 0
+                    c.count("select count(*) from connection_decisions where simulation_id = ?", s.shared) shouldBe 0
+                    c.count("select count(*) from chat_members where chat_id = ?", s.chat) shouldBe 0
+                    // Los consentimientos no pasan a ninguna lápida.
+                    c.count("select count(*) from consents") shouldBe 0
+                    c.count("select count(*) from chats where id = ?", s.chat) shouldBe 0
+                    c.count("select count(*) from chat_messages where chat_id = ?", s.chat) shouldBe 0
+                }
+
+                if (FirestoreEmulator.enabled) {
+                    val chat = FirestoreEmulator.firestore.collection("chats").document(s.chat.toString())
+                    chat.get().get().exists() shouldBe false
+                    chat.collection("messages").get().get().isEmpty shouldBe true
+                }
+            }
+        }
+
     test("arquitectura: toda columna jsonb del esquema real está clasificada en PersonalJsonPaths")
         .config(enabled = TestDatabase.enabled) {
             withDb { ds ->

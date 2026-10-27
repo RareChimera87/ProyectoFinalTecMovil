@@ -77,9 +77,15 @@ dependencies {
 // Los tests con Testcontainers solo corren en CI; en local se omiten con -PsinContenedores.
 val sinContenedores = providers.gradleProperty("sinContenedores").isPresent
 
+// E10.6: el código del smoke e2e vive en src/e2eTest y se compila con las pruebas (para que su autotest local y
+// sus piezas puras corran en `./gradlew test`); el smoke real lleva @Tag("e2e") y solo corre con `./gradlew e2eTest`.
+sourceSets.test { kotlin.srcDir("src/e2eTest/kotlin") }
+
 tasks.test {
-    // El humo contra Vertex real (@Tag("vertex")) es manual: solo corre con -Pvertex.
+    // El humo contra Vertex real (@Tag("vertex")) es manual: solo corre con -Pvertex. El smoke e2e (@Tag("e2e")) lo
+    // corre deploy-dev con `e2eTest`, nunca esta tarea.
     useJUnitPlatform {
+        excludeTags("e2e")
         if (!providers.gradleProperty("vertex").isPresent) excludeTags("vertex")
     }
     if (sinContenedores) systemProperty("sinContenedores", "true")
@@ -90,6 +96,25 @@ tasks.test {
     if (privacySeed.get().isNotBlank()) systemProperty("privacy.seed", privacySeed.get())
     testLogging {
         events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
+// Smoke e2e contra la API desplegada (E10.6): lo corre deploy-dev tras el despliegue. Configuración por variables
+// E2E_* (ver E2eConfig); sin ellas se omite, y con E2E_REQUIRED=true falla.
+tasks.register<Test>("e2eTest") {
+    description = "Smoke e2e contra la API desplegada (E10.6)."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("e2e") }
+    // Kotest no mira las etiquetas de JUnit: sin este filtro correría toda la suite de pruebas contra nada.
+    filter { includeTestsMatching("me.santiagoreina.parcheu.e2e.E2eSmokeTest") }
+    // Siempre se ejecuta: depende de un entorno vivo, no de las entradas de Gradle.
+    outputs.upToDateWhen { false }
+    testLogging {
+        events("failed", "standardOut")
+        showStandardStreams = true
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }

@@ -50,6 +50,7 @@ class IdentityService(
             email = firebase.email,
             displayName = firebase.name?.trim()?.take(MAX_NAME)?.takeIf { it.isNotEmpty() },
             now = now,
+            isTest = firebase.isTest,
         )
         ensureActive(user)
         if (existing != null && firebase.email != null && firebase.email != user.email) {
