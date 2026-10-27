@@ -1,5 +1,6 @@
 import com.android.build.api.artifact.SingleArtifact
 import com.github.triplet.gradle.androidpublisher.ReleaseStatus
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
 import java.net.URI
 import java.util.Properties
@@ -10,6 +11,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.roborazzi)
     alias(libs.plugins.play.publisher)
 }
@@ -61,6 +63,11 @@ if (hasUploadKey && !file(uploadKeystoreFile!!).isFile) {
     throw GradleException("UPLOAD_KEYSTORE_FILE no apunta a un archivo: $uploadKeystoreFile")
 }
 
+// Crashlytics (E10.5): el plugin engancha la subida del mapa de R8 al bundle de release y esa tarea falla si
+// el flavor no tiene google-services.json (appIdFile inexistente). El archivo no se versiona y en CI puede faltar
+// (secreto GOOGLE_SERVICES_JSON_PROD pendiente), así que la subida solo se activa si el flavor lo tiene.
+fun hasGoogleServices(flavor: String): Boolean = file("src/$flavor/google-services.json").exists()
+
 android {
     namespace = "me.santiagoreina.parcheu"
     compileSdk {
@@ -104,6 +111,11 @@ android {
             // App Link de invitaciones (E6.1): https://<host>/i/{codigo}.
             manifestPlaceholders["inviteHost"] = hostOf(hosting)
             resValue("string", "app_name", "ParcheU dev")
+            (this as ExtensionAware).extensions.configure<CrashlyticsExtension>(
+                "firebaseCrashlytics"
+            ) {
+                mappingFileUploadEnabled = hasGoogleServices("dev")
+            }
         }
         create("prod") {
             dimension = "env"
@@ -118,6 +130,11 @@ android {
             buildConfigField("String", "PRIVACY_URL", "\"$hosting/privacidad\"")
             manifestPlaceholders["inviteHost"] = hostOf(hosting)
             resValue("string", "app_name", "ParcheU")
+            (this as ExtensionAware).extensions.configure<CrashlyticsExtension>(
+                "firebaseCrashlytics"
+            ) {
+                mappingFileUploadEnabled = hasGoogleServices("prod")
+            }
         }
     }
 
@@ -272,6 +289,8 @@ dependencies {
     implementation(libs.firebase.auth)
     // E5.3: push con FCM.
     implementation(libs.firebase.messaging)
+    // E10.5: Crashlytics con claves route y flavor, sin datos personales.
+    implementation(libs.firebase.crashlytics)
     // E4.4: fila de match en tiempo real (Firestore de solo lectura).
     // E4.5: progreso en vivo de simulations/{id} (ADR-0004: Firestore es canal de solo lectura).
     // E5.2: chat en vivo, listener de mensajes con caché offline (arquitectura.md §8).

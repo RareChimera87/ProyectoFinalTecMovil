@@ -114,6 +114,9 @@ sched="$(q '[.[] | select(.type=="google_cloud_scheduler_job") | .values.name] |
   && ok "sin presupuesto en la plataforma (vive en bootstrap)" \
   || fail "el presupuesto no debe estar en la plataforma: CI no tiene roles de facturación (va en bootstrap)"
 [ "$(q '[.[] | select(.type=="google_monitoring_uptime_check_config")] | length')" -ge 1 ] && ok "uptime check" || fail "falta el uptime check"
+# E10.5: alertas (5xx, p95, AiBudgetExceeded, report_created, simulaciones FAILED, uptime) y dashboard.
+[ "$(q '[.[] | select(.type=="google_monitoring_alert_policy")] | length')" -ge 6 ] && ok "políticas de alerta" || fail "faltan políticas de alerta (se esperan 6 o más)"
+[ "$(q '[.[] | select(.type=="google_monitoring_dashboard")] | length')" -ge 1 ] && ok "dashboard" || fail "falta el dashboard"
 sql="$(q '[.[] | select(.type=="google_sql_database_instance") | .values.database_version] | first')"
 [ "$sql" = "POSTGRES_16" ] && ok "Cloud SQL Postgres 16" || fail "Cloud SQL debe ser POSTGRES_16 (es '$sql')"
 

@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu
 
 import android.app.Application
 import androidx.lifecycle.ProcessLifecycleOwner
+import me.santiagoreina.parcheu.core.observability.CrashReporting
 import me.santiagoreina.parcheu.data.billing.BillingReconciler
 import me.santiagoreina.parcheu.di.appModules
 import me.santiagoreina.parcheu.push.PushChannels
@@ -25,6 +26,8 @@ class ParcheUApplication : Application() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(
             GlobalContext.get().get<BillingReconciler>()
         )
+        // Crashlytics (E10.5): claves flavor y, desde ParcheUApp, route.
+        CrashReporting.install(flavor = BuildConfig.FLAVOR, isDebug = BuildConfig.DEBUG)
         PushChannels.ensureCreated(this)
     }
 }

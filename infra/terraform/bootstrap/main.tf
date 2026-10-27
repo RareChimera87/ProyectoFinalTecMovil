@@ -66,6 +66,8 @@ locals {
     "roles/datastore.owner",
     "roles/firebase.admin",
     "roles/monitoring.admin",
+    # Métricas basadas en logs de monitoring.tf (E10.5).
+    "roles/logging.configWriter",
   ]
 
   # Roles que modules/platform asigna a sa-api: sa-terraform solo puede otorgar
@@ -275,6 +277,9 @@ resource "google_project_iam_custom_role" "terraform_plan" {
     "resourcemanager.projects.get",
     "resourcemanager.projects.getIamPolicy",
     "pubsub.topics.getIamPolicy",
+    # Métricas basadas en logs (E10.5): solo configuración, no entradas de log.
+    "logging.logMetrics.get",
+    "logging.logMetrics.list",
   ]
   depends_on = [google_project_service.bootstrap]
 }
