@@ -1,10 +1,14 @@
 package me.santiagoreina.parcheu.api.platform.auth
 
-/** Usuario autenticado por un ID token de Firebase. `uid` es el UID de Firebase. */
+/**
+ * Usuario autenticado por un ID token de Firebase. `uid` es el UID de Firebase. [admin] es el claim
+ * `admin` del token (E8.5): solo lo otorga `scripts/grant-admin.sh`, nunca el cliente.
+ */
 data class FirebaseUser(
     val uid: String,
     val email: String?,
     val name: String?,
+    val admin: Boolean = false,
 )
 
 /** Identidad de servicio autenticada por un token OIDC de Google (Tasks, Scheduler, Pub/Sub). */

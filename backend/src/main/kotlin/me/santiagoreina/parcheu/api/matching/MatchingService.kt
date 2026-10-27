@@ -11,6 +11,7 @@ import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.api.platform.errors.DomainException
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
+import me.santiagoreina.parcheu.api.platform.errors.Suspended
 import me.santiagoreina.parcheu.api.platform.errors.Underage
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.api.platform.notifier.Notification
@@ -106,6 +107,7 @@ class MatchingService(
 
     private fun validateCanQueue(person: MatchPerson, mode: Mode) {
         if (person.underage) throw Underage()
+        person.suspendedUntil?.let { if (it.isAfter(clock.instant())) throw Suspended() }
         if (mode !in person.activeModes) throw ValidationFailed("El modo ${mode.name} no está activo")
         if (mode == Mode.PAREJA) {
             if (person.isDemo) throw ValidationFailed("Los usuarios de demostración no participan en Pareja")

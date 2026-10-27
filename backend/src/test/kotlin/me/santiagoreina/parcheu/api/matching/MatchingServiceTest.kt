@@ -29,6 +29,7 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.SimulationOrigin
+import me.santiagoreina.parcheu.api.platform.errors.Suspended
 import me.santiagoreina.parcheu.contract.TicketStatus
 import java.time.Duration
 import java.util.UUID
@@ -350,6 +351,16 @@ class MatchingServiceTest : FunSpec({
         shouldThrow<NotFound> { f.service.match(ana, id) }
         f.usage.refunded("$id:$ana") shouldBe false
         f.usage.refunded("$id:$beto") shouldBe false
+    }
+
+    test("una persona suspendida no entra a la fila (SUSPENDED) y al vencer la suspensión sí") {
+        val f = MatchFixture()
+        val ana = f.person("ana")
+        f.matchRepo.addPerson(f.matchRepo.person(ana)!!.copy(suspendedUntil = f.clock.instant().plusSeconds(3600)))
+        shouldThrow<Suspended> { f.service.enqueue(ana, Mode.AMISTAD) }
+        f.matchRepo.ticket(ana) shouldBe null
+        f.clock.now = f.clock.now.plusSeconds(3601)
+        f.service.enqueue(ana, Mode.AMISTAD).status shouldBe TicketStatus.WAITING
     }
 
     test("si una persona se borra o la suspenden el cupo vuelve solo a la otra") {

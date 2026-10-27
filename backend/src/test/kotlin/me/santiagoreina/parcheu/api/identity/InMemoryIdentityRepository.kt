@@ -106,4 +106,11 @@ class InMemoryIdentityRepository : IdentityRepository {
         if (user.deletedAt == null) replace(user.copy(deletedAt = now))
         fcmTokens.entries.removeIf { it.value == userId }
     }
+
+    override suspend fun suspendUntil(userId: UUID, until: Instant, now: Instant): Instant? {
+        val user = users.firstOrNull { it.id == userId } ?: return null
+        val effective = user.suspendedUntil?.takeIf { it.isAfter(until) } ?: until
+        replace(user.copy(suspendedUntil = effective))
+        return effective
+    }
 }
