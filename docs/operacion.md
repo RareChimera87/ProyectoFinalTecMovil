@@ -29,9 +29,12 @@ Nombres en Cloud Monitoring (sufijo `-dev` o `-prod`):
 
 Métricas basadas en logs (`logging.googleapis.com/user/...`): `parcheu_report_created`,
 `parcheu_ai_budget_exceeded`, `parcheu_simulation_failed`, `parcheu_simulation_done`,
-`parcheu_quota_rejected` y `parcheu_ai_cost_micros` (micro-USD sumados de los logs `ai_call`).
+`parcheu_quota_rejected`, `parcheu_http_requests` y `parcheu_http_5xx` (peticiones de usuario, sin `/internal/`),
+`parcheu_http_latency` (distribución, segundos) y `parcheu_ai_cost_micros` (distribución del costo de cada log
+`ai_call`; el total diario es su suma). Las tareas internas (`/internal/tasks/simulate` corre la simulación
+completa en minutos y devuelve 5xx para que Cloud Tasks reintente) quedan fuera de la latencia y de los 5xx.
 Si alguien renombra esos mensajes en el backend, las alertas dejan de disparar; lo protege
-`ObservabilityLogsTest`.
+`ObservabilityLogsTest` (incluye `simulation_failed` con `cause` ERROR e INELIGIBLE y `simulation_done`).
 
 ## api-5xx-mayor-2pct
 
@@ -104,21 +107,30 @@ El uptime check de `/v1/health` (cada 5 min, varias regiones) falló.
 
 ## Verificar el pipeline de errores en dev
 
-Un error del backend en dev debe aparecer en Error Reporting. Verificación (requiere `parcheu-dev` aplicado):
+Un error del backend en dev debe aparecer en Error Reporting (requiere `parcheu-dev` aplicado).
+
+**Verificación principal: un error real del backend.** Provoca un `log.error` con traza a través del propio
+servicio, por ejemplo una petición que llegue al handler de `Throwable` de `ErrorHandling.kt` (un 500 real,
+no un 4xx de validación). Un minuto después debe aparecer en
+`https://console.cloud.google.com/errors?project=parcheu-dev`, en el servicio `api`, con la traza y el `traceId`.
+Esta prueba recorre el pipeline completo (backend, logback JSON, Cloud Logging, Error Reporting).
+
+**Alternativa que solo prueba Error Reporting (no el backend).** Escribe directamente una entrada con el tipo
+`ReportedErrorEvent` y una traza con formato Java reconocible; sin `@type` y sin traza válida Error Reporting
+la ignora:
 
 ```bash
-# 1. Publica un error con traza en el servicio api (formato de Error Reporting).
 gcloud logging write run.googleapis.com%2Fstderr \
-  '{"message":"E10.5 error forzado de prueba\n    at forzado(operacion.md)","serviceContext":{"service":"api","version":"e10-5-prueba"},"severity":"ERROR"}' \
+  '{"@type":"type.googleapis.com/google.devtools.clouderrorreporting.v1beta1.ReportedErrorEvent","message":"java.lang.IllegalStateException: E10.5 error forzado de prueba\n\tat me.santiagoreina.parcheu.Prueba.forzado(Prueba.kt:1)","serviceContext":{"service":"api","version":"e10-5-prueba"}}' \
   --payload-type=json --severity=ERROR --project parcheu-dev \
   --monitored-resource-type=cloud_run_revision \
   --monitored-resource-labels=service_name=api,revision_name=prueba,location=us-central1,configuration_name=api
-# 2. En un minuto abre https://console.cloud.google.com/errors?project=parcheu-dev: debe aparecer
-#    "E10.5 error forzado de prueba" en el servicio api.
 ```
 
-También sirve cualquier `log.error` real del backend (por ejemplo, una petición que dispare el handler de
-`Throwable` en `ErrorHandling.kt`). Para Crashlytics: en un build `dev` release (no debug), llama a
+Si esta alternativa aparece pero el error real no, el fallo está en el backend (formato del log), no en
+Error Reporting.
+
+Para Crashlytics: en un build `dev` release (no debug), llama a
 `CrashReporting.reporter.recordNonFatal(RuntimeException("prueba"))` o fuerza un cierre y reabre la app; el evento
 llega con las claves `route` y `flavor=dev` en unos minutos.
 

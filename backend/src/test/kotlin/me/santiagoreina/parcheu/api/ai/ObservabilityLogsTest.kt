@@ -8,7 +8,12 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
+import me.santiagoreina.parcheu.api.simulation.SimFixture
+import me.santiagoreina.parcheu.api.simulation.SimulationEngine
+import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.StartSimulation
 import org.slf4j.LoggerFactory
+import java.util.UUID
 
 /**
  * E10.5: los logs que alimentan las métricas basadas en logs de Terraform (monitoring.tf) mantienen su
@@ -47,5 +52,51 @@ class ObservabilityLogsTest : FunSpec({
         }.filter { it.formattedMessage == "ai_call" }
         events shouldHaveSize 1
         events.single().fields()["costMicros"] shouldBe usage.entries.single().costMicros
+    }
+
+    // Los logs de simulación alimentan la alerta simulaciones-failed y el panel de simulaciones.
+    fun List<ILoggingEvent>.named(message: String) = filter { it.formattedMessage == message }
+
+    test("una simulación que termina bien registra simulation_done con su id") {
+        val f = SimFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        val events = capture(SimulationEngine::class.java) {
+            f.module.service.start(ana, StartSimulation(beto.toString(), Mode.AMISTAD))
+        }.named("simulation_done")
+        events shouldHaveSize 1
+        val fields = events.single().fields()
+        fields["event"] shouldBe "simulation_done"
+        fields["simulationId"] shouldBe f.repo.all().single().id.toString()
+    }
+
+    test("un fallo del LLM registra simulation_failed con cause ERROR") {
+        val f = SimFixture(judgeReply = { error("el juez no responde") })
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        val events = capture(SimulationEngine::class.java) {
+            f.module.service.start(ana, StartSimulation(beto.toString(), Mode.AMISTAD))
+        }
+        events.named("simulation_done") shouldHaveSize 0
+        val failed = events.named("simulation_failed")
+        failed shouldHaveSize 1
+        val fields = failed.single().fields()
+        fields["event"] shouldBe "simulation_failed"
+        fields["cause"] shouldBe "ERROR"
+        fields["simulationId"] shouldBe f.repo.all().single().id.toString()
+    }
+
+    test("un bloqueo registra simulation_failed con cause INELIGIBLE") {
+        val f = SimFixture(inline = false)
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        val id = UUID.fromString(f.module.service.start(ana, StartSimulation(beto.toString(), Mode.AMISTAD)).id)
+        f.repo.block(beto, ana)
+        val failed = capture(SimulationEngine::class.java) { f.module.engine.run(id) }.named("simulation_failed")
+        failed shouldHaveSize 1
+        val fields = failed.single().fields()
+        fields["event"] shouldBe "simulation_failed"
+        fields["cause"] shouldBe "INELIGIBLE"
+        fields["simulationId"] shouldBe id.toString()
     }
 })

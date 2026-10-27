@@ -7,6 +7,10 @@
 locals {
   alert_runbook = "Runbook: docs/operacion.md (sección de esta alerta)."
   run_filter    = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${google_cloud_run_v2_service.api.name}\""
+  # Peticiones de usuario: se excluye /internal/ (tareas de Cloud Tasks y Scheduler). /internal/tasks/simulate
+  # corre la simulación completa de forma síncrona (minutos) y devuelve 5xx a propósito para que Cloud Tasks
+  # reintente; medirlas inflaría el p95 y la tasa de 5xx sin que ningún usuario lo note.
+  user_requests_filter = "${local.run_filter} AND log_id(\"run.googleapis.com/requests\") AND NOT httpRequest.requestUrl:\"/internal/\""
 }
 
 # --- Uptime de /v1/health -------------------------------------------------------
@@ -73,6 +77,14 @@ locals {
       description = "Peticiones rechazadas por cuota (429)."
       filter      = "${local.run_filter} AND httpRequest.status=429"
     }
+    http_requests = {
+      description = "Peticiones de usuario (sin /internal/), base de la tasa de 5xx."
+      filter      = local.user_requests_filter
+    }
+    http_5xx = {
+      description = "Peticiones de usuario (sin /internal/) que respondieron 5xx."
+      filter      = "${local.user_requests_filter} AND httpRequest.status>=500"
+    }
   }
 }
 
@@ -92,25 +104,58 @@ resource "google_logging_metric" "events" {
   depends_on = [google_project_service.apis]
 }
 
-# Costo de IA: suma de costMicros de cada log "ai_call" (micro-USD).
+# Costo de IA: suma de costMicros de cada log "ai_call" (micro-USD). Una métrica de logs de tipo contador solo
+# cuenta entradas y no admite value_extractor; para sumar un campo hay que declararla como DISTRIBUTION y
+# sumar la distribución en MQL (sum_from). Los buckets exponenciales cubren de 1 a 2^63 micro-USD.
 resource "google_logging_metric" "ai_cost_micros" {
   project     = var.project_id
   name        = "parcheu_ai_cost_micros"
-  description = "Costo de IA en micro-USD, sumado de los logs ai_call."
+  description = "Costo de IA en micro-USD de cada log ai_call (distribución; el total es su suma)."
   filter      = "${local.run_filter} AND jsonPayload.message=\"ai_call\""
 
   metric_descriptor {
     metric_kind = "DELTA"
-    value_type  = "INT64"
+    value_type  = "DISTRIBUTION"
     unit        = "1"
   }
   value_extractor = "EXTRACT(jsonPayload.costMicros)"
+  bucket_options {
+    exponential_buckets {
+      num_finite_buckets = 63
+      growth_factor      = 2
+      scale              = 1
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# Latencia de las peticiones de usuario (segundos), de los logs de petición de Cloud Run.
+resource "google_logging_metric" "http_latency" {
+  project     = var.project_id
+  name        = "parcheu_http_latency"
+  description = "Latencia en segundos de las peticiones de usuario (sin /internal/)."
+  filter      = local.user_requests_filter
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "s"
+  }
+  value_extractor = "EXTRACT(httpRequest.latency)"
+  bucket_options {
+    exponential_buckets {
+      num_finite_buckets = 40
+      growth_factor      = 1.5
+      scale              = 0.005
+    }
+  }
 
   depends_on = [google_project_service.apis]
 }
 
 # --- Alertas -----------------------------------------------------------------------
-# 5xx > 2 % de las peticiones en 5 min.
+# 5xx > 2 % de las peticiones de usuario en 5 min (sin /internal/, ver user_requests_filter).
 resource "google_monitoring_alert_policy" "error_rate" {
   project      = var.project_id
   display_name = "api-5xx-mayor-2pct-${var.environment}"
@@ -121,12 +166,18 @@ resource "google_monitoring_alert_policy" "error_rate" {
     condition_monitoring_query_language {
       duration = "0s"
       query    = <<-EOT
-        fetch cloud_run_revision
-        | metric 'run.googleapis.com/request_count'
-        | filter resource.service_name == '${google_cloud_run_v2_service.api.name}'
-        | align rate(5m)
-        | every 5m
-        | group_by [], [total: sum(val()), errores: sum(if(metric.response_code_class == '5xx', val(), 0))]
+        { fetch cloud_run_revision
+          | metric 'logging.googleapis.com/user/${google_logging_metric.events["http_5xx"].name}'
+          | align delta(5m)
+          | every 5m
+          | group_by [], [errores: sum(val())]
+        ; fetch cloud_run_revision
+          | metric 'logging.googleapis.com/user/${google_logging_metric.events["http_requests"].name}'
+          | align delta(5m)
+          | every 5m
+          | group_by [], [total: sum(val())]
+        }
+        | join
         | value [tasa: div(errores, total)]
         | condition tasa > 0.02 '1'
       EOT
@@ -141,7 +192,7 @@ resource "google_monitoring_alert_policy" "error_rate" {
   depends_on = [google_project_service.apis]
 }
 
-# Latencia p95 > 2 s en 5 min.
+# Latencia p95 > 2 s en 5 min, solo peticiones de usuario (métrica de logs, sin /internal/).
 resource "google_monitoring_alert_policy" "latency" {
   project      = var.project_id
   display_name = "api-p95-mayor-2s-${var.environment}"
@@ -150,9 +201,9 @@ resource "google_monitoring_alert_policy" "latency" {
   conditions {
     display_name = "Latencia p95 > 2 s (5 min)"
     condition_threshold {
-      filter          = "${local.run_filter} AND metric.type=\"run.googleapis.com/request_latencies\""
+      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.http_latency.name}\" AND resource.type=\"cloud_run_revision\""
       comparison      = "COMPARISON_GT"
-      threshold_value = 2000
+      threshold_value = 2
       duration        = "300s"
       aggregations {
         alignment_period     = "300s"
@@ -286,11 +337,11 @@ resource "google_monitoring_dashboard" "api" {
         {
           xPos = 6, width = 6, height = 4,
           widget = {
-            title = "Latencia p50 / p95 / p99 (ms)"
+            title = "Latencia p50 / p95 / p99 (s, sin /internal/)"
             xyChart = { dataSets = [for p in ["ALIGN_PERCENTILE_50", "ALIGN_PERCENTILE_95", "ALIGN_PERCENTILE_99"] : {
               plotType = "LINE"
               timeSeriesQuery = { timeSeriesFilter = {
-                filter = "${local.run_filter} AND metric.type=\"run.googleapis.com/request_latencies\""
+                filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.http_latency.name}\" AND resource.type=\"cloud_run_revision\""
                 aggregation = {
                   alignmentPeriod    = "300s"
                   perSeriesAligner   = p
@@ -324,14 +375,15 @@ resource "google_monitoring_dashboard" "api" {
             title = "Costo de IA por día (micro-USD)"
             xyChart = { dataSets = [{
               plotType = "STACKED_BAR"
-              timeSeriesQuery = { timeSeriesFilter = {
-                filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.ai_cost_micros.name}\" AND resource.type=\"cloud_run_revision\""
-                aggregation = {
-                  alignmentPeriod    = "86400s"
-                  perSeriesAligner   = "ALIGN_SUM"
-                  crossSeriesReducer = "REDUCE_SUM"
-                }
-              } }
+              timeSeriesQuery = { timeSeriesQueryLanguage = <<-EOT
+                fetch cloud_run_revision
+                | metric 'logging.googleapis.com/user/${google_logging_metric.ai_cost_micros.name}'
+                | align delta(1d)
+                | every 1d
+                | value [costo: sum_from(val())]
+                | group_by [], [costo: sum(costo)]
+              EOT
+              }
             }] }
           }
         },
