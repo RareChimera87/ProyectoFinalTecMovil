@@ -946,3 +946,16 @@ Todo lo de código quedó hecho y no depende de un entorno vivo: C3 consume `GET
 | # | Paso | Dueño | Cuándo |
 |---|---|---|---|
 | 1 | **Revisión visual** de `android/app/src/test/screenshots/profile/*.png` (0, 1 y 16 puntos, claro y oscuro) contra el mockup 06. Diferencia aceptada: el mockup de '4 meses de historial' se reproduce solo con los 16 puntos demo de la captura; con datos reales el gráfico muestra un punto por semana con datos. 'Rasgos' y el pie de la suscripción no están en el mockup y se armaron con componentes del sistema de diseño. | I2 | Ventana de revisión de la ola 10 |
+
+## E10.5 · Observabilidad
+
+El código, las métricas, las alertas, el dashboard y el runbook (`docs/operacion.md`) están en el repositorio. Falta aplicarlos y verificarlos en el entorno vivo, que solo tú puedes hacer:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Reaplicar `bootstrap/` de dev** (con tu ADC) para que `sa-terraform` reciba `roles/logging.configWriter` y `sa-terraform-plan` los permisos `logging.logMetrics.get/list` del rol `parcheuTerraformPlan`. Sin esto el `apply`/`plan` de CI falla al crear las métricas basadas en logs. Mismo cambio en prod cuando hagas su bootstrap (solo el rol personalizado de plan aplica allí). | I1 | Antes del primer `apply` con E10.5 |
+| 2 | **Definir los 3 correos de alerta**: crea `infra/terraform/envs/dev/terraform.tfvars` local (no versionar) con `alert_emails = ["a@...", "b@...", "c@..."]`, o pásalos con `-var`. Sin correos las políticas se crean pero no notifican a nadie. Para el `apply` de CI en dev, agrega la variable como `TF_VAR_alert_emails` (secreto/variable de entorno de GitHub) antes de mezclar a `dev`; si no, CI crea las alertas sin canal. | I1 | Antes del apply de dev |
+| 3 | **`terraform plan`/`apply` de dev** y comprobar que el plan incluye 6 políticas de alerta, 6 métricas y el dashboard `ParcheU dev` (el CI ya valida su presencia con `scripts/check-plan.sh`). Los correos de los canales de notificación llegan con un enlace de verificación solo la primera vez. | I1 | Con el bootstrap de dev |
+| 4 | **Verificar el error forzado en Error Reporting** siguiendo "Verificar el pipeline de errores en dev" de `docs/operacion.md` (criterio de aceptación de E10.5) y confirmar que aparece en `https://console.cloud.google.com/errors?project=parcheu-dev`. | I1 | Tras el apply de dev |
+| 5 | **Habilitar Crashlytics** en la consola de Firebase (Release & Monitor > Crashlytics > Habilitar) para la app `me.santiagoreina.parcheu.dev` y, cuando exista, la de prod. Hasta entonces el SDK no envía nada. Los builds debug no reportan a propósito. | I1 | Antes de la 0.3 |
+| 6 | **Alerta de presupuesto de facturación** (50 % y 90 %): ya la crea `bootstrap/`; comprueba que el correo del presupuesto sea alguno de los 3. | I1 | Con el bootstrap |
