@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -243,19 +245,22 @@ private fun MonthCard(
             .semantics {
                 role = Role.Button
                 this.selected = selected
+                contentDescription =
+                    "${monthName(snapshot.month)}, ${connectionsText(snapshot.connections)}"
             }
             .padding(start = 6.dp, end = 6.dp, top = 10.dp, bottom = 12.dp)
             .testTag(EvolutionTags.month(snapshot.month)),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Box {
+        // El mini grafo es decorativo: se oculta a TalkBack (sus nodos son de relleno, sin datos reales).
+        Box(Modifier.clearAndSetSemantics {}) {
             PuGraph(
                 nodes = miniNodes(snapshot.connections),
                 size = 140.dp,
                 centerLabel = "Tú"
             )
-            // El mini grafo es decorativo: esta capa deja que todo el toque llegue a la tarjeta.
+            // El Canvas del grafo consume los toques: esta capa (sin semántica) los reenvía a la tarjeta.
             Box(Modifier.matchParentSize().clickable(onClick = onClick))
         }
         Text(

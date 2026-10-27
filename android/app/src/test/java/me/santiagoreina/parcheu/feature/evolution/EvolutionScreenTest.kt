@@ -1,7 +1,9 @@
 package me.santiagoreina.parcheu.feature.evolution
 
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -75,5 +77,19 @@ class EvolutionScreenTest {
         composeRule.onAllNodesWithText("MOMENTOS").assertCountEquals(0)
         composeRule.onNodeWithText("Ver ParcheU+").performClick()
         assertEquals(1, unlocked)
+    }
+
+    @Test
+    fun miniGraphsAreHiddenFromTalkBack() {
+        show(EvolutionUiState.Content(EvolutionSamples.full))
+        composeRule.onNodeWithTag(EvolutionTags.month("2026-09")).assert(
+            hasContentDescription("Septiembre, 6 conexiones")
+        )
+        composeRule.onAllNodes(
+            hasContentDescription("afín", substring = true, ignoreCase = true)
+        ).assertCountEquals(0)
+        composeRule.onAllNodes(
+            hasContentDescription("Alguien", substring = true)
+        ).assertCountEquals(0)
     }
 }
