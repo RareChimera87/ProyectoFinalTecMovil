@@ -22,7 +22,10 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.chat.ChatDoc
+import me.santiagoreina.parcheu.api.chat.ChatMirror
 import me.santiagoreina.parcheu.api.chat.ChatRecord
+import me.santiagoreina.parcheu.api.chat.MessageDoc
 import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
 import me.santiagoreina.parcheu.api.chat.InMemoryChatRepository
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
@@ -64,7 +67,16 @@ class AdminApiTest : FunSpec({
             listOf("ana", "beto").forEach { uid -> repo.addUser(f.graphRepo.people.getValue(identity.user(uid).id), uid) }
         }
         val mirror = InMemoryChatMirror()
-        val chat = inMemoryChatModule(f.clock, f.graph.policy, f.notifier, chatRepo, mirror)
+        var mirrorFails = false
+        private val flakyMirror = object : ChatMirror {
+            override suspend fun upsertChat(doc: ChatDoc) = mirror.upsertChat(doc)
+
+            override suspend fun upsertMessage(chatId: UUID, doc: MessageDoc) {
+                check(!mirrorFails) { "Firestore no responde" }
+                mirror.upsertMessage(chatId, doc)
+            }
+        }
+        val chat = inMemoryChatModule(f.clock, f.graph.policy, f.notifier, chatRepo, flakyMirror)
         val safetyRepo = InMemorySafetyRepository(
             people = { id -> f.graphRepo.people[id] },
             messages = { chatId ->
@@ -213,8 +225,26 @@ class AdminApiTest : FunSpec({
             w.chatRepo.allMessages.single().hidden shouldBe true
             val doc = w.mirror.messages(chat.id).single { it.id.toString() == messageId }
             doc.hidden shouldBe true
+            doc.text shouldBe ""
             doc.senderUid shouldBe "beto"
             w.identity.user("beto").suspendedUntil.shouldBeNull()
+        }
+    }
+
+    test("si la acción falla el reporte sigue OPEN y el reintento la completa") {
+        val w = World()
+        val chat = w.direct()
+        testApplication {
+            val client = app(w)
+            val (reportId, messageId) = client.reportOfBetoMessage(w, chat)
+            w.mirrorFails = true
+            client.resolve("admin", reportId, AdminAction.HIDE_MESSAGE).status shouldBe HttpStatusCode.InternalServerError
+            val pending = client.get("/v1/admin/reports") { auth("admin") }.body<Page<AdminReport>>().items.single()
+            pending.status shouldBe ReportStatus.OPEN
+
+            w.mirrorFails = false
+            client.resolve("admin", reportId, AdminAction.HIDE_MESSAGE).status shouldBe HttpStatusCode.OK
+            w.mirror.messages(chat.id).single { it.id.toString() == messageId }.text shouldBe ""
         }
     }
 

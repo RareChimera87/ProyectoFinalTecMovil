@@ -183,7 +183,7 @@ class ChatService(
         val senderUid = message.senderId?.let { sender -> repo.chat(message.chatId)?.members?.firstOrNull { it.userId == sender }?.firebaseUid }
         mirror.upsertMessage(
             message.chatId,
-            MessageDoc(message.id, senderUid, system = message.senderId == null, text = message.text, createdAt = message.createdAt, hidden = true),
+            MessageDoc(message.id, senderUid, system = message.senderId == null, text = "", createdAt = message.createdAt, hidden = true),
         )
         return true
     }
@@ -266,7 +266,7 @@ class ChatService(
         id = id,
         senderUid = senderUid,
         system = false,
-        text = text,
+        text = if (hidden) "" else text,
         createdAt = createdAt,
         hidden = hidden,
     )

@@ -64,8 +64,10 @@ class AdminService(
 
         val now = clock.instant()
         val resolution = listOfNotNull(request.action.name, note).joinToString(": ")
-        if (!repo.markResolved(id, resolution, adminUserId, now)) throw Conflict("El reporte ya está resuelto")
+        // Primero la acción (idempotente: hidden=true y suspendUntil conserva la fecha mayor) y después
+        // el cierre: si la acción falla, el reporte sigue OPEN y el admin puede reintentar.
         applyAction(request.action, target, message, now)
+        if (!repo.markResolved(id, resolution, adminUserId, now)) throw Conflict("El reporte ya está resuelto")
 
         // Solo ids y acción, nunca el detalle ni los textos del reporte (dato personal).
         log.atInfo()

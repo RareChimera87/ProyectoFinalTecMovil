@@ -77,7 +77,9 @@ class AdminDbTest : FunSpec({
             resolved.status shouldBe ReportStatus.RESOLVED
             resolved.resolution shouldBe "HIDE_MESSAGE: texto ofensivo"
             env.chat.repository.findByClientId(beto.id, "b-1")!!.hidden shouldBe true
-            env.mirror.messages(chat.id).single { it.id.toString() == message.id }.hidden shouldBe true
+            val doc = env.mirror.messages(chat.id).single { it.id.toString() == message.id }
+            doc.hidden shouldBe true
+            doc.text shouldBe ""
             env.admin.reports(null, ReportStatus.RESOLVED, null, null).items.single().id shouldBe harassment.id
         }
     }
