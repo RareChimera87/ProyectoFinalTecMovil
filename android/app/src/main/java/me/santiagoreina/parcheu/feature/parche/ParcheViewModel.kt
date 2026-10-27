@@ -15,6 +15,7 @@ import me.santiagoreina.parcheu.contract.NodeDetail
 import me.santiagoreina.parcheu.contract.NodeDto
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
+import me.santiagoreina.parcheu.feature.plus.PlusErrorRouter
 import me.santiagoreina.parcheu.navigation.AppRoute
 import me.santiagoreina.parcheu.navigation.Chat
 import me.santiagoreina.parcheu.navigation.Results
@@ -118,10 +119,23 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
                     updateSheet(sheet.node.id) { it.copy(starting = false) }
                     _effects.send(ParcheEffect.Navigate(Simulation(result.value.id)))
                 }
-                is ApiResult.Failure ->
+                is ApiResult.Failure -> {
+                    val paywall = PlusErrorRouter.route(result.error, PAYWALL_SOURCE_PARCHE)
+                    // Un error premium (402) abre G1 o la G2 del cupo en vez de quedarse en un texto.
                     updateSheet(sheet.node.id) {
-                        it.copy(starting = false, actionError = result.error)
+                        it.copy(
+                            starting = false,
+                            actionError = if (paywall ==
+                                null
+                            ) {
+                                result.error
+                            } else {
+                                null
+                            }
+                        )
                     }
+                    paywall?.let { _effects.send(ParcheEffect.Navigate(it)) }
+                }
             }
         }
     }

@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.santiagoreina.parcheu.contract.Progress
+import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.SimulationDto
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import me.santiagoreina.parcheu.core.error.AppError
@@ -23,8 +24,11 @@ import me.santiagoreina.parcheu.data.simulation.SimulationSnapshot
 import me.santiagoreina.parcheu.data.simulation.snapshot
 import me.santiagoreina.parcheu.data.simulation.summary
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
+import me.santiagoreina.parcheu.feature.plus.PlusSources
+import me.santiagoreina.parcheu.navigation.Paywall
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -271,19 +275,42 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun retryErrorKeepsF5AndShowsTheReason() = runVmTest {
+    fun retryQuotaExceededOpensG2WithoutLeavingF5() = runVmTest {
         repository.getResult =
             ApiResult.Success(
                 SimulationDto(summary(status = SimulationStatus.FAILED), Progress(1, 2, 5))
             )
-        repository.startResult = ApiResult.Failure(AppError.QuotaExceeded(null, null))
+        repository.startResult =
+            ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.SIMULATION, null))
+        val viewModel = viewModel()
+        live.flow.emit(snapshot(status = SimulationStatus.FAILED, scenarioIndex = 1))
+
+        viewModel.effects.test {
+            viewModel.onRetry()
+            assertEquals(
+                SimulationEffect.OpenPaywall(Paywall(PlusSources.limit(QuotaKind.SIMULATION))),
+                awaitItem()
+            )
+        }
+        val state = viewModel.state.value as SimulationUiState.Failed
+        assertFalse(state.retrying)
+        assertNull(state.retryError)
+    }
+
+    @Test
+    fun retryNetworkErrorKeepsF5AndShowsTheReason() = runVmTest {
+        repository.getResult =
+            ApiResult.Success(
+                SimulationDto(summary(status = SimulationStatus.FAILED), Progress(1, 2, 5))
+            )
+        repository.startResult = ApiResult.Failure(AppError.Network)
         val viewModel = viewModel()
         live.flow.emit(snapshot(status = SimulationStatus.FAILED, scenarioIndex = 1))
         viewModel.onRetry()
 
         val state = viewModel.state.value as SimulationUiState.Failed
         assertFalse(state.retrying)
-        assertTrue(state.retryError is AppError.QuotaExceeded)
+        assertEquals(AppError.Network, state.retryError)
     }
 
     @Test
