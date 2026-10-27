@@ -174,6 +174,20 @@ class ChatService(
         repo.setMuted(chatId, user.id, muted)
     }
 
+    /**
+     * Oculta un mensaje por decisión de un admin (E8.5): `hidden = true` en Postgres y en el espejo de
+     * Firestore (la app deja de ver el texto). Devuelve false si el mensaje no existe. Idempotente.
+     */
+    suspend fun hideMessage(messageId: UUID): Boolean {
+        val message = repo.hideMessage(messageId) ?: return false
+        val senderUid = message.senderId?.let { sender -> repo.chat(message.chatId)?.members?.firstOrNull { it.userId == sender }?.firebaseUid }
+        mirror.upsertMessage(
+            message.chatId,
+            MessageDoc(message.id, senderUid, system = message.senderId == null, text = "", createdAt = message.createdAt, hidden = true),
+        )
+        return true
+    }
+
     // --- internos ----------------------------------------------------------------------------
 
     /**
@@ -252,7 +266,7 @@ class ChatService(
         id = id,
         senderUid = senderUid,
         system = false,
-        text = text,
+        text = if (hidden) "" else text,
         createdAt = createdAt,
         hidden = hidden,
     )

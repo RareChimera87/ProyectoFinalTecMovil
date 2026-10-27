@@ -144,6 +144,16 @@ class ExposedIdentityRepository(private val db: Database) :
             FcmTokens.deleteWhere { FcmTokens.userId eq userId }
         }
     }
+
+    override suspend fun suspendUntil(userId: UUID, until: Instant, now: Instant): Instant? = tx {
+        val current = Users.selectAll().where { Users.id eq userId }.forUpdate().singleOrNull() ?: return@tx null
+        val effective = current[Users.suspendedUntil]?.toInstant()?.takeIf { it.isAfter(until) } ?: until
+        Users.update({ Users.id eq userId }) {
+            it[suspendedUntil] = effective.odt()
+            it[updatedAt] = now.odt()
+        }
+        effective
+    }
 }
 
 private fun Instant.odt(): OffsetDateTime = OffsetDateTime.ofInstant(this, ZoneOffset.UTC)

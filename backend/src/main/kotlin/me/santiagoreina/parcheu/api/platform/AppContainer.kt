@@ -1,6 +1,9 @@
 package me.santiagoreina.parcheu.api.platform
 
+import me.santiagoreina.parcheu.api.admin.AdminModule
 import me.santiagoreina.parcheu.api.admin.AdminRoutes
+import me.santiagoreina.parcheu.api.admin.adminModule
+import me.santiagoreina.parcheu.api.admin.inMemoryAdminModule
 import me.santiagoreina.parcheu.api.ai.AiConfig
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.AiModule
@@ -177,6 +180,8 @@ class AppContainer(
      * [fromConfig] cablea Postgres (la misma tabla `entitlements` que lee [quota]) y Google Play.
      */
     val billing: BillingModule = inMemoryBillingModule(clock),
+    /** Administración de reportes (E8.5). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
+    val admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, clock),
     /**
      * Cola en proceso y programador de jobs (`TASKS_MODE=inline`, ADR-0033); null con Cloud Tasks o Fake.
      * Main lo arranca (`start`) en modo `serve` y lo cierra al parar.
@@ -186,10 +191,13 @@ class AppContainer(
     val domains: List<DomainRoutes> =
         allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
-            invites, billing, config.env, introductions,
+            invites, billing, config.env, introductions, admin,
         ),
 ) {
     companion object {
+        /** Con `ENV=local`, el token `fake-admin` lleva el claim `admin` (E8.5). Nunca existe en dev ni prod. */
+        const val LOCAL_ADMIN_UID = "admin"
+
         /**
          * Cableado de producción: verificadores reales (Fake solo con `ENV=local`). La
          * configuración de IA se valida aquí, así que un `AI_PROVIDER` inválido hace fallar el
@@ -198,7 +206,7 @@ class AppContainer(
         fun fromConfig(config: AppConfig, vars: Map<String, String> = System.getenv()): AppContainer {
             val local = config.env == Env.LOCAL
             val tokenVerifier = if (local) {
-                FakeTokenVerifier()
+                FakeTokenVerifier(adminUids = setOf(LOCAL_ADMIN_UID))
             } else {
                 FirebaseTokenVerifier(requireNotNull(config.firebaseProjectId))
             }
@@ -253,6 +261,8 @@ class AppContainer(
             )
             // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
             val safety = safetyModule(database, chat, graph, matching, clock)
+            // Administración de reportes (E8.5): sobre la misma tabla `reports`; suspende por `users.suspended_until`.
+            val admin = adminModule(database, identity.repo, chat, clock)
             // Borrado y exportación (E8.3): purga por la cola `maintenance`; Firestore y Auth reales fuera de local.
             val account = accountModule(
                 config.env, database, identity, graph, twin, tasks, config.firebaseProjectId, clock,
@@ -271,7 +281,7 @@ class AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
                 introductionStore = introductionStore, simulation = simulation,
-                matching = matching, safety = safety, account = account, introductions = introductions,
+                matching = matching, safety = safety, admin = admin, account = account, introductions = introductions,
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
                 billing = billing,
                 invites = invites,
@@ -352,6 +362,7 @@ fun allDomains(
     env: Env = Env.LOCAL,
     introductions: IntroductionModule =
         introductionModule(InMemoryIntroductionRepository(), simulation, graph, chat, quota, NoopNotifier, systemClock()),
+    admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, systemClock()),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -373,7 +384,8 @@ fun allDomains(
         identity.requireUser(firebase).id
     },
     SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
-    AdminRoutes(),
+    // Administración de reportes (E8.5): claim `admin`; `resolved_by` es la cuenta del admin si la tiene.
+    AdminRoutes(admin.service) { firebase -> identity.repo.findByFirebaseUid(firebase.uid)?.id },
     // Inicio (E4.7): agregador de cupos, simulaciones, sugerencias del grafo y no leídas.
     // Las sugerencias solo ofrecen modos activos para los dos, como exige SimulationService.create.
     HomeRoutes(HomeService(quota.service, simulation.service, homeSuggestions(graph, simulation, matching.flags.demoUsersEnabled), unread)) { firebase ->
