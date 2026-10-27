@@ -486,6 +486,8 @@ Implementación (E6.3, `backend/.../graph/fof/`): `ExposedFofRepository` ejecuta
 ### 6.4 Evolución de la red
 Derivada de `edges.created_at`, `connected_at` y `updated_at` agrupando por mes (zona Bogotá); 'Momentos' = primera conexión, primera comunidad, 10/25/50 conexiones, afinidad más alta. No se guardan snapshots (no hay datos que mantener ni migrar).
 
+Implementación (E6.5, `backend/.../graph/history/`): `HistoryService` (`GET /v1/graph/history`, 402 `PLUS_REQUIRED` si no es ParcheU+) lee las aristas directas del observador con los mismos filtros del ego-grafo (`canSee`, `canSeeEdge`; no es vista de terceros). La serie va del mes del primer evento al mes actual sin huecos: `nodes` = personas con alguna arista nacida hasta fin de mes, `connections` = acumulado de personas con arista CONNECTED y `newConnections` = personas cuya primera conexión cae ese mes (mes de Bogotá; la fecha de conexión es `connected_at`, o `created_at` si falta). Momentos: primera conexión, primera comunidad (`communities.created_at` más antigua donde está la persona), hitos de 10/25/50 conexiones con la fecha de la n-ésima y afinidad más alta; la otra persona pasa por `GraphVisibilityPolicy.present`. No hay tarea ni job: se calcula en cada consulta. En Android (`feature/evolution/`), D9 muestra las tarjetas mensuales (mini grafo con el conteo), 'Momentos' y los estados bloqueado (402) y menos de 2 meses. **Desvío:** el historial solo trae conteos, así que tocar un mes selecciona su detalle en D9 y no abre D1 con ese snapshot (D1 no tiene fechas por nodo).
+
 ---
 
 ## 7. Conocer: gemelo, simulación, fila y escenario

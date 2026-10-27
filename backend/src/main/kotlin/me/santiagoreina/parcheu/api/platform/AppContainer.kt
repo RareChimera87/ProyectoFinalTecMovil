@@ -29,6 +29,7 @@ import me.santiagoreina.parcheu.api.graph.GraphRoutes
 import me.santiagoreina.parcheu.api.graph.fof.ExposedFofRepository
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
+import me.santiagoreina.parcheu.api.graph.history.HistoryService
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.home.HomeService
@@ -374,7 +375,12 @@ fun allDomains(
     MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
-    GraphRoutes(graph.service, fofService(graph, twin, quota, matching.flags.demoUsersEnabled)) { firebase ->
+    GraphRoutes(
+        graph.service,
+        fofService(graph, twin, quota, matching.flags.demoUsersEnabled),
+        // Evolución de la red (E6.5): derivada de las aristas en cada consulta, sin tarea ni job.
+        HistoryService(graph.repository, graph.policy, { quota.service.isPlus(it) }, quota.clock),
+    ) { firebase ->
         identity.requireUser(firebase).id
     },
     SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },

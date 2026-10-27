@@ -1009,3 +1009,10 @@ Todo el código quedó hecho y probado en local: el recorrido (`backend/src/e2eT
 | 5 | **Cuentas de prueba huérfanas** (solo si una corrida murió sin limpiar, p. ej. cancelada a mano): llevan el uid `e2e-<hex>-a|b` y `users.is_test = true`. Se borran con `DELETE /v1/me` (purga completa) o desde la consola de Firebase Authentication; el barrido horario `purge-sweep` reintenta las purgas atascadas. | I3 | Si ocurre |
 
 Para correrlo a mano contra dev con tu propio `gcloud`: ver "Smoke e2e (E10.6)" en `docs/desarrollo-local.md`.
+
+## E6.5 · Evolución de la red
+
+No requiere infraestructura ni secretos: el historial se calcula en cada consulta (sin tareas, jobs ni migraciones).
+
+- [ ] **Decisión de producto (I3 / diseño):** el mockup D9 dice 'Mes → 08a en esa fecha'. El historial solo devuelve conteos por mes y D1 no tiene fecha por nodo, así que tocar un mes selecciona su detalle en D9 en vez de abrir D1 con ese snapshot. Para hacerlo literal haría falta devolver las personas por mes (con la policy) o las fechas por nodo en `GET /v1/graph`. Decidir si entra antes del 30 nov.
+- [ ] Revisar con datos reales: el momento 'Tu primera comunidad' aparecerá cuando E6.4 (comunidades) cree filas en `communities`/`community_members`.

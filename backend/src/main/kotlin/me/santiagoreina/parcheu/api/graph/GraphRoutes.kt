@@ -6,6 +6,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import me.santiagoreina.parcheu.api.graph.fof.FofService
+import me.santiagoreina.parcheu.api.graph.history.HistoryService
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
@@ -16,7 +17,7 @@ import java.util.UUID
 
 /**
  * Rutas del dominio graph. E3.1 implementa el ego-grafo y el detalle de nodo y E6.3 amigos de
- * amigos ([FofService]); historial (E6.5), comunidades (E6.2) y connect-requests siguen como stub 501
+ * amigos ([FofService]) y E6.5 la evolución de la red ([HistoryService]); comunidades (E6.2) y connect-requests siguen como stub 501
  * hasta su feature.
  *
  * [viewerId] traduce el usuario de Firebase a `users.id` (lo resuelve identity).
@@ -24,6 +25,7 @@ import java.util.UUID
 class GraphRoutes(
     private val graph: GraphService,
     private val fof: FofService,
+    private val history: HistoryService,
     private val viewerId: suspend (FirebaseUser) -> UUID,
 ) : DomainRoutes {
     override fun Route.v1() {
@@ -39,7 +41,9 @@ class GraphRoutes(
         get("/graph/fof") {
             call.respond(fof.fof(viewerId(call.firebaseUser())))
         }
-        stubGet("/graph/history")
+        get("/graph/history") {
+            call.respond(history.history(viewerId(call.firebaseUser())))
+        }
         stubGet("/communities")
         stubGet("/connect-requests")
     }
