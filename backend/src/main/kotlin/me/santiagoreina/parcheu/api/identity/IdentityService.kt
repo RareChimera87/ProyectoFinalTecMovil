@@ -50,6 +50,7 @@ class IdentityService(
             email = firebase.email,
             displayName = firebase.name?.trim()?.take(MAX_NAME)?.takeIf { it.isNotEmpty() },
             now = now,
+            isTest = firebase.isTest,
         )
         ensureActive(user)
         if (existing != null && firebase.email != null && firebase.email != user.email) {
@@ -71,11 +72,11 @@ class IdentityService(
      * Puerta de todas las rutas salvo las exentas: cuenta de menor de edad (403 UNDERAGE, E2.6),
      * suspensión y términos vigentes (403 TERMS_REQUIRED).
      */
-    suspend fun requireFullAccess(firebase: FirebaseUser) {
+    suspend fun requireFullAccess(firebase: FirebaseUser, ignoreSuspension: Boolean = false) {
         val user = requireUser(firebase)
         if (user.underageAt != null) throw Underage()
         val until = user.suspendedUntil
-        if (until != null && until.isAfter(clock.instant())) throw Suspended()
+        if (!ignoreSuspension && until != null && until.isAfter(clock.instant())) throw Suspended()
         if (!termsAccepted(repo.latestConsents(user.id))) throw TermsRequired()
     }
 
@@ -124,7 +125,14 @@ class IdentityService(
         LearningConsentPolicy.checkGrant(change.kind, change.granted, user, repo.modes(user.id), clock.instant())
         val current = repo.latestConsents(user.id).firstOrNull { it.kind == change.kind }
         val unchanged = current != null && current.granted == change.granted && current.textVersion == change.textVersion
-        if (!unchanged) repo.appendConsents(user.id, listOf(NewConsent(change.kind, change.granted, change.textVersion)), clock.instant())
+        val entry = NewConsent(change.kind, change.granted, change.textVersion)
+        val revokedMode = LearningConsentPolicy.modeOf(change.kind).takeIf { !change.granted }
+        when {
+            // Revocar el aprendizaje de un modo descarta sus memorias pendientes en la misma transacción (E8.2).
+            revokedMode != null ->
+                repo.savePrivacy(user.id, null, if (unchanged) emptyList() else listOf(entry), setOf(revokedMode), clock.instant())
+            !unchanged -> repo.appendConsents(user.id, listOf(entry), clock.instant())
+        }
         return consents(user)
     }
 

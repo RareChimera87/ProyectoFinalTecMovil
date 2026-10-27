@@ -23,6 +23,11 @@ import me.santiagoreina.parcheu.data.simulation.SimulationLiveSource
 import me.santiagoreina.parcheu.data.simulation.SimulationRepository
 import me.santiagoreina.parcheu.data.simulation.SimulationSnapshot
 import me.santiagoreina.parcheu.data.simulation.toSnapshot
+import me.santiagoreina.parcheu.feature.plus.PlusErrorRouter
+import me.santiagoreina.parcheu.navigation.AppRoute
+
+/** Origen del paywall cuando se abre desde F5 (analítica de G1). */
+const val SIMULATION_PAYWALL_SOURCE = "simulation"
 
 /** Cantidad de escenarios de una simulación (arquitectura.md §7.2). */
 const val SCENARIO_COUNT = 3
@@ -79,6 +84,9 @@ sealed interface SimulationEffect {
 
     /** Reintento aceptado: reemplaza F4/F5 por la nueva simulación. */
     data class OpenSimulation(val simulationId: String) : SimulationEffect
+
+    /** El reintento chocó con un límite premium (402): abre G1 o la G2 del cupo sin cerrar F5. */
+    data class OpenPaywall(val route: AppRoute) : SimulationEffect
 }
 
 /**
@@ -156,8 +164,15 @@ class SimulationViewModel(
             when (val result = repository.start(other, mode)) {
                 is ApiResult.Success ->
                     _effects.send(SimulationEffect.OpenSimulation(result.value.id))
-                is ApiResult.Failure ->
-                    _state.value = failed.copy(retrying = false, retryError = result.error)
+                is ApiResult.Failure -> {
+                    val paywall = PlusErrorRouter.route(result.error, SIMULATION_PAYWALL_SOURCE)
+                    _state.value =
+                        failed.copy(
+                            retrying = false,
+                            retryError = if (paywall == null) result.error else null
+                        )
+                    paywall?.let { _effects.send(SimulationEffect.OpenPaywall(it)) }
+                }
             }
         }
     }

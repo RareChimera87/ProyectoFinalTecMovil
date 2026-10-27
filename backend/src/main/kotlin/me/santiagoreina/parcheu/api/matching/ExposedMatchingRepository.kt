@@ -163,6 +163,10 @@ class ExposedMatchingRepository(private val db: Database) : MatchingRepository {
                     (EdgesView.me eq own.userId) and (EdgesView.other eq MatchQueue.userId) and (EdgesView.state eq EdgeState.CONNECTED)
                 },
             )
+        // E10.6: las cuentas de prueba (`is_test`) solo se emparejan entre ellas, para que el smoke e2e no toque
+        // a personas reales ni las personas reales caigan en un match con una cuenta que se va a borrar.
+        val ownIsTest = Users.select(Users.isTest).where { Users.id eq own.userId }.singleOrNull()?.get(Users.isTest) ?: false
+        condition = condition and (Users.isTest eq ownIsTest)
         // ADR-0027: sin la bandera nadie se empareja con una cuenta de demostración; en Pareja nunca.
         if (!demoUsersEnabled || own.mode == Mode.PAREJA) condition = condition and (Users.isDemo eq false)
         if (own.mode == Mode.PAREJA) {

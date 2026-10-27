@@ -16,7 +16,8 @@ import java.util.UUID
  * (`sa-api`, ADC): borra `simulations/{id}` y `matchTickets/{uid}`, saca su uid de `members` de sus chats
  * y deja sus mensajes sin autor (`senderUid` = null, 'Usuario eliminado'); los mensajes del otro no se
  * tocan. Es idempotente: borrar lo que no existe no falla y la consulta de mensajes propios ya no
- * encuentra nada en el reintento. Con `FIRESTORE_EMULATOR_HOST` apunta al emulador.
+ * encuentra nada en el reintento. En una cuenta de prueba ([PurgePlan.isTest]) borra los chats completos con sus
+ * mensajes. Con `FIRESTORE_EMULATOR_HOST` apunta al emulador.
  */
 class FirestoreAccountMirrorCleaner(firestore: () -> Firestore) : AccountMirrorCleaner {
     private val firestore: Firestore by lazy(firestore)
@@ -33,6 +34,12 @@ class FirestoreAccountMirrorCleaner(firestore: () -> Firestore) : AccountMirrorC
             val chatIds = (plan.chats.map { it.chatId.toString() } + mirrored).distinct()
             for (chatId in chatIds) {
                 val chat = fs.collection(CHATS).document(chatId)
+                if (plan.isTest) {
+                    // Cuenta de prueba: no se conserva nada, ni el chat ni sus mensajes (los del otro tampoco).
+                    commitInChunks(chat.collection(MESSAGES).get().get().documents.map { it.reference }) { batch, ref -> batch.delete(ref) }
+                    chat.delete().get()
+                    continue
+                }
                 val own = chat.collection(MESSAGES).whereEqualTo("senderUid", uid).get().get().documents.map { it.reference }
                 commitInChunks(own) { batch, ref -> batch.update(ref, "senderUid", null) }
                 if (chat.get().get().exists()) chat.update("members", FieldValue.arrayRemove(uid)).get()

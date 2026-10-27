@@ -51,6 +51,12 @@ variable "simulations_max_concurrent_dispatches" {
   default     = 10
 }
 
+variable "alert_emails" {
+  description = "Correos que reciben las alertas de monitoring.tf (E10.5). Se pasa con -var o un .tfvars local, nunca en el repo."
+  type        = list(string)
+  default     = []
+}
+
 module "platform" {
   source = "../../modules/platform"
 
@@ -58,6 +64,7 @@ module "platform" {
   environment                    = "dev"
   region                         = local.region
   deployer_service_account_email = "sa-deployer@${local.project_id}.iam.gserviceaccount.com"
+  alert_emails                   = var.alert_emails
 
   api_min_instances   = 0
   api_max_instances   = 3

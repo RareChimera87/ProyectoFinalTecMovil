@@ -69,6 +69,14 @@ jobs:
           :app:verifyProdReleaseBillingPermission
           :designsystem:lintDebug :designsystem:testDebugUnitTest
           -Proborazzi.test.verify=true
+      - name: bundleProdRelease sin google-services.json de prod (E10.5)
+        # Crashlytics no debe romper el AAB de prod mientras falte el secreto de prod: el pipeline
+        # android-release admite construir sin él. Solo corre si el archivo no existe (CI no lo escribe).
+        working-directory: android
+        run: |
+          if [[ ! -f app/src/prod/google-services.json ]]; then
+            ./gradlew --stacktrace :app:bundleProdRelease
+          fi
       - name: Reportes y diferencias de capturas
         if: failure()
         uses: actions/upload-artifact@v4

@@ -79,6 +79,14 @@ class InMemorySimulationRepository(scenarios: List<ScenarioDef> = DefaultScenari
             .maxByOrNull { it.finishedAt!! }
     }
 
+    override suspend fun unfinished(createdBefore: Instant, createdAfter: Instant, limit: Int): List<SimulationRecord> =
+        synchronized(lock) {
+            simulations.values
+                .filter { it.status in UNFINISHED && it.createdAt < createdBefore && it.createdAt > createdAfter }
+                .sortedWith(compareBy<SimulationRecord> { it.createdAt }.thenBy { it.id })
+                .take(limit)
+        }
+
     override suspend fun markRunning(id: UUID): Boolean = synchronized(lock) {
         val r = simulations[id] ?: return false
         if (r.status != SimulationStatus.QUEUED) return false

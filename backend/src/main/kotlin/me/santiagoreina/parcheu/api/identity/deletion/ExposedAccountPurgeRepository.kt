@@ -33,7 +33,7 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
     private suspend fun <T> tx(block: JdbcTransaction.() -> T): T = withContext(Dispatchers.IO) { transaction(db) { block() } }
 
     override suspend fun plan(userId: UUID): PurgePlan? = tx {
-        val user = Users.select(Users.firebaseUid, Users.displayName, Users.deletedAt)
+        val user = Users.select(Users.firebaseUid, Users.displayName, Users.deletedAt, Users.isTest)
             .where { Users.id eq userId }
             .singleOrNull() ?: return@tx null
         if (user[Users.deletedAt] == null) return@tx null
@@ -52,6 +52,7 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
             displayName = user[Users.displayName],
             simulationIds = simulations,
             chats = (memberOf + own.keys).distinct().map { ChatPurge(it, own[it].orEmpty()) },
+            isTest = user[Users.isTest],
         )
     }
 
@@ -64,7 +65,8 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
             log.info("Purga de {}: la cuenta ya no existe o no está borrada", user)
             return@tx emptyList()
         }
-        val tombstone = tombstoneFor(sql, plan, now)
+        // Una cuenta de prueba no hereda nada: sin lápida (cada corrida del smoke dejaría una).
+        val tombstone = if (plan.isTest) null else tombstoneFor(sql, plan, now)
 
         // 1. Reportes abiertos donde la persona reporta o es reportada: se resuelven antes de perder el contexto.
         sql.update(
@@ -140,6 +142,22 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
         )
         JsonbPurgeRules.rules.forEach { rule -> sql.update(rule.sql, *rule.params.map { values[it] }.toTypedArray()) }
 
+        if (tombstone == null) {
+            deleteTestAccountData(sql, plan)
+        } else {
+            retainForTombstone(sql, plan, tombstone)
+        }
+
+        // 6. La fila de users: ON DELETE CASCADE borra perfil, modos, tokens FCM, gemelo, memorias, fila,
+        //    matches (ya cerrados en 1c), aristas, comunidades, invitaciones, presentaciones, avisos, cuotas y bloqueos;
+        //    ai_usage.user_id queda en null (ON DELETE SET NULL).
+        sql.update("delete from users where id = ?", user)
+        closed
+    }
+
+    /** Pasos 3 a 5 de una cuenta real: lo que la ley obliga a conservar pasa a la lápida [tombstone]. */
+    private fun retainForTombstone(sql: Connection, plan: PurgePlan, tombstone: UUID) {
+        val user = plan.userId
         // 3. Consentimientos: prueba de la autorización (Ley 1581). La tabla solo admite INSERT, así que
         //    se copian a la lápida y luego se borran los originales con la excepción del trigger (E0.4).
         sql.update(
@@ -173,12 +191,43 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
             "update chat_messages set sender_id = null, client_id = null, learnable = false where sender_id = ?",
             user,
         )
+    }
 
-        // 6. La fila de users: ON DELETE CASCADE borra perfil, modos, tokens FCM, gemelo, memorias, fila,
-        //    matches (ya cerrados en 1c), aristas, comunidades, invitaciones, presentaciones, avisos, cuotas y bloqueos;
-        //    ai_usage.user_id queda en null (ON DELETE SET NULL).
-        sql.update("delete from users where id = ?", user)
-        closed
+    /**
+     * Cuenta de prueba (`is_test`): no se conserva nada. Se borran consentimientos, compras, reportes propios,
+     * y las simulaciones y chats donde participa con todo lo que cuelga de ellos (matches, desbloqueos,
+     * decisiones y mensajes, también los del otro: el smoke solo empareja cuentas de prueba entre sí o con demos).
+     */
+    private fun deleteTestAccountData(sql: Connection, plan: PurgePlan) {
+        val user = plan.userId
+        sql.update("set local parcheu.consents_purge = 'on'")
+        sql.update("delete from consents where user_id = ?", user)
+        sql.update("set local parcheu.consents_purge = 'off'")
+
+        sql.update("delete from purchase_events where user_id = ? or purchase_token in (select purchase_token from entitlements where user_id = ?)", user, user)
+        sql.update("delete from entitlements where user_id = ?", user)
+        sql.update("delete from reports where reporter_id = ? or target_id = ?", user, user)
+        sql.update("update reports set resolved_by = null where resolved_by = ?", user)
+
+        val sims = sql.ids(
+            "select id from simulations where user_a = ? or user_b = ? or requested_by = ?", user, user, user,
+        )
+        val chats = sql.ids(
+            "select chat_id from chat_members where user_id = ? union select chat_id from chat_messages where sender_id = ?",
+            user, user,
+        )
+        val simArray = sql.createArrayOf("uuid", sims.toTypedArray())
+        val chatArray = sql.createArrayOf("uuid", chats.toTypedArray())
+        sql.update("delete from matches where user_a = ? or user_b = ? or simulation_id = any(?) or chat_id = any(?)", user, user, simArray, chatArray)
+        sql.update("update edges set last_simulation_id = null where last_simulation_id = any(?)", simArray)
+        sql.update("update introductions set simulation_id = null where simulation_id = any(?)", simArray)
+        sql.update("update reports set simulation_id = null where simulation_id = any(?)", simArray)
+        sql.update("update simulations set cached_from = null where cached_from = any(?)", simArray)
+        sql.update("delete from report_unlocks where simulation_id = any(?)", simArray)
+        sql.update("delete from connection_decisions where simulation_id = any(?)", simArray)
+        sql.update("delete from simulations where id = any(?)", simArray)
+        // chat_members y chat_messages se van por ON DELETE CASCADE con el chat.
+        sql.update("delete from chats where id = any(?)", chatArray)
     }
 
     override suspend fun stalledDeletions(deletedBefore: Instant, limit: Int): List<UUID> = tx {

@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.simulation
 
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Progress
+import me.santiagoreina.parcheu.contract.SimulationStatus
 import java.time.Instant
 import java.util.UUID
 
@@ -76,6 +77,12 @@ interface SimulationRepository {
 
     /** → FAILED con el motivo. Devuelve false si ya estaba terminada. */
     suspend fun markFailed(id: UUID, error: String, now: Instant): Boolean
+
+    /**
+     * Simulaciones QUEUED o RUNNING creadas antes de [createdBefore] y después de [createdAfter], las más
+     * antiguas primero, hasta [limit]. Las usa la recuperación tras un reinicio (`TASKS_MODE=inline`).
+     */
+    suspend fun unfinished(createdBefore: Instant, createdAfter: Instant, limit: Int): List<SimulationRecord>
 }
 
 /** Cursor de `GET /v1/simulations`: `<epochMicros>_<uuid>` de la última fila de la página anterior. */
@@ -91,4 +98,8 @@ data class SimulationCursor(val createdAt: Instant, val id: UUID) {
             return SimulationCursor(Instant.ofEpochSecond(Math.floorDiv(micros, 1_000_000L), Math.floorMod(micros, 1_000_000L) * 1_000L), id)
         }
     }
+
 }
+
+/** Estados de una simulación que aún no terminó. */
+internal val UNFINISHED = listOf(SimulationStatus.QUEUED, SimulationStatus.RUNNING)

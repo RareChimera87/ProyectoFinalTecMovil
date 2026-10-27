@@ -44,6 +44,8 @@ jobs:
               - 'scripts/check-plan.sh'
               - 'scripts/check-iam.sh'
               - 'scripts/cargar-secretos.sh'
+              - 'scripts/grant-admin.sh'
+              - 'scripts/test/grant-admin.test.sh'
               - 'scripts/test/check-plan.test.sh'
               - 'scripts/test/cargar-secretos.test.sh'
               - 'scripts/test/plan-iam-permisos.test.sh'
@@ -90,11 +92,12 @@ jobs:
             terraform -chdir=infra/terraform/$d validate
             echo "::endgroup::"
           done
-      - name: Pruebas de check-plan, check-iam y cargar-secretos
+      - name: Pruebas de check-plan, check-iam, cargar-secretos y grant-admin
         run: |
           scripts/test/check-plan.test.sh
           scripts/test/cargar-secretos.test.sh
           scripts/test/plan-iam-permisos.test.sh
+          scripts/test/grant-admin.test.sh
 
   plan-dev:
     name: infra-plan-dev

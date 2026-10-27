@@ -66,6 +66,8 @@ locals {
     "roles/datastore.owner",
     "roles/firebase.admin",
     "roles/monitoring.admin",
+    # Métricas basadas en logs de monitoring.tf (E10.5).
+    "roles/logging.configWriter",
   ]
 
   # Roles que modules/platform asigna a sa-api: sa-terraform solo puede otorgar
@@ -220,6 +222,16 @@ resource "google_project_iam_member" "deployer" {
   member   = "serviceAccount:${google_service_account.deployer.email}"
 }
 
+# E10.6: el smoke e2e de deploy-dev crea tokens personalizados de Firebase con el claim `is_test`. Con WIF no hay llave
+# privada, así que el Admin SDK los firma con IAM signBlob de la propia cuenta: sa-deployer necesita poder
+# crear tokens de sí misma (solo sobre esta cuenta, no sobre el proyecto). En prod no hay smoke automático.
+resource "google_service_account_iam_member" "deployer_signs_own_tokens" {
+  count              = local.is_prod ? 0 : 1
+  service_account_id = google_service_account.deployer.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.deployer.email}"
+}
+
 resource "google_project_iam_member" "terraform" {
   for_each = local.is_prod ? toset([]) : toset(local.terraform_roles_dev)
   project  = local.project_id
@@ -265,6 +277,9 @@ resource "google_project_iam_custom_role" "terraform_plan" {
     "resourcemanager.projects.get",
     "resourcemanager.projects.getIamPolicy",
     "pubsub.topics.getIamPolicy",
+    # Métricas basadas en logs (E10.5): solo configuración, no entradas de log.
+    "logging.logMetrics.get",
+    "logging.logMetrics.list",
   ]
   depends_on = [google_project_service.bootstrap]
 }

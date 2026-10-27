@@ -124,10 +124,14 @@ public data class AgeVerification(
     val birthDate: IsoDate,
 )
 
-/** PATCH /v1/me/privacy */
+/**
+ * PATCH /v1/me/privacy: solo se cambia lo presente. [learning] enciende o apaga el aprendizaje de chats por modo
+ * (un modo ausente no se toca); apagarlo borra las memorias pendientes de ese modo.
+ */
 @Serializable
 public data class UpdatePrivacy(
     val visibility: Visibility? = null,
+    val learning: Map<Mode, Boolean>? = null,
 )
 
 /** GET/PATCH /v1/me/privacy */

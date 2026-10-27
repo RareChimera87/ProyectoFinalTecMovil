@@ -77,6 +77,7 @@ class MatchingDbTest : FunSpec({
         ageVerified: Boolean = true,
         deleted: Boolean = false,
         suspended: Boolean = false,
+        isTest: Boolean = false,
     ): UUID = transaction(this) {
         val id = Users.insert {
             it[firebaseUid] = "uid-$name"
@@ -89,6 +90,7 @@ class MatchingDbTest : FunSpec({
                 it[parejaConfirmedAt] = now
             }
             it[Users.isDemo] = isDemo
+            it[Users.isTest] = isTest
             if (deleted) it[deletedAt] = now
             if (suspended) it[suspendedUntil] = start.plus(Duration.ofDays(1)).atOffset(java.time.ZoneOffset.UTC)
             it[createdAt] = now
@@ -161,6 +163,28 @@ class MatchingDbTest : FunSpec({
                 MatchQueue.selectAll().all { it[MatchQueue.status] == TicketStatus.MATCHED && it[MatchQueue.matchId] != null } shouldBe true
                 UsageEvents.selectAll().count() shouldBe 10
             }
+        }
+    }
+
+    test("Postgres: las cuentas is_test solo se emparejan entre ellas (E10.6)").config(enabled = TestDatabase.enabled) {
+        withDb { db ->
+            val w = World(db)
+            val real = db.user("real")
+            val prueba1 = db.user("prueba1", isTest = true)
+            val prueba2 = db.user("prueba2", isTest = true)
+            w.service.enqueue(real, Mode.AMISTAD).status shouldBe TicketStatus.WAITING
+            // La cuenta de prueba no toma a la persona real que espera, ni siquiera siendo la única candidata.
+            w.service.enqueue(prueba1, Mode.AMISTAD).status shouldBe TicketStatus.WAITING
+            db.countMatches() shouldBe 0
+            // Entre cuentas de prueba sí hay match.
+            w.service.enqueue(prueba2, Mode.AMISTAD).status shouldBe TicketStatus.MATCHED
+            db.countMatches() shouldBe 1
+            val members = transaction(db) { Matches.selectAll().flatMap { listOf(it[Matches.userA], it[Matches.userB]) } }
+            members shouldContainExactlyInAnyOrder listOf(prueba1, prueba2)
+            // Y una segunda persona real encuentra a la real que esperaba.
+            val real2 = db.user("real2")
+            w.service.enqueue(real2, Mode.AMISTAD).status shouldBe TicketStatus.MATCHED
+            db.countMatches() shouldBe 2
         }
     }
 

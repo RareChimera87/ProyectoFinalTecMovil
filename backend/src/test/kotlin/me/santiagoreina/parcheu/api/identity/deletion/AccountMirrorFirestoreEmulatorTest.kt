@@ -46,4 +46,30 @@ class AccountMirrorFirestoreEmulatorTest : FunSpec({
         own.getString("text") shouldBe "mío"
         chat.collection("messages").document(theirs.toString()).get().get().getString("senderUid") shouldBe other
     }
+
+    test("una cuenta is_test borra el chat completo con sus mensajes, también el del otro").config(enabled = FirestoreEmulator.enabled) {
+        val fs = FirestoreEmulator.firestore
+        val me = "uid-test-${UUID.randomUUID()}"
+        val other = "uid-test-${UUID.randomUUID()}"
+        val chatId = UUID.randomUUID()
+        val mine = UUID.randomUUID()
+        val theirs = UUID.randomUUID()
+        val chat = fs.collection("chats").document(chatId.toString())
+        chat.set(mapOf("members" to listOf(me, other), "type" to "SCENARIO")).get()
+        chat.collection("messages").document(mine.toString()).set(mapOf("senderUid" to me, "text" to "mío")).get()
+        chat.collection("messages").document(theirs.toString()).set(mapOf("senderUid" to other, "text" to "suyo")).get()
+        val stray = fs.collection("chats").document(UUID.randomUUID().toString())
+        stray.set(mapOf("members" to listOf(me))).get()
+        stray.collection("messages").document(UUID.randomUUID().toString()).set(mapOf("senderUid" to me, "text" to "huérfano")).get()
+
+        val plan = PurgePlan(UUID.randomUUID(), me, null, emptyList(), listOf(ChatPurge(chatId, listOf(mine))), isTest = true)
+        val cleaner = FirestoreAccountMirrorCleaner { fs }
+        cleaner.clean(plan)
+        cleaner.clean(plan)
+
+        chat.get().get().exists() shouldBe false
+        chat.collection("messages").get().get().isEmpty shouldBe true
+        stray.get().get().exists() shouldBe false
+        stray.collection("messages").get().get().isEmpty shouldBe true
+    }
 })

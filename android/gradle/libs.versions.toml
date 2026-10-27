@@ -24,6 +24,8 @@ billing = "8.3.0"
 zxing = "3.5.4"
 codeScanner = "16.1.0"
 googleServices = "4.5.0"
+# Plugin de Crashlytics (E10.5): sube los mapas de R8 de los release.
+crashlyticsPlugin = "3.0.6"
 # Gradle Play Publisher (E10.2): 4.x es la serie compatible con AGP 9 (verificado con AGP 9.4.1).
 playPublisher = "4.1.1"
 # Pruebas
@@ -104,6 +106,7 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlyticsPlugin" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
 play-publisher = { id = "com.github.triplet.play", version.ref = "playPublisher" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

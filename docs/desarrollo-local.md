@@ -37,6 +37,19 @@ cd backend && ./gradlew jibBuildTar
 scripts/test/commit-lint.test.sh
 ```
 
+## Backend en el homeserver (ADR-0033)
+
+Para probar la app contra el backend de pruebas del homeserver (`deploy/homelab/README.md`), agrega a `android/local.properties` (no versionado):
+
+```properties
+parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/
+# respaldo sin HTTPS (solo LAN): parcheu.apiUrl.dev=http://192.168.0.10:8090/
+```
+
+`urlProperty` lee primero `-P`/`gradle.properties` y luego `local.properties`. La URL HTTPS necesita el Proxy Host de Nginx Proxy Manager (paso humano en `deploy/homelab/README.md`); AdGuard resuelve `*.homeserverlab.site` a `192.168.0.10` en la LAN (por Tailscale, con el DNS de AdGuard). Solo el `devDebug` trae `network_security_config` con HTTP permitido, como respaldo, hacia `192.168.0.10` y `10.0.2.2` (`app/src/devDebug/`); el release y el flavor `prod` exigen HTTPS. Sin la llave de Google el backend corre con autenticación Fake y la app no inicia sesión (ver el README del despliegue).
+
+**Advertencia:** `urlProperty` lee `local.properties` también al construir el flavor `prod`; si dejas ahí `parcheu.apiUrl.prod` (o cualquier URL de producción) un build local la usará. Revisa `android/local.properties` antes de generar un AAB y no dejes URLs de prod en él.
+
 ## Testcontainers solo en CI
 
 Los tests de backend que necesitan Postgres usan Testcontainers y **solo corren en CI**. En local no se requiere Docker: pasa `-PsinContenedores` para omitirlos (los demás tests usan fakes como `FakeLlmClient` o `FakeTokenVerifier`). Si quieres correrlos localmente, agrega tu usuario al grupo `docker` y vuelve a iniciar sesión.
@@ -233,3 +246,11 @@ JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
   ```
 
 - Android: `feature/deleteaccount` (confirmación con casilla, aviso de que la suscripción se cancela en Play y cierre de sesión tras borrar) y `feature/exportdata` ('Descargar mis datos' guarda `parcheu-datos-<fecha>.json` con `ACTION_CREATE_DOCUMENT` o lo comparte con el `FileProvider` `<paquete>.exports`, limitado a `cache/exports/`). Los datos de la API están en `data/account/`.
+
+## Smoke e2e (E10.6)
+
+`backend/src/e2eTest/` tiene el smoke que `deploy-dev` corre tras cada despliegue (job `smoke-e2e`): dos usuarios de prueba pasan por sesión y términos, modos, respuestas del gemelo, fila, elección, simulación (Flash real, una por corrida), decisión mutua y un mensaje que debe verse en `chats/{id}/messages` leído por Firestore REST con el ID token de la otra persona (así también prueba las reglas). Las cuentas llevan el claim `is_test` (solo lo puede firmar quien tiene credenciales del proyecto), el servidor las marca `users.is_test` y solo las empareja entre sí; al terminar el smoke las borra con `DELETE /v1/me` (purga de Postgres, Firestore y Firebase Auth).
+
+- `./gradlew test`: no corre el smoke real (etiqueta `e2e` excluida), pero sí sus piezas puras y `SmokeScenarioLocalTest`, que ejecuta **el mismo recorrido** contra la API con `ENV=local`, Postgres (Testcontainers) y el LLM Fake, llamando a mano a las tareas internas que en dev entrega Cloud Tasks. Con `-PsinContenedores` este se omite.
+- `./gradlew e2eTest`: el smoke real. Variables: `E2E_BASE_URL` (URL de Cloud Run de dev), `E2E_FIREBASE_PROJECT_ID` (`parcheu-dev`), `E2E_FIREBASE_API_KEY` (`client[0].api_key[0].current_key` de `google-services.json`) y, solo si tus credenciales no tienen llave privada, `E2E_SERVICE_ACCOUNT` (firma con IAM `signBlob`; en CI es `sa-deployer`). Sin ellas se omite; con `E2E_REQUIRED=true` falla (así lo fija CI). Necesita ADC con permiso para crear tokens personalizados, p. ej. `gcloud auth application-default login --impersonate-service-account=sa-deployer@parcheu-dev.iam.gserviceaccount.com`.
+- Cada corrida gasta una simulación de IA real: no la repitas en bucle.

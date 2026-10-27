@@ -127,6 +127,18 @@ class IdentityDbTest : FunSpec({
             }
         }
 
+    test("createIfAbsent con isTest guarda users.is_test y el alta repetida no lo cambia (E10.6)")
+        .config(enabled = TestDatabase.enabled) {
+            withApp { _, db ->
+                val repo = ExposedIdentityRepository(db)
+                repo.createIfAbsent("e2e-uno", null, null, FIXED_CLOCK.instant(), isTest = true)
+                repo.createIfAbsent("e2e-uno", null, null, FIXED_CLOCK.instant(), isTest = false)
+                repo.createIfAbsent("persona-real", null, null, FIXED_CLOCK.instant())
+                transaction(db) { Users.selectAll().where { Users.firebaseUid eq "e2e-uno" }.single()[Users.isTest] } shouldBe true
+                transaction(db) { Users.selectAll().where { Users.firebaseUid eq "persona-real" }.single()[Users.isTest] } shouldBe false
+            }
+        }
+
     test("PATCH /me guarda y valida contra el catálogo sembrado; más de 40 caracteres es 400 VALIDATION")
         .config(enabled = TestDatabase.enabled) {
             withApp { client, _ ->

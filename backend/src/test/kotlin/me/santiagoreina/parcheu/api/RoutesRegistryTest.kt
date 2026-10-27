@@ -21,11 +21,8 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * (E7.1, probadas en `BillingApiTest`).
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
-    // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
-    // E2.6 (catálogo y edad) ProfileApiTest y E8.3 (DELETE /me y exportación) AccountApiTest.
-    "identity" to listOf(
-        HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",
-    ),
+    // Identity: ya no queda ningún stub; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
+    // E2.6 (catálogo y edad) ProfileApiTest, E8.3 (DELETE /me y exportación) AccountApiTest y E8.2 (privacidad) PrivacyApiTest.
     // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest) y E9.2 las memorias
     // (MemoryApiTest); el feedback sigue en 501 hasta E9.3.
     "twin" to listOf(
@@ -43,7 +40,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Notifications: E5.4 implementa la bandeja y 'Marcar leídas' (NotificationsApiTest); ya no queda ningún stub.
     // Billing: E7.1 implementa entitlement, verify y la RTDN (BillingApiTest); ya no queda ningún stub.
     // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` sigue en 501 (E8.6).
-    "admin" to listOf(HttpMethod.Get to "/v1/admin/reports", HttpMethod.Post to "/v1/admin/reports/r1/resolve"),
+    // Admin: E8.5 implementa las dos rutas (AdminApiTest); ya no queda ningún stub.
     // Home: E4.7 implementa GET /v1/home (HomeApiTest); ya no queda ningún stub.
 )
 

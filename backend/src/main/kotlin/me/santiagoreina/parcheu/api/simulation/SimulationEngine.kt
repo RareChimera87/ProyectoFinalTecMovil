@@ -114,6 +114,8 @@ class SimulationEngine(
     }
 
     private suspend fun failIneligible(record: SimulationRecord, why: Ineligible) {
+        log.atWarn().setMessage("simulation_failed").addKeyValue("event", "simulation_failed")
+            .addKeyValue("simulationId", record.id.toString()).addKeyValue("cause", "INELIGIBLE").log()
         log.warn("simulate: {} FAILED por elegibilidad: {}", record.id, why.reason)
         repo.markFailed(record.id, why.reason, clock.instant())
         quota.refund(QuotaKind.SIMULATION, record.id.toString())
@@ -197,12 +199,16 @@ class SimulationEngine(
         }
         val done = repo.markDone(record.id, report.score, report, transcript, progress, cachedFrom, provider, UsageTotals(), clock.instant())
         if (!done) return
+        log.atInfo().setMessage("simulation_done").addKeyValue("event", "simulation_done")
+            .addKeyValue("simulationId", record.id.toString()).log()
         log.info("simulate: {} DONE con puntaje {}", record.id, report.score)
         publish(record, participants, SimulationStatus.DONE, progress, report.score)
         notifyBoth(record, SimulationStatus.DONE, report.score)
     }
 
     private suspend fun fail(record: SimulationRecord, participants: List<String>, reason: String) {
+        log.atWarn().setMessage("simulation_failed").addKeyValue("event", "simulation_failed")
+            .addKeyValue("simulationId", record.id.toString()).addKeyValue("cause", "ERROR").log()
         log.warn("simulate: {} FAILED: {}", record.id, reason)
         if (repo.markFailed(record.id, reason, clock.instant())) {
             quota.refund(QuotaKind.SIMULATION, record.id.toString())

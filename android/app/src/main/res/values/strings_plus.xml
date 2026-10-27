@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- G1 · Paywall (E7.3). Tono honesto: sin urgencia ni contadores falsos. Los precios llegan por parámetro desde ProductDetails. -->
+    <string name="plus_close">Cerrar</string>
+    <string name="plus_restore">Restaurar compras</string>
+    <string name="plus_restoring">Buscando tus compras…</string>
+    <string name="plus_hero_title">ParcheU+</string>
+    <string name="plus_hero_subtitle">Simula sin límite y ve todo tu parche</string>
+    <string name="plus_plan_annual">Anual</string>
+    <string name="plus_plan_monthly">Mensual</string>
+    <string name="plus_plan_annual_per_month">%1$s/mes</string>
+    <string name="plus_plan_annual_savings">Ahorras %1$s al año</string>
+    <string name="plus_plan_monthly_caption">por mes</string>
+    <string name="plus_cta_annual">Suscribirme por %1$s/año</string>
+    <string name="plus_cta_monthly">Suscribirme por %1$s/mes</string>
+    <string name="plus_cta_loading">Cargando precios…</string>
+    <string name="plus_subscribing">Abriendo Google Play…</string>
+    <string name="plus_footnote">Cancela cuando quieras desde Google Play. Sin cobros escondidos.</string>
+
+    <string name="plus_table_free">Gratis</string>
+    <string name="plus_table_plus">ParcheU+</string>
+    <string name="plus_row_simulations">Simulaciones</string>
+    <string name="plus_row_simulations_free">5 por semana</string>
+    <string name="plus_row_simulations_plus">Ilimitadas</string>
+    <string name="plus_row_match">Match al azar</string>
+    <string name="plus_row_match_free">1 al día</string>
+    <string name="plus_row_match_plus">Ilimitados y con prioridad</string>
+    <string name="plus_row_report">Informe completo</string>
+    <string name="plus_row_report_free">1 al mes</string>
+    <string name="plus_row_report_plus">Siempre</string>
+    <string name="plus_row_graph">Tu grafo</string>
+    <string name="plus_row_graph_free">Contactos directos</string>
+    <string name="plus_row_graph_plus">+ amigos de amigos</string>
+    <string name="plus_row_communities">Comunidades y evolución</string>
+    <string name="plus_row_communities_free">—</string>
+    <string name="plus_row_communities_plus">Incluidas</string>
+    <string name="plus_row_scenarios">Escenarios</string>
+    <string name="plus_row_scenarios_free">Básicos</string>
+    <string name="plus_row_scenarios_plus">Todos, en los 3 modos</string>
+    <string name="plus_row_connect">Quién quiere conectar contigo</string>
+    <string name="plus_row_connect_free">—</string>
+    <string name="plus_row_connect_plus">Incluido</string>
+    <string name="plus_row_safety">Reportar y bloquear</string>
+    <string name="plus_row_safety_free">Gratis siempre</string>
+    <string name="plus_row_safety_plus">Gratis siempre</string>
+
+    <string name="plus_error_title">No pudimos cargar los precios</string>
+    <string name="plus_error_billing">Google Play no respondió. Revisa tu conexión e inténtalo de nuevo.</string>
+    <string name="plus_error_product">ParcheU+ no está disponible en este momento. Inténtalo de nuevo más tarde.</string>
+    <string name="plus_retry">Reintentar</string>
+
+    <string name="plus_msg_purchase_failed">No se pudo completar la compra. No te cobramos nada; inténtalo de nuevo.</string>
+    <string name="plus_msg_purchase_unverified">Google Play registró tu pago, pero todavía no pudimos activar ParcheU+. Si no se activa, Play te devuelve el dinero. Antes de pagar otra vez, toca Restaurar compras o vuelve a intentarlo en un rato.</string>
+    <string name="plus_msg_purchase_unavailable">Google Play no está disponible ahora. Inténtalo de nuevo en un momento.</string>
+    <string name="plus_msg_purchase_forbidden">Esta compra pertenece a otra cuenta de ParcheU. Entra con la cuenta con la que pagaste.</string>
+    <string name="plus_msg_nothing_to_restore">No encontramos compras activas de ParcheU+ en esta cuenta de Google Play.</string>
+    <string name="plus_msg_restore_failed">No pudimos restaurar tus compras. Inténtalo de nuevo.</string>
+    <string name="plus_msg_restored">Listo, restauramos tu ParcheU+.</string>
+    <string name="plus_msg_no_account">No pudimos confirmar tu cuenta. Revisa tu conexión e inténtalo de nuevo.</string>
+    <string name="plus_msg_dismiss">Entendido</string>
+
+    <!-- G2 · Límite alcanzado (hoja) -->
+    <string name="plus_limit_title_simulation">Ya usaste tus simulaciones de esta semana</string>
+    <string name="plus_limit_title_random_match">Ya usaste tu match al azar de hoy</string>
+    <string name="plus_limit_title_full_report">Ya usaste tu informe completo de este mes</string>
+    <string name="plus_limit_body_simulation">Se renuevan el %1$s. Mientras tanto puedes chatear con tu parche y seguir entrenando a tu gemelo.</string>
+    <string name="plus_limit_body_random_match">Se renueva el %1$s. Mientras tanto puedes simular con tu parche y seguir entrenando a tu gemelo.</string>
+    <string name="plus_limit_body_full_report">Se renueva el %1$s. Mientras tanto puedes ver el resumen de tus resultados.</string>
+    <string name="plus_limit_body_simulation_soon">Se renuevan pronto. Mientras tanto puedes chatear con tu parche y seguir entrenando a tu gemelo.</string>
+    <string name="plus_limit_body_random_match_soon">Se renueva pronto. Mientras tanto puedes simular con tu parche y seguir entrenando a tu gemelo.</string>
+    <string name="plus_limit_body_full_report_soon">Se renueva pronto. Mientras tanto puedes ver el resumen de tus resultados.</string>
+    <string name="plus_limit_title_fair_use">Llegaste al uso justo de hoy</string>
+    <string name="plus_limit_body_fair_use">Se renueva mañana. Tu ParcheU+ sigue activo; este tope existe para cuidar el servicio para todos.</string>
+    <string name="plus_limit_quota_description">Cupo agotado</string>
+    <string name="plus_limit_see_plus">Ver ParcheU+</string>
+    <string name="plus_limit_wait_simulation">Espero al lunes</string>
+    <string name="plus_limit_wait">Esperar</string>
+
+    <!-- G3 · Compra exitosa -->
+    <string name="plus_success_title">¡Ya eres ParcheU+!</string>
+    <string name="plus_success_plan_annual">Plan anual · %1$s</string>
+    <string name="plus_success_plan_monthly">Plan mensual · %1$s</string>
+    <string name="plus_success_plan_annual_nopr">Plan anual</string>
+    <string name="plus_success_plan_monthly_nopr">Plan mensual</string>
+    <string name="plus_success_next_charge">Tu próximo cobro es el %1$s.</string>
+    <string name="plus_success_benefit_unlimited">Simulaciones y matches ilimitados</string>
+    <string name="plus_success_benefit_graph">Amigos de amigos y comunidades</string>
+    <string name="plus_success_benefit_report">Informe completo siempre</string>
+    <string name="plus_success_explore">Explorar amigos de amigos</string>
+    <string name="plus_success_home">Ir al inicio</string>
+    <string name="plus_pending_title">Estamos verificando tu pago</string>
+    <string name="plus_pending_body">Google Play aún no confirmó el pago. Cuando lo haga activamos ParcheU+ automáticamente; no tienes que volver a pagar.</string>
+    <string name="plus_pending_note">Puedes seguir usando la app mientras tanto.</string>
+
+    <!-- G4 · Gestionar suscripción -->
+    <string name="plus_manage_title">Suscripción</string>
+    <string name="plus_manage_back">Volver</string>
+    <string name="plus_manage_loading">Cargando tu suscripción…</string>
+    <string name="plus_manage_error_title">No pudimos cargar tu suscripción</string>
+    <string name="plus_manage_error_message">Revisa tu conexión e inténtalo de nuevo.</string>
+    <string name="plus_manage_status_active">Activa</string>
+    <string name="plus_manage_status_canceled">Cancelada</string>
+    <string name="plus_manage_status_grace">Pago pendiente</string>
+    <string name="plus_manage_status_on_hold">En pausa</string>
+    <string name="plus_manage_status_inactive">Sin suscripción</string>
+    <string name="plus_manage_plan_annual_price">Plan anual · %1$s</string>
+    <string name="plus_manage_plan_monthly_price">Plan mensual · %1$s</string>
+    <string name="plus_manage_plan_annual">Plan anual</string>
+    <string name="plus_manage_plan_monthly">Plan mensual</string>
+    <string name="plus_manage_plan_none">No tienes ParcheU+</string>
+    <string name="plus_manage_renews">Se renueva el %1$s</string>
+    <string name="plus_manage_ends">Termina el %1$s</string>
+    <string name="plus_manage_grace_until">Tienes ParcheU+ hasta el %1$s mientras Google Play reintenta el cobro</string>
+    <string name="plus_manage_on_hold_detail">Tu pago falló y la suscripción está en pausa</string>
+    <string name="plus_manage_pay_with_play">Pagas con Google Play</string>
+    <string name="plus_manage_inactive_detail">Cuando quieras, vuelves a suscribirte desde ParcheU+.</string>
+    <string name="plus_manage_change_monthly">Cambiar a mensual</string>
+    <string name="plus_manage_change_monthly_detail">%1$s/mes desde la próxima renovación</string>
+    <string name="plus_manage_change_monthly_detail_nopr">Desde la próxima renovación</string>
+    <string name="plus_manage_restore">Restaurar compras</string>
+    <string name="plus_manage_restore_detail">Si cambiaste de celular</string>
+    <string name="plus_manage_cancel">Cancelar suscripción</string>
+    <string name="plus_manage_cancel_detail">Se cancela en Google Play</string>
+    <string name="plus_manage_reactivate">Reactivar en Google Play</string>
+    <string name="plus_manage_fix_payment">Actualizar método de pago</string>
+    <string name="plus_manage_fix_payment_detail">Se abre Google Play</string>
+    <string name="plus_manage_subscribe">Ver ParcheU+</string>
+    <string name="plus_manage_info_active">Si cancelas, sigues con ParcheU+ hasta el %1$s y luego pasas al plan gratis. No pierdes tu parche.</string>
+    <string name="plus_manage_info_canceled">Sigues con ParcheU+ hasta el %1$s y luego pasas al plan gratis. No pierdes tu parche.</string>
+    <string name="plus_manage_info_inactive">Tu parche, tus simulaciones y tus chats se quedan como están.</string>
+    <string name="plus_cancel_dialog_title">¿Cancelar ParcheU+?</string>
+    <string name="plus_cancel_dialog_body">Te llevamos a Google Play para confirmarlo. Sigues con ParcheU+ hasta el final del periodo que ya pagaste.</string>
+    <string name="plus_cancel_dialog_confirm">Ir a Google Play</string>
+    <string name="plus_cancel_dialog_keep">Mantener ParcheU+</string>
+    <string name="plus_open_play_failed">No pudimos abrir Google Play en este dispositivo.</string>
+</resources>

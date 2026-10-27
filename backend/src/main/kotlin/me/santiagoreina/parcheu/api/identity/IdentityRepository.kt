@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.identity
 
 import me.santiagoreina.parcheu.api.identity.modes.ModesRepository
+import me.santiagoreina.parcheu.api.identity.privacy.PrivacyRepository
 import me.santiagoreina.parcheu.contract.Mode
 import java.time.Instant
 import java.util.UUID
@@ -8,13 +9,13 @@ import java.util.UUID
 /**
  * Acceso a datos del dominio identity. La implementación real es [ExposedIdentityRepository];
  * los tests de rutas usan una en memoria y los de esquema, Postgres de verdad. La escritura de modos
- * (E2.5) viene de [ModesRepository].
+ * (E2.5) viene de [ModesRepository] y la de privacidad (E8.2), de [PrivacyRepository].
  */
-interface IdentityRepository : ModesRepository {
+interface IdentityRepository : ModesRepository, PrivacyRepository {
     suspend fun findByFirebaseUid(uid: String): UserRecord?
 
     /** Alta idempotente por `firebase_uid`: dos llamadas (incluso concurrentes) dejan un solo usuario. */
-    suspend fun createIfAbsent(uid: String, email: String?, displayName: String?, now: Instant): UserRecord
+    suspend fun createIfAbsent(uid: String, email: String?, displayName: String?, now: Instant, isTest: Boolean = false): UserRecord
 
     suspend fun updateEmail(userId: UUID, email: String, now: Instant)
 
@@ -49,4 +50,10 @@ interface IdentityRepository : ModesRepository {
      * mensajes de terceros).
      */
     suspend fun markDeleted(userId: UUID, now: Instant)
+
+    /**
+     * Fija `suspended_until` (E8.5) sin acortar una suspensión que ya dure más (un baneo no se levanta
+     * con una suspensión de 24 h). Devuelve el valor vigente o null si el usuario no existe.
+     */
+    suspend fun suspendUntil(userId: UUID, until: Instant, now: Instant): Instant?
 }

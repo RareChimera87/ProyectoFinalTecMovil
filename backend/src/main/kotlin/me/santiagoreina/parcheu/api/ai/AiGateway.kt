@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.ai
 
 import kotlinx.serialization.json.JsonObject
 import me.santiagoreina.parcheu.api.platform.BogotaZone
+import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -59,6 +60,8 @@ class AiGateway(
     private val clock: Clock,
     val guard: DailyBudgetGuard = DailyBudgetGuard(usage, config.dailyBudgetUsd, clock),
 ) {
+    private val log = LoggerFactory.getLogger(AiGateway::class.java)
+
     val provider: AiProvider get() = client.provider
 
     fun modelFor(tier: ModelTier): String = when (tier) {
@@ -101,6 +104,11 @@ class AiGateway(
         }
 
     private suspend fun record(call: AiCall, decision: DailyBudgetGuard.Decision, tokens: LlmUsage) {
+        val cost = config.prices.costMicros(decision.model, decision.day, tokens)
+        // Evento para la métrica de costo de IA por día (E10.5): solo propósito, modelo y costo.
+        log.atInfo().setMessage("ai_call").addKeyValue("event", "ai_call")
+            .addKeyValue("purpose", call.purpose.toString()).addKeyValue("model", decision.model)
+            .addKeyValue("costMicros", cost).log()
         usage.record(
             AiUsageEntry(
                 day = decision.day,
@@ -110,7 +118,7 @@ class AiGateway(
                 userId = call.userId,
                 tokensIn = tokens.tokensIn,
                 tokensOut = tokens.tokensOut,
-                costMicros = config.prices.costMicros(decision.model, decision.day, tokens),
+                costMicros = cost,
                 createdAt = OffsetDateTime.now(clock.withZone(BogotaZone)),
             ),
         )

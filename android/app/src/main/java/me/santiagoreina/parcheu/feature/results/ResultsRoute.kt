@@ -31,6 +31,7 @@ fun ResultsRoute(
             when (effect) {
                 is ResultsEffect.OpenChat -> navigator.navigate(Chat(effect.chatId))
                 ResultsEffect.OpenPaywall -> navigator.navigate(Paywall(RESULTS_PAYWALL_SOURCE))
+                is ResultsEffect.OpenLimit -> navigator.navigate(effect.route)
             }
         }
     }

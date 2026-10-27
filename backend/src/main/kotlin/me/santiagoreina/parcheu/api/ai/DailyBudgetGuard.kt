@@ -4,6 +4,7 @@ import me.santiagoreina.parcheu.api.platform.BogotaZone
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
 import java.math.BigDecimal
 import java.time.Clock
+import org.slf4j.LoggerFactory
 import java.time.LocalDate
 import kotlin.time.Instant
 
@@ -21,6 +22,8 @@ class DailyBudgetGuard(
     dailyBudgetUsd: BigDecimal,
     private val clock: Clock,
 ) {
+    private val log = LoggerFactory.getLogger(DailyBudgetGuard::class.java)
+
     enum class Level { NORMAL, DEGRADED }
 
     data class Decision(val level: Level, val model: String, val spentMicros: Long, val day: LocalDate)
@@ -39,6 +42,11 @@ class DailyBudgetGuard(
         val day = today()
         val spent = usage.spentMicros(day)
         // Comparación entera: spent/budget ≥ 1 y spent/budget ≥ 0,70.
+        if (spent >= budgetMicros) {
+            // Evento para la métrica y la alerta de E10.5 (sin datos personales).
+            log.atWarn().setMessage("AiBudgetExceeded").addKeyValue("event", "AiBudgetExceeded")
+                .addKeyValue("spentMicros", spent).addKeyValue("budgetMicros", budgetMicros).log()
+        }
         if (spent >= budgetMicros) throw AiBudgetExceeded(retryAt = nextMidnight(day))
         return if (spent * 100 >= budgetMicros * 70) {
             Decision(Level.DEGRADED, liteModel, spent, day)

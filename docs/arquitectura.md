@@ -379,7 +379,7 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | POST `/v1/me/age-verification` | `AgeVerification{birthDate: LocalDate}` (en B0, para todos) | `MeDto` | UNDERAGE, CONFLICT |
 | POST `/v1/me/consent` | `ConsentChange{kind, granted, textVersion}` | `ConsentsDto` | - |
 | GET `/v1/me/consents` | - | `ConsentsDto{items: List<ConsentState>}` | - |
-| GET/PATCH `/v1/me/privacy` | `UpdatePrivacy{visibility?}` | `PrivacyDto{visibility, modes, learning: Map<Mode,Boolean>}` | - |
+| GET/PATCH `/v1/me/privacy` | `UpdatePrivacy{visibility?, learning?: Map<Mode,Boolean>}` | `PrivacyDto{visibility, modes, learning: Map<Mode,Boolean>}` | - |
 | POST/DELETE `/v1/me/fcm-token` | `FcmToken{token}` | 204 | - |
 | GET `/v1/twin/questions` | - | `List<QuestionDto{id, text, optionA, optionB}>` | - |
 | POST `/v1/twin/answers` | `Answers{items: List<Answer{questionId, answer}>}` (12) | `TwinDto` | VALIDATION |

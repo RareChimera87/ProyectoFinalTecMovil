@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.matching
 
+import kotlinx.coroutines.async
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -29,6 +30,7 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.SimulationOrigin
+import me.santiagoreina.parcheu.api.platform.errors.Suspended
 import me.santiagoreina.parcheu.contract.TicketStatus
 import java.time.Duration
 import java.util.UUID
@@ -352,6 +354,16 @@ class MatchingServiceTest : FunSpec({
         f.usage.refunded("$id:$beto") shouldBe false
     }
 
+    test("una persona suspendida no entra a la fila (SUSPENDED) y al vencer la suspensión sí") {
+        val f = MatchFixture()
+        val ana = f.person("ana")
+        f.matchRepo.addPerson(f.matchRepo.person(ana)!!.copy(suspendedUntil = f.clock.instant().plusSeconds(3600)))
+        shouldThrow<Suspended> { f.service.enqueue(ana, Mode.AMISTAD) }
+        f.matchRepo.ticket(ana) shouldBe null
+        f.clock.now = f.clock.now.plusSeconds(3601)
+        f.service.enqueue(ana, Mode.AMISTAD).status shouldBe TicketStatus.WAITING
+    }
+
     test("si una persona se borra o la suspenden el cupo vuelve solo a la otra") {
         val f = MatchFixture()
         val (ana, beto, id) = f.pair()
@@ -502,6 +514,17 @@ class MatchingServiceTest : FunSpec({
         // Ana bloqueó: no recupera el cupo; Beto, que no causó el cierre, sí.
         f.usage.refunded("$id:$ana") shouldBe false
         f.usage.refunded("$id:$beto") shouldBe true
+    }
+
+    test("barridos concurrentes sobre un match en SIMULATION sin simulación crean una sola (sin huérfanas)") {
+        val f = MatchFixture()
+        val (_, _, id) = f.pair()
+        f.matchRepo.updateMatch(UUID.fromString(id)) { it.copy(status = MatchStatus.SIMULATION, simulationId = null) }
+        kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Default) {
+            (1..8).map { async { f.service.sweep() } }.forEach { it.await() }
+        }
+        f.simRepo.all().size shouldBe 1
+        f.matchRepo.match(UUID.fromString(id))!!.simulationId shouldBe f.simRepo.all().single().id
     }
 
     test("si la simulación falla sin culpable (gemelo no listo) el match se cierra y el cupo vuelve a las dos") {

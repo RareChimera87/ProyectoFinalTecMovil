@@ -2,7 +2,11 @@ name: deploy-dev
 
 # E0.6. Push a dev que toca el backend o el contrato: Jib -> Artifact Registry -> job migrate
 # -> API en Cloud Run de parcheu-dev -> humo de /v1/health con el SHA (flujo en _desplegar-api.yml).
-# workflow_dispatch sirve para redesplegar a mano (p. ej. si el merge lo hizo el GITHUB_TOKEN).
+# Desde ADR-0033 el backend de pruebas vive en el homeserver (deploy/homelab): este despliegue solo corre si la
+# variable de repositorio GCP_DEV_ENABLED es 'true' (cuando exista la infraestructura de parcheu-dev).
+# workflow_dispatch redespliega a mano (p. ej. si el merge lo hizo el GITHUB_TOKEN), pero tampoco corre sin GCP_DEV_ENABLED.
+# E10.6: después del despliegue corre el smoke e2e (backend/src/e2eTest) contra dev con dos usuarios de prueba;
+# si falla, el workflow falla. Sin los secretos que necesita se omite con un aviso (mismo patrón que infra-ci).
 on:
   push:
     branches: [dev]
@@ -20,7 +24,7 @@ permissions:
 jobs:
   api:
     name: deploy-dev
-    if: github.ref == 'refs/heads/dev'
+    if: github.ref == 'refs/heads/dev' && vars.GCP_DEV_ENABLED == 'true'
     uses: ./.github/workflows/_desplegar-api.yml
     with:
       entorno: dev
@@ -28,3 +32,83 @@ jobs:
     secrets:
       wif_provider: ${{ secrets.WIF_PROVIDER }}
       wif_service_account: ${{ secrets.WIF_SERVICE_ACCOUNT_DEV }}
+
+  e2e:
+    name: smoke-e2e
+    needs: api
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    environment: dev
+    # El smoke dura menos de 5 min (criterio de E10.6); el resto es preparar Gradle y las credenciales.
+    timeout-minutes: 20
+    concurrency:
+      group: smoke-e2e-dev
+      cancel-in-progress: false
+    env:
+      PROYECTO: ${{ vars.GCP_PROJECT_DEV || 'parcheu-dev' }}
+      REGION: us-central1
+      WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }}
+      WIF_SA: ${{ secrets.WIF_SERVICE_ACCOUNT_DEV }}
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON_DEV }}
+    steps:
+      - name: Comprueba los secretos del smoke
+        id: guarda
+        run: |
+          faltan=""
+          [[ -z "$WIF_PROVIDER" ]] && faltan="$faltan WIF_PROVIDER"
+          [[ -z "$WIF_SA" ]] && faltan="$faltan WIF_SERVICE_ACCOUNT_DEV"
+          [[ -z "$GOOGLE_SERVICES_JSON" ]] && faltan="$faltan GOOGLE_SERVICES_JSON_DEV"
+          if [[ -n "$faltan" ]]; then
+            echo "::notice::Smoke e2e omitido: faltan los secretos$faltan (ver docs/pendientes-humanos.md, sección E10.6)."
+            echo "listo=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "listo=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.guarda.outputs.listo == 'true'
+      - uses: google-github-actions/auth@v2
+        if: steps.guarda.outputs.listo == 'true'
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT_DEV }}
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.guarda.outputs.listo == 'true'
+      - uses: actions/setup-java@v4
+        if: steps.guarda.outputs.listo == 'true'
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.guarda.outputs.listo == 'true'
+      - name: Datos de dev para el smoke
+        if: steps.guarda.outputs.listo == 'true'
+        run: |
+          url="$(gcloud run services describe api --project "$PROYECTO" --region "$REGION" --format 'value(status.url)')"
+          # La clave web de Firebase sale de google-services.json (secreto en base64); solo canjea tokens personalizados.
+          api_key="$(base64 -d <<<"$GOOGLE_SERVICES_JSON" | jq -r '.client[0].api_key[0].current_key')"
+          if [[ -z "$url" || -z "$api_key" || "$api_key" == "null" ]]; then
+            echo "::error::No se pudo resolver la URL de la API o la clave web de Firebase de $PROYECTO."
+            exit 1
+          fi
+          echo "::add-mask::$api_key"
+          {
+            echo "E2E_BASE_URL=$url"
+            echo "E2E_FIREBASE_PROJECT_ID=$PROYECTO"
+            echo "E2E_FIREBASE_API_KEY=$api_key"
+            # sa-deployer firma los tokens personalizados con IAM signBlob suplantándose a sí misma.
+            echo "E2E_SERVICE_ACCOUNT=$WIF_SA"
+            echo "E2E_REQUIRED=true"
+          } >> "$GITHUB_ENV"
+      - name: Smoke e2e
+        if: steps.guarda.outputs.listo == 'true'
+        working-directory: backend
+        run: ./gradlew --stacktrace e2eTest
+      - name: Informe del smoke
+        if: failure() && steps.guarda.outputs.listo == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-e2e-informe
+          path: backend/build/reports/tests/e2eTest
+          if-no-files-found: ignore

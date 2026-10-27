@@ -27,11 +27,16 @@ fun SimulationRoute(
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
+            if (effect is SimulationEffect.OpenPaywall) {
+                navigator.navigate(effect.route)
+                return@collect
+            }
             navigator.back()
             navigator.navigate(
                 when (effect) {
                     is SimulationEffect.OpenResults -> Results(effect.simulationId)
                     is SimulationEffect.OpenSimulation -> Simulation(effect.simulationId)
+                    is SimulationEffect.OpenPaywall -> error("manejado arriba")
                 }
             )
         }

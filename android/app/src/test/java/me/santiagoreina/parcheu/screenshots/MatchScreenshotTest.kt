@@ -10,7 +10,6 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundScreen
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundUiState
-import me.santiagoreina.parcheu.feature.conocer.match.MatchLimitSheetPreview
 import me.santiagoreina.parcheu.feature.conocer.match.MatchQueueScreen
 import me.santiagoreina.parcheu.feature.conocer.match.MatchQueueUiState
 import me.santiagoreina.parcheu.feature.conocer.match.testMatch
@@ -63,8 +62,6 @@ class MatchScreenshotTest(private val dark: Boolean) {
             onCancel = {},
             onRetry = {},
             onOpenMatch = {},
-            onLimitSeePlus = {},
-            onLimitDismiss = {},
             animate = false
         )
     }
@@ -89,11 +86,6 @@ class MatchScreenshotTest(private val dark: Boolean) {
                 MatchChoice.SIMULATION
             )
         )
-    }
-
-    @Test
-    fun limitSheet() = capture("hoja_limite_match") {
-        MatchLimitSheetPreview()
     }
 
     companion object {
