@@ -77,6 +77,16 @@ class InMemoryTwinRepository(
         accuracy.getOrPut(userId) { mutableListOf() }.apply { removeAll { it.week == point.week }; add(point) }
     }
 
+    /**
+     * Sube la versión del gemelo en 1 (memoria aceptada, E9.2) sin tocar la persona; devuelve la
+     * versión nueva o null si el usuario aún no tiene gemelo.
+     */
+    @Synchronized
+    fun bumpVersion(userId: UUID): Int? = twins[userId]?.let { row ->
+        row.version += 1
+        row.version
+    }
+
     /** Persona guardada (para asserts). */
     @Synchronized fun personaOf(userId: UUID): String? = twins[userId]?.summary
 }
