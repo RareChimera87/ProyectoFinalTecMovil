@@ -34,7 +34,7 @@ class FirebaseTokenVerifier(
     override suspend fun verify(token: String): FirebaseUser? = withContext(Dispatchers.IO) {
         try {
             val decoded = auth.verifyIdToken(token)
-            FirebaseUser(decoded.uid, decoded.email, decoded.name)
+            FirebaseUser(decoded.uid, decoded.email, decoded.name, isTest = decoded.claims["is_test"] == true)
         } catch (e: FirebaseAuthException) {
             log.debug("ID token rechazado: {}", e.authErrorCode)
             null

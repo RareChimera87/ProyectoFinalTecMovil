@@ -45,12 +45,13 @@ class ExposedIdentityRepository(private val db: Database) :
         Users.selectAll().where { Users.firebaseUid eq uid }.singleOrNull()?.toUser()
     }
 
-    override suspend fun createIfAbsent(uid: String, email: String?, displayName: String?, now: Instant): UserRecord = tx {
+    override suspend fun createIfAbsent(uid: String, email: String?, displayName: String?, now: Instant, isTest: Boolean): UserRecord = tx {
         // ON CONFLICT DO NOTHING sobre firebase_uid único: seguro ante dos sesiones simultáneas.
         Users.insertIgnore {
             it[firebaseUid] = uid
             it[Users.email] = email
             it[Users.displayName] = displayName
+            it[Users.isTest] = isTest
             it[createdAt] = now.odt()
             it[updatedAt] = now.odt()
         }

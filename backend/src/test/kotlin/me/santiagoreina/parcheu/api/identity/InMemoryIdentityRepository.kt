@@ -48,10 +48,16 @@ class InMemoryIdentityRepository : IdentityRepository {
         deletedAt = null, createdAt = now,
     )
 
+    /** uid de las cuentas creadas con `isTest = true` (E10.6). */
+    val testUids = mutableSetOf<String>()
+
     override suspend fun findByFirebaseUid(uid: String) = users.firstOrNull { it.firebaseUid == uid }
 
-    override suspend fun createIfAbsent(uid: String, email: String?, displayName: String?, now: Instant): UserRecord =
-        findByFirebaseUid(uid) ?: newUser(uid, email, displayName, now).also { users += it }
+    override suspend fun createIfAbsent(uid: String, email: String?, displayName: String?, now: Instant, isTest: Boolean): UserRecord =
+        findByFirebaseUid(uid) ?: newUser(uid, email, displayName, now).also {
+            users += it
+            if (isTest) testUids += uid
+        }
 
     override suspend fun updateEmail(userId: UUID, email: String, now: Instant) {
         replace(users.first { it.id == userId }.copy(email = email))

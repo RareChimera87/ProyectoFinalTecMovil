@@ -79,6 +79,16 @@ class IdentityApiTest : FunSpec({
         }
     }
 
+    test("un uid de prueba (e2e-) crea la cuenta marcada is_test y los demás no (E10.6)") {
+        val repo = InMemoryIdentityRepository()
+        testApplication {
+            val client = startApp(testContainer(repo = repo))
+            client.session("e2e-ana")
+            client.session("lucia")
+            repo.testUids shouldBe setOf("e2e-ana")
+        }
+    }
+
     test("la sesión sin token responde 401") {
         testApplication {
             startApp().post("/v1/session").status shouldBe HttpStatusCode.Unauthorized
