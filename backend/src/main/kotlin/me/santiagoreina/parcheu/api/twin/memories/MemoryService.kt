@@ -55,8 +55,12 @@ class MemoryService(
 
     /**
      * Handler del job nocturno: encola `extract-memories` para cada usuario con mensajes nuevos,
-     * paginando por id. El nombre lleva el día de Bogotá: repetir el job el mismo día no duplica
-     * tareas y el de la noche siguiente sí encola de nuevo. Devuelve cuántas encoló.
+     * paginando por id. El nombre lleva el día de Bogotá: repetir el job el mismo día dentro del mismo
+     * proceso no duplica tareas y el de la noche siguiente sí encola de nuevo. Ese nombre NO evita
+     * duplicados tras un reinicio (la deduplicación de `InProcessTaskQueue` vive en memoria); lo que
+     * evita el trabajo doble es el cursor ([extract]). Tras un reinicio el job no corre hasta las 02:00
+     * siguientes; si el servidor está caído a esa hora, se recupera la noche siguiente (tope de
+     * [MAX_MESSAGES] mensajes por ejecución). Devuelve cuántas encoló.
      */
     suspend fun enqueueNightly(): Int {
         val day = LocalDate.ofInstant(clock.instant(), BogotaZone).format(DateTimeFormatter.BASIC_ISO_DATE)

@@ -70,14 +70,14 @@ class InMemoryMemoryRepository(private val twins: InMemoryTwinRepository? = null
     }
 
     override fun learningModes(userId: UUID): Set<Mode> = synchronized(lock) {
-        learning[userId].orEmpty().filterValues { it }.keys.toSet()
+        if (userId in deleted) emptySet() else learning[userId].orEmpty().filterValues { it }.keys.toSet()
     }
 
     override fun cursor(userId: UUID): Instant? = synchronized(lock) { cursors[userId] }
 
     override fun learnableMessages(userId: UUID, since: Instant?, until: Instant, limit: Int): List<LearnableMessage> = synchronized(lock) {
         messages
-            .filter { it.senderId == userId && it.learnable && !it.hidden }
+            .filter { it.senderId == userId && userId !in deleted && it.learnable && !it.hidden }
             .filter { (since == null || it.createdAt > since) && it.createdAt <= until }
             .sortedWith(compareBy<StoredMessage> { it.createdAt }.thenBy { it.id })
             .take(limit)

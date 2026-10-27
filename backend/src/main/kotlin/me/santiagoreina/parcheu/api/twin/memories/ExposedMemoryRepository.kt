@@ -10,6 +10,7 @@ import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.contract.ConsentKind
 import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -56,6 +57,7 @@ class ExposedMemoryRepository(private val db: Database) : MemoryRepository {
     override fun learningModes(userId: UUID): Set<Mode> = transaction(db) { currentLearningModes(userId) }
 
     private fun currentLearningModes(userId: UUID): Set<Mode> {
+        if (Users.select(Users.id).where { (Users.id eq userId) and Users.deletedAt.isNull() }.empty()) return emptySet()
         val kinds = Mode.entries.associateBy { learningKindOf(it) }
         return Consents.select(Consents.kind, Consents.granted)
             .where { (Consents.userId eq userId) and (Consents.kind inList kinds.keys) }
@@ -76,9 +78,11 @@ class ExposedMemoryRepository(private val db: Database) : MemoryRepository {
         var where: Op<Boolean> = (ChatMessages.senderId eq userId) and (ChatMessages.learnable eq true) and
             (ChatMessages.hidden eq false) and (ChatMessages.createdAt lessEq until.odt())
         since?.let { where = where and (ChatMessages.createdAt greater it.odt()) }
+        // Una cuenta marcada como borrada (users.deleted_at) no aporta mensajes: nada de ella llega al prompt.
         (ChatMessages innerJoin Chats)
+            .join(Users, JoinType.INNER, ChatMessages.senderId, Users.id)
             .select(ChatMessages.id, ChatMessages.chatId, Chats.mode, ChatMessages.text, ChatMessages.createdAt)
-            .where { where }
+            .where { where and Users.deletedAt.isNull() }
             .orderBy(ChatMessages.createdAt to SortOrder.ASC, ChatMessages.id to SortOrder.ASC)
             .limit(limit)
             .map {

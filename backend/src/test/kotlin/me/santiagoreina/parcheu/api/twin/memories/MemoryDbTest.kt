@@ -158,6 +158,22 @@ class MemoryDbTest : FunSpec({
         }
     }
 
+    test("Postgres: una cuenta con deleted_at no llega al prompt ni llama a la IA").config(enabled = TestDatabase.enabled) {
+        withMemories { twin, db, capture, _ ->
+            val ana = newUser(db, "ana")
+            val chat = newChat(db, Mode.AMISTAD)
+            consent(db, ana, ConsentKind.CHAT_LEARNING_AMISTAD, true, minutesAgo(1000))
+            message(db, chat, ana, "MENSAJE-DE-CUENTA-BORRADA", minutesAgo(30))
+            transaction(db) { Users.update({ Users.id eq ana }) { it[deletedAt] = minutesAgo(1) } }
+
+            runBlocking { twin.memories.extract(ana) } shouldBe ExtractionOutcome.NOTHING_TO_DO
+
+            capture.fake.calls shouldBe 0
+            capture.prompts.shouldBeEmpty()
+            memories(db, ana).shouldBeEmpty()
+        }
+    }
+
     test("Postgres: con el consentimiento revocado no se extrae nada aunque haya mensajes learnable=true").config(enabled = TestDatabase.enabled) {
         withMemories { twin, db, capture, _ ->
             val ana = newUser(db, "ana")

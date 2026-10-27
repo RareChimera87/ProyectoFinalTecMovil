@@ -88,6 +88,19 @@ class MemoryServiceTest : FunSpec({
         f.repo.all(ana).all { it.status == MemoryStatus.PENDING && it.sourceChatId == chat } shouldBe true
     }
 
+    test("una cuenta marcada como borrada no llega al prompt ni llama a la IA") {
+        val f = Fixture()
+        f.repo.setLearning(ana, Mode.AMISTAD, true)
+        f.repo.addMessage(ana, UUID.randomUUID(), Mode.AMISTAD, "Mensaje de cuenta borrada", minutesAgo(10))
+        f.repo.markDeleted(ana)
+
+        f.service.extract(ana) shouldBe ExtractionOutcome.NOTHING_TO_DO
+
+        f.fake.calls shouldBe 0
+        f.prompts.shouldBeEmpty()
+        f.repo.all(ana).shouldBeEmpty()
+    }
+
     test("con el consentimiento revocado no se extrae nada aunque haya mensajes learnable=true") {
         val f = Fixture()
         f.repo.setLearning(ana, Mode.AMISTAD, true)
