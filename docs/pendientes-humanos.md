@@ -927,3 +927,11 @@ Lo automatizable ya quedó hecho: `GET /v1/invites/me`, `POST /v1/invites/redeem
 | 4 | **Probar en un teléfono (dev).** Instalar el `devDebug`, `adb shell pm verify-app-links --re-verify me.santiagoreina.parcheu.dev` y luego `adb shell pm get-app-links me.santiagoreina.parcheu.dev` debe mostrar `parcheu-dev.web.app: verified`. Abrir `https://parcheu-dev.web.app/i/<código de otra cuenta>` desde WhatsApp: debe abrir C5 con el código en el campo. Escanear con 'Escanear' el QR de otra cuenta (la primera vez Google Play services descarga el módulo del lector) y escanear un QR ajeno para ver 'Este código no es de ParcheU'. | I3 | Con el despliegue de dev |
 | 5 | **Prod.** Con el tag `v*` se despliega Hosting de `parcheu-prod`; repetir el paso 3 con `parcheu-prod.web.app` y el paso 4 con la app de la prueba cerrada (paquete `me.santiagoreina.parcheu`) una vez hecho el paso 1. | I3 | Con la 0.2 |
 | 6 | **Revisión visual** de `android/app/src/test/screenshots/invites/*.png` contra el mockup 07 (C5 'Mi código'); 'Escanear', el selector de modo ('¿Cómo se conocen?') y la lista 'Quieren agregarte' no tienen mockup y se armaron con componentes del sistema de diseño. Diferencia aceptada: el código es todo al azar (p. ej. `QZHT-4827`) y no `MARI-4827` como en el mockup, porque un prefijo con el nombre dejaba solo 10.000 códigos por nombre y facilitaba adivinarlos. | I2 | Ventana de revisión de la ola 10 |
+
+## E9.1 · Perfil y gemelo
+
+Todo lo de código quedó hecho y no depende de un entorno vivo: C3 consume `GET /v1/me`, `GET /v1/catalog`, `GET /v1/twin` y `GET /v1/twin/evolution` (ya existentes) y 'Editar perfil' reutiliza B0 (`BasicProfile(edit = true)`, `PATCH /v1/me`). Solo queda una revisión visual:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Revisión visual** de `android/app/src/test/screenshots/profile/*.png` (0, 1 y 16 puntos, claro y oscuro) contra el mockup 06. Diferencia aceptada: el mockup de '4 meses de historial' se reproduce solo con los 16 puntos demo de la captura; con datos reales el gráfico muestra un punto por semana con datos. 'Rasgos' y el pie de la suscripción no están en el mockup y se armaron con componentes del sistema de diseño. | I2 | Ventana de revisión de la ola 10 |
