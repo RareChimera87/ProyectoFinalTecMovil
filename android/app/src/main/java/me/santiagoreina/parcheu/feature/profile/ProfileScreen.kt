@@ -176,12 +176,12 @@ private fun ProfileCard(state: ProfileUiState.Loaded, onEdit: () -> Unit) {
         if (detail.isNotEmpty()) {
             Text(detail, style = MaterialTheme.typography.bodyMedium, color = colors.mu)
         }
-        if (me.interests.isNotEmpty()) {
+        if (state.interestLabels.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                me.interests.forEach { PillChip(text = it) }
+                state.interestLabels.forEach { PillChip(text = it) }
             }
         }
         TonalButton(
@@ -308,9 +308,9 @@ private fun AccuracyCard(chart: TwinChart) {
                     points = chart.values.map { it.toFloat() },
                     contentDescription =
                     "Evolución semanal: de ${chart.values.first()} % a ${chart.last} % " +
-                        "en ${chart.values.size} semanas.",
-                    startLabel = "Hace ${chart.values.size} semanas",
-                    endLabel = "Esta semana"
+                        "entre ${chart.startLabel} y ${chart.endLabel}.",
+                    startLabel = chart.startLabel,
+                    endLabel = chart.endLabel
                 )
         }
     }

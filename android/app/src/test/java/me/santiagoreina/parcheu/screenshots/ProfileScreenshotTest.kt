@@ -38,7 +38,8 @@ class ProfileScreenshotTest(private val dark: Boolean) {
                 ProfileSamples.me,
                 ProfileSamples.twin,
                 chartOf(points),
-                "Universidad Industrial de Santander"
+                "Universidad Industrial de Santander",
+                listOf("Música", "Cine", "Café")
             )
         composeRule.setContent {
             ParcheUTheme(darkTheme = dark) { ProfileScreen(state, ProfileCallbacks()) }

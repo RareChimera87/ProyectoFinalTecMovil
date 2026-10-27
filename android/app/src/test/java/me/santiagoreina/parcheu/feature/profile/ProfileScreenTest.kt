@@ -27,7 +27,8 @@ class ProfileScreenTest {
         ProfileSamples.me,
         ProfileSamples.twin,
         chartOf(points),
-        "Universidad Industrial de Santander"
+        "Universidad Industrial de Santander",
+        listOf("Música", "Cine", "Café")
     )
 
     private fun show(state: ProfileUiState, callbacks: ProfileCallbacks = ProfileCallbacks()) =
@@ -48,6 +49,21 @@ class ProfileScreenTest {
         composeRule.onNodeWithTag(
             ProfileTags.CHART_VALUE
         ).performScrollTo().assertTextEquals("42 %")
+    }
+
+    @Test
+    fun interestsShowCatalogLabelsNotSlugs() {
+        show(loaded(ProfileSamples.zero))
+        composeRule.onNodeWithText("Música").assertIsDisplayed()
+    }
+
+    @Test
+    fun lineAxisUsesMonthsOfFirstAndLastPoint() {
+        val points =
+            listOf(TwinPoint("2026-08", 40, 2), TwinPoint("2026-11", 61, 3))
+        show(loaded(points))
+        composeRule.onNodeWithText("ago 2026").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("nov 2026").performScrollTo().assertIsDisplayed()
     }
 
     @Test

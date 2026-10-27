@@ -2,9 +2,11 @@ package me.santiagoreina.parcheu.feature.profile
 
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import me.santiagoreina.parcheu.contract.TwinPoint
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
+import me.santiagoreina.parcheu.feature.basicprofile.BasicProfileSamples
 import me.santiagoreina.parcheu.navigation.AddFriends
 import me.santiagoreina.parcheu.navigation.BasicProfile
 import me.santiagoreina.parcheu.navigation.ManageSubscription
@@ -20,6 +22,43 @@ class ProfileViewModelTest {
     val mainRule = MainDispatcherRule()
 
     private fun loaded(vm: ProfileViewModel) = vm.state.value as ProfileUiState.Loaded
+
+    @Test
+    fun interestSlugsAreMappedToCatalogLabels() = runTest {
+        val vm = ProfileViewModel(FakeProfileRepository())
+        vm.load()
+        assertEquals(listOf("Música", "Cine", "Café"), loaded(vm).interestLabels)
+    }
+
+    @Test
+    fun interestsFallBackToSlugWhenCatalogFailsOrSlugIsUnknown() = runTest {
+        val failing =
+            ProfileViewModel(
+                FakeProfileRepository(
+                    catalogResult = ApiResult.Failure(AppError.Network)
+                )
+            )
+        failing.load()
+        assertEquals(listOf("musica", "cine", "cafe"), loaded(failing).interestLabels)
+        assertEquals(
+            listOf("Música", "dibujo"),
+            interestLabels(listOf("musica", "dibujo"), BasicProfileSamples.catalog.interests)
+        )
+    }
+
+    @Test
+    fun lineLabelsUseMonthsOfFirstAndLastPointWithData() {
+        val points =
+            listOf(
+                TwinPoint("2026-08", 40, 2),
+                TwinPoint("2026-08", null, 2),
+                TwinPoint("2026-11", 61, 3)
+            )
+        val line = chartOf(points) as TwinChart.Line
+        assertEquals("ago 2026", line.startLabel)
+        assertEquals("nov 2026", line.endLabel)
+        assertEquals("Primer registro", monthLabel("raro", "Primer registro"))
+    }
 
     @Test
     fun zeroPointsShowEmptyState() = runTest {
@@ -45,7 +84,7 @@ class ProfileViewModelTest {
                 FakeProfileRepository(evolutionResult = ApiResult.Success(ProfileSamples.three))
             )
         vm.load()
-        assertEquals(TwinChart.Line(listOf(40, 52, 61)), loaded(vm).chart)
+        assertEquals(TwinChart.Line(listOf(40, 52, 61), "ene 2026", "ene 2026"), loaded(vm).chart)
     }
 
     @Test

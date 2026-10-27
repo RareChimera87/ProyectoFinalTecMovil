@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import me.santiagoreina.parcheu.contract.Interest
 import me.santiagoreina.parcheu.contract.MeDto
 import me.santiagoreina.parcheu.contract.TwinDto
 import me.santiagoreina.parcheu.contract.TwinPoint
@@ -35,18 +36,47 @@ sealed interface TwinChart {
 
     data class Single(val value: Int) : TwinChart
 
-    data class Line(val values: List<Int>) : TwinChart {
+    /**
+     * [startLabel] y [endLabel] salen del mes del primer y del último punto con datos ('ago 2026'),
+     * porque el servidor solo devuelve las semanas con registro: no son semanas consecutivas.
+     */
+    data class Line(val values: List<Int>, val startLabel: String, val endLabel: String) :
+        TwinChart {
         val last: Int get() = values.last()
     }
 }
 
+private val MONTH_ABBREVIATIONS =
+    listOf("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+
+/** '2026-08' → 'ago 2026'; si el formato no es el esperado devuelve [fallback]. */
+fun monthLabel(month: String, fallback: String): String {
+    val parts = month.split("-")
+    val year = parts.getOrNull(0)?.takeIf { it.length == 4 && it.all(Char::isDigit) }
+    val index = parts.getOrNull(1)?.toIntOrNull()?.minus(1)
+    val name = index?.let { MONTH_ABBREVIATIONS.getOrNull(it) }
+    return if (year != null && name != null) "$name $year" else fallback
+}
+
+/** Etiquetas del catálogo para los slugs de intereses; sin catálogo (o slug ajeno) queda el slug. */
+fun interestLabels(slugs: List<String>, catalog: List<Interest>): List<String> {
+    val bySlug = catalog.associate { it.slug to it.label }
+    return slugs.map { bySlug[it] ?: it }
+}
+
 /** Convierte los puntos del servidor (ya ordenados por semana) en el estado del gráfico. */
 fun chartOf(points: List<TwinPoint>): TwinChart {
-    val values = points.mapNotNull { it.accuracy }
+    val withData = points.filter { it.accuracy != null }
+    val values = withData.mapNotNull { it.accuracy }
     return when (values.size) {
         0 -> TwinChart.Empty
         1 -> TwinChart.Single(values.first())
-        else -> TwinChart.Line(values)
+        else ->
+            TwinChart.Line(
+                values,
+                monthLabel(withData.first().month, "Primer registro"),
+                monthLabel(withData.last().month, "Último registro")
+            )
     }
 }
 
@@ -57,7 +87,9 @@ sealed interface ProfileUiState {
         val me: MeDto,
         val twin: TwinDto,
         val chart: TwinChart,
-        val universityName: String?
+        val universityName: String?,
+        /** Intereses de [me] con la etiqueta del catálogo (o el slug si el catálogo no cargó). */
+        val interestLabels: List<String>
     ) : ProfileUiState
 
     data class Error(val error: AppError) : ProfileUiState
@@ -106,8 +138,19 @@ class ProfileViewModel(private val repository: ProfileRepository) : ViewModel() 
                             ?.universities
                             ?.firstOrNull { it.id == meResult.value.universityId }
                             ?.name
+                    val labels =
+                        interestLabels(
+                            meResult.value.interests,
+                            (catalogResult as? ApiResult.Success)?.value?.interests.orEmpty()
+                        )
                     _state.value =
-                        ProfileUiState.Loaded(meResult.value, twinResult.value, chart, university)
+                        ProfileUiState.Loaded(
+                            meResult.value,
+                            twinResult.value,
+                            chart,
+                            university,
+                            labels
+                        )
                 } else if (current !is ProfileUiState.Loaded) {
                     val error =
                         (meResult as? ApiResult.Failure)?.error

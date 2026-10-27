@@ -20,7 +20,7 @@ object ProfileSamples {
             displayName = "Ana Gómez",
             career = "Ingeniería Industrial",
             universityId = 1,
-            interests = listOf("Música", "Cine", "Café"),
+            interests = listOf("musica", "cine", "cafe"),
             birthDate = IsoDate("2004-05-17"),
             ageVerified = true,
             modes = mapOf(Mode.AMISTAD to true, Mode.PAREJA to false, Mode.ESTUDIO to true),
