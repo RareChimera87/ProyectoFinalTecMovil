@@ -36,7 +36,7 @@ class TwinRoutes(private val twin: TwinModule) : DomainRoutes {
     }
 
     override fun Route.internal() {
-        post("/tasks/build-persona") {
+        post(TwinService.BUILD_PERSONA_PATH) {
             twin.service.buildPersona(call.receive<TaskPayload>().uuid())
             call.respond(HttpStatusCode.NoContent)
         }

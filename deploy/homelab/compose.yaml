@@ -1,0 +1,90 @@
+# ParcheU en el homeserver (ADR-0033): Postgres + migraciones + API Ktor.
+# Se despliega con deploy/homelab/desplegar.sh; las variables salen de ~/parcheu/.env (ver .env.example).
+# La imagen se etiqueta con el SHA del commit (PARCHEU_TAG, lo fija desplegar.sh) y la anterior queda en PARCHEU_PREV_TAG para revertir.
+# Solo la API publica un puerto (8090), en loopback y en la IP de la LAN (no en 0.0.0.0, así no queda abierto en
+# Tailscale ni en otras interfaces); Postgres no publica nada (el 5432 del host ya está ocupado).
+# Las direcciones se pueden cambiar con PARCHEU_BIND_LOCAL / PARCHEU_BIND_LAN en .env.
+name: parcheu
+
+services:
+  parcheu-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: parcheu
+      POSTGRES_USER: parcheu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+    volumes:
+      - parcheu-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parcheu -d parcheu"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    mem_limit: 384m
+
+  # Una sola ejecución (ADR-0011): aplica Flyway y termina. La API espera a que acabe bien.
+  parcheu-migrate:
+    image: parcheu-api:${PARCHEU_TAG:-latest}
+    pull_policy: never
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      ENV: ${PARCHEU_ENV:-local}
+      DB_NAME: parcheu
+      DB_URL: jdbc:postgresql://parcheu-db:5432/parcheu
+      DB_USER: parcheu
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JAVA_TOOL_OPTIONS: -Xmx256m
+    depends_on:
+      parcheu-db:
+        condition: service_healthy
+    mem_limit: 512m
+
+  parcheu-api:
+    image: parcheu-api:${PARCHEU_TAG:-latest}
+    pull_policy: never
+    command: ["serve"]
+    restart: unless-stopped
+    ports:
+      - "${PARCHEU_BIND_LOCAL:-127.0.0.1:8090}:8080"
+      - "${PARCHEU_BIND_LAN:-192.168.0.10:8090}:8080"
+    environment:
+      ENV: ${PARCHEU_ENV:-local}
+      PORT: "8080"
+      DB_NAME: parcheu
+      DB_URL: jdbc:postgresql://parcheu-db:5432/parcheu
+      DB_USER: parcheu
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      HMAC_ANON_KEY: ${HMAC_ANON_KEY:-}
+      JAVA_TOOL_OPTIONS: -Xmx384m -XX:+ExitOnOutOfMemoryError
+      # Solo se usan con PARCHEU_ENV=dev y la llave de Google (README). Vacías son inocuas.
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      INTERNAL_OIDC_AUDIENCE: ${INTERNAL_OIDC_AUDIENCE:-}
+      TASKS_SERVICE_ACCOUNT: ${TASKS_SERVICE_ACCOUNT:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_VERTEX_PROJECT: ${AI_VERTEX_PROJECT:-}
+      AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-}
+      # Cola de tareas y jobs dentro del proceso (sin Cloud Tasks ni Cloud Scheduler; ADR-0033).
+      TASKS_MODE: ${TASKS_MODE:-inline}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/sa.json
+    volumes:
+      # Opcional: ~/parcheu/secrets/sa.json (llave de la cuenta de servicio). Se monta el directorio
+      # para que el archivo pueda faltar sin romper el arranque.
+      - ./secrets:/secrets:ro
+    depends_on:
+      parcheu-db:
+        condition: service_healthy
+      parcheu-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    mem_limit: 640m
+
+volumes:
+  parcheu-pgdata:

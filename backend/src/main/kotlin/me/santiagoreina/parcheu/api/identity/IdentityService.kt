@@ -124,7 +124,14 @@ class IdentityService(
         LearningConsentPolicy.checkGrant(change.kind, change.granted, user, repo.modes(user.id), clock.instant())
         val current = repo.latestConsents(user.id).firstOrNull { it.kind == change.kind }
         val unchanged = current != null && current.granted == change.granted && current.textVersion == change.textVersion
-        if (!unchanged) repo.appendConsents(user.id, listOf(NewConsent(change.kind, change.granted, change.textVersion)), clock.instant())
+        val entry = NewConsent(change.kind, change.granted, change.textVersion)
+        val revokedMode = LearningConsentPolicy.modeOf(change.kind).takeIf { !change.granted }
+        when {
+            // Revocar el aprendizaje de un modo descarta sus memorias pendientes en la misma transacción (E8.2).
+            revokedMode != null ->
+                repo.savePrivacy(user.id, null, if (unchanged) emptyList() else listOf(entry), setOf(revokedMode), clock.instant())
+            !unchanged -> repo.appendConsents(user.id, listOf(entry), clock.instant())
+        }
         return consents(user)
     }
 

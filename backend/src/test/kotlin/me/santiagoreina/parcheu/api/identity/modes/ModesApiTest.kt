@@ -33,6 +33,7 @@ import me.santiagoreina.parcheu.contract.ConsentKind
 import me.santiagoreina.parcheu.contract.ConsentsDto
 import me.santiagoreina.parcheu.contract.ErrorCode
 import me.santiagoreina.parcheu.contract.MeDto
+import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.OnboardingStep
 import me.santiagoreina.parcheu.contract.SessionDto
@@ -207,6 +208,31 @@ class ModesApiTest : FunSpec({
             // Volver a encender Pareja no reanuda el aprendizaje: hay que pasar por H3.
             client.putModes("ana", UpdateModes(pareja + (Mode.AMISTAD to true), parejaConfirmed = true)).status shouldBe HttpStatusCode.OK
             learningParejaGranted() shouldBe false
+        }
+    }
+
+    test("apagar Pareja borra solo las memorias PENDING de Pareja; las aceptadas y las de otros modos quedan") {
+        val repo = repoWithAna(ageVerified = true)
+        val id = repo.user("ana").id
+        testApplication {
+            val client = startApp(testContainer(repo = repo))
+            client.putModes("ana", UpdateModes(pareja + (Mode.AMISTAD to true), parejaConfirmed = true)).status shouldBe HttpStatusCode.OK
+            client.consent("ana", ConsentKind.CHAT_LEARNING_PAREJA).status shouldBe HttpStatusCode.OK
+            repo.memories[id] = mutableListOf(
+                Mode.PAREJA to MemoryStatus.PENDING,
+                Mode.PAREJA to MemoryStatus.PENDING,
+                Mode.PAREJA to MemoryStatus.ACCEPTED,
+                Mode.AMISTAD to MemoryStatus.PENDING,
+            )
+            // Mantener Pareja encendido no borra nada.
+            client.putModes("ana", UpdateModes(pareja)).status shouldBe HttpStatusCode.OK
+            repo.memories.getValue(id).size shouldBe 4
+
+            client.putModes("ana", UpdateModes(mapOf(Mode.AMISTAD to true))).status shouldBe HttpStatusCode.OK
+            repo.memories.getValue(id) shouldBe listOf(
+                Mode.PAREJA to MemoryStatus.ACCEPTED,
+                Mode.AMISTAD to MemoryStatus.PENDING,
+            )
         }
     }
 

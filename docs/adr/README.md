@@ -36,5 +36,6 @@ Formato: contexto, decisión, alternativas, consecuencias. Una decisión nueva o
 | [0030](0030-contraste-tema-claro.md) | Ajustes de contraste AA en el tema claro |
 | [0031](0031-edad-y-perfil-en-onboarding.md) | Fecha de nacimiento para todos y perfil básico (B0) |
 | [0032](0032-memorias-por-modo.md) | Memorias del gemelo aisladas por modo |
+| [0033](0033-backend-en-homeserver.md) | Backend de pruebas en el homeserver en vez de Cloud SQL + Cloud Run |
 
 Enmiendas del 22 oct 2026 (ronda de corrección): 0001 (merge y releases intermedios), 0005 y 0008 (fecha límite de los spikes), 0012 (memorias), 0016 (billing, login y tiempos de Play), 0017 (términos, política y aviso de IA).

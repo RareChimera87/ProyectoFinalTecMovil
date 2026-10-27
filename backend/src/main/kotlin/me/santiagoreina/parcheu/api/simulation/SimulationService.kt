@@ -123,7 +123,7 @@ class SimulationService(
             repo.create(record)
             // El documento de Firestore existe antes de que la tarea empiece a escribir progreso.
             publishQueued(record)
-            tasks.enqueue(TaskRequest(QueueKind.SIMULATIONS, "/tasks/simulate", "simulate-$id", """{"id":"$id"}"""))
+            tasks.enqueue(simulateTask(id))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -201,7 +201,25 @@ class SimulationService(
         score = record.score.takeIf { record.status == SimulationStatus.DONE },
     )
 
+    /**
+     * Vuelve a encolar las simulaciones QUEUED o RUNNING creadas hace entre 10 min y 24 h (la cola en
+     * proceso no sobrevive a un reinicio). El motor es idempotente y reanuda por pasos. Devuelve cuántas.
+     */
+    suspend fun requeueUnfinished(): Int {
+        val now = clock.instant()
+        val pending = repo.unfinished(now.minus(REQUEUE_MIN_AGE), now.minus(REQUEUE_MAX_AGE), REQUEUE_LIMIT)
+        pending.forEach { tasks.enqueue(simulateTask(it.id)) }
+        if (pending.isNotEmpty()) log.warn("Recuperadas {} simulaciones sin terminar", pending.size)
+        return pending.size
+    }
+
+    private fun simulateTask(id: UUID) = TaskRequest(QueueKind.SIMULATIONS, SIMULATE_PATH, "simulate-$id", """{"id":"$id"}""")
+
     companion object {
+        const val SIMULATE_PATH = "/tasks/simulate"
+        val REQUEUE_MIN_AGE: java.time.Duration = java.time.Duration.ofMinutes(10)
+        val REQUEUE_MAX_AGE: java.time.Duration = java.time.Duration.ofHours(24)
+        const val REQUEUE_LIMIT = 100
         const val DEFAULT_PAGE = 20
         const val MAX_PAGE = 50
     }

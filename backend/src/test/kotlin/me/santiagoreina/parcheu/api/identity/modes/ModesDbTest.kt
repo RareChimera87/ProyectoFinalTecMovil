@@ -35,6 +35,7 @@ import me.santiagoreina.parcheu.api.platform.db.TestDatabase
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.runMigrations
 import me.santiagoreina.parcheu.api.platform.db.tables.Consents
+import me.santiagoreina.parcheu.api.platform.db.tables.TwinMemories
 import me.santiagoreina.parcheu.api.platform.db.tables.UserModes
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
@@ -47,12 +48,14 @@ import me.santiagoreina.parcheu.contract.ConsentChange
 import me.santiagoreina.parcheu.contract.ConsentKind
 import me.santiagoreina.parcheu.contract.ErrorCode
 import me.santiagoreina.parcheu.contract.MeDto
+import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.SessionDto
 import me.santiagoreina.parcheu.contract.UpdateModes
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -188,6 +191,34 @@ class ModesDbTest : FunSpec({
                         .map { it[Consents.granted] to it[Consents.textVersion] }
                 }
                 history shouldContainExactly listOf(true to TEST_LEGAL_VERSION, false to TEST_LEGAL_VERSION)
+            }
+        }
+
+    test("apagar Pareja borra solo las memorias PENDING de Pareja en la misma transacción")
+        .config(enabled = TestDatabase.enabled) {
+            withApp { client, db ->
+                val userId = client.onboard("lucia")
+                verifyAge(db, userId)
+                client.putModes("lucia", UpdateModes(pareja + (Mode.AMISTAD to true), parejaConfirmed = true)).status shouldBe HttpStatusCode.OK
+                fun insertMemory(mode: Mode, status: MemoryStatus) = transaction(db) {
+                    TwinMemories.insert {
+                        it[TwinMemories.userId] = userId
+                        it[TwinMemories.mode] = mode
+                        it[text] = "Le gusta el café"
+                        it[TwinMemories.status] = status
+                        it[createdAt] = java.time.OffsetDateTime.ofInstant(FIXED_CLOCK.instant(), java.time.ZoneOffset.UTC)
+                    }
+                }
+                insertMemory(Mode.PAREJA, MemoryStatus.PENDING)
+                insertMemory(Mode.PAREJA, MemoryStatus.ACCEPTED)
+                insertMemory(Mode.AMISTAD, MemoryStatus.PENDING)
+
+                client.putModes("lucia", UpdateModes(mapOf(Mode.AMISTAD to true))).status shouldBe HttpStatusCode.OK
+                val left = transaction(db) {
+                    TwinMemories.selectAll().where { TwinMemories.userId eq userId }
+                        .map { it[TwinMemories.mode] to it[TwinMemories.status] }
+                }
+                left.toSet() shouldBe setOf(Mode.PAREJA to MemoryStatus.ACCEPTED, Mode.AMISTAD to MemoryStatus.PENDING)
             }
         }
 })

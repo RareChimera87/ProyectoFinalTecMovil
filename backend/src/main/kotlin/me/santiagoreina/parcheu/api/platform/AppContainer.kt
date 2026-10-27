@@ -101,6 +101,16 @@ import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.twin.twinModule
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Clock
+import java.time.Duration
+import me.santiagoreina.parcheu.api.platform.jobs.InProcessScheduler
+import me.santiagoreina.parcheu.api.platform.tasks.InProcessTaskQueue
+import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
+import me.santiagoreina.parcheu.api.platform.tasks.TasksMode
+import me.santiagoreina.parcheu.api.simulation.SimulationService
+import me.santiagoreina.parcheu.api.twin.TaskPayload
+import me.santiagoreina.parcheu.api.twin.TwinService
+import me.santiagoreina.parcheu.api.identity.deletion.AccountDeletionService
+import me.santiagoreina.parcheu.contract.ContractJson
 
 /**
  * Inyección de dependencias manual por constructores (arquitectura.md §3.2). Aquí se construyen
@@ -172,6 +182,11 @@ class AppContainer(
     val billing: BillingModule = inMemoryBillingModule(clock),
     /** Administración de reportes (E8.5). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
     val admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, clock),
+    /**
+     * Cola en proceso y programador de jobs (`TASKS_MODE=inline`, ADR-0033); null con Cloud Tasks o Fake.
+     * Main lo arranca (`start`) en modo `serve` y lo cierra al parar.
+     */
+    val background: BackgroundWork? = null,
     /** Dominios con rutas. Los tests pueden agregar rutas propias; el orden no importa. */
     val domains: List<DomainRoutes> =
         allDomains(
@@ -209,7 +224,13 @@ class AppContainer(
             val profile = ProfileService(identity, ExposedProfileRepository(database), clock)
             val quota = quotaModule(config.env, database, clock)
             val ai = aiGateway(config, vars, clock) { database }
-            val tasks = if (local) FakeTaskQueue() else CloudTasksQueue.fromEnv(config, vars)
+            val mode = TasksMode.fromEnv(config.env, vars)
+            val inlineQueue = if (mode == TasksMode.INLINE) InProcessTaskQueue(clock) else null
+            val tasks: TaskQueue = when (mode) {
+                TasksMode.FAKE -> FakeTaskQueue()
+                TasksMode.INLINE -> checkNotNull(inlineQueue)
+                TasksMode.CLOUD -> CloudTasksQueue.fromEnv(config, vars)
+            }
             val twin = twinModule(config.env, database, clock, ai, tasks)
             val graph = GraphModule(
                 ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock, ExposedFofRepository(database),
@@ -255,6 +276,7 @@ class AppContainer(
             val invites = exposedInviteModule(database, graph, simulation, notifier, InviteLinks.fromConfig(config, vars), clock)
             // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.
             val billing = billingModule(config.env, database, clock, vars)
+            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account) }
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
@@ -263,7 +285,33 @@ class AppContainer(
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
                 billing = billing,
                 invites = invites,
+                background = background,
             )
+        }
+
+        /**
+         * Handlers de las tres tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
+         * Retention, communities, memories y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
+         */
+        private fun inlineBackground(
+            queue: InProcessTaskQueue,
+            clock: Clock,
+            twin: TwinModule,
+            simulation: SimulationModule,
+            matching: MatchingModule,
+            account: AccountModule,
+        ): BackgroundWork {
+            fun id(body: String) = ContractJson.decodeFromString<TaskPayload>(body).uuid()
+            queue.register(TwinService.BUILD_PERSONA_PATH) { twin.service.buildPersona(id(it)) }
+            queue.register(SimulationService.SIMULATE_PATH) { simulation.engine.run(id(it)) }
+            queue.register(AccountDeletionService.PURGE_PATH) { account.deletion.purge(id(it)) }
+            return BackgroundWork(queue, InProcessScheduler()) { scheduler ->
+                scheduler.every("match-sweep", Duration.ofSeconds(60)) { matching.service.sweep() }
+                scheduler.every("purge-sweep", Duration.ofHours(1), Duration.ofMinutes(2)) { account.deletion.sweepStalled() }
+                scheduler.every("simulation-recovery", Duration.ofMinutes(15), Duration.ofSeconds(30)) {
+                    simulation.service.requeueUnfinished()
+                }
+            }
         }
 
         /**

@@ -236,7 +236,7 @@ private fun AdultBadge() {
 
 /** B3: diálogo obligatorio al encender Pareja. La fecha es de solo lectura. */
 @Composable
-private fun ParejaDialog(
+internal fun ParejaDialog(
     dialog: ParejaDialogState,
     onConfirmedChange: (Boolean) -> Unit,
     onConfirm: () -> Unit,

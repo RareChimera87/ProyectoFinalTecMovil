@@ -938,6 +938,18 @@ Lo automatizable ya quedó hecho: `GET /v1/admin/reports` (filtros `kind`, `stat
 | 2 | **Otorgar el claim `admin` a los 3 integrantes.** Cada uno debe haber iniciado sesión en la app (dev) al menos una vez. Con `gcloud auth login` de una cuenta con rol de administrador de Firebase Auth en `parcheu-dev`: `scripts/grant-admin.sh --dry-run dev correo1 correo2 correo3` para ver el efecto y luego `scripts/grant-admin.sh dev correo1 correo2 correo3`. Repetir con `prod` antes de la 1.0. Cada persona debe cerrar sesión y volver a entrar para que su ID token traiga el claim. | I3 | Tras el primer inicio de sesión en dev |
 | 3 | **Verificación manual (criterio de la ficha).** En dev: crear dos cuentas de prueba, chatear, reportar a una desde la app (`POST /v1/reports` o la pantalla de E8.7) con un mensaje, abrir `https://parcheu-dev.web.app/admin`, entrar con una cuenta admin, comprobar que el reporte aparece con su snapshot y resolverlo con 'Ocultar mensaje' (el mensaje debe verse vacío en la app) y con 'Suspender 24 h' (la persona debe recibir 403 `SUSPENDED` al escribir y al entrar a la fila). | I3 | Con el despliegue de dev |
 | 4 | **Aprobación de la parte de `backend/`.** La ficha pide que I1 apruebe los cambios en `backend/` (este PR toca además `ChatRepository`, `IdentityRepository`, `MatchingService` y `FirebaseUser` por la suspensión, el ocultamiento y el claim). | I1 | En la revisión del PR |
+## Backend de pruebas en el homeserver (ADR-0033)
+
+Lo automatizable ya quedó hecho: `deploy/homelab/` (compose, `desplegar.sh`, `respaldar.sh`, README), el ADR-0033, la condición `GCP_DEV_ENABLED` en `deploy-dev` y la excepción de HTTP solo en `devDebug`. **No se ejecutó nada contra el homeserver.**
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **No aplicar Terraform de `parcheu-dev` por ahora** (E0.5 y sus pasos de import/WIF quedan en pausa). `deploy-dev` no corre mientras la variable de repositorio `GCP_DEV_ENABLED` no sea `true`. | El usuario | Hasta decidir volver a GCP |
+| 2 | **Correr el despliegue:** `deploy/homelab/desplegar.sh` desde el portátil (SSH sin contraseña a `user@homelab`). Verificar `curl http://192.168.0.10:8090/v1/health` desde la LAN. Reservar `192.168.0.10` como IP estática del servidor. | El usuario | Cuando quiera probar |
+| 3 | **Llave de Google (opcional, para iniciar sesión con la app real):** crear `sa-homelab` con 4 roles, generar la llave y copiarla a `~/parcheu/secrets/sa.json`; pasar `.env` a `PARCHEU_ENV=dev` (pasos exactos en `deploy/homelab/README.md`). Borrar la cuenta y la llave al terminar. | El usuario | Antes de que otros prueben la app |
+| 4 | **Proxy Host en Nginx Proxy Manager:** `api-parcheu.homeserverlab.site` → `http://192.168.0.10:8090`, certificado existente `npm-1` y Force SSL (el despliegue no toca NPM). Mientras `PARCHEU_ENV=local` debe llevar una Access List que permita solo `192.168.0.0/24` y `100.64.0.0/10`, o crearse solo tras pasar a `dev`. | El usuario | Tras el paso 2 |
+| 5 | **Testers externos de Play (fuera de alcance por ahora):** ruta del hostname `api-parcheu.homeserverlab.site` en el túnel de Cloudflare hacia `http://localhost:8090`, solo en modo `dev`. Decisión pendiente: la instancia que atienda la prueba cerrada debe usar `FIREBASE_PROJECT_ID` y `AI_VERTEX_PROJECT` del mismo proyecto que el flavor publicado (`prod` → `parcheu-prod`, que aún no existe; alternativa: publicar con `dev`), y la variable de repositorio `PARCHEU_API_URL_PROD`. La subida automática a alpha depende de `deploy-prod` (sin GCP queda `workflow_dispatch`). | El usuario | Si se publica en Play |
+| 6 | **App de debug:** `parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/` en `android/local.properties` (ver `docs/desarrollo-local.md`). | Cada desarrollador | Al probar contra el homeserver |
 ## E7.3 · Pantallas de ParcheU+
 
 Lo automatizable ya quedó hecho: G1 (paywall, I4 en claro), la hoja G2 de límite (simulaciones, match diario e informe mensual), G3 (anual, mensual y verificación pendiente) y G4 (activa anual y mensual, cancelada, en gracia, en pausa y sin suscripción) en `feature/plus`, con sus ViewModels sobre `BillingRepository` (E7.2), pruebas y capturas Roborazzi en `android/app/src/test/screenshots/plus/`. Lo que falta necesita una decisión tuya o un dispositivo con Play:
@@ -956,3 +968,16 @@ Todo lo de código quedó hecho y no depende de un entorno vivo: C3 consume `GET
 | # | Paso | Dueño | Cuándo |
 |---|---|---|---|
 | 1 | **Revisión visual** de `android/app/src/test/screenshots/profile/*.png` (0, 1 y 16 puntos, claro y oscuro) contra el mockup 06. Diferencia aceptada: el mockup de '4 meses de historial' se reproduce solo con los 16 puntos demo de la captura; con datos reales el gráfico muestra un punto por semana con datos. 'Rasgos' y el pie de la suscripción no están en el mockup y se armaron con componentes del sistema de diseño. | I2 | Ventana de revisión de la ola 10 |
+
+## E8.2 · Ajustes de privacidad
+
+No hay acciones obligatorias de consola. Revisión manual recomendada con el backend de dev ya desplegado:
+
+1. **Páginas legales**: H3 abre `<HOSTING_URL>/terminos` y `<HOSTING_URL>/privacidad` (`BuildConfig.TERMS_URL` y
+   `PRIVACY_URL`, ya servidas por Firebase Hosting desde `firebase/public`). Confirmar que responden 200 tras el
+   despliegue de Hosting.
+2. **Cerrar sesión en dispositivo real**: verificar con Play Services que `DELETE /v1/me/fcm-token` responde 204,
+   que no llegan push tras cerrar sesión y que, al entrar con otra cuenta, no aparece nada de la anterior (chats,
+   grafo, progreso de B1). El borrado del token necesita red: si falla (sin conexión) el token queda en el servidor
+   hasta que otro usuario lo reasigne o se purgue por inactividad.
+3. **Pantalla 'Personas bloqueadas'**: el enlace de H3 abre la ruta `BlockedUsers`, que sigue siendo stub hasta E8.7.

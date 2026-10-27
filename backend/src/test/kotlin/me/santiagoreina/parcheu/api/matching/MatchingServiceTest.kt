@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.matching
 
+import kotlinx.coroutines.async
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -513,6 +514,17 @@ class MatchingServiceTest : FunSpec({
         // Ana bloqueó: no recupera el cupo; Beto, que no causó el cierre, sí.
         f.usage.refunded("$id:$ana") shouldBe false
         f.usage.refunded("$id:$beto") shouldBe true
+    }
+
+    test("barridos concurrentes sobre un match en SIMULATION sin simulación crean una sola (sin huérfanas)") {
+        val f = MatchFixture()
+        val (_, _, id) = f.pair()
+        f.matchRepo.updateMatch(UUID.fromString(id)) { it.copy(status = MatchStatus.SIMULATION, simulationId = null) }
+        kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Default) {
+            (1..8).map { async { f.service.sweep() } }.forEach { it.await() }
+        }
+        f.simRepo.all().size shouldBe 1
+        f.matchRepo.match(UUID.fromString(id))!!.simulationId shouldBe f.simRepo.all().single().id
     }
 
     test("si la simulación falla sin culpable (gemelo no listo) el match se cierra y el cupo vuelve a las dos") {

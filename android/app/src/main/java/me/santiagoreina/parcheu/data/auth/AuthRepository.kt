@@ -36,7 +36,10 @@ interface AuthRepository {
     /** `POST /v1/me/terms` con la versión vigente del texto legal ([SessionDto.legalTextVersion]). */
     suspend fun acceptTerms(textVersion: String): ApiResult<Unit>
 
-    /** Cierra la sesión de Firebase y borra el estado de Credential Manager (E8.2 agrega el resto). */
+    /**
+     * Cierra la sesión (E8.2, [SignOutFlow]): borra el token FCM en el servidor, los datos locales de la
+     * persona, la caché de Firestore y la sesión de Firebase y de Credential Manager.
+     */
     suspend fun signOut()
 }
 
