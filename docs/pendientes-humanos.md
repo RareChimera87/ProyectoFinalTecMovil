@@ -927,3 +927,16 @@ Lo automatizable ya quedó hecho: `GET /v1/invites/me`, `POST /v1/invites/redeem
 | 4 | **Probar en un teléfono (dev).** Instalar el `devDebug`, `adb shell pm verify-app-links --re-verify me.santiagoreina.parcheu.dev` y luego `adb shell pm get-app-links me.santiagoreina.parcheu.dev` debe mostrar `parcheu-dev.web.app: verified`. Abrir `https://parcheu-dev.web.app/i/<código de otra cuenta>` desde WhatsApp: debe abrir C5 con el código en el campo. Escanear con 'Escanear' el QR de otra cuenta (la primera vez Google Play services descarga el módulo del lector) y escanear un QR ajeno para ver 'Este código no es de ParcheU'. | I3 | Con el despliegue de dev |
 | 5 | **Prod.** Con el tag `v*` se despliega Hosting de `parcheu-prod`; repetir el paso 3 con `parcheu-prod.web.app` y el paso 4 con la app de la prueba cerrada (paquete `me.santiagoreina.parcheu`) una vez hecho el paso 1. | I3 | Con la 0.2 |
 | 6 | **Revisión visual** de `android/app/src/test/screenshots/invites/*.png` contra el mockup 07 (C5 'Mi código'); 'Escanear', el selector de modo ('¿Cómo se conocen?') y la lista 'Quieren agregarte' no tienen mockup y se armaron con componentes del sistema de diseño. Diferencia aceptada: el código es todo al azar (p. ej. `QZHT-4827`) y no `MARI-4827` como en el mockup, porque un prefijo con el nombre dejaba solo 10.000 códigos por nombre y facilitaba adivinarlos. | I2 | Ventana de revisión de la ola 10 |
+
+## E8.2 · Ajustes de privacidad
+
+No hay acciones obligatorias de consola. Revisión manual recomendada con el backend de dev ya desplegado:
+
+1. **Páginas legales**: H3 abre `<HOSTING_URL>/terminos` y `<HOSTING_URL>/privacidad` (`BuildConfig.TERMS_URL` y
+   `PRIVACY_URL`, ya servidas por Firebase Hosting desde `firebase/public`). Confirmar que responden 200 tras el
+   despliegue de Hosting.
+2. **Cerrar sesión en dispositivo real**: verificar con Play Services que `DELETE /v1/me/fcm-token` responde 204,
+   que no llegan push tras cerrar sesión y que, al entrar con otra cuenta, no aparece nada de la anterior (chats,
+   grafo, progreso de B1). El borrado del token necesita red: si falla (sin conexión) el token queda en el servidor
+   hasta que otro usuario lo reasigne o se purgue por inactividad.
+3. **Pantalla 'Personas bloqueadas'**: el enlace de H3 abre la ruta `BlockedUsers`, que sigue siendo stub hasta E8.7.
