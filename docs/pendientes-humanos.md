@@ -927,3 +927,16 @@ Lo automatizable ya quedó hecho: `GET /v1/invites/me`, `POST /v1/invites/redeem
 | 4 | **Probar en un teléfono (dev).** Instalar el `devDebug`, `adb shell pm verify-app-links --re-verify me.santiagoreina.parcheu.dev` y luego `adb shell pm get-app-links me.santiagoreina.parcheu.dev` debe mostrar `parcheu-dev.web.app: verified`. Abrir `https://parcheu-dev.web.app/i/<código de otra cuenta>` desde WhatsApp: debe abrir C5 con el código en el campo. Escanear con 'Escanear' el QR de otra cuenta (la primera vez Google Play services descarga el módulo del lector) y escanear un QR ajeno para ver 'Este código no es de ParcheU'. | I3 | Con el despliegue de dev |
 | 5 | **Prod.** Con el tag `v*` se despliega Hosting de `parcheu-prod`; repetir el paso 3 con `parcheu-prod.web.app` y el paso 4 con la app de la prueba cerrada (paquete `me.santiagoreina.parcheu`) una vez hecho el paso 1. | I3 | Con la 0.2 |
 | 6 | **Revisión visual** de `android/app/src/test/screenshots/invites/*.png` contra el mockup 07 (C5 'Mi código'); 'Escanear', el selector de modo ('¿Cómo se conocen?') y la lista 'Quieren agregarte' no tienen mockup y se armaron con componentes del sistema de diseño. Diferencia aceptada: el código es todo al azar (p. ej. `QZHT-4827`) y no `MARI-4827` como en el mockup, porque un prefijo con el nombre dejaba solo 10.000 códigos por nombre y facilitaba adivinarlos. | I2 | Ventana de revisión de la ola 10 |
+
+## Backend de pruebas en el homeserver (ADR-0033)
+
+Lo automatizable ya quedó hecho: `deploy/homelab/` (compose, `desplegar.sh`, `respaldar.sh`, README), el ADR-0033, la condición `GCP_DEV_ENABLED` en `deploy-dev` y la excepción de HTTP solo en `devDebug`. **No se ejecutó nada contra el homeserver.**
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **No aplicar Terraform de `parcheu-dev` por ahora** (E0.5 y sus pasos de import/WIF quedan en pausa). `deploy-dev` no corre mientras la variable de repositorio `GCP_DEV_ENABLED` no sea `true`. | El usuario | Hasta decidir volver a GCP |
+| 2 | **Correr el despliegue:** `deploy/homelab/desplegar.sh` desde el portátil (SSH sin contraseña a `user@homelab`). Verificar `curl http://homelab:8090/v1/health`. | El usuario | Cuando quiera probar |
+| 3 | **Llave de Google (opcional, para iniciar sesión con la app real):** crear `sa-homelab` con 4 roles, generar la llave y copiarla a `~/parcheu/secrets/sa.json`; pasar `.env` a `PARCHEU_ENV=dev` (pasos exactos en `deploy/homelab/README.md`). Borrar la cuenta y la llave al terminar. | El usuario | Antes de que otros prueben la app |
+| 4 | **Proxy Host en Nginx Proxy Manager:** `api-parcheu.homeserverlab.site` → `http://192.168.0.10:8090`, certificado existente `npm-1` y Force SSL (el despliegue no toca NPM). | El usuario | Tras el paso 2 |
+| 5 | **Testers externos de Play:** el dominio está en Cloudflare; agregar la ruta del hostname `api-parcheu.homeserverlab.site` en el túnel existente apuntando a `http://localhost:8090`. Solo en modo `dev`. | El usuario | Con la prueba cerrada |
+| 6 | **App de debug:** `parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/` en `android/local.properties` (ver `docs/desarrollo-local.md`). | Cada desarrollador | Al probar contra el homeserver |

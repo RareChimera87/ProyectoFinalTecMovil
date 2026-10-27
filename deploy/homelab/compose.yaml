@@ -1,0 +1,90 @@
+# ParcheU en el homeserver (ADR-0033): Postgres + migraciones + API Ktor.
+# Se despliega con deploy/homelab/desplegar.sh; las variables salen de ~/parcheu/.env (ver .env.example).
+# Solo la API publica un puerto (8090); Postgres no publica nada (el 5432 del host ya está ocupado).
+name: parcheu
+
+services:
+  parcheu-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: parcheu
+      POSTGRES_USER: parcheu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+    volumes:
+      - parcheu-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parcheu -d parcheu"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    mem_limit: 384m
+
+  # Una sola ejecución (ADR-0011): aplica Flyway y termina. La API espera a que acabe bien.
+  parcheu-migrate:
+    image: parcheu-api:${PARCHEU_TAG:-latest}
+    pull_policy: never
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      ENV: ${PARCHEU_ENV:-local}
+      DB_NAME: parcheu
+      DB_URL: jdbc:postgresql://parcheu-db:5432/parcheu
+      DB_USER: parcheu
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JAVA_TOOL_OPTIONS: -Xmx256m
+    depends_on:
+      parcheu-db:
+        condition: service_healthy
+    mem_limit: 512m
+
+  parcheu-api:
+    image: parcheu-api:${PARCHEU_TAG:-latest}
+    pull_policy: never
+    command: ["serve"]
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      ENV: ${PARCHEU_ENV:-local}
+      PORT: "8080"
+      APP_VERSION: ${APP_VERSION:-homelab}
+      DB_NAME: parcheu
+      DB_URL: jdbc:postgresql://parcheu-db:5432/parcheu
+      DB_USER: parcheu
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      HMAC_ANON_KEY: ${HMAC_ANON_KEY:-}
+      JAVA_TOOL_OPTIONS: -Xmx384m -XX:+ExitOnOutOfMemoryError
+      # Solo se usan con PARCHEU_ENV=dev y la llave de Google (README). Vacías son inocuas.
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      INTERNAL_OIDC_AUDIENCE: ${INTERNAL_OIDC_AUDIENCE:-}
+      TASKS_SERVICE_ACCOUNT: ${TASKS_SERVICE_ACCOUNT:-}
+      SERVICE_URL: ${SERVICE_URL:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_VERTEX_PROJECT: ${AI_VERTEX_PROJECT:-}
+      AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-}
+      TASKS_QUEUE_AI_LIGHT: ${TASKS_QUEUE_AI_LIGHT:-}
+      TASKS_QUEUE_SIM: ${TASKS_QUEUE_SIM:-}
+      TASKS_QUEUE_MAINT: ${TASKS_QUEUE_MAINT:-}
+      GCP_REGION: ${GCP_REGION:-}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/sa.json
+    volumes:
+      # Opcional: ~/parcheu/secrets/sa.json (llave de la cuenta de servicio). Se monta el directorio
+      # para que el archivo pueda faltar sin romper el arranque.
+      - ./secrets:/secrets:ro
+    depends_on:
+      parcheu-db:
+        condition: service_healthy
+      parcheu-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    mem_limit: 640m
+
+volumes:
+  parcheu-pgdata:

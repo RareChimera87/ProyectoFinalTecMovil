@@ -37,6 +37,17 @@ cd backend && ./gradlew jibBuildTar
 scripts/test/commit-lint.test.sh
 ```
 
+## Backend en el homeserver (ADR-0033)
+
+Para probar la app contra el backend de pruebas del homeserver (`deploy/homelab/README.md`), agrega a `android/local.properties` (no versionado):
+
+```properties
+parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/
+# respaldo sin HTTPS (LAN): parcheu.apiUrl.dev=http://192.168.0.10:8090/  (o Tailscale: http://100.104.43.91:8090/)
+```
+
+`urlProperty` lee primero `-P`/`gradle.properties` y luego `local.properties`. La URL HTTPS necesita el Proxy Host de Nginx Proxy Manager (paso humano en `deploy/homelab/README.md`); AdGuard resuelve `*.homeserverlab.site` a `192.168.0.10` en la LAN (por Tailscale, con el DNS de AdGuard). Solo el `devDebug` trae `network_security_config` con HTTP permitido, como respaldo, hacia `192.168.0.10`, `100.104.43.91`, `homelab` y `10.0.2.2` (`app/src/devDebug/`); el release y el flavor `prod` exigen HTTPS. Sin la llave de Google el backend corre con autenticación Fake y la app no inicia sesión (ver el README del despliegue).
+
 ## Testcontainers solo en CI
 
 Los tests de backend que necesitan Postgres usan Testcontainers y **solo corren en CI**. En local no se requiere Docker: pasa `-PsinContenedores` para omitirlos (los demás tests usan fakes como `FakeLlmClient` o `FakeTokenVerifier`). Si quieres correrlos localmente, agrega tu usuario al grupo `docker` y vuelve a iniciar sesión.
