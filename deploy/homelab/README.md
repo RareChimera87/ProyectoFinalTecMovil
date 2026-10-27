@@ -6,7 +6,7 @@ Despliegue del backend Ktor en el homeserver del equipo (Docker Compose), en vez
 |---|---|
 | `parcheu-db` | Postgres 16 con volumen `parcheu-pgdata`; **no publica puertos** |
 | `parcheu-migrate` | Flyway (modo `migrate`) una sola vez antes de la API |
-| `parcheu-api` | Ktor en `0.0.0.0:8090` del host (LAN y Tailscale; el router no lo expone) |
+| `parcheu-api` | Ktor publicado en `127.0.0.1:8090` y `192.168.0.10:8090` del host (loopback y LAN; no en `0.0.0.0`, ni Tailscale; el router no lo expone). Se cambia con `PARCHEU_BIND_LOCAL` / `PARCHEU_BIND_LAN` en `.env` |
 
 Memoria: API con `-Xmx384m` y tope de 640 MB, Postgres 384 MB, migración 512 MB solo mientras corre.
 No toca los demás contenedores del servidor (seafile, n8n, nginx-proxy-manager, etc.).
@@ -21,14 +21,22 @@ deploy/homelab/desplegar.sh --host usuario@100.104.43.91
 deploy/homelab/desplegar.sh --sin-build     # reutiliza backend/build/jib-image.tar
 ```
 
-El script: comprueba que el 8090 esté libre (o sea de ParcheU) y aborta si no, construye la imagen, copia imagen y compose a `~/parcheu/`, crea `~/parcheu/.env` con contraseñas aleatorias la primera vez (`chmod 600`, nunca se sobrescribe), carga la imagen, migra, levanta la API, verifica `http://homelab:8090/v1/health` (y `https://api-parcheu.homeserverlab.site/v1/health` si ya resuelve) e instala un cron de respaldo diario (03:17, `respaldar.sh`, 7 días en `~/parcheu/backups`). Es idempotente: se puede repetir para actualizar.
+El script: comprueba que el 8090 esté libre (o sea de ParcheU) y aborta si no, construye la imagen, copia imagen y compose a `~/parcheu/`, crea `~/parcheu/.env` con contraseñas aleatorias la primera vez (`chmod 600`, nunca se sobrescribe; solo agrega claves que falten, como `TASKS_MODE=inline`), carga la imagen y la etiqueta con su SHA (`PARCHEU_TAG`, la anterior queda en `PARCHEU_PREV_TAG`), levanta la API con un solo `docker compose up` (la migración corre antes por `depends_on`), verifica la salud desde el servidor y, **si falla, revierte solo a la imagen anterior** (las migraciones de Flyway no se deshacen: usa migraciones compatibles hacia atrás). Tras un despliegue sano borra las etiquetas anteriores a la previa (nunca `docker image prune`), avisa si el HTTPS responde con `PARCHEU_ENV=local` e instala un cron de respaldo diario (03:17, `respaldar.sh`, 7 días en `~/parcheu/backups`, `respaldo.log` rotado a 1 MiB). Es idempotente: se puede repetir para actualizar.
+
+Los respaldos viven en el mismo servidor: copia `~/parcheu/backups` fuera de él (p. ej. a Seafile) si los datos importan.
+
+Datos de demostración: `ssh user@homelab 'cd ~/parcheu && docker compose run --rm parcheu-migrate seed-demo'` (la misma imagen, modo `seed-demo`; en `local` o `dev`).
+
+### Tareas en proceso (`TASKS_MODE=inline`)
+
+Sin Cloud Tasks ni Cloud Scheduler, la API ejecuta las tareas asíncronas dentro del proceso (`InProcessTaskQueue`): `build-persona`, `simulate` y `purge-user`, con hasta 5 intentos (10/30/90/270 s con jitter), concurrencia por cola (simulaciones 2, IA ligera 4, mantenimiento 1) y deduplicación por nombre durante 1 h. Un programador interno corre los jobs `match-sweep` (cada 60 s), `purge-sweep` (cada hora) y `simulation-recovery` (cada 15 min; reencola las simulaciones QUEUED/RUNNING de entre 10 min y 24 h, p. ej. tras un reinicio). Retention, communities, memories y twin-accuracy siguen siendo stubs y no se programan. `inline` se rechaza con `ENV=prod` y dentro de Cloud Run.
 
 Respaldo a mano: `ssh user@homelab '~/parcheu/respaldar.sh'`. Restaurar: `gunzip -c parcheu-AAAAMMDD-HHMMSS.sql.gz | docker compose exec -T parcheu-db psql -U parcheu parcheu` (con la base vacía).
 Registros: `ssh user@homelab 'cd ~/parcheu && docker compose logs -f parcheu-api'`.
 
 ## Qué funciona sin la llave de Google (`PARCHEU_ENV=local`, el valor inicial)
 
-El backend arranca con `ENV=local`: autenticación Fake (`Authorization: Bearer fake-<uid>` para `/v1/*`), IA falsa (`FakeLlmClient`, sin gastar), FCM falso, chat y espejos de Firestore en memoria, cola de tareas Fake.
+El backend arranca con `ENV=local`: autenticación Fake (`Authorization: Bearer fake-<uid>` para `/v1/*`), IA falsa (`FakeLlmClient`, sin gastar), FCM falso, chat y espejos de Firestore en memoria, tareas en proceso (`TASKS_MODE=inline`).
 
 Funciona: `GET /v1/health`, sesión y términos, perfil, gemelo (`build-persona` en línea), grafo, invitaciones, cuotas, `grant-plus` de prueba, `seed-demo`, y todo con Postgres real. Se prueba con `curl`:
 
@@ -37,9 +45,9 @@ curl http://homelab:8090/v1/health
 curl -XPOST -H 'Authorization: Bearer fake-ana' http://homelab:8090/v1/session
 ```
 
-No funciona: iniciar sesión desde la app Android (envía un ID token real de Firebase, que en modo `local` no se valida), IA real (Vertex), notificaciones push, espejos de Firestore (chat y progreso en vivo), borrado de usuarios en Firebase Auth, verificación de compras en Play y las simulaciones y tareas encoladas (la cola Fake de `local` solo ejecuta en línea el gemelo).
+No funciona: iniciar sesión desde la app Android (envía un ID token real de Firebase, que en modo `local` no se valida), IA real (Vertex), notificaciones push, espejos de Firestore (chat y progreso en vivo), borrado de usuarios en Firebase Auth, verificación de compras en Play (`verify` responde 500; Plus se prueba con `grant-plus`). El gemelo y las simulaciones corren en proceso, con IA falsa.
 
-**Seguridad.** En modo `local` cualquiera con acceso al puerto puede suplantar a cualquier usuario. Por eso el 8090 queda solo en LAN y Tailscale: **no lo publiques por Cloudflare en modo `local`.**
+**Seguridad.** En modo `local` cualquiera con acceso al puerto puede suplantar a cualquier usuario. Por eso el 8090 queda solo en loopback y la LAN: **no lo publiques por Cloudflare en modo `local`.** Mientras `PARCHEU_ENV=local`, el Proxy Host de NPM debe llevar una *Access List* que permita solo `192.168.0.0/24` y `100.64.0.0/10` (Tailscale), o crearse únicamente después de pasar a `dev`; `desplegar.sh` avisa si el HTTPS responde con `local`.
 
 ## Con la app real: `PARCHEU_ENV=dev` y la llave de Google
 
@@ -56,7 +64,14 @@ Según el código (`sa-api` en el Terraform, sin los de Cloud SQL, logs y Cloud 
 | `roles/datastore.user` | Espejos de Firestore (chat, `matchTickets`, `simulations`) |
 | `roles/firebasecloudmessaging.admin` | Enviar push (FCM) |
 
-No hace falta Secret Manager: la clave de `anonId` va directa en `HMAC_ANON_KEY` del `.env`. Cloud Tasks (`roles/cloudtasks.enqueuer`) solo si configuras colas reales (más abajo). Play Billing (`PLAY_SA_JSON`) queda fuera: `verify` responderá 500, y Plus se prueba con `/internal/dev/grant-plus`.
+No hace falta Secret Manager: la clave de `anonId` va directa en `HMAC_ANON_KEY` del `.env`, ni Cloud Tasks (las tareas corren en proceso). Play Billing (`PLAY_SA_JSON`) queda fuera: `verify` responderá 500 y las notificaciones RTDN de Play (renovaciones y cancelaciones) no se sincronizan en el homeserver; Plus se prueba con `/internal/dev/grant-plus`. Esa ruta exige un token OIDC de la cuenta de `TASKS_SERVICE_ACCOUNT`:
+
+```bash
+gcloud auth activate-service-account --key-file sa.json
+TOKEN=$(gcloud auth print-identity-token --audiences=https://api-parcheu.homeserverlab.site)
+```
+
+y se envía como `Authorization: Bearer $TOKEN`.
 
 ### Crear la llave (pasos del usuario)
 
@@ -88,17 +103,17 @@ TASKS_SERVICE_ACCOUNT=sa-homelab@parcheu-dev.iam.gserviceaccount.com
 INTERNAL_OIDC_AUDIENCE=https://api-parcheu.homeserverlab.site
 ```
 
-y `cd ~/parcheu && docker compose up -d parcheu-api`. Las migraciones son iguales. `ENV=dev` exige proyecto de Firebase, audiencia https y una cuenta de servicio como `TASKS_SERVICE_ACCOUNT`; si falta algo, la API no arranca y el mensaje sale en los registros.
+y `cd ~/parcheu && docker compose up -d parcheu-api`. Usa el mismo proyecto de Firebase que el flavor `dev` de la app (`parcheu-dev`). Las migraciones son iguales. `ENV=dev` exige proyecto de Firebase, audiencia https y una cuenta de servicio como `TASKS_SERVICE_ACCOUNT`; si falta algo, la API no arranca y el mensaje sale en los registros.
 
-Limitación: sin colas de Cloud Tasks, las tareas asíncronas (construir el gemelo, simulaciones, purga de cuentas) fallan al encolar. Para tenerlas hay que crear las colas `ai-light`, `simulations` y `maintenance` en `parcheu-dev`, dar `roles/cloudtasks.enqueuer` (y `iam.serviceAccountUser` sobre `TASKS_SERVICE_ACCOUNT`) a `sa-homelab`, y llenar `GCP_REGION`, `TASKS_QUEUE_*` y `SERVICE_URL=https://api-parcheu.homeserverlab.site` en el `.env`; Cloud Tasks llamará a esa URL pública con un token OIDC, así que antes hay que exponer la API (siguiente sección). Es opcional y no se probó.
+Las tareas asíncronas (gemelo, simulaciones, purga de cuentas) y los jobs periódicos corren dentro de la API (`TASKS_MODE=inline`); no hace falta crear colas.
 
 ## HTTPS con Nginx Proxy Manager (paso del usuario)
 
-El servidor ya tiene NPM con el certificado comodín `*.homeserverlab.site` (Let's Encrypt, vence en ene 2027) y AdGuard reescribe `*.homeserverlab.site` a `192.168.0.10` en la LAN. En NPM crea un *Proxy Host*: dominio `api-parcheu.homeserverlab.site`, esquema `http`, destino `192.168.0.10` puerto `8090`, pestaña SSL con el certificado existente `npm-1` y *Force SSL*. Nada de esto lo hace `desplegar.sh`. Después, `curl https://api-parcheu.homeserverlab.site/v1/health` debe responder. Funciona en el emulador y en teléfonos de la LAN (o por Tailscale usando el DNS de AdGuard).
+El servidor ya tiene NPM con el certificado comodín `*.homeserverlab.site` (Let's Encrypt, vence en ene 2027) y AdGuard reescribe `*.homeserverlab.site` a `192.168.0.10` en la LAN. En NPM crea un *Proxy Host*: dominio `api-parcheu.homeserverlab.site`, esquema `http`, destino `192.168.0.10` puerto `8090`, pestaña SSL con el certificado existente `npm-1` y *Force SSL*. Nada de esto lo hace `desplegar.sh`. **Mientras `PARCHEU_ENV=local`** agrega una *Access List* en NPM (pestaña Details del Proxy Host) que permita solo `192.168.0.0/24` y `100.64.0.0/10` y deniegue el resto, o crea el Proxy Host solo después de pasar a `dev`. Después, `curl https://api-parcheu.homeserverlab.site/v1/health` debe responder. Funciona en el emulador y en teléfonos de la LAN (o por Tailscale usando el DNS de AdGuard).
 
 ## Exponerlo a testers de Play (túnel de Cloudflare existente)
 
-Solo en modo `dev` (token real de Firebase). El dominio está en Cloudflare: en Zero Trust, en el túnel que ya corre en el servidor, agrega la ruta del hostname `api-parcheu.homeserverlab.site` → `HTTP` `localhost:8090` (el túnel usa `network_mode: host`). Luego la app debe apuntar a `https://api-parcheu.homeserverlab.site/` (`-Pparcheu.apiUrl.prod=...` al construir el AAB de la prueba cerrada). Los testers no necesitan Tailscale ni red local.
+Fuera de alcance por ahora: no hay testers ni publicación en Play. Para publicar más adelante habría que alinear el proyecto de Firebase y de Vertex de la instancia (`FIREBASE_PROJECT_ID`, `AI_VERTEX_PROJECT`) con el del flavor publicado (`prod` apunta a `parcheu-prod`, que aún no existe; la alternativa es publicar con el flavor `dev`) y fijar la variable de repositorio `PARCHEU_API_URL_PROD`; la subida automática a alpha depende de `deploy-prod` (sin GCP queda como `workflow_dispatch`). Solo en modo `dev` (token real de Firebase). El dominio está en Cloudflare: en Zero Trust, en el túnel que ya corre en el servidor, agrega la ruta del hostname `api-parcheu.homeserverlab.site` → `HTTP` `localhost:8090` (el túnel usa `network_mode: host`). Luego la app debe apuntar a `https://api-parcheu.homeserverlab.site/` (`-Pparcheu.apiUrl.prod=...` al construir el AAB de la prueba cerrada). Los testers no necesitan Tailscale ni red local.
 
 ## Probar la app de debug en el teléfono
 
