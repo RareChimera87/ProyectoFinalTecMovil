@@ -80,8 +80,10 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * InvitesScreenTest e InvitesScreenshotTest), D6/D7 (E6.3, FofScreenTest y FofScreenshotTest) y
          * E1-E3 (E6.2, feature/presentar: IntroduceViewModelTest, IntroResultViewModelTest,
          * IntroProposalViewModelTest y PresentarScreenshotTest), C3 (E9.1, ProfileViewModelTest,
-         * ProfileScreenTest y ProfileScreenshotTest) y G1-G4/I4 (E7.3, feature/plus:
-         * PlusNavigationTest, PlusScreenTest y PlusScreenshotTest).
+         * ProfileScreenTest y ProfileScreenshotTest), G1-G4/I4 (E7.3, feature/plus:
+         * PlusNavigationTest, PlusScreenTest y PlusScreenshotTest) y H3 (E8.2, feature/privacysettings:
+         * PrivacySettingsViewModelTest, PrivacySettingsScreenTest, SignOutBackStackTest y
+         * PrivacySettingsScreenshotTest).
          */
         val implementedRoutes =
             setOf(
@@ -114,7 +116,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 Profile::class,
                 Paywall::class,
                 PurchaseSuccess::class,
-                ManageSubscription::class
+                ManageSubscription::class,
+                PrivacySettings::class
             )
     }
 }

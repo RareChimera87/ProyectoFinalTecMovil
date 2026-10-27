@@ -946,3 +946,16 @@ Todo lo de código quedó hecho y no depende de un entorno vivo: C3 consume `GET
 | # | Paso | Dueño | Cuándo |
 |---|---|---|---|
 | 1 | **Revisión visual** de `android/app/src/test/screenshots/profile/*.png` (0, 1 y 16 puntos, claro y oscuro) contra el mockup 06. Diferencia aceptada: el mockup de '4 meses de historial' se reproduce solo con los 16 puntos demo de la captura; con datos reales el gráfico muestra un punto por semana con datos. 'Rasgos' y el pie de la suscripción no están en el mockup y se armaron con componentes del sistema de diseño. | I2 | Ventana de revisión de la ola 10 |
+
+## E8.2 · Ajustes de privacidad
+
+No hay acciones obligatorias de consola. Revisión manual recomendada con el backend de dev ya desplegado:
+
+1. **Páginas legales**: H3 abre `<HOSTING_URL>/terminos` y `<HOSTING_URL>/privacidad` (`BuildConfig.TERMS_URL` y
+   `PRIVACY_URL`, ya servidas por Firebase Hosting desde `firebase/public`). Confirmar que responden 200 tras el
+   despliegue de Hosting.
+2. **Cerrar sesión en dispositivo real**: verificar con Play Services que `DELETE /v1/me/fcm-token` responde 204,
+   que no llegan push tras cerrar sesión y que, al entrar con otra cuenta, no aparece nada de la anterior (chats,
+   grafo, progreso de B1). El borrado del token necesita red: si falla (sin conexión) el token queda en el servidor
+   hasta que otro usuario lo reasigne o se purgue por inactividad.
+3. **Pantalla 'Personas bloqueadas'**: el enlace de H3 abre la ruta `BlockedUsers`, que sigue siendo stub hasta E8.7.

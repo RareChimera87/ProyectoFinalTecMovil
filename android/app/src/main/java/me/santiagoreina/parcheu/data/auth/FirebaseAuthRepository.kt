@@ -2,11 +2,9 @@ package me.santiagoreina.parcheu.data.auth
 
 import android.annotation.SuppressLint
 import android.content.Context
-import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.ClearCredentialException
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.GetCredentialInterruptedException
@@ -60,7 +58,7 @@ class FirebaseAuthRepository(
     private val source: FirebaseAuthSource,
     private val api: SessionApi,
     private val errorMapper: ApiErrorMapper,
-    private val cleaners: List<SessionCleaner> = emptyList()
+    private val signOutFlow: SignOutFlow
 ) : AuthRepository {
     override fun hasSession(): Boolean = source.authOrNull()?.currentUser != null
 
@@ -99,27 +97,7 @@ class FirebaseAuthRepository(
         Unit
     }
 
-    override suspend fun signOut() {
-        // Los datos locales de la persona se borran siempre, aunque Credential Manager falle después.
-        cleaners.forEach { cleaner ->
-            try {
-                cleaner.clear()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // Un fallo al borrar una caché no debe impedir cerrar la sesión.
-            }
-        }
-        source.authOrNull()?.signOut()
-        // clearCredentialState necesita un Context; el de la aplicación basta para borrar la selección.
-        try {
-            CredentialManager.create(
-                source.applicationContext()
-            ).clearCredentialState(ClearCredentialStateRequest())
-        } catch (_: ClearCredentialException) {
-            // Sin proveedor de credenciales (emulador sin Play Services): no hay estado que borrar.
-        }
-    }
+    override suspend fun signOut() = signOutFlow()
 
     private suspend fun requestGoogleIdToken(context: Context, webClientId: String): TokenResult {
         val option =
