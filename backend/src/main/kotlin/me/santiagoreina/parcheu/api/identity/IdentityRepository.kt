@@ -50,4 +50,10 @@ interface IdentityRepository : ModesRepository, PrivacyRepository {
      * mensajes de terceros).
      */
     suspend fun markDeleted(userId: UUID, now: Instant)
+
+    /**
+     * Fija `suspended_until` (E8.5) sin acortar una suspensión que ya dure más (un baneo no se levanta
+     * con una suspensión de 24 h). Devuelve el valor vigente o null si el usuario no existe.
+     */
+    suspend fun suspendUntil(userId: UUID, until: Instant, now: Instant): Instant?
 }

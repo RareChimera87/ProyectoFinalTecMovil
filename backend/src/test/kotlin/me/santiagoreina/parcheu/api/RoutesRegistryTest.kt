@@ -41,7 +41,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Notifications: E5.4 implementa la bandeja y 'Marcar leídas' (NotificationsApiTest); ya no queda ningún stub.
     // Billing: E7.1 implementa entitlement, verify y la RTDN (BillingApiTest); ya no queda ningún stub.
     // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` sigue en 501 (E8.6).
-    "admin" to listOf(HttpMethod.Get to "/v1/admin/reports", HttpMethod.Post to "/v1/admin/reports/r1/resolve"),
+    // Admin: E8.5 implementa las dos rutas (AdminApiTest); ya no queda ningún stub.
     // Home: E4.7 implementa GET /v1/home (HomeApiTest); ya no queda ningún stub.
 )
 

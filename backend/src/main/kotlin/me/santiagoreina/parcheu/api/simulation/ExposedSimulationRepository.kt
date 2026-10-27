@@ -175,6 +175,17 @@ class ExposedSimulationRepository(private val db: Database) : SimulationReposito
             ?.takeIf { it.score != null && it.report != null }
     }
 
+    override suspend fun unfinished(createdBefore: Instant, createdAfter: Instant, limit: Int): List<SimulationRecord> = tx {
+        Simulations.selectAll()
+            .where {
+                (Simulations.status inList UNFINISHED) and
+                    (Simulations.createdAt less createdBefore.odt()) and (Simulations.createdAt greater createdAfter.odt())
+            }
+            .orderBy(Simulations.createdAt to SortOrder.ASC, Simulations.id to SortOrder.ASC)
+            .limit(limit)
+            .map { it.toRecord() }
+    }
+
     override suspend fun markRunning(id: UUID): Boolean = tx {
         Simulations.update({ (Simulations.id eq id) and (Simulations.status eq SimulationStatus.QUEUED) }) {
             it[status] = SimulationStatus.RUNNING
