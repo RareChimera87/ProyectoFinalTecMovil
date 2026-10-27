@@ -90,7 +90,7 @@ object EdgeTransitions {
 
 /**
  * Alta y actualización de aristas (E3.1). Lo llaman la simulación (E4.3), la decisión mutua (E4.5),
- * las invitaciones (E6.1) y las presentaciones (E6.4); nunca las rutas del grafo. Ignora los eventos
+ * las invitaciones (E6.1) y las presentaciones (E6.2); nunca las rutas del grafo. Ignora los eventos
  * entre usuarios con un bloqueo en cualquier sentido.
  */
 class EdgeService(private val repo: GraphRepository, private val clock: Clock) {

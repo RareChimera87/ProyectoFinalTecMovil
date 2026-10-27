@@ -225,10 +225,9 @@ class IntroductionService(
      */
     suspend fun request(requester: UUID, body: IntroRequest) {
         if (!quota.isPlus(requester)) throw PlusRequired("Pedir una presentación es de ParcheU+")
-        val (target, mutuals) = people.resolveFof(requester, body.anonId.trim()) ?: throw NotFound("La persona no existe")
+        val (target, via) = people.resolveFof(requester, body.anonId.trim()) ?: throw NotFound("La persona no existe")
         if (repo.pendingRequest(requester, target) != null) return
-        // Determinista: el amigo en común con el id menor (no se revela a quien pide).
-        val via = mutuals.minBy { it.toString() }
+        // `via` es el viaId que D6 le muestra a quien pide ('Amigo de …'): una sola fuente de verdad (FofService).
         repo.insertRequest(
             IntroRequestRecord(UUID.randomUUID(), requester, via, target, IntroRequestStatus.PENDING, clock.instant().truncatedTo(ChronoUnit.MICROS)),
         )

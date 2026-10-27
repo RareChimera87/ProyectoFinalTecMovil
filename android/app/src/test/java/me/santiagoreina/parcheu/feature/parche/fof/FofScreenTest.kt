@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -112,6 +113,34 @@ class FofScreenTest {
         )
         composeRule.onNodeWithText("Pedida").performScrollTo().assertIsNotEnabled()
         composeRule.onNodeWithTag(FofTags.MESSAGE).assertIsDisplayed()
+    }
+
+    @Test
+    fun introductionButtonsTellTalkBackWhichCandidateTheyAreFor() {
+        show(
+            FofUiState.Unlocked(FofSamples.plus, requested = setOf(FofSamples.candidates[1].anonId))
+        )
+        composeRule.onNodeWithContentDescription(
+            "Pedir presentación de Alguien, amigo de Valentina"
+        )
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(
+            "Presentación pedida de Felipe R., amigo de Andrés"
+        )
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun introActionDescriptionCoversEveryState() {
+        assertEquals("Pedir presentación de Ana", introActionDescription("Ana", null, false, false))
+        assertEquals(
+            "Pidiendo presentación de Ana, amigo de Luis",
+            introActionDescription("Ana", "Luis", false, true)
+        )
+        assertEquals(
+            "Presentación pedida de Ana, amigo de Luis",
+            introActionDescription("Ana", "Luis", true, false)
+        )
     }
 
     @Test

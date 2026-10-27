@@ -45,7 +45,7 @@ sealed interface FofEffect {
 
 /**
  * D6/D7 (E6.3). Gratis ve el bloqueo (D7) y "Ver ParcheU+" abre G1; ParcheU+ ve G0 con la capa fof y la
- * lista (D6). "Pedir presentación" usa `POST /v1/introductions/request` (E6.4) con el `anonId`.
+ * lista (D6). "Pedir presentación" usa `POST /v1/introductions/request` (E6.2) con el `anonId`.
  */
 class FofViewModel(private val repository: FofRepository) : ViewModel() {
     private val _state = MutableStateFlow<FofUiState>(FofUiState.Loading)
@@ -62,6 +62,14 @@ class FofViewModel(private val repository: FofRepository) : ViewModel() {
         if (started) return
         started = true
         load()
+    }
+
+    /**
+     * Al volver a D7 (p. ej. desde G1 tras comprar ParcheU+) recarga sin mostrar el spinner: si ya hay
+     * plan, pasa a D6; si no, sigue en el candado. En cualquier otro estado no hace nada.
+     */
+    fun refreshIfLocked() {
+        if (_state.value is FofUiState.Locked) load()
     }
 
     /** "Reintentar" del error. */

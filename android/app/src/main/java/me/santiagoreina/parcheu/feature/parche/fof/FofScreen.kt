@@ -28,6 +28,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -356,6 +358,7 @@ private fun FofCard(
                 )
             }
             val enabled = !requested && !sending
+            val actionDescription = introActionDescription(name, viaName, requested, sending)
             Text(
                 text = when {
                     requested -> "Pedida"
@@ -372,11 +375,28 @@ private fun FofCard(
                     .widthIn(max = 96.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable(enabled = enabled, role = Role.Button, onClick = onRequest)
+                    // TalkBack: el botón dice a quién se refiere (todos los de la lista decían lo mismo).
+                    .semantics { contentDescription = actionDescription }
                     .heightIn(min = 48.dp)
                     .wrapContentHeight()
                     .padding(horizontal = 4.dp)
             )
         }
+    }
+}
+
+/** Descripción de TalkBack del botón de [FofCard]: acción, candidato y amigo en común. */
+internal fun introActionDescription(
+    name: String,
+    viaName: String?,
+    requested: Boolean,
+    sending: Boolean
+): String {
+    val via = viaName?.let { ", amigo de $it" }.orEmpty()
+    return when {
+        requested -> "Presentación pedida de $name$via"
+        sending -> "Pidiendo presentación de $name$via"
+        else -> "Pedir presentación de $name$via"
     }
 }
 

@@ -107,7 +107,7 @@ interface ThirdPartyView {
 
 /**
  * Registro de las vistas de terceros. El ego-grafo de E3.1 no lo es (solo muestra aristas
- * directas del observador); fof (E6.3), comunidades (E6.2), presentaciones (E6.4) y sugerencias
+ * directas del observador); fof (E6.3), comunidades (E6.4), presentaciones (E6.2) y sugerencias
  * de inicio (E4.7) agregan aquí su clase en su feature.
  *
  * Es declarativo (clases, no instancias) para que el test de arquitectura de E3.5 lo compare con

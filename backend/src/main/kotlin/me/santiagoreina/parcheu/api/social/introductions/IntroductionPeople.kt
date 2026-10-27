@@ -1,14 +1,12 @@
 package me.santiagoreina.parcheu.api.social.introductions
 
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
-import me.santiagoreina.parcheu.api.graph.GraphFilter
 import me.santiagoreina.parcheu.api.graph.GraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.PersonRow
+import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.graph.ThirdPartyView
 import me.santiagoreina.parcheu.api.graph.ViewContext
-import me.santiagoreina.parcheu.contract.EdgeState
-import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.PersonRef
 import me.santiagoreina.parcheu.contract.Visibility
 import java.util.UUID
@@ -20,13 +18,12 @@ import java.util.UUID
  *
  * - La otra persona es de segundo grado mientras no estén conectados: nombre solo con visibilidad NAME,
  *   nunca HIDDEN, nunca bloqueados ni borrados. Con conexión directa ya es su ego-grafo.
- * - Amigos de amigos: dos saltos por aristas CONNECTED que **no** son de Pareja (nunca se usa una arista
- *   de Pareja ajena), sin HIDDEN, bloqueados ni borrados, ni personas ya conectadas con quien pide.
+ * - Amigos de amigos: los de D6, sin definición propia: se delega en [FofService] (E6.3).
  */
 class IntroductionPeople(
     private val graph: GraphRepository,
     private val policy: GraphVisibilityPolicy,
-    private val anonIds: AnonIdSigner,
+    private val fof: FofService,
 ) : ThirdPartyView {
     override val viewName: String = "introductions"
 
@@ -57,31 +54,20 @@ class IntroductionPeople(
         subject.deletedAt == null && subject.visibility != Visibility.HIDDEN
 
     /**
-     * Amigos de amigos de [requester]: candidato → amigos en común (por quienes se puede pedir la
-     * presentación). Solo aristas CONNECTED de Amistad o Estudio.
+     * Amigos de amigos de [requester]: los mismos candidatos que D6 (E6.3), porque [fof] es la única
+     * fuente de verdad (ADR-0012 regla 2). Así 'Pedir presentación' nunca acepta a quien D6 no lista
+     * (HIDDEN como amigo en común, personas con cualquier arista con quien pide) ni elige un amigo
+     * distinto del que D6 nombra ([FofService.Candidate.viaId]).
      */
-    suspend fun friendsOfFriends(requester: UUID): Map<UUID, Set<UUID>> {
-        val blocked = graph.blockedEitherWay(requester)
-        val direct = graph.connectedWith(requester)
-        val friends = graph.egoEdges(requester, GraphFilter())
-            .filter { it.state == EdgeState.CONNECTED && it.mode != Mode.PAREJA }
-            .map { it.other }
-            .filter { policy.canSee(requester, it, ViewContext.EGO, blocked) }
-            .distinctBy { it.id }
-        val result = mutableMapOf<UUID, MutableSet<UUID>>()
-        for (friend in friends) {
-            graph.egoEdges(friend.id, GraphFilter())
-                .filter { it.state == EdgeState.CONNECTED && it.mode != Mode.PAREJA && policy.canSeeEdge(requester, friend.id, it.other.id, it.mode) }
-                .map { it.other }
-                .filter { it.id != requester && it.id !in direct && policy.canSee(requester, it, ViewContext.THIRD_PARTY, blocked) }
-                .forEach { candidate -> result.getOrPut(candidate.id) { mutableSetOf() } += friend.id }
-        }
-        return result
-    }
+    suspend fun friendsOfFriends(requester: UUID): List<FofService.Candidate> = fof.candidates(requester)
 
-    /** Resuelve el `anonId` que [requester] ve en D6 entre sus amigos de amigos; null si no es uno de ellos. */
-    suspend fun resolveFof(requester: UUID, anonId: String): Pair<UUID, Set<UUID>>? {
+    /**
+     * Resuelve el `anonId` que [requester] ve en D6; null si D6 no lo lista. Devuelve a quién se le pide
+     * la presentación: el `viaId` del candidato.
+     */
+    suspend fun resolveFof(requester: UUID, anonId: String): Pair<UUID, UUID>? {
         if (!anonId.startsWith(AnonIdSigner.PREFIX)) return null
-        return friendsOfFriends(requester).entries.firstOrNull { anonIds.anonId(requester, it.key) == anonId }?.toPair()
+        val candidate = friendsOfFriends(requester).firstOrNull { it.person.id == anonId } ?: return null
+        return candidate.userId to UUID.fromString(candidate.viaId)
     }
 }
