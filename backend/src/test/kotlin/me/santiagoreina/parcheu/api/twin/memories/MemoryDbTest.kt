@@ -196,6 +196,31 @@ class MemoryDbTest : FunSpec({
         }
     }
 
+    test("Postgres: un consentimiento revocado durante la llamada al modelo no deja memorias de ese modo").config(enabled = TestDatabase.enabled) {
+        withMemories { twin, db, capture, _ ->
+            val ana = newUser(db, "ana")
+            val pareja = newChat(db, Mode.PAREJA)
+            val estudio = newChat(db, Mode.ESTUDIO)
+            consent(db, ana, ConsentKind.CHAT_LEARNING_PAREJA, true, minutesAgo(1000))
+            consent(db, ana, ConsentKind.CHAT_LEARNING_ESTUDIO, true, minutesAgo(1000))
+            message(db, pareja, ana, "PAREJA-1 me gustan las cenas tranquilas", minutesAgo(50))
+            message(db, estudio, ana, "ESTUDIO-1 repaso con mapas mentales", minutesAgo(49))
+            val echo = capture.fake.jsonResponder!!
+            var revoked = false
+            capture.fake.jsonResponder = { request, schema ->
+                if (!revoked) {
+                    revoked = true
+                    consent(db, ana, ConsentKind.CHAT_LEARNING_PAREJA, false, minutesAgo(5))
+                }
+                echo(request, schema)
+            }
+
+            runBlocking { twin.memories.extract(ana) } shouldBe ExtractionOutcome.PROCESSED
+
+            memories(db, ana).map { it.first.first } shouldBe listOf(Mode.ESTUDIO)
+        }
+    }
+
     test("Postgres: aceptar una memoria sube twins.version en 1; repetir o rechazar otra no").config(enabled = TestDatabase.enabled) {
         withMemories { twin, db, _, _ ->
             val ana = newUser(db, "ana")

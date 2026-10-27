@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.twin.memories
 
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import me.santiagoreina.parcheu.api.ai.LlmInvalidOutput
 import me.santiagoreina.parcheu.api.platform.BogotaZone
 import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
@@ -75,7 +76,8 @@ class MemoryService(
      * Handler de `POST /internal/tasks/extract-memories`. Idempotente: el cursor solo avanza junto
      * con las memorias guardadas (misma transacción), así que un reintento después de un éxito no
      * encuentra mensajes nuevos, y uno después de un fallo vuelve a empezar desde el mismo punto. Si el
-     * modelo falla, el error se propaga para que Cloud Tasks reintente.
+     * modelo falla de forma pasajera (IO, presupuesto) el error se propaga para que Cloud Tasks reintente; un lote que
+     * el modelo rechaza (`LlmInvalidOutput`) se omite para no atascar al usuario.
      */
     suspend fun extract(userId: UUID): ExtractionOutcome {
         val now = clock.instant()
@@ -92,7 +94,16 @@ class MemoryService(
             .filter { it.mode in modes }
             .groupBy { it.mode }
             .toSortedMap()
-            .flatMap { (mode, batch) -> extractor.extract(userId, mode, batch) }
+            .flatMap { (mode, batch) ->
+                try {
+                    extractor.extract(userId, mode, batch)
+                } catch (e: LlmInvalidOutput) {
+                    // El modelo rechaza este lote siempre (filtro de seguridad, salida inválida): reintentar no lo arregla
+                    // y bloquearía el aprendizaje del usuario cada noche. Se trata como "sin memorias" y el cursor avanza.
+                    log.warn("extract-memories de {}: el modelo rechazó el lote de {} ({} mensajes); se omite: {}", userId, mode, batch.size, e.message)
+                    emptyList()
+                }
+            }
 
         if (!repo.saveExtraction(userId, cursor, messages.last().createdAt, memories, now)) {
             log.info("extract-memories de {}: otra ejecución ya avanzó el cursor; se descarta el resultado", userId)

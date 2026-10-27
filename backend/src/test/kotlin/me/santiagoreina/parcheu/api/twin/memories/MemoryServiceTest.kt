@@ -15,6 +15,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
+import me.santiagoreina.parcheu.api.ai.LlmInvalidOutput
 import me.santiagoreina.parcheu.api.ai.LlmRequest
 import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.platform.errors.Conflict
@@ -205,6 +206,47 @@ class MemoryServiceTest : FunSpec({
         fail = false
         f.service.extract(ana) shouldBe ExtractionOutcome.PROCESSED
         f.repo.all(ana) shouldHaveSize 1
+    }
+
+    test("un lote que el modelo rechaza siempre se omite: los demás modos se guardan y el cursor avanza") {
+        val f = Fixture { request ->
+            if ("PAREJA-" in request.prompt) throw LlmInvalidOutput("bloqueado por seguridad") else Fixture().echo(request.prompt)
+        }
+        f.repo.setLearning(ana, Mode.PAREJA, true)
+        f.repo.setLearning(ana, Mode.ESTUDIO, true)
+        f.repo.addMessage(ana, UUID.randomUUID(), Mode.PAREJA, "PAREJA-1 mensaje que el filtro bloquea", minutesAgo(20))
+        f.repo.addMessage(ana, UUID.randomUUID(), Mode.ESTUDIO, "ESTUDIO-1 repaso con mapas mentales", minutesAgo(10))
+
+        f.service.extract(ana) shouldBe ExtractionOutcome.PROCESSED
+
+        f.repo.all(ana).map { it.mode to it.text } shouldBe listOf(Mode.ESTUDIO to "Recuerdo de: ESTUDIO-1 repaso con mapas mentales")
+        f.repo.cursor(ana) shouldBe minutesAgo(10)
+        f.service.extract(ana) shouldBe ExtractionOutcome.NOTHING_TO_DO
+    }
+
+    test("un error pasajero del modelo sigue propagándose para que Cloud Tasks reintente") {
+        val f = Fixture { throw java.io.IOException("Vertex caído") }
+        f.repo.setLearning(ana, Mode.AMISTAD, true)
+        f.repo.addMessage(ana, UUID.randomUUID(), Mode.AMISTAD, "Me encanta el café de la U", minutesAgo(5))
+
+        shouldThrow<java.io.IOException> { f.service.extract(ana) }
+        f.repo.cursor(ana) shouldBe null
+    }
+
+    test("si el consentimiento se revoca durante la llamada al modelo no se guardan memorias de ese modo") {
+        lateinit var repoRef: InMemoryMemoryRepository
+        val f = Fixture { request ->
+            repoRef.setLearning(ana, Mode.PAREJA, false)
+            Fixture().echo(request.prompt)
+        }
+        repoRef = f.repo
+        f.repo.setLearning(ana, Mode.PAREJA, true)
+        f.repo.addMessage(ana, UUID.randomUUID(), Mode.PAREJA, "PAREJA-1 me gustan las cenas tranquilas", minutesAgo(20))
+
+        f.service.extract(ana) shouldBe ExtractionOutcome.PROCESSED
+
+        f.repo.all(ana).shouldBeEmpty()
+        f.repo.cursor(ana) shouldBe minutesAgo(20)
     }
 
     test("solo toma los mensajes posteriores a la última ejecución") {

@@ -92,7 +92,10 @@ class InMemoryMemoryRepository(private val twins: InMemoryTwinRepository? = null
         now: Instant,
     ): Boolean = synchronized(lock) {
         if (userId in deleted || cursors[userId] != expectedCursor) return false
-        memories.forEach { m ->
+        // Igual que Postgres: se relee el consentimiento al guardar y se descarta lo de modos revocados.
+        val granted = learning[userId].orEmpty().filterValues { it }.keys
+        this.memories.values.removeAll { it.userId == userId && it.status == MemoryStatus.PENDING && it.mode !in granted }
+        memories.filter { it.mode in granted }.forEach { m ->
             val record = MemoryRecord(UUID.randomUUID(), userId, m.mode, m.text, m.sourceChatId, MemoryStatus.PENDING, now, null)
             this.memories[record.id] = record
         }

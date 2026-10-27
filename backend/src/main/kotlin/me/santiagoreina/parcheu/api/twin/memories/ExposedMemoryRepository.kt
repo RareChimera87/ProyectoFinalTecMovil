@@ -53,9 +53,11 @@ class ExposedMemoryRepository(private val db: Database) : MemoryRepository {
         }
     }
 
-    override fun learningModes(userId: UUID): Set<Mode> = transaction(db) {
+    override fun learningModes(userId: UUID): Set<Mode> = transaction(db) { currentLearningModes(userId) }
+
+    private fun currentLearningModes(userId: UUID): Set<Mode> {
         val kinds = Mode.entries.associateBy { learningKindOf(it) }
-        Consents.select(Consents.kind, Consents.granted)
+        return Consents.select(Consents.kind, Consents.granted)
             .where { (Consents.userId eq userId) and (Consents.kind inList kinds.keys) }
             .orderBy(Consents.id to SortOrder.DESC)
             .map { it[Consents.kind] to it[Consents.granted] }
@@ -102,7 +104,16 @@ class ExposedMemoryRepository(private val db: Database) : MemoryRepository {
             ?.get(TwinLearningCursor.lastMessageAt)?.toInstant()
         if (current != expectedCursor) return@transaction false
         val at = now.odt()
-        memories.forEach { memory ->
+        // El consentimiento pudo revocarse mientras se llamaba al modelo: se relee bajo el bloqueo, se descartan
+        // las memorias de modos ya no concedidos y se borran las PENDING de esos modos (arquitectura.md §10.1).
+        val granted = currentLearningModes(userId)
+        val revoked = Mode.entries.toSet() - granted
+        if (revoked.isNotEmpty()) {
+            TwinMemories.deleteWhere {
+                (TwinMemories.userId eq userId) and (TwinMemories.status eq MemoryStatus.PENDING) and (TwinMemories.mode inList revoked)
+            }
+        }
+        memories.filter { it.mode in granted }.forEach { memory ->
             TwinMemories.insert {
                 it[TwinMemories.userId] = userId
                 it[mode] = memory.mode

@@ -70,7 +70,9 @@ interface MemoryRepository {
 
     /**
      * En una transacción: si el cursor sigue en [expectedCursor] guarda [memories] en PENDING y lo
-     * mueve a [newCursor]; si otra ejecución ya lo movió no guarda nada y devuelve false.
+     * mueve a [newCursor]; si otra ejecución ya lo movió no guarda nada y devuelve false. Bajo el
+     * bloqueo relee el consentimiento: descarta las memorias de modos ya no concedidos y borra las
+     * PENDING de esos modos (el consentimiento pudo revocarse durante la llamada al modelo).
      */
     fun saveExtraction(userId: UUID, expectedCursor: Instant?, newCursor: Instant, memories: List<NewMemory>, now: Instant): Boolean
 
