@@ -928,6 +928,18 @@ Lo automatizable ya quedó hecho: `GET /v1/invites/me`, `POST /v1/invites/redeem
 | 5 | **Prod.** Con el tag `v*` se despliega Hosting de `parcheu-prod`; repetir el paso 3 con `parcheu-prod.web.app` y el paso 4 con la app de la prueba cerrada (paquete `me.santiagoreina.parcheu`) una vez hecho el paso 1. | I3 | Con la 0.2 |
 | 6 | **Revisión visual** de `android/app/src/test/screenshots/invites/*.png` contra el mockup 07 (C5 'Mi código'); 'Escanear', el selector de modo ('¿Cómo se conocen?') y la lista 'Quieren agregarte' no tienen mockup y se armaron con componentes del sistema de diseño. Diferencia aceptada: el código es todo al azar (p. ej. `QZHT-4827`) y no `MARI-4827` como en el mockup, porque un prefijo con el nombre dejaba solo 10.000 códigos por nombre y facilitaba adivinarlos. | I2 | Ventana de revisión de la ola 10 |
 
+## Backend de pruebas en el homeserver (ADR-0033)
+
+Lo automatizable ya quedó hecho: `deploy/homelab/` (compose, `desplegar.sh`, `respaldar.sh`, README), el ADR-0033, la condición `GCP_DEV_ENABLED` en `deploy-dev` y la excepción de HTTP solo en `devDebug`. **No se ejecutó nada contra el homeserver.**
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **No aplicar Terraform de `parcheu-dev` por ahora** (E0.5 y sus pasos de import/WIF quedan en pausa). `deploy-dev` no corre mientras la variable de repositorio `GCP_DEV_ENABLED` no sea `true`. | El usuario | Hasta decidir volver a GCP |
+| 2 | **Correr el despliegue:** `deploy/homelab/desplegar.sh` desde el portátil (SSH sin contraseña a `user@homelab`). Verificar `curl http://192.168.0.10:8090/v1/health` desde la LAN. Reservar `192.168.0.10` como IP estática del servidor. | El usuario | Cuando quiera probar |
+| 3 | **Llave de Google (opcional, para iniciar sesión con la app real):** crear `sa-homelab` con 4 roles, generar la llave y copiarla a `~/parcheu/secrets/sa.json`; pasar `.env` a `PARCHEU_ENV=dev` (pasos exactos en `deploy/homelab/README.md`). Borrar la cuenta y la llave al terminar. | El usuario | Antes de que otros prueben la app |
+| 4 | **Proxy Host en Nginx Proxy Manager:** `api-parcheu.homeserverlab.site` → `http://192.168.0.10:8090`, certificado existente `npm-1` y Force SSL (el despliegue no toca NPM). Mientras `PARCHEU_ENV=local` debe llevar una Access List que permita solo `192.168.0.0/24` y `100.64.0.0/10`, o crearse solo tras pasar a `dev`. | El usuario | Tras el paso 2 |
+| 5 | **Testers externos de Play (fuera de alcance por ahora):** ruta del hostname `api-parcheu.homeserverlab.site` en el túnel de Cloudflare hacia `http://localhost:8090`, solo en modo `dev`. Decisión pendiente: la instancia que atienda la prueba cerrada debe usar `FIREBASE_PROJECT_ID` y `AI_VERTEX_PROJECT` del mismo proyecto que el flavor publicado (`prod` → `parcheu-prod`, que aún no existe; alternativa: publicar con `dev`), y la variable de repositorio `PARCHEU_API_URL_PROD`. La subida automática a alpha depende de `deploy-prod` (sin GCP queda `workflow_dispatch`). | El usuario | Si se publica en Play |
+| 6 | **App de debug:** `parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/` en `android/local.properties` (ver `docs/desarrollo-local.md`). | Cada desarrollador | Al probar contra el homeserver |
 ## E7.3 · Pantallas de ParcheU+
 
 Lo automatizable ya quedó hecho: G1 (paywall, I4 en claro), la hoja G2 de límite (simulaciones, match diario e informe mensual), G3 (anual, mensual y verificación pendiente) y G4 (activa anual y mensual, cancelada, en gracia, en pausa y sin suscripción) en `feature/plus`, con sus ViewModels sobre `BillingRepository` (E7.2), pruebas y capturas Roborazzi en `android/app/src/test/screenshots/plus/`. Lo que falta necesita una decisión tuya o un dispositivo con Play:

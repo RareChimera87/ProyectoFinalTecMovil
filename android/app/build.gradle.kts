@@ -2,6 +2,7 @@ import com.android.build.api.artifact.SingleArtifact
 import com.github.triplet.gradle.androidpublisher.ReleaseStatus
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
 import java.net.URI
+import java.util.Properties
 import javax.xml.parsers.DocumentBuilderFactory
 
 plugins {
@@ -15,8 +16,14 @@ plugins {
 
 // URLs por entorno. Se pueden sobrescribir con -Pparcheu.apiUrl.dev=... (o en ~/.gradle/gradle.properties)
 // sin tocar este archivo. La URL de Cloud Run es determinista: https://<servicio>-<número de proyecto>.<región>.run.app
-fun urlProperty(name: String, default: String): String =
-    providers.gradleProperty(name).getOrElse(default)
+// Orden: -P / gradle.properties, luego android/local.properties (no versionado), luego el valor por defecto.
+val localProperties = providers.fileContents(
+    rootProject.layout.projectDirectory.file("local.properties")
+)
+    .asText.map { text -> Properties().apply { load(text.reader()) } }
+fun urlProperty(name: String, default: String): String = providers.gradleProperty(name)
+    .orElse(localProperties.map { it.getProperty(name) ?: "" }.map { it.ifBlank { default } })
+    .getOrElse(default)
 
 // Host de una URL https (sin esquema, puerto ni camino), para el App Link de invitaciones (E6.1).
 fun hostOf(url: String): String = URI(url).host ?: error("URL de Hosting sin host: $url")

@@ -107,7 +107,7 @@ class TwinService(
 
     private fun buildPersonaTask(userId: UUID, version: Int) = TaskRequest(
         queue = QueueKind.AI_LIGHT,
-        path = "/tasks/build-persona",
+        path = BUILD_PERSONA_PATH,
         // Un nombre por versión: un reenvío de respuestas genera tarea nueva; encolar dos veces la misma no duplica.
         name = "build-persona-$userId-v$version",
         body = buildJsonObject { put("id", JsonPrimitive(userId.toString())) }.toString(),
@@ -124,6 +124,8 @@ class TwinService(
     )
 
     companion object {
+        const val BUILD_PERSONA_PATH = "/tasks/build-persona"
+
         private val EMPTY_STATE = TwinState(traits = null, personaReady = false, version = 1, level = 1, xp = 0, accuracy = null)
     }
 }

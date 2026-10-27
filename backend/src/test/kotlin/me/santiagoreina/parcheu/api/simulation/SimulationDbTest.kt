@@ -165,6 +165,30 @@ class SimulationDbTest : FunSpec({
         }
     }
 
+    test("Postgres: unfinished devuelve QUEUED/RUNNING dentro de la ventana de recuperación").config(enabled = TestDatabase.enabled) {
+        withDb { db ->
+            val ana = db.user("ana")
+            val beto = db.user("beto")
+            val w = Db(db)
+            val a = w.start(ana, beto)
+            val b = w.start(beto, ana, Mode.PAREJA)
+            val finished = w.start(ana, beto, Mode.ESTUDIO)
+            val now = FIXED_CLOCK.instant()
+            fun age(id: UUID, minutes: Long, status: SimulationStatus) = transaction(db) {
+                Simulations.update({ Simulations.id eq id }) {
+                    it[createdAt] = OffsetDateTime.ofInstant(now.minusSeconds(minutes * 60), java.time.ZoneOffset.UTC)
+                    it[Simulations.status] = status
+                }
+            }
+            age(a.id, 30, SimulationStatus.QUEUED)
+            age(b.id, 120, SimulationStatus.RUNNING)
+            age(finished.id, 45, SimulationStatus.DONE)
+            val repo = w.module.repository
+            runBlocking { repo.unfinished(now.minusSeconds(600), now.minusSeconds(86_400), 100) }.map { it.id } shouldBe listOf(b.id, a.id)
+            runBlocking { repo.unfinished(now.minusSeconds(600), now.minusSeconds(86_400), 1) }.map { it.id } shouldBe listOf(b.id)
+        }
+    }
+
     test("Postgres: la caché de 7 días no reutiliza una simulación INTRODUCTION (E6.2)").config(enabled = TestDatabase.enabled) {
         withDb { db ->
             val ana = db.user("ana")
