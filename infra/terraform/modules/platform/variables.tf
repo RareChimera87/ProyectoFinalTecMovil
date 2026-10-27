@@ -145,3 +145,11 @@ variable "scheduler_time_zone" {
   type    = string
   default = "America/Bogota"
 }
+
+# --- Observabilidad (E10.5) ----------------------------------------------------
+
+variable "alert_emails" {
+  description = "Correos que reciben las alertas de monitoring.tf (los 3 del equipo). Vacío = las políticas se crean sin canal de notificación."
+  type        = list(string)
+  default     = []
+}

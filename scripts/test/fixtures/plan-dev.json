@@ -1776,6 +1776,60 @@
             "time_zone": "America/Bogota",
             "timeouts": null
           }
+        },
+        {
+          "address": "module.platform.google_monitoring_alert_policy.error_rate",
+          "name": "error_rate",
+          "type": "google_monitoring_alert_policy",
+          "values": {
+            "display_name": "error_rate"
+          }
+        },
+        {
+          "address": "module.platform.google_monitoring_alert_policy.latency",
+          "name": "latency",
+          "type": "google_monitoring_alert_policy",
+          "values": {
+            "display_name": "latency"
+          }
+        },
+        {
+          "address": "module.platform.google_monitoring_alert_policy.uptime",
+          "name": "uptime",
+          "type": "google_monitoring_alert_policy",
+          "values": {
+            "display_name": "uptime"
+          }
+        },
+        {
+          "address": "module.platform.google_monitoring_alert_policy.events[\"ai_budget_exceeded\"]",
+          "name": "events",
+          "type": "google_monitoring_alert_policy",
+          "values": {
+            "display_name": "events[\"ai_budget_exceeded\"]"
+          }
+        },
+        {
+          "address": "module.platform.google_monitoring_alert_policy.events[\"report_created\"]",
+          "name": "events",
+          "type": "google_monitoring_alert_policy",
+          "values": {
+            "display_name": "events[\"report_created\"]"
+          }
+        },
+        {
+          "address": "module.platform.google_monitoring_alert_policy.events[\"simulation_failed\"]",
+          "name": "events",
+          "type": "google_monitoring_alert_policy",
+          "values": {
+            "display_name": "events[\"simulation_failed\"]"
+          }
+        },
+        {
+          "address": "module.platform.google_monitoring_dashboard.api",
+          "name": "api",
+          "type": "google_monitoring_dashboard",
+          "values": {}
         }
       ]
     }
