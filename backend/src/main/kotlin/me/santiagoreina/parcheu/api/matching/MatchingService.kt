@@ -1,6 +1,8 @@
 package me.santiagoreina.parcheu.api.matching
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.identity.deletion.ClosedMatch
@@ -11,6 +13,7 @@ import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.api.platform.errors.DomainException
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
+import me.santiagoreina.parcheu.api.platform.errors.Suspended
 import me.santiagoreina.parcheu.api.platform.errors.Underage
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.api.platform.notifier.Notification
@@ -57,6 +60,7 @@ class MatchingService(
     private val clock: Clock,
 ) {
     private val log = LoggerFactory.getLogger(MatchingService::class.java)
+    private val simulationLocks = java.util.concurrent.ConcurrentHashMap<UUID, Mutex>()
 
     // ---- Fila -------------------------------------------------------------------------------
 
@@ -106,6 +110,7 @@ class MatchingService(
 
     private fun validateCanQueue(person: MatchPerson, mode: Mode) {
         if (person.underage) throw Underage()
+        person.suspendedUntil?.let { if (it.isAfter(clock.instant())) throw Suspended() }
         if (mode !in person.activeModes) throw ValidationFailed("El modo ${mode.name} no está activo")
         if (mode == Mode.PAREJA) {
             if (person.isDemo) throw ValidationFailed("Los usuarios de demostración no participan en Pareja")
@@ -357,6 +362,24 @@ class MatchingService(
      * el match como EXPIRED y devuelve el cupo.
      */
     private suspend fun startSimulation(match: MatchRecord) {
+        // Petición (onPaired/choose) y barrido pueden llegar a la vez: se serializa por match y se relee dentro,
+        // así solo uno crea la simulación y no queda una huérfana que gaste IA.
+        val lock = simulationLocks.computeIfAbsent(match.id) { Mutex() }
+        lock.withLock {
+            val current = repo.match(match.id)
+            if (current == null || current.status != MatchStatus.SIMULATION || current.simulationId != null) {
+                // Ya resuelto: quien espere releerá y saldrá, así que el candado ya no hace falta.
+                if (current?.status != MatchStatus.SIMULATION || current.simulationId != null) simulationLocks.remove(match.id)
+                return
+            }
+            createSimulationFor(current)
+            if (repo.match(match.id)?.let { it.status != MatchStatus.SIMULATION || it.simulationId != null } != false) {
+                simulationLocks.remove(match.id)
+            }
+        }
+    }
+
+    private suspend fun createSimulationFor(match: MatchRecord) {
         // Quien pidió la simulación: quien eligió SIMULATION o, si venció el plazo, quien sí eligió.
         val requestedBy = when {
             match.choiceA == MatchChoice.SIMULATION -> match.userA

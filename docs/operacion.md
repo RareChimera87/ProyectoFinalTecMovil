@@ -2,7 +2,8 @@
 
 Qué hacer cuando suena una alerta de ParcheU (E10.5). Las alertas, métricas y el dashboard viven en
 `infra/terraform/modules/platform/monitoring.tf` y llegan por correo a los tres del equipo
-(`alert_emails`). Cada correo trae el enlace a este documento. Diseño: `arquitectura.md` §11.
+(`alert_emails`). Cada correo trae el enlace a este documento. Las alertas solo cubren entornos desplegados
+en GCP; el backend de dev en el homelab (ADR-0033) no queda cubierto (allí: `docker compose logs api`). Diseño: `arquitectura.md` §11.
 
 Nombres en Cloud Monitoring (sufijo `-dev` o `-prod`):
 
@@ -108,6 +109,11 @@ El uptime check de `/v1/health` (cada 5 min, varias regiones) falló.
 ## Verificar el pipeline de errores en dev
 
 Un error del backend en dev debe aparecer en Error Reporting (requiere `parcheu-dev` aplicado).
+
+**Alcance (ADR-0033):** mientras el backend de dev corra en el homelab, esta verificación no es ejecutable ni
+las alertas cubren ese backend: sus logs van a `docker compose logs api` y nada llega a Cloud Logging ni a
+Error Reporting. Allí se mira `docker compose logs api` en el homelab. Este procedimiento vale cuando se vuelva a
+Terraform en dev (`GCP_DEV_ENABLED=true`) o, cambiando el proyecto por `parcheu-prod`, tras el primer apply de prod.
 
 **Verificación principal: un error real del backend.** Provoca un `log.error` con traza a través del propio
 servicio, por ejemplo una petición que llegue al handler de `Throwable` de `ErrorHandling.kt` (un 500 real,

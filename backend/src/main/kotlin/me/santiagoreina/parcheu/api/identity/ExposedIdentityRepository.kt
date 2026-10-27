@@ -4,6 +4,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.santiagoreina.parcheu.api.identity.modes.ExposedModesRepository
 import me.santiagoreina.parcheu.api.identity.modes.ModesRepository
+import me.santiagoreina.parcheu.api.identity.privacy.ExposedPrivacyRepository
+import me.santiagoreina.parcheu.api.identity.privacy.PrivacyRepository
 import me.santiagoreina.parcheu.api.platform.db.tables.Consents
 import me.santiagoreina.parcheu.api.platform.db.tables.FcmTokens
 import me.santiagoreina.parcheu.api.platform.db.tables.Interests
@@ -34,7 +36,8 @@ import java.util.UUID
 /** Repositorio de identity sobre Postgres con Exposed. Cada operación abre su transacción (arquitectura.md §3.2). */
 class ExposedIdentityRepository(private val db: Database) :
     IdentityRepository,
-    ModesRepository by ExposedModesRepository(db) {
+    ModesRepository by ExposedModesRepository(db),
+    PrivacyRepository by ExposedPrivacyRepository(db) {
 
     private suspend fun <T> tx(block: () -> T): T = withContext(Dispatchers.IO) { transaction(db) { block() } }
 
@@ -140,6 +143,16 @@ class ExposedIdentityRepository(private val db: Database) :
             }
             FcmTokens.deleteWhere { FcmTokens.userId eq userId }
         }
+    }
+
+    override suspend fun suspendUntil(userId: UUID, until: Instant, now: Instant): Instant? = tx {
+        val current = Users.selectAll().where { Users.id eq userId }.forUpdate().singleOrNull() ?: return@tx null
+        val effective = current[Users.suspendedUntil]?.toInstant()?.takeIf { it.isAfter(until) } ?: until
+        Users.update({ Users.id eq userId }) {
+            it[suspendedUntil] = effective.odt()
+            it[updatedAt] = now.odt()
+        }
+        effective
     }
 }
 

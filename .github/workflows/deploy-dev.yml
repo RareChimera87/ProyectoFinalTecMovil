@@ -2,7 +2,9 @@ name: deploy-dev
 
 # E0.6. Push a dev que toca el backend o el contrato: Jib -> Artifact Registry -> job migrate
 # -> API en Cloud Run de parcheu-dev -> humo de /v1/health con el SHA (flujo en _desplegar-api.yml).
-# workflow_dispatch sirve para redesplegar a mano (p. ej. si el merge lo hizo el GITHUB_TOKEN).
+# Desde ADR-0033 el backend de pruebas vive en el homeserver (deploy/homelab): este despliegue solo corre si la
+# variable de repositorio GCP_DEV_ENABLED es 'true' (cuando exista la infraestructura de parcheu-dev).
+# workflow_dispatch redespliega a mano (p. ej. si el merge lo hizo el GITHUB_TOKEN), pero tampoco corre sin GCP_DEV_ENABLED.
 on:
   push:
     branches: [dev]
@@ -20,7 +22,7 @@ permissions:
 jobs:
   api:
     name: deploy-dev
-    if: github.ref == 'refs/heads/dev'
+    if: github.ref == 'refs/heads/dev' && vars.GCP_DEV_ENABLED == 'true'
     uses: ./.github/workflows/_desplegar-api.yml
     with:
       entorno: dev

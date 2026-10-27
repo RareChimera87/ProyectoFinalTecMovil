@@ -4,11 +4,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.santiagoreina.parcheu.api.identity.NewConsent
 import me.santiagoreina.parcheu.api.platform.db.tables.Consents
+import me.santiagoreina.parcheu.api.platform.db.tables.TwinMemories
 import me.santiagoreina.parcheu.api.platform.db.tables.UserModes
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
+import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -28,6 +33,7 @@ class ExposedModesRepository(private val db: Database) : ModesRepository {
         parejaConfirmedAt: Instant?,
         now: Instant,
         consentRevocations: List<NewConsent>,
+        discardPendingModes: Set<Mode>,
     ) {
         withContext(Dispatchers.IO) {
             transaction(db) {
@@ -47,6 +53,13 @@ class ExposedModesRepository(private val db: Database) : ModesRepository {
                 Users.update({ Users.id eq userId }) {
                     if (parejaConfirmedAt != null) it[Users.parejaConfirmedAt] = parejaConfirmedAt.odt()
                     it[updatedAt] = now.odt()
+                }
+                if (discardPendingModes.isNotEmpty()) {
+                    TwinMemories.deleteWhere {
+                        (TwinMemories.userId eq userId) and
+                            (TwinMemories.mode inList discardPendingModes) and
+                            (TwinMemories.status eq MemoryStatus.PENDING)
+                    }
                 }
                 consentRevocations.forEach { e ->
                     Consents.insert {

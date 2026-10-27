@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api
 
+import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import me.santiagoreina.parcheu.api.demo.DemoJobs
@@ -36,7 +37,11 @@ fun main(args: Array<String>) {
         Mode.SERVE -> {
             val container = AppContainer.fromConfig(config)
             log.info("Iniciando servicio {} en el puerto {} (env={})", config.version, config.port, config.env)
-            embeddedServer(Netty, port = config.port) { module(container) }.start(wait = true)
+            container.background?.start()
+            embeddedServer(Netty, port = config.port) {
+                module(container)
+                monitor.subscribe(ApplicationStopping) { container.background?.close() }
+            }.start(wait = true)
         }
         Mode.MIGRATE -> {
             val dbConfig = requireNotNull(config.db) { "migrate requiere DB_NAME y la conexión (CLOUD_SQL_INSTANCE o DB_URL)" }

@@ -94,18 +94,22 @@ fun ticketFromFields(fields: Map<String, Any?>): TicketDto? {
     return TicketDto(status, mode, expiresAt, fields["matchId"] as? String)
 }
 
+/**
+ * Las instancias se piden en cada escucha (no se guardan): al cerrar sesión (E8.2) Firestore se termina y
+ * su instancia queda inservible; la siguiente sesión necesita la nueva.
+ */
 class FirestoreMatchTicketSource(
-    private val firestore: FirebaseFirestore,
-    private val auth: FirebaseAuth
+    private val firestore: () -> FirebaseFirestore,
+    private val auth: () -> FirebaseAuth
 ) : MatchTicketSource {
     override fun observe(): Flow<TicketDto?> = callbackFlow {
-        val uid = auth.currentUser?.uid
+        val uid = auth().currentUser?.uid
         if (uid == null) {
             trySend(null)
             close()
             return@callbackFlow
         }
-        val registration = firestore.collection("matchTickets").document(uid)
+        val registration = firestore().collection("matchTickets").document(uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     // Tras un error Firestore no entrega más eventos: se cierra el flujo para que

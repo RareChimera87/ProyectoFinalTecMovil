@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.identity
 
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.contract.ConsentKind
+import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
 import java.time.Instant
@@ -14,6 +15,8 @@ class InMemoryIdentityRepository : IdentityRepository {
     val fcmTokens = mutableMapOf<String, UUID>()
     val twins = mutableSetOf<UUID>()
     val enabledModes = mutableMapOf<UUID, MutableSet<Mode>>()
+    /** Memorias del gemelo (modo, estado) por usuario; `savePrivacy` borra las PENDING de los modos apagados. */
+    val memories = mutableMapOf<UUID, MutableList<Pair<Mode, MemoryStatus>>>()
     var universities = setOf(1, 2, 99)
     var interestSlugs = setOf("musica", "futbol", "cine", "lectura", "gym", "series", "anime")
     private var consentSeq = 0L
@@ -77,10 +80,24 @@ class InMemoryIdentityRepository : IdentityRepository {
         parejaConfirmedAt: Instant?,
         now: Instant,
         consentRevocations: List<NewConsent>,
+        discardPendingModes: Set<Mode>,
     ) {
+        memories[userId]?.removeAll { (mode, status) -> mode in discardPendingModes && status == MemoryStatus.PENDING }
         enabledModes[userId] = modes.filterValues { it }.keys.toMutableSet()
         if (parejaConfirmedAt != null) replace(users.first { it.id == userId }.copy(parejaConfirmedAt = parejaConfirmedAt))
         appendConsents(userId, consentRevocations, now)
+    }
+
+    override suspend fun savePrivacy(
+        userId: UUID,
+        visibility: Visibility?,
+        consents: List<NewConsent>,
+        discardPendingModes: Set<Mode>,
+        now: Instant,
+    ) {
+        if (visibility != null) replace(users.first { it.id == userId }.copy(visibility = visibility))
+        appendConsents(userId, consents, now)
+        memories[userId]?.removeAll { (mode, status) -> mode in discardPendingModes && status == MemoryStatus.PENDING }
     }
 
     override suspend fun hasTwin(userId: UUID) = userId in twins
@@ -105,5 +122,12 @@ class InMemoryIdentityRepository : IdentityRepository {
         val user = users.first { it.id == userId }
         if (user.deletedAt == null) replace(user.copy(deletedAt = now))
         fcmTokens.entries.removeIf { it.value == userId }
+    }
+
+    override suspend fun suspendUntil(userId: UUID, until: Instant, now: Instant): Instant? {
+        val user = users.firstOrNull { it.id == userId } ?: return null
+        val effective = user.suspendedUntil?.takeIf { it.isAfter(until) } ?: until
+        replace(user.copy(suspendedUntil = effective))
+        return effective
     }
 }

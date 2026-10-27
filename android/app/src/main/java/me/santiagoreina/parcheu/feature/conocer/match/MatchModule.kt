@@ -10,7 +10,10 @@ val conocerMatchDataModule =
     module {
         single<MatchApi> { get<Retrofit>().create(MatchApi::class.java) }
         single<MatchTicketSource> {
-            FirestoreMatchTicketSource(FirebaseFirestore.getInstance(), FirebaseAuth.getInstance())
+            FirestoreMatchTicketSource(
+                firestore = { FirebaseFirestore.getInstance() },
+                auth = { FirebaseAuth.getInstance() }
+            )
         }
         single<MatchRepository> { MatchRepositoryImpl(get(), get(), get()) }
     }

@@ -16,6 +16,8 @@ import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.admin.AdminModule
+import me.santiagoreina.parcheu.api.admin.inMemoryAdminModule
 import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.social.invites.InviteModule
 import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
@@ -97,6 +99,8 @@ fun testContainer(
     invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
     // Billing (E7.1): para que `verify` dé Plus en el cupo, pasar también `quota` con `billing.entitlements`.
     billing: BillingModule = inMemoryBillingModule(clock),
+    // Administración de reportes (E8.5): por defecto lee el repositorio de safety en memoria y suspende en [repo].
+    admin: AdminModule = inMemoryAdminModule(repo, chat, safety, clock),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
@@ -106,7 +110,7 @@ fun testContainer(
     return AppContainer(
         config = config,
         clock = clock,
-        tokenVerifier = FakeTokenVerifier(),
+        tokenVerifier = FakeTokenVerifier(adminUids = setOf("admin")),
         oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
         identity = identity,
         profile = profile,
@@ -120,6 +124,7 @@ fun testContainer(
         notifier = notifier,
         matching = matching,
         safety = safety,
+        admin = admin,
         account = accountModule,
         notifications = notifications,
         introductions = introductions,
@@ -128,7 +133,7 @@ fun testContainer(
         invites = invites,
         domains = allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
-            invites, billing, config.env, introductions,
+            invites, billing, config.env, introductions, admin,
         ) + extra,
     )
 }
