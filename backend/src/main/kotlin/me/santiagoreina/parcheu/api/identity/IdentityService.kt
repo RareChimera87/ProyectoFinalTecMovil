@@ -72,11 +72,11 @@ class IdentityService(
      * Puerta de todas las rutas salvo las exentas: cuenta de menor de edad (403 UNDERAGE, E2.6),
      * suspensión y términos vigentes (403 TERMS_REQUIRED).
      */
-    suspend fun requireFullAccess(firebase: FirebaseUser) {
+    suspend fun requireFullAccess(firebase: FirebaseUser, ignoreSuspension: Boolean = false) {
         val user = requireUser(firebase)
         if (user.underageAt != null) throw Underage()
         val until = user.suspendedUntil
-        if (until != null && until.isAfter(clock.instant())) throw Suspended()
+        if (!ignoreSuspension && until != null && until.isAfter(clock.instant())) throw Suspended()
         if (!termsAccepted(repo.latestConsents(user.id))) throw TermsRequired()
     }
 

@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.admin
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -9,6 +10,7 @@ import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -40,7 +42,9 @@ import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.contract.AdminAction
 import me.santiagoreina.parcheu.contract.AdminReport
 import me.santiagoreina.parcheu.contract.ApiError
+import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.contract.ErrorCode
+import me.santiagoreina.parcheu.contract.FcmToken
 import me.santiagoreina.parcheu.contract.MessageDto
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Page
@@ -52,6 +56,7 @@ import me.santiagoreina.parcheu.contract.Resolve
 import me.santiagoreina.parcheu.contract.SendMessage
 import me.santiagoreina.parcheu.contract.MeDto
 import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 
 /** Criterios de E8.5 de punta a punta: claim `admin`, listado, resolución y efectos sobre chat y sesión. */
@@ -195,6 +200,44 @@ class AdminApiTest : FunSpec({
             // La app se entera por la sesión: `suspendedUntil` viaja en /v1/me.
             client.get("/v1/me") { auth("beto") }.body<MeDto>().suspendedUntil.shouldNotBeNull()
             client.get("/v1/admin/reports?status=RESOLVED") { auth("admin") }.body<Page<AdminReport>>().items.single().id shouldBe reportId
+        }
+    }
+
+    test("si otro admin gana la marca de resuelto, este no aplica la sanción y el baneo no queda sin registro") {
+        val w = World()
+        val chat = w.direct()
+        testApplication {
+            val client = app(w)
+            val (reportId, _) = client.reportOfBetoMessage(w, chat)
+            // El otro admin cierra el reporte entre la lectura (OPEN) y el cierre de este: markResolved pierde.
+            val inner = InMemoryAdminRepository { w.safetyRepo.allReports }
+            val losing = object : AdminRepository by inner {
+                override suspend fun markResolved(id: UUID, resolution: String, resolvedBy: UUID?, now: Instant) = false
+            }
+            val service = AdminService(losing, w.identity, w.chat.service, w.f.clock)
+            shouldThrow<Conflict> { service.resolve(null, reportId, Resolve(AdminAction.BAN)) }
+            w.identity.user("beto").suspendedUntil.shouldBeNull()
+        }
+    }
+
+    test("una cuenta baneada aún puede ver su privacidad, descargar sus datos, cerrar sesión y borrarse; lo demás es 403 SUSPENDED") {
+        val w = World()
+        val chat = w.direct()
+        testApplication {
+            val client = app(w)
+            val (reportId, _) = client.reportOfBetoMessage(w, chat)
+            client.resolve("admin", reportId, AdminAction.BAN).status shouldBe HttpStatusCode.OK
+
+            client.get("/v1/me/privacy") { auth("beto") }.status shouldBe HttpStatusCode.OK
+            client.get("/v1/me/export") { auth("beto") }.status shouldBe HttpStatusCode.OK
+            client.delete("/v1/me/fcm-token") {
+                auth("beto")
+                contentType(ContentType.Application.Json)
+                setBody(FcmToken("tok-beto"))
+            }.status shouldBe HttpStatusCode.NoContent
+            client.get("/v1/home") { auth("beto") }.body<ApiError>().code shouldBe ErrorCode.SUSPENDED
+            client.get("/v1/me/consents") { auth("beto") }.body<ApiError>().code shouldBe ErrorCode.SUSPENDED
+            client.delete("/v1/me") { auth("beto") }.status shouldBe HttpStatusCode.Accepted
         }
     }
 

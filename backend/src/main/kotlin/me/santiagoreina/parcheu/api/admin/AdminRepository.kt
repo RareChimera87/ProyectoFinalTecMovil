@@ -24,7 +24,11 @@ interface AdminRepository {
     /**
      * Pasa el reporte de OPEN a RESOLVED con [resolution] y quién lo resolvió ([resolvedBy] es null si
      * el admin no tiene cuenta en la app). Devuelve false si ya estaba resuelto o no existe, de modo que
-     * dos admins que resuelven a la vez no aplican la acción dos veces.
+     * dos admins que resuelven a la vez no aplican la acción dos veces: quien gana la marca es el único
+     * que aplica la acción ([AdminService.resolve] reclama primero y actúa después).
      */
     suspend fun markResolved(id: UUID, resolution: String, resolvedBy: UUID?, now: Instant): Boolean
+
+    /** Devuelve a OPEN un reporte que [markResolved] reclamó pero cuya acción falló, para que se pueda reintentar. */
+    suspend fun reopen(id: UUID)
 }

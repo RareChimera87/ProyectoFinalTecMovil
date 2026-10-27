@@ -1,5 +1,7 @@
 package me.santiagoreina.parcheu.api.admin
 
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import me.santiagoreina.parcheu.api.chat.ChatService
 import me.santiagoreina.parcheu.api.identity.IdentityRepository
 import me.santiagoreina.parcheu.api.platform.errors.Conflict
@@ -40,8 +42,10 @@ class AdminService(
 
     /**
      * `POST /v1/admin/reports/{id}/resolve`. Valida la acción contra el reporte antes de tocar nada, la
-     * aplica y marca el reporte RESOLVED. Un reporte ya resuelto es 409. La acción se aplica solo si
-     * este llamado ganó la marca de resuelto, así dos admins a la vez no la repiten.
+     * aplica y marca el reporte RESOLVED. Un reporte ya resuelto es 409. Primero reclama el reporte
+     * (OPEN a RESOLVED en un UPDATE condicional) y solo el llamado que ganó la marca aplica la acción, así
+     * dos admins a la vez no dejan una sanción sin registro ni la repiten. Si la acción falla, el reporte
+     * vuelve a OPEN y el admin puede reintentar.
      *
      * - DISMISS: solo cierra el reporte.
      * - HIDE_MESSAGE: oculta `messageId` (Postgres y Firestore); el reporte debe traerlo.
@@ -64,10 +68,16 @@ class AdminService(
 
         val now = clock.instant()
         val resolution = listOfNotNull(request.action.name, note).joinToString(": ")
-        // Primero la acción (idempotente: hidden=true y suspendUntil conserva la fecha mayor) y después
-        // el cierre: si la acción falla, el reporte sigue OPEN y el admin puede reintentar.
-        applyAction(request.action, target, message, now)
+        // Primero se reclama el reporte: quien pierde la carrera recibe 409 sin haber tocado a nadie. Después
+        // la acción (idempotente: hidden=true y suspendUntil conserva la fecha mayor); si falla, se reabre
+        // el reporte para que el admin pueda reintentar.
         if (!repo.markResolved(id, resolution, adminUserId, now)) throw Conflict("El reporte ya está resuelto")
+        try {
+            applyAction(request.action, target, message, now)
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { runCatching { repo.reopen(id) } }
+            throw e
+        }
 
         // Solo ids y acción, nunca el detalle ni los textos del reporte (dato personal).
         log.atInfo()

@@ -33,6 +33,10 @@ class InMemoryAdminRepository(private val reports: () -> List<NewReport>) : Admi
         true
     }
 
+    override suspend fun reopen(id: UUID) {
+        synchronized(lock) { resolved.remove(id) }
+    }
+
     private fun all(): List<AdminReport> {
         val state = synchronized(lock) { resolved.toMap() }
         return reports().map { r ->
