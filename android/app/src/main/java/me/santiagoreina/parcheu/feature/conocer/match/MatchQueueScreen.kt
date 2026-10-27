@@ -41,12 +41,9 @@ object MatchQueueTags {
     const val SEARCHING = "match_queue_searching"
     const val CANCEL = "match_queue_cancel"
     const val RETRY = "match_queue_retry"
-    const val LIMIT_SHEET = "match_limit_sheet"
-    const val LIMIT_SEE_PLUS = "match_limit_see_plus"
-    const val LIMIT_DISMISS = "match_limit_dismiss"
 }
 
-/** F1 · Match al azar, en la fila (13a). Con [MatchQueueUiState.limitSheet] muestra además la hoja de límite. */
+/** F1 · Match al azar, en la fila (13a). El match diario agotado abre la G2 de E7.3 desde la ruta. */
 @Composable
 fun MatchQueueScreen(
     state: MatchQueueUiState,
@@ -54,8 +51,6 @@ fun MatchQueueScreen(
     onCancel: () -> Unit,
     onRetry: () -> Unit,
     onOpenMatch: () -> Unit,
-    onLimitSeePlus: () -> Unit,
-    onLimitDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     animate: Boolean = true
 ) {
@@ -87,11 +82,6 @@ fun MatchQueueScreen(
                     onRetryClick = onRetry
                 )
             else -> QueueBody(state, onModeSelected, onCancel, onOpenMatch, animate)
-        }
-    }
-    if (state.limitSheet != null) {
-        ParcheUBottomSheet(onDismissRequest = onLimitDismiss) {
-            MatchLimitSheetBody(onSeePlus = onLimitSeePlus, onDismiss = onLimitDismiss)
         }
     }
 }
@@ -192,47 +182,4 @@ private fun ModeSelector(
         onSelect = { onModeSelected(modes[it]) },
         modifier = modifier.fillMaxWidth()
     )
-}
-
-/** Contenido de la hoja de límite de match diario; se expone aparte para capturarlo sin ventana. */
-@Composable
-fun MatchLimitSheetBody(onSeePlus: () -> Unit, onDismiss: () -> Unit) {
-    val colors = ParcheUTheme.colors
-    Column(
-        modifier = Modifier.fillMaxWidth().testTag(MatchQueueTags.LIMIT_SHEET),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        TwinMascot(size = TwinMascotSize.L, tone = TwinMascotTone.User, animationsEnabled = false)
-        Text(
-            MatchStrings.LIMIT_TITLE,
-            style = MaterialTheme.typography.titleLarge,
-            color = colors.tx,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            MatchStrings.LIMIT_MESSAGE,
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.mu,
-            textAlign = TextAlign.Center
-        )
-        PrimaryButton(
-            MatchStrings.SEE_PLUS,
-            onSeePlus,
-            Modifier.fillMaxWidth().testTag(MatchQueueTags.LIMIT_SEE_PLUS)
-        )
-        OutlineButton(
-            MatchStrings.UNDERSTOOD,
-            onDismiss,
-            Modifier.fillMaxWidth().testTag(MatchQueueTags.LIMIT_DISMISS)
-        )
-    }
-}
-
-/** Hoja de límite dibujada sin ventana modal, para las capturas. */
-@Composable
-fun MatchLimitSheetPreview(modifier: Modifier = Modifier) {
-    ParcheUBottomSheetContent(modifier) {
-        MatchLimitSheetBody(onSeePlus = {}, onDismiss = {})
-    }
 }
