@@ -70,8 +70,20 @@ class SmokeScenarioLocalTest : FunSpec({
                 } finally {
                     scenario.cleanup()
                 }
-                // La limpieza purgó a las dos: no queda ninguna fila de usuario de prueba (la lápida no es is_test).
-                transaction(db) { Users.selectAll().where { Users.isTest eq true }.count() } shouldBe 0L
+                // La limpieza purgó a las dos sin dejar nada: ni lápidas ni consentimientos, simulaciones, chats o mensajes.
+                transaction(db) {
+                    val sql = connection.connection as java.sql.Connection
+                    fun count(query: String): Long = sql.createStatement().use { st ->
+                        st.executeQuery(query).use { rs ->
+                            rs.next()
+                            rs.getLong(1)
+                        }
+                    }
+                    Users.selectAll().where { Users.isTest eq true }.count() shouldBe 0L
+                    count("select count(*) from users where firebase_uid like 'deleted:%' or firebase_uid like 'e2e-%'") shouldBe 0L
+                    listOf("simulations", "chats", "chat_members", "chat_messages", "consents", "matches", "report_unlocks", "connection_decisions")
+                        .forEach { table -> count("select count(*) from $table") shouldBe 0L }
+                }
             } finally {
                 server.stop(0, 0)
             }
