@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.roborazzi)
     alias(libs.plugins.play.publisher)
 }
@@ -265,6 +266,8 @@ dependencies {
     implementation(libs.firebase.auth)
     // E5.3: push con FCM.
     implementation(libs.firebase.messaging)
+    // E10.5: Crashlytics con claves route y flavor, sin datos personales.
+    implementation(libs.firebase.crashlytics)
     // E4.4: fila de match en tiempo real (Firestore de solo lectura).
     // E4.5: progreso en vivo de simulations/{id} (ADR-0004: Firestore es canal de solo lectura).
     // E5.2: chat en vivo, listener de mensajes con caché offline (arquitectura.md §8).

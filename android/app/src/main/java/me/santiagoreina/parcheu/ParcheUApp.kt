@@ -16,6 +16,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
+import me.santiagoreina.parcheu.core.observability.CrashReporting
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.navigation.AppNavHost
 import me.santiagoreina.parcheu.navigation.AppRoute
@@ -55,6 +56,9 @@ fun ParcheUApp(
             navigator.navigate(route)
         }
     }
+
+    // Crashlytics (E10.5): la clave route acompaña cualquier cierre inesperado con la pantalla visible.
+    LaunchedEffect(destination?.route) { CrashReporting.setRoute(destination?.route) }
 
     // Permiso de notificaciones tras B5: se pide una vez al llegar a Inicio y entonces se registra el token FCM.
     val scope = rememberCoroutineScope()
