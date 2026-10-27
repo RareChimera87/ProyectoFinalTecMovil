@@ -26,6 +26,12 @@ import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
+import me.santiagoreina.parcheu.api.graph.communities.CommunityModule
+import me.santiagoreina.parcheu.api.graph.communities.CommunityService
+import me.santiagoreina.parcheu.api.graph.communities.CommunityRoutes
+import me.santiagoreina.parcheu.api.graph.communities.ExposedCommunityRepository
+import me.santiagoreina.parcheu.api.graph.communities.communityModule
+import me.santiagoreina.parcheu.api.graph.communities.inMemoryCommunityModule
 import me.santiagoreina.parcheu.api.graph.fof.ExposedFofRepository
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
@@ -183,6 +189,11 @@ class AppContainer(
     /** Administración de reportes (E8.5). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
     val admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, clock),
     /**
+     * Comunidades (E6.4): job semanal, nombre con el modelo lite y `GET /v1/communities`. Por defecto en
+     * memoria sobre [graph]: solo [fromConfig] cablea Postgres y la cola de tareas.
+     */
+    val communities: CommunityModule = inMemoryCommunityModule(graph, ai, quota, clock, traitsOf = { twin.repository.state(it)?.traits }),
+    /**
      * Cola en proceso y programador de jobs (`TASKS_MODE=inline`, ADR-0033); null con Cloud Tasks o Fake.
      * Main lo arranca (`start`) en modo `serve` y lo cierra al parar.
      */
@@ -191,7 +202,7 @@ class AppContainer(
     val domains: List<DomainRoutes> =
         allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
-            invites, billing, config.env, introductions, admin,
+            invites, billing, config.env, introductions, admin, communities,
         ),
 ) {
     companion object {
@@ -280,7 +291,11 @@ class AppContainer(
             val invites = exposedInviteModule(database, graph, simulation, notifier, InviteLinks.fromConfig(config, vars), clock)
             // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.
             val billing = billingModule(config.env, database, clock, vars)
-            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account) }
+            // Comunidades (E6.4): la tarea name-community y el job semanal también corren en el homeserver.
+            val communities = communityModule(
+                ExposedCommunityRepository(database), graph, ai, quota, tasks, clock, matching.flags.demoUsersEnabled,
+            )
+            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account, communities) }
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
@@ -289,13 +304,14 @@ class AppContainer(
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
                 billing = billing,
                 invites = invites,
+                communities = communities,
                 background = background,
             )
         }
 
         /**
          * Handlers de las tres tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
-         * Retention, communities, memories y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
+         * Retention, memories y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
          */
         private fun inlineBackground(
             queue: InProcessTaskQueue,
@@ -304,14 +320,18 @@ class AppContainer(
             simulation: SimulationModule,
             matching: MatchingModule,
             account: AccountModule,
+            communities: CommunityModule,
         ): BackgroundWork {
             fun id(body: String) = ContractJson.decodeFromString<TaskPayload>(body).uuid()
             queue.register(TwinService.BUILD_PERSONA_PATH) { twin.service.buildPersona(id(it)) }
             queue.register(SimulationService.SIMULATE_PATH) { simulation.engine.run(id(it)) }
             queue.register(AccountDeletionService.PURGE_PATH) { account.deletion.purge(id(it)) }
+            queue.register(CommunityService.NAME_PATH) { communities.service.nameCommunity(id(it)) }
             return BackgroundWork(queue, InProcessScheduler()) { scheduler ->
                 scheduler.every("match-sweep", Duration.ofSeconds(60)) { matching.service.sweep() }
                 scheduler.every("purge-sweep", Duration.ofHours(1), Duration.ofMinutes(2)) { account.deletion.sweepStalled() }
+                // Comunidades (E6.4): revisa cada hora y corre una vez por semana desde el lunes 03:00 de Bogotá.
+                scheduler.every("communities", Duration.ofHours(1), Duration.ofMinutes(3)) { communities.service.runIfDue() }
                 scheduler.every("simulation-recovery", Duration.ofMinutes(15), Duration.ofSeconds(30)) {
                     simulation.service.requeueUnfinished()
                 }
@@ -367,6 +387,9 @@ fun allDomains(
     introductions: IntroductionModule =
         introductionModule(InMemoryIntroductionRepository(), simulation, graph, chat, quota, NoopNotifier, systemClock()),
     admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, systemClock()),
+    communities: CommunityModule = inMemoryCommunityModule(
+        graph, AppContainer.localAiGateway(systemClock()), quota, systemClock(), traitsOf = { twin.repository.state(it)?.traits },
+    ),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -377,6 +400,8 @@ fun allDomains(
     GraphRoutes(graph.service, fofService(graph, twin, quota, matching.flags.demoUsersEnabled)) { firebase ->
         identity.requireUser(firebase).id
     },
+    // Comunidades semanales (E6.4).
+    CommunityRoutes(communities) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },
     // Presentar a dos amigos (E6.2).
     IntroductionRoutes(introductions.service) { firebase -> identity.requireUser(firebase).id },

@@ -23,6 +23,8 @@ import me.santiagoreina.parcheu.api.social.invites.InviteModule
 import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
+import me.santiagoreina.parcheu.api.graph.communities.CommunityModule
+import me.santiagoreina.parcheu.api.graph.communities.inMemoryCommunityModule
 import me.santiagoreina.parcheu.api.home.UnreadCounter
 import me.santiagoreina.parcheu.api.notifications.center.NotificationCenterModule
 import me.santiagoreina.parcheu.api.notifications.center.inMemoryNotificationCenter
@@ -101,6 +103,8 @@ fun testContainer(
     billing: BillingModule = inMemoryBillingModule(clock),
     // Administración de reportes (E8.5): por defecto lee el repositorio de safety en memoria y suspende en [repo].
     admin: AdminModule = inMemoryAdminModule(repo, chat, safety, clock),
+    // Comunidades (E6.4): por defecto sobre el grafo en memoria y los rasgos del gemelo en memoria.
+    communities: CommunityModule = inMemoryCommunityModule(graph, ai, quota, clock, traitsOf = { twin.repository.state(it)?.traits }),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
@@ -131,9 +135,10 @@ fun testContainer(
         unread = unread,
         billing = billing,
         invites = invites,
+        communities = communities,
         domains = allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
-            invites, billing, config.env, introductions, admin,
+            invites, billing, config.env, introductions, admin, communities,
         ) + extra,
     )
 }

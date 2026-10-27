@@ -34,7 +34,8 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     "scenario" to listOf(HttpMethod.Get to "/v1/scenarios", HttpMethod.Post to "/v1/scenario-sessions/c1/agreement"),
     "graph" to listOf(
         // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest) y /v1/graph/fof E6.3 (FofApiTest).
-        HttpMethod.Get to "/v1/graph/history", HttpMethod.Get to "/v1/communities", HttpMethod.Get to "/v1/connect-requests",
+        // GET /v1/communities lo implementa E6.4 (CommunityApiTest).
+        HttpMethod.Get to "/v1/graph/history", HttpMethod.Get to "/v1/connect-requests",
     ),
     // Social: E6.1 implementa las invitaciones (InviteApiTest) y E6.2 las presentaciones (IntroductionApiTest); ya no queda ningún stub.
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
@@ -46,11 +47,12 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
 )
 
 // `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest) y
-// `/internal/tasks/purge-user`, E8.3 (AccountApiTest).
+// `/internal/tasks/purge-user`, E8.3 (AccountApiTest); `/internal/tasks/name-community` y `/internal/jobs/communities`,
+// E6.4 (CommunityApiTest).
 private val internalRoutes = listOf(
     "/internal/tasks/judge-scenario",
-    "/internal/tasks/extract-memories", "/internal/tasks/moderate", "/internal/tasks/name-community",
-    "/internal/jobs/communities", "/internal/jobs/memories",
+    "/internal/tasks/extract-memories", "/internal/tasks/moderate",
+    "/internal/jobs/memories",
     "/internal/jobs/twin-accuracy", "/internal/jobs/retention",
 )
 

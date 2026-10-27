@@ -11,12 +11,11 @@ import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
 import me.santiagoreina.parcheu.api.platform.stubGet
-import me.santiagoreina.parcheu.api.platform.stubPost
 import java.util.UUID
 
 /**
  * Rutas del dominio graph. E3.1 implementa el ego-grafo y el detalle de nodo y E6.3 amigos de
- * amigos ([FofService]); historial (E6.5), comunidades (E6.2) y connect-requests siguen como stub 501
+ * amigos ([FofService]) (las comunidades, E6.4, viven en `graph/communities`); historial (E6.5) y connect-requests siguen como stub 501
  * hasta su feature.
  *
  * [viewerId] traduce el usuario de Firebase a `users.id` (lo resuelve identity).
@@ -40,13 +39,7 @@ class GraphRoutes(
             call.respond(fof.fof(viewerId(call.firebaseUser())))
         }
         stubGet("/graph/history")
-        stubGet("/communities")
         stubGet("/connect-requests")
-    }
-
-    override fun Route.internal() {
-        stubPost("/tasks/name-community")
-        stubPost("/jobs/communities")
     }
 }
 

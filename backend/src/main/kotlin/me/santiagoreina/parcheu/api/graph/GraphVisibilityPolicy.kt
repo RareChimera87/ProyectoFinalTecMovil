@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.graph
 
+import me.santiagoreina.parcheu.api.graph.communities.CommunitiesView
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
 import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
@@ -122,6 +123,8 @@ object ThirdPartyViews {
         IntroductionPeople::class,
         // Amigos de amigos (E6.3): candidatos a dos saltos y las aristas que los conectan.
         FofService::class,
+        // Comunidades (E6.4): los miembros de cada comunidad del observador.
+        CommunitiesView::class,
     )
 
     fun names(): Set<String> = registered.mapNotNull { it.simpleName }.toSet()
