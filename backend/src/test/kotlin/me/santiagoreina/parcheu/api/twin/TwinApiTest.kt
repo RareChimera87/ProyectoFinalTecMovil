@@ -274,11 +274,12 @@ class TwinApiTest : FunSpec({
         }
     }
 
-    test("las rutas de /v1/twin exigen token y las de memorias siguen en 501") {
+    test("las rutas de /v1/twin exigen token; las de memorias ya responden (E9.2)") {
         testApplication {
             val client = app(TwinFixture())
             client.get("/v1/twin").status shouldBe HttpStatusCode.Unauthorized
-            client.getAs("ana", "/v1/twin/memories").status shouldBe HttpStatusCode.NotImplemented
+            client.get("/v1/twin/memories").status shouldBe HttpStatusCode.Unauthorized
+            client.getAs("ana", "/v1/twin/memories").status shouldBe HttpStatusCode.OK
         }
     }
 })

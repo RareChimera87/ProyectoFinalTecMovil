@@ -1,10 +1,13 @@
 package me.santiagoreina.parcheu.contract
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -50,5 +53,17 @@ class PrivacyContractTest {
         val intro = ContractJson.decodeFromString(IntroductionDto.serializer(), Examples.read("IntroductionDto"))
         assertTrue(intro.introducer.id != intro.other.id)
         assertEquals(Mode.AMISTAD, intro.mode)
+    }
+
+    @Test
+    fun `MemoryDto siempre lleva el modo para el chip de C4 (ADR-0032)`() {
+        val memory = ContractJson.decodeFromString(MemoryDto.serializer(), Examples.read("MemoryDto"))
+        assertEquals(Mode.AMISTAD, memory.mode)
+        val sinModo = JsonObject(example("MemoryDto") - "mode").toString()
+        assertFailsWith<SerializationException>("una memoria sin modo no es válida") {
+            ContractJson.decodeFromString(MemoryDto.serializer(), sinModo)
+        }
+        val conModoNulo = JsonObject(example("MemoryDto") + ("mode" to JsonNull)).toString()
+        assertFailsWith<SerializationException> { ContractJson.decodeFromString(MemoryDto.serializer(), conModoNulo) }
     }
 }
