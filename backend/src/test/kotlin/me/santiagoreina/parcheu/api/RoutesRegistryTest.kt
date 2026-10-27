@@ -21,11 +21,8 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
  * (E7.1, probadas en `BillingApiTest`).
  */
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
-    // Identity: solo los stubs que quedan; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
-    // E2.6 (catálogo y edad) ProfileApiTest y E8.3 (DELETE /me y exportación) AccountApiTest.
-    "identity" to listOf(
-        HttpMethod.Get to "/v1/me/privacy", HttpMethod.Patch to "/v1/me/privacy",
-    ),
+    // Identity: ya no queda ningún stub; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
+    // E2.6 (catálogo y edad) ProfileApiTest, E8.3 (DELETE /me y exportación) AccountApiTest y E8.2 (privacidad) PrivacyApiTest.
     // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest); el resto sigue en 501.
     "twin" to listOf(
         HttpMethod.Get to "/v1/twin/memories",
