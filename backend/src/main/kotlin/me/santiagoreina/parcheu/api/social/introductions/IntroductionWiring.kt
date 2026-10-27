@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.social.introductions
 
 import me.santiagoreina.parcheu.api.chat.ChatModule
+import me.santiagoreina.parcheu.api.demo.DemoConnectPolicy
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.quota.QuotaModule
@@ -28,6 +29,8 @@ fun introductionModule(
     quota: QuotaModule,
     notifier: Notifier,
     clock: Clock,
+    demo: DemoConnectPolicy = DemoConnectPolicy.DEFAULT,
+    demoUsersEnabled: Boolean = true,
 ): IntroductionModule {
     val people = IntroductionPeople(graph.repository, graph.policy, graph.anonIds)
     val service = IntroductionService(
@@ -43,6 +46,8 @@ fun introductionModule(
         chat = chat.service,
         notifier = notifier,
         clock = clock,
+        demo = demo,
+        demoUsersEnabled = demoUsersEnabled,
     )
     return IntroductionModule(repository, people, service)
 }

@@ -53,6 +53,9 @@ class BillingService(
         val state = store.atomically {
             val owner = store.entitlementByToken(token, forUpdate = true)
             if (owner != null && owner.userId != userId) throw Forbidden("La compra pertenece a otra cuenta")
+            // Las RTDN que llegaron antes de verificar no tenían dueño: se ligan ahora para poder redactarlas al borrar.
+            store.linkEventsOfToken(token, userId)
+            sub.linkedPurchaseToken?.let { store.linkEventsOfToken(it, userId) }
             resolveState(token, sub, previous = owner, revoked = false)?.also { saveIfBetter(userId, token, sub, it, clock.instant()) }
         }
         acknowledgeIfNeeded(token, sub, state, failOnError = false)
@@ -133,7 +136,14 @@ class BillingService(
         }
         // Privacidad (arquitectura.md §10.2): el evento de una cuenta ya borrada (lápida) no guarda el payload
         // completo ni el token; el de una viva se liga a su dueño para poder redactarlo si luego se borra.
-        if (store.isTombstone(ownerId)) store.redactEvent(messageId) else store.assignEvent(messageId, ownerId)
+        if (store.isTombstone(ownerId)) {
+            store.redactEvent(messageId)
+        } else {
+            store.assignEvent(messageId, ownerId)
+            // Eventos del token y del anterior (cambio de plan) que llegaron cuando aún no había dueño.
+            store.linkEventsOfToken(token, ownerId)
+            sub.linkedPurchaseToken?.let { store.linkEventsOfToken(it, ownerId) }
+        }
         val state = resolveState(token, sub, previous = current, revoked = revoked)
         if (state != null) {
             if (current != null) {

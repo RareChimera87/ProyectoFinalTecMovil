@@ -2,6 +2,8 @@ package me.santiagoreina.parcheu.api.social.introductions
 
 import kotlinx.coroutines.CancellationException
 import me.santiagoreina.parcheu.api.chat.ChatService
+import me.santiagoreina.parcheu.api.demo.DemoConnectPolicy
+import me.santiagoreina.parcheu.api.demo.DemoVisibility
 import me.santiagoreina.parcheu.api.graph.EdgeEvent
 import me.santiagoreina.parcheu.api.graph.EdgeService
 import me.santiagoreina.parcheu.api.graph.EdgeSource
@@ -71,6 +73,10 @@ class IntroductionService(
     private val chat: ChatService,
     private val notifier: Notifier,
     private val clock: Clock,
+    /** Cómo decide un demo (E4.9): la misma política determinista que usa `ReportService.decideForDemo`. */
+    private val demo: DemoConnectPolicy = DemoConnectPolicy.DEFAULT,
+    /** `DEMO_USERS_ENABLED`: con la bandera apagada un demo no se puede presentar (ADR-0027). */
+    private val demoUsersEnabled: Boolean = true,
 ) {
     private val log = LoggerFactory.getLogger(IntroductionService::class.java)
 
@@ -95,6 +101,9 @@ class IntroductionService(
         }
         if (b in graph.blockedEitherWay(a) || simulationRepo.blockedEitherWay(a, b)) throw Blocked()
         if (!people.acceptsIntroductions(personA) || !people.acceptsIntroductions(personB)) {
+            throw Forbidden("Una de las personas no recibe presentaciones")
+        }
+        if (!DemoVisibility.proposable(personA.isDemo, demoUsersEnabled) || !DemoVisibility.proposable(personB.isDemo, demoUsersEnabled)) {
             throw Forbidden("Una de las personas no recibe presentaciones")
         }
         val alreadyConnected = graph.egoEdges(a, GraphFilter(mode = body.mode))
@@ -154,6 +163,12 @@ class IntroductionService(
             throw Conflict("La presentación no está lista para enviarse")
         }
         if (interested && simulationRepo.blockedEitherWay(record.userA, record.userB)) throw Blocked()
+        // Pudieron conectarse por otro camino mientras corría la simulación: ya no hay nada que proponer.
+        if (interested && graph.egoEdges(record.userA, GraphFilter(mode = record.mode))
+                .any { it.other.id == record.userB && it.state == EdgeState.CONNECTED }
+        ) {
+            throw Conflict("Ya están conectados en ${record.mode.name}")
+        }
         val (_, after) = repo.update(record.id) { current ->
             if (current.status != IntroductionStatus.SIMULATING) throw Conflict("Ya decidiste sobre esta presentación")
             current.copy(status = if (interested) IntroductionStatus.PROPOSED else IntroductionStatus.DECLINED)
@@ -174,12 +189,34 @@ class IntroductionService(
                 )
             }
         }
+        // Un demo no usa la app: responde en su nombre, con la decisión determinista por presentación (E4.9).
+        if (interested) {
+            listOf(record.userA, record.userB).forEach { user ->
+                if (simulationRepo.participant(user)?.isDemo == true) answerForDemo(after, user)
+            }
+        }
         return dto(viewer, after) ?: throw NotFound()
+    }
+
+    private suspend fun answerForDemo(record: IntroductionRecord, demoUser: UUID) {
+        try {
+            answer(demoUser, record, demo.wantsToConnect(record.id))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // La propuesta ya salió: si el demo no pudo responder (bloqueo, modo apagado) no deshace el envío.
+            log.warn("El demo {} no pudo responder la presentación {}: {}", demoUser, record.id, e.message)
+        }
     }
 
     /** E3: 'Me interesa' o 'No, gracias' de una persona presentada. */
     private suspend fun answer(viewer: UUID, record: IntroductionRecord, interested: Boolean): IntroductionDto {
         if (simulationRepo.blockedEitherWay(record.userA, record.userB)) throw Blocked()
+        // Nunca se conecta en un modo inactivo (como E6.1): si alguno lo apagó tras la propuesta, no se avanza.
+        if (interested) {
+            val active = listOf(record.userA, record.userB).all { simulationRepo.participant(it)?.activeModes?.contains(record.mode) == true }
+            if (!active) throw Conflict("Esta presentación ya no está disponible porque uno de los dos desactivó el modo")
+        }
         val response = if (interested) IntroResponse.INTERESTED else IntroResponse.DECLINED
         val (before, after) = repo.update(record.id) { current ->
             if (current.responseOf(viewer) != null) throw Conflict("Ya respondiste a esta presentación")
@@ -200,7 +237,12 @@ class IntroductionService(
     }
 
     private suspend fun connect(record: IntroductionRecord) {
-        edges.apply(EdgeEvent.Connected(record.userA, record.userB, record.mode, EdgeSource.INTRODUCTION))
+        val edge = edges.apply(EdgeEvent.Connected(record.userA, record.userB, record.mode, EdgeSource.INTRODUCTION))
+        if (edge == null) {
+            // Un bloqueo entre el chequeo y la conexión: sin arista no hay chat ni aviso.
+            log.warn("Presentación {} sin conectar: la arista no se pudo crear (bloqueo)", record.id)
+            return
+        }
         val direct = chat.createDirectTolerant(record.userA, record.userB, record.mode)
         listOf(record.userA, record.userB).forEach { user ->
             val name = presenter.present(user, record.otherThan(user)).takeIf { it.id != null }?.label
@@ -226,7 +268,7 @@ class IntroductionService(
     suspend fun request(requester: UUID, body: IntroRequest) {
         if (!quota.isPlus(requester)) throw PlusRequired("Pedir una presentación es de ParcheU+")
         val (target, mutuals) = people.resolveFof(requester, body.anonId.trim()) ?: throw NotFound("La persona no existe")
-        if (repo.pendingRequest(requester, target) != null) return
+        if (repo.pendingRequest(requester, target, clock.instant().minus(REQUEST_TTL)) != null) return
         // Determinista: el amigo en común con el id menor (no se revela a quien pide).
         val via = mutuals.minBy { it.toString() }
         repo.insertRequest(
@@ -358,5 +400,10 @@ class IntroductionService(
             // El aviso no deshace la presentación: la propuesta queda en GET y en la bandeja.
             log.warn("No se pudo enviar el aviso {} de la presentación {}: {}", notification.kind, introductionId, e.message)
         }
+    }
+
+    companion object {
+        /** Una solicitud PENDING sin respuesta deja de contar tras este tiempo (nadie la cierra todavía). */
+        val REQUEST_TTL: java.time.Duration = java.time.Duration.ofDays(14)
     }
 }

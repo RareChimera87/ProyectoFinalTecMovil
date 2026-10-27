@@ -67,6 +67,8 @@ class IntroductionPeople(
             .filter { it.state == EdgeState.CONNECTED && it.mode != Mode.PAREJA }
             .map { it.other }
             .filter { policy.canSee(requester, it, ViewContext.EGO, blocked) }
+            // Misma regla que D6 (FofService): un amigo HIDDEN no cuenta como amigo en común.
+            .filter { policy.canSee(requester, it, ViewContext.THIRD_PARTY, blocked) }
             .distinctBy { it.id }
         val result = mutableMapOf<UUID, MutableSet<UUID>>()
         for (friend in friends) {

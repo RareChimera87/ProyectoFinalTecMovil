@@ -89,11 +89,15 @@ class NotificationsViewModelTest {
     }
 
     @Test
-    fun markAllReadIsOptimisticAndSendsNoIds() {
+    fun markAllReadIsOptimisticAndSendsTheShownUnreadIds() {
         val repo = FakeNotificationsRepository(ApiResult.Success(inbox))
         val vm = NotificationsViewModel(repo)
         vm.onMarkAllRead()
-        assertEquals(listOf<List<String>?>(null), repo.markReadCalls)
+        val shownUnread = (inbox.today + inbox.week + inbox.older).filterNot {
+            it.read
+        }.map { it.id }
+        assertEquals(3, shownUnread.size)
+        assertEquals(listOf<List<String>?>(shownUnread), repo.markReadCalls)
         assertEquals(0, loaded(vm).unread)
         assertNull(loaded(vm).actionError)
     }

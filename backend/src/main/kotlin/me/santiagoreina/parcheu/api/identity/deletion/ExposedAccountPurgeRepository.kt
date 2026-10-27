@@ -110,6 +110,11 @@ class ExposedAccountPurgeRepository(private val db: Database) : AccountPurgeRepo
         val closed = pending.map { (match, other) -> ClosedMatch(match, other, notify = true) } +
             expiredTickets.filter { it.first !in pendingIds }.map { (match, other) -> ClosedMatch(match, other, notify = false) }
 
+        // 1d. Candado de su derecho de compra: una RTDN en vuelo (que ya tomó `select ... for update` sobre su
+        //     fila) termina de ligar y guardar su evento antes de seguir, y el paso 2 lo redacta; sin esto la
+        //     purga podía terminar antes de que ese evento existiera y dejar el payload completo.
+        sql.query("select 1 from entitlements where user_id = ? for update", user)
+
         // 2. Columnas jsonb con datos personales (PersonalJsonPaths), antes de mover las filas a la lápida.
         //    Contrapartes: quienes compartieron con ella chat, arista, simulación o match (para el nombre visible).
         val counterparts = sql.ids(

@@ -18,7 +18,7 @@ class FakeNotificationsRepository(
         mutableListOf(ApiResult.Failure(AppError.Network))
     }
 
-    /** Cada llamada a `markRead`: la lista de ids o `null` (todas). */
+    /** Cada llamada a `markRead`: la lista de ids (o `null`: todas). */
     val markReadCalls = mutableListOf<List<String>?>()
 
     override suspend fun inbox(): ApiResult<NotificationsDto> =
@@ -26,7 +26,9 @@ class FakeNotificationsRepository(
 
     override suspend fun markRead(ids: List<String>?): ApiResult<Unit> {
         markReadCalls += ids
-        if (ids == null) markAllGate?.await()
-        return if (ids == null) markReadResult else ApiResult.Success(Unit)
+        // 'Marcar leídas' manda los varios ids no leídos en pantalla; abrir un aviso manda uno solo.
+        val bulk = ids == null || ids.size > 1
+        if (bulk) markAllGate?.await()
+        return if (bulk) markReadResult else ApiResult.Success(Unit)
     }
 }

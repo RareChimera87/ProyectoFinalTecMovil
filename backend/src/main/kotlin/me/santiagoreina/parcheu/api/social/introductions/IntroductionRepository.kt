@@ -76,8 +76,11 @@ interface IntroductionRepository {
      */
     suspend fun update(id: UUID, change: (IntroductionRecord) -> IntroductionRecord): Pair<IntroductionRecord, IntroductionRecord>?
 
-    /** Solicitud PENDING de [requesterId] para conocer a [targetUserId], si existe. */
-    suspend fun pendingRequest(requesterId: UUID, targetUserId: UUID): IntroRequestRecord?
+    /**
+     * Solicitud PENDING de [requesterId] para conocer a [targetUserId] creada desde [since], si existe. Las
+     * más viejas ya no cuentan (nadie las cierra): repetir la solicitud vuelve a avisar al amigo en común.
+     */
+    suspend fun pendingRequest(requesterId: UUID, targetUserId: UUID, since: Instant): IntroRequestRecord?
 
     suspend fun insertRequest(record: IntroRequestRecord)
 }
@@ -123,8 +126,11 @@ class InMemoryIntroductionRepository : IntroductionRepository {
             before to after
         }
 
-    override suspend fun pendingRequest(requesterId: UUID, targetUserId: UUID): IntroRequestRecord? = synchronized(lock) {
-        requestRows.firstOrNull { it.requesterId == requesterId && it.targetUserId == targetUserId && it.status == IntroRequestStatus.PENDING }
+    override suspend fun pendingRequest(requesterId: UUID, targetUserId: UUID, since: Instant): IntroRequestRecord? = synchronized(lock) {
+        requestRows.firstOrNull {
+            it.requesterId == requesterId && it.targetUserId == targetUserId && it.status == IntroRequestStatus.PENDING &&
+                !it.createdAt.isBefore(since)
+        }
     }
 
     override suspend fun insertRequest(record: IntroRequestRecord) {

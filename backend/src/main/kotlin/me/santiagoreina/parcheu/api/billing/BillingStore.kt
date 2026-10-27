@@ -12,6 +12,7 @@ import me.santiagoreina.parcheu.contract.EntitlementState
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -60,6 +61,12 @@ interface BillingStore {
 
     /** Liga el evento [messageId] a [userId] (para redactarlo al borrar la cuenta, arquitectura.md §10.2). */
     fun assignEvent(messageId: String, userId: UUID)
+
+    /**
+     * Liga a [userId] los eventos de [purchaseToken] que aún no tienen dueño (una RTDN llegó antes de que la
+     * app verificara la compra): sin esto la purga de E8.3 no los encontraría al borrar la cuenta.
+     */
+    fun linkEventsOfToken(purchaseToken: String, userId: UUID)
 
     /**
      * Deja el evento [messageId] sin datos de la cuenta: payload mínimo (tipo y fecha) y sin token ni usuario.
@@ -134,6 +141,14 @@ class ExposedBillingStore(private val db: Database) : BillingStore {
     override fun assignEvent(messageId: String, userId: UUID) {
         transaction(db) {
             PurchaseEvents.update({ PurchaseEvents.messageId eq messageId }) { it[PurchaseEvents.userId] = userId }
+        }
+    }
+
+    override fun linkEventsOfToken(purchaseToken: String, userId: UUID) {
+        transaction(db) {
+            PurchaseEvents.update({ (PurchaseEvents.purchaseToken eq purchaseToken) and PurchaseEvents.userId.isNull() }) {
+                it[PurchaseEvents.userId] = userId
+            }
         }
     }
 
@@ -225,6 +240,11 @@ class InMemoryBillingStore(
     @Synchronized
     override fun assignEvent(messageId: String, userId: UUID) {
         events[messageId]?.let { events[messageId] = Event(it.token, it.payload, userId) }
+    }
+
+    @Synchronized
+    override fun linkEventsOfToken(purchaseToken: String, userId: UUID) {
+        events.replaceAll { _, e -> if (e.token == purchaseToken && e.userId == null) Event(e.token, e.payload, userId) else e }
     }
 
     @Synchronized

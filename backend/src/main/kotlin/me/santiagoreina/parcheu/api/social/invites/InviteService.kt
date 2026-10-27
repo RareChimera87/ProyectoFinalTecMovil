@@ -43,11 +43,13 @@ data class InviteParticipant(val id: UUID, val activeModes: Set<Mode>, val delet
  * - `GET /v1/invites/me`: el código `XXXX-0000` de la persona (se crea la primera vez), su App Link y los
  *   canjes de su código que esperan que ella acepte.
  * - `POST /v1/invites/redeem`: quien canjea el código de otra persona pide conectar en un modo que los dos
- *   tienen activo. La arista queda PENDING (`EdgeEvent.InterestShown`) y el dueño recibe `INVITE_PENDING`.
+ *   tienen activo. El canje queda PENDING (fila de `invite_redemptions`) y el dueño recibe `INVITE_PENDING`.
  *   Es idempotente: repetirlo no duplica el canje ni el aviso. Si el dueño ya había canjeado el código de
  *   quien canjea en el mismo modo, el interés es mutuo y quedan CONNECTED de una vez. Cada persona tiene
  *   [MAX_REDEEMS_PER_DAY] intentos por día (exista o no el código) y la respuesta nunca dice qué modos
  *   tiene activos el dueño: si no tiene el modo pedido, se responde PENDING sin crear nada ni avisarle.
+ *   El canje no toca `edges` (ni siquiera PENDING): solo así el ego-grafo y D6 de quien canjea son iguales
+ *   tenga o no el dueño ese modo.
  * - `POST /v1/invites/{id}/accept[?mode=]`: el dueño acepta un canje (por el [PendingInvite.id]
  *   `anonId:MODO` que ve en [InviteDto.pending], o por `anonId`/`users.id` más `mode`) y la arista pasa a
  *   CONNECTED solo en ese modo. Sin modo se acepta solo si esa persona tiene un único canje pendiente.
@@ -76,8 +78,17 @@ class InviteService(
         val modes = ModesLookup(userId)
         val pending = repo.pendingFor(userId).mapNotNull { r ->
             if (r.redeemer in blocked) return@mapNotNull null
-            // El modo ya no está activo para alguno de los dos: no se ofrece (aceptarlo lo descarta).
-            if (!modes.activeForBoth(r)) return@mapNotNull null
+            // El modo ya no está activo para alguno de los dos: no se ofrece y se borra el canje, para que no
+            // reaparezca si reactivan el modo (quien canjeó puede volver a hacerlo).
+            if (!modes.activeForBoth(r)) {
+                repo.removeRedemption(userId, r.redeemer, r.mode)
+                return@mapNotNull null
+            }
+            // Ya se conectaron en ese modo por otro camino (presentación, decisión mutua): nada que aceptar.
+            if (isConnected(userId, r.redeemer, r.mode)) {
+                repo.markConnected(userId, r.redeemer, r.mode, clock.instant())
+                return@mapNotNull null
+            }
             val person = graph.person(r.redeemer)?.takeIf { it.deletedAt == null } ?: return@mapNotNull null
             val ref = requesterRef(userId, person)
             PendingInvite(id = pendingId(ref.anonId!!, r.mode), other = ref, mode = r.mode, createdAt = r.createdAt.toKotlinInstant())
@@ -132,13 +143,10 @@ class InviteService(
         // para que este canje quede PENDING, con aviso y fila en C5, en vez de quedar ignorado.
         if (repo.redemption(owner, userId, mode)?.status == RedeemStatus.CONNECTED) repo.removeRedemption(owner, userId, mode)
 
-        // Primero la arista (no se crea si hay un bloqueo) y luego el canje, que decide si se avisa.
-        val edge = edges.apply(EdgeEvent.InterestShown(userId, owner, mode, EdgeSource.INVITE)) ?: throw Blocked()
+        // El canje NO escribe en `edges`: una arista PENDING la vería quien canjea en su ego-grafo y en D6, y
+        // así sabría si el dueño tiene el modo (Pareja sobre todo). El estado pendiente vive en
+        // invite_redemptions; la arista CONNECTED nace solo cuando el dueño acepta.
         val created = repo.addRedemption(owner, userId, mode, clock.instant())
-        if (edge.state == EdgeState.CONNECTED) {
-            repo.markConnected(owner, userId, mode, clock.instant())
-            return RedeemResult(RedeemStatus.CONNECTED, connectedRef(userId, ownerPerson))
-        }
         if (created) {
             val name = graph.person(userId)?.displayName?.trim()?.takeIf { it.isNotEmpty() }
             notifySafely(
@@ -181,11 +189,16 @@ class InviteService(
             throw NotFound("No hay una invitación pendiente de esa persona")
         }
         // Alguno apagó el modo después del canje (p. ej. Pareja): nunca se conecta en un modo inactivo.
-        // La arista PENDING se descarta y el canje se borra; si reactivan el modo, pueden volver a canjear.
+        // El canje se borra (y cualquier arista PENDING heredada); si reactivan el modo, pueden volver a canjear.
         if (!modes.activeForBoth(redemption)) {
             edges.apply(EdgeEvent.Declined(redeemer, ownerId, redemption.mode, EdgeSource.INVITE))
             repo.removeRedemption(ownerId, redeemer, redemption.mode)
             throw NotFound("No hay una invitación pendiente de esa persona")
+        }
+        // Ya estaban conectados en ese modo por otro camino: se cierra el canje sin repetir el aviso.
+        if (isConnected(ownerId, redeemer, redemption.mode)) {
+            repo.markConnected(ownerId, redeemer, redemption.mode, clock.instant())
+            return RedeemResult(RedeemStatus.CONNECTED, connectedRef(ownerId, person))
         }
         connect(owner = ownerId, redeemer = redeemer, mode = redemption.mode)
         return RedeemResult(RedeemStatus.CONNECTED, connectedRef(ownerId, person))
