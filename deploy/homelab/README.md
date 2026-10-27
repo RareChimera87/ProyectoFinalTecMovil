@@ -53,7 +53,7 @@ curl -XPOST -H 'Authorization: Bearer fake-ana' http://192.168.0.10:8090/v1/sess
 
 No funciona: iniciar sesión desde la app Android (envía un ID token real de Firebase, que en modo `local` no se valida), IA real (Vertex), notificaciones push, espejos de Firestore (chat y progreso en vivo), borrado de usuarios en Firebase Auth, verificación de compras en Play (`verify` responde 500; Plus se prueba con `grant-plus`). El gemelo y las simulaciones corren en proceso, con IA falsa.
 
-**Seguridad.** En modo `local` cualquiera con acceso al puerto puede suplantar a cualquier usuario. Por eso el 8090 queda solo en loopback y la LAN: **no lo publiques por Cloudflare en modo `local`.** Mientras `PARCHEU_ENV=local`, el Proxy Host de NPM debe llevar una *Access List* que permita solo `192.168.0.0/24` y `100.64.0.0/10` (Tailscale), o crearse únicamente después de pasar a `dev`; `desplegar.sh` avisa si el HTTPS responde con `local`.
+**Seguridad.** En modo `local` cualquiera con acceso al puerto puede suplantar a cualquier usuario. Por eso el 8090 queda solo en loopback y la LAN: **no lo publiques por Cloudflare en modo `local`.** Mientras `PARCHEU_ENV=local`, el Proxy Host de NPM debe llevar una *Access List* que permita solo `192.168.0.0/24` y `100.64.0.0/10` (Tailscale), o crearse únicamente después de pasar a `dev`; `desplegar.sh` avisa si el HTTPS responde con `local`. El token `fake-admin` (moderación y lectura de todos los reportes, con los textos de los chats) solo existe si defines `LOCAL_FAKE_ADMIN=true`; no va en `.env.example` ni conviene activarlo en el homeserver, donde viven datos de testers.
 
 ## Con la app real: `PARCHEU_ENV=dev` y la llave de Google
 
