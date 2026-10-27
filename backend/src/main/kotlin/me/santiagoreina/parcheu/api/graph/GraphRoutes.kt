@@ -41,7 +41,6 @@ class GraphRoutes(
         }
         stubGet("/graph/history")
         stubGet("/communities")
-        stubGet("/connect-requests")
     }
 
     override fun Route.internal() {

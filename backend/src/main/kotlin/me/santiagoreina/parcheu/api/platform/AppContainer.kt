@@ -89,6 +89,10 @@ import me.santiagoreina.parcheu.api.social.introductions.IntroductionRepository
 import me.santiagoreina.parcheu.api.social.introductions.IntroductionRoutes
 import me.santiagoreina.parcheu.api.social.introductions.IntroductionSimulationNotifier
 import me.santiagoreina.parcheu.api.social.introductions.introductionModule
+import me.santiagoreina.parcheu.api.social.requests.ConnectRequestModule
+import me.santiagoreina.parcheu.api.social.requests.ConnectRequestRoutes
+import me.santiagoreina.parcheu.api.social.requests.exposedConnectRequestModule
+import me.santiagoreina.parcheu.api.social.requests.inMemoryConnectRequestModule
 import me.santiagoreina.parcheu.api.social.invites.InviteLinks
 import me.santiagoreina.parcheu.api.social.invites.InviteModule
 import me.santiagoreina.parcheu.api.social.invites.exposedInviteModule
@@ -175,6 +179,8 @@ class AppContainer(
     val unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
     /** Invitaciones por QR y código (E6.1). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
     val invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
+    /** 'Quién quiere conectar contigo' (E6.6). Por defecto lee las decisiones en memoria de [simulation]. */
+    val connectRequests: ConnectRequestModule = inMemoryConnectRequestModule(simulation, graph, quota),
     /**
      * Billing (E7.1): verify, derecho vigente y RTDN. Por defecto en memoria y sin API de Play: solo
      * [fromConfig] cablea Postgres (la misma tabla `entitlements` que lee [quota]) y Google Play.
@@ -191,7 +197,7 @@ class AppContainer(
     val domains: List<DomainRoutes> =
         allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
-            invites, billing, config.env, introductions, admin,
+            invites, billing, config.env, introductions, admin, connectRequests,
         ),
 ) {
     companion object {
@@ -278,6 +284,8 @@ class AppContainer(
             )
             // Invitaciones (E6.1): aristas por EdgeService, modos de user_modes y enlace https://<hosting>/i/{codigo}.
             val invites = exposedInviteModule(database, graph, simulation, notifier, InviteLinks.fromConfig(config, vars), clock)
+            // Solicitudes de conexión (E6.6): lee `connection_decisions` de la misma base.
+            val connectRequests = exposedConnectRequestModule(database, graph, quota, demo.enabled)
             // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.
             val billing = billingModule(config.env, database, clock, vars)
             val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account) }
@@ -289,6 +297,7 @@ class AppContainer(
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
                 billing = billing,
                 invites = invites,
+                connectRequests = connectRequests,
                 background = background,
             )
         }
@@ -367,6 +376,7 @@ fun allDomains(
     introductions: IntroductionModule =
         introductionModule(InMemoryIntroductionRepository(), simulation, graph, chat, quota, NoopNotifier, systemClock()),
     admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, systemClock()),
+    connectRequests: ConnectRequestModule = inMemoryConnectRequestModule(simulation, graph, quota),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -378,6 +388,8 @@ fun allDomains(
         identity.requireUser(firebase).id
     },
     SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },
+    // Quién quiere conectar contigo (E6.6).
+    ConnectRequestRoutes(connectRequests.service) { firebase -> identity.requireUser(firebase).id },
     // Presentar a dos amigos (E6.2).
     IntroductionRoutes(introductions.service) { firebase -> identity.requireUser(firebase).id },
     ChatRoutes(chat.service) { firebase -> identity.requireUser(firebase) },
