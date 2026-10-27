@@ -47,6 +47,7 @@ import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.Decision
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.ErrorCode
+import me.santiagoreina.parcheu.contract.FofDto
 import me.santiagoreina.parcheu.contract.GraphDto
 import me.santiagoreina.parcheu.contract.IntroRequest
 import me.santiagoreina.parcheu.contract.IntroResponse
@@ -597,6 +598,56 @@ class IntroductionApiTest : FunSpec({
             client.requestIntro("juli", anonOfMari).status shouldBe HttpStatusCode.NotFound
             w.friends("juli", "sebas")
             w.block("mari", "juli")
+            client.requestIntro("juli", anonOfMari).status shouldBe HttpStatusCode.NotFound
+        }
+        w.store.requests.shouldBeEmpty()
+    }
+
+    fun World.hide(uid: String) = sim.graphRepo.addPerson(PersonRow(id(uid), uid, null, "UIS", Visibility.HIDDEN, false, null))
+
+    test("pedir presentación usa el viaId de D6: con un amigo en común HIDDEN el aviso va al visible, no al HIDDEN") {
+        val w = World()
+        // juli es amiga de sebas (visible) y de nico (HIDDEN); mari es amiga de los dos. D6 dice 'Amigo de sebas'.
+        w.friends("juli", "sebas")
+        w.friends("juli", "nico")
+        w.hide("nico")
+        w.sim.plus(w.id("juli"))
+        val anonOfMari = AnonIdSigner.forTests().anonId(w.id("juli"), w.id("mari"))
+        testApplication {
+            val client = app(w)
+            val fof = client.get("/v1/graph/fof") { auth("juli") }.body<FofDto>()
+            fof.items!!.single().viaId shouldBe w.id("sebas").toString()
+            client.requestIntro("juli", anonOfMari).status shouldBe HttpStatusCode.Accepted
+        }
+        w.store.requests.single().viaUserId shouldBe w.id("sebas")
+        w.sentTo("sebas") shouldHaveSize 1
+        w.sentTo("nico").shouldBeEmpty()
+    }
+
+    test("pedir presentación no es oráculo: si el único camino es un amigo HIDDEN, 404 igual que si no existiera") {
+        val w = World()
+        w.friends("juli", "nico")
+        w.hide("nico")
+        w.sim.plus(w.id("juli"))
+        val anonOfMari = AnonIdSigner.forTests().anonId(w.id("juli"), w.id("mari"))
+        testApplication {
+            val client = app(w)
+            client.get("/v1/graph/fof") { auth("juli") }.body<FofDto>().count shouldBe 0
+            client.requestIntro("juli", anonOfMari).status shouldBe HttpStatusCode.NotFound
+        }
+        w.store.requests.shouldBeEmpty()
+        w.sentTo("nico").shouldBeEmpty()
+    }
+
+    test("pedir presentación no acepta a quien ya tiene una arista (SIMULATED) con quien pide, aunque su anonId salga del G0") {
+        val w = World()
+        w.friends("juli", "sebas")
+        w.sim.graphRepo.putEdge(w.id("juli"), w.id("mari"), Mode.AMISTAD, EdgeState.SIMULATED, 60)
+        w.sim.plus(w.id("juli"))
+        val anonOfMari = AnonIdSigner.forTests().anonId(w.id("juli"), w.id("mari"))
+        testApplication {
+            val client = app(w)
+            client.get("/v1/graph/fof") { auth("juli") }.body<FofDto>().count shouldBe 0
             client.requestIntro("juli", anonOfMari).status shouldBe HttpStatusCode.NotFound
         }
         w.store.requests.shouldBeEmpty()
