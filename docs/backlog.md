@@ -1005,10 +1005,10 @@ QR y código, presentar a dos amigos, amigos de amigos, comunidades, evolución 
 
 **Criterios de aceptación (verificables):**
 
-- [ ] Test: dos cliques unidos por una arista débil producen dos comunidades.
-- [ ] Test: misma entrada y semilla → mismas comunidades; una arista de Pareja no cambia el resultado.
-- [ ] Test: el prompt de nombre no contiene nombres ni correos (FakeLlm).
-- [ ] Roborazzi de D8 en sus 3 estados.
+- [x] Test: dos cliques unidos por una arista débil producen dos comunidades.
+- [x] Test: misma entrada y semilla → mismas comunidades; una arista de Pareja no cambia el resultado.
+- [x] Test: el prompt de nombre no contiene nombres ni correos (FakeLlm).
+- [x] Roborazzi de D8 en sus 3 estados.
 
 #### E6.5 · Evolución de la red
 

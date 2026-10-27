@@ -77,7 +77,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * SafetyScreenshotTest), el borrado y 'Descargar mis datos' (E8.3, DeleteAccountScreenTest,
          * ExportDataRouteTest y AccountScreenshotTest), C1/I1 (E4.7, HomeScreenTest y HomeScreenshotTest),
          * C2 (E5.4, NotificationsRouteTest y NotificationsScreenshotTest), C5 (E6.1, InviteAppLinkTest,
-         * InvitesScreenTest e InvitesScreenshotTest), D6/D7 (E6.3, FofScreenTest y FofScreenshotTest) y
+         * InvitesScreenTest e InvitesScreenshotTest), D6/D7 (E6.3, FofScreenTest y FofScreenshotTest), D8 (E6.4, CommunitiesScreenTest y CommunitiesScreenshotTest) y
          * E1-E3 (E6.2, feature/presentar: IntroduceViewModelTest, IntroResultViewModelTest,
          * IntroProposalViewModelTest y PresentarScreenshotTest), C3 (E9.1, ProfileViewModelTest,
          * ProfileScreenTest y ProfileScreenshotTest), G1-G4/I4 (E7.3, feature/plus:
@@ -97,6 +97,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 TwinReady::class,
                 Parche::class,
                 FriendsOfFriends::class,
+                Communities::class,
                 MatchQueue::class,
                 MatchFound::class,
                 Simulation::class,
