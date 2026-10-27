@@ -58,6 +58,8 @@ TAR="$RAIZ/backend/build/jib-image.tar"
 if [ "$SIN_BUILD" -eq 0 ]; then
   paso "Construyendo la imagen con Jib"
   SHA="$(git -C "$RAIZ" rev-parse --short=12 HEAD 2>/dev/null || echo homelab)"
+  # Con cambios sin commit la imagen no corresponde al SHA: se marca para no confundirla (README).
+  if [ -n "$(git -C "$RAIZ" status --porcelain 2>/dev/null)" ]; then SHA="$SHA-dirty"; echo "AVISO: hay cambios sin commit; la etiqueta será $SHA." >&2; fi
   (cd "$RAIZ/backend" && ./gradlew jibBuildTar -PsinContenedores -PgitSha="$SHA" -Pimagen=parcheu-api)
 fi
 [ -f "$TAR" ] || falla "No existe $TAR (corre sin --sin-build)."
@@ -72,6 +74,9 @@ paso "Preparando ~/$DIR_REMOTO/.env (no se sobrescribe si ya existe)"
 remoto "DIR=$DIR_REMOTO bash -s" <<'REMOTO'
 set -euo pipefail
 cd ~/"$DIR"
+# Un solo despliegue a la vez edita el .env.
+exec 9>.desplegar.lock
+flock -w 120 9 || { echo "Otro despliegue tiene el candado de ~/$DIR/.desplegar.lock" >&2; exit 1; }
 aleatorio() { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 if [ ! -f .env ]; then
   umask 077
@@ -85,12 +90,14 @@ if [ ! -f .env ]; then
   echo "Creado .env con contraseñas nuevas."
 else
   # Un .env de un despliegue anterior puede no traer claves nuevas; se agregan sin tocar las existentes.
+  cp -p .env .env.bak
   for clave in POSTGRES_PASSWORD HMAC_ANON_KEY; do
     grep -q "^$clave=" .env || echo "$clave=$(aleatorio)" >> .env
   done
   grep -q "^TASKS_MODE=" .env || echo "TASKS_MODE=inline" >> .env
   # La versión sale de la imagen (SHA); un APP_VERSION fijo en el .env la taparía.
-  sed -i '/^APP_VERSION=/d' .env
+  grep -v '^APP_VERSION=' .env > .env.nuevo || true
+  mv -f .env.nuevo .env
   echo "Se conserva el .env existente."
 fi
 chmod 600 .env
@@ -102,6 +109,8 @@ ETIQUETAS="$(remoto "DIR=$DIR_REMOTO bash -s" <<'REMOTO'
 set -euo pipefail
 umask 077
 cd ~/"$DIR"
+exec 9>.desplegar.lock
+flock -w 120 9 || { echo "Otro despliegue tiene el candado de ~/$DIR/.desplegar.lock" >&2; exit 1; }
 docker load -i jib-image.tar >&2
 rm -f jib-image.tar
 NUEVA="$(docker image inspect parcheu-api:latest --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^APP_VERSION=//p' | head -1)"
@@ -111,11 +120,20 @@ esac
 docker tag parcheu-api:latest "parcheu-api:$NUEVA"
 ACTUAL="$(sed -n 's/^PARCHEU_TAG=//p' .env | tail -1)"
 if [ "$ACTUAL" = "$NUEVA" ]; then ANTERIOR="$(sed -n 's/^PARCHEU_PREV_TAG=//p' .env | tail -1)"; else ANTERIOR="$ACTUAL"; fi
-fijar() { grep -v "^$1=" .env > .env.nuevo || true; echo "$1=$2" >> .env.nuevo; cat .env.nuevo > .env; rm -f .env.nuevo; }
+PREV_ACTUAL="$(sed -n 's/^PARCHEU_PREV_TAG=//p' .env | tail -1)"
+# Escritura atómica: archivo temporal con los mismos permisos y mv.
+fijar() { grep -v "^$1=" .env > .env.nuevo || true; echo "$1=$2" >> .env.nuevo; mv -f .env.nuevo .env; }
+cp -p .env .env.bak
 fijar PARCHEU_PREV_TAG "$ANTERIOR"
 fijar PARCHEU_TAG "$NUEVA"
 # Solo `up`: la API depende de la base sana y de que parcheu-migrate termine bien, así que la migración corre sola.
-docker compose up -d --remove-orphans parcheu-api >&2
+if ! docker compose up -d --remove-orphans parcheu-api >&2; then
+  echo "docker compose up falló: se restauran las etiquetas anteriores en .env." >&2
+  fijar PARCHEU_PREV_TAG "$PREV_ACTUAL"
+  fijar PARCHEU_TAG "$ACTUAL"
+  [ -z "$ACTUAL" ] || docker compose up -d parcheu-api >&2 || true
+  exit 1
+fi
 echo "$NUEVA $ANTERIOR"
 REMOTO
 )" || falla "No se pudo cargar o levantar la imagen. Revisa los mensajes de arriba."
@@ -134,7 +152,7 @@ if ! salud_remota; then
   remoto "cd ~/$DIR_REMOTO && docker compose logs --tail 40 parcheu-api" >&2 || true
   if [ -n "$ANTERIOR" ]; then
     echo "La versión $NUEVA no respondió: se revierte a $ANTERIOR (las migraciones de Flyway no se deshacen)." >&2
-    remoto "cd ~/$DIR_REMOTO && sed -i 's/^PARCHEU_TAG=.*/PARCHEU_TAG=$ANTERIOR/' .env && docker compose up -d parcheu-api" >&2 || true
+    remoto "cd ~/$DIR_REMOTO && grep -v '^PARCHEU_TAG=' .env > .env.nuevo; echo 'PARCHEU_TAG=$ANTERIOR' >> .env.nuevo; mv -f .env.nuevo .env && docker compose up -d parcheu-api" >&2 || true
     if salud_remota; then falla "Despliegue revertido a $ANTERIOR: $NUEVA no pasó la comprobación de salud."; fi
     falla "$NUEVA falló y la reversión a $ANTERIOR tampoco respondió. Revisa los registros del servidor."
   fi
@@ -159,7 +177,7 @@ MODO="$(remoto "sed -n 's/^PARCHEU_ENV=//p' ~/$DIR_REMOTO/.env | tail -1")"
 if curl -fsS --max-time 8 "https://api-parcheu.homeserverlab.site/v1/health" >/dev/null 2>&1; then
   echo "HTTPS OK: https://api-parcheu.homeserverlab.site/v1/health"
   if [ "$MODO" = "local" ]; then
-    echo "ALERTA: PARCHEU_ENV=local (autenticación Fake: cualquiera suplanta a cualquier usuario) y el HTTPS ya responde. Restringe el Proxy Host de NPM a 192.168.0.0/24 y 100.64.0.0/10 con una Access List, o pasa a dev (README)." >&2
+    echo "ALERTA: PARCHEU_ENV=local (autenticación Fake: cualquiera suplanta a cualquier usuario) y el HTTPS responde. Si el Proxy Host de NPM no tiene una Access List que permita solo 192.168.0.0/24 y 100.64.0.0/10, agrégala o pasa a dev (README)." >&2
   fi
 else
   echo "AVISO: https://api-parcheu.homeserverlab.site aún no responde (falta el Proxy Host en NPM o el DNS); no es un error." >&2

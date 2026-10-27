@@ -14,7 +14,7 @@ Aplicar el Terraform de `parcheu-dev` (Cloud SQL, Cloud Run, Cloud Tasks, Schedu
 - Cada despliegue etiqueta la imagen con el SHA y `desplegar.sh` revierte solo a la anterior si la salud falla.
 - No se aplica Terraform por ahora. `deploy-dev.yml` se conserva pero queda condicionado a la variable de repositorio `GCP_DEV_ENABLED` para no fallar en cada push a `dev`.
 - Acceso principal por HTTPS: Nginx Proxy Manager del servidor (certificado comodín `*.homeserverlab.site`) con `api-parcheu.homeserverlab.site` → `http://192.168.0.10:8090`; AdGuard resuelve el dominio en la LAN. Mientras `PARCHEU_ENV=local` (auth Fake) el Proxy Host lleva una Access List que permite solo `192.168.0.0/24` y `100.64.0.0/10`, o se crea solo tras pasar a `dev`; `desplegar.sh` avisa si el HTTPS responde con `local`.
-- Android: como respaldo, el `devDebug` (y solo él) permite HTTP hacia `192.168.0.10`, `100.104.43.91`, `homelab` y `10.0.2.2`; `release` y `prod` mantienen la red segura por defecto.
+- Android: como respaldo, el `devDebug` (y solo él) permite HTTP hacia `192.168.0.10` y `10.0.2.2`; `release` y `prod` mantienen la red segura por defecto.
 
 ## Alternativas consideradas
 - **Aplicar Terraform de dev ya:** costo fijo y pasos humanos pendientes; se mantiene como camino de regreso.

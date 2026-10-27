@@ -17,11 +17,17 @@ Requisitos: SSH sin contraseña a `user@homelab`, JDK para Gradle y red para que
 
 ```bash
 deploy/homelab/desplegar.sh                 # destino user@homelab
-deploy/homelab/desplegar.sh --host usuario@100.104.43.91
+deploy/homelab/desplegar.sh --host usuario@192.168.0.10
 deploy/homelab/desplegar.sh --sin-build     # reutiliza backend/build/jib-image.tar
 ```
 
-El script: comprueba que el 8090 esté libre (o sea de ParcheU) y aborta si no, construye la imagen, copia imagen y compose a `~/parcheu/`, crea `~/parcheu/.env` con contraseñas aleatorias la primera vez (`chmod 600`, nunca se sobrescribe; solo agrega claves que falten, como `TASKS_MODE=inline`), carga la imagen y la etiqueta con su SHA (`PARCHEU_TAG`, la anterior queda en `PARCHEU_PREV_TAG`), levanta la API con un solo `docker compose up` (la migración corre antes por `depends_on`), verifica la salud desde el servidor y, **si falla, revierte solo a la imagen anterior** (las migraciones de Flyway no se deshacen: usa migraciones compatibles hacia atrás). Tras un despliegue sano borra las etiquetas anteriores a la previa (nunca `docker image prune`), avisa si el HTTPS responde con `PARCHEU_ENV=local` e instala un cron de respaldo diario (03:17, `respaldar.sh`, 7 días en `~/parcheu/backups`, `respaldo.log` rotado a 1 MiB). Es idempotente: se puede repetir para actualizar.
+El script: comprueba que el 8090 esté libre (o sea de ParcheU) y aborta si no, construye la imagen, copia imagen y compose a `~/parcheu/`, crea `~/parcheu/.env` con contraseñas aleatorias la primera vez (`chmod 600`, nunca se sobrescribe; solo agrega claves que falten, como `TASKS_MODE=inline`), carga la imagen y la etiqueta con su SHA (`PARCHEU_TAG`, la anterior queda en `PARCHEU_PREV_TAG`), levanta la API con un solo `docker compose up` (la migración corre antes por `depends_on`), verifica la salud desde el servidor y, **si falla, revierte solo a la imagen anterior** (las migraciones de Flyway no se deshacen: usa migraciones compatibles hacia atrás). Tras un despliegue sano borra las etiquetas anteriores a la previa (nunca `docker image prune`), avisa si el HTTPS responde con `PARCHEU_ENV=local` e instala un cron de respaldo diario (03:17, `respaldar.sh`, 7 días en `~/parcheu/backups`, `respaldo.log` rotado a 1 MiB). Es idempotente: se puede repetir para actualizar. Las ediciones del `.env` son atómicas (archivo temporal + `mv`, con `.env.bak` previo) y los despliegues simultáneos se serializan con `flock`; si `docker compose up` falla, el `.env` vuelve a la etiqueta anterior.
+
+Advertencias operativas:
+- **La IP `192.168.0.10` del servidor debe ser estática** (reserva DHCP en el router): el compose publica el 8090 en esa IP y, si cambia, la API no arranca o queda inalcanzable.
+- **Evita desplegar con cambios sin commit**: la etiqueta sale del SHA; el script le agrega `-dirty` si el árbol tiene cambios, pero esa imagen no es reproducible.
+- **Reversión y migraciones:** Flyway no se deshace. Si la versión nueva aplicó una migración y luego se revierte la imagen, el código viejo corre contra el esquema nuevo; y si la anterior trae migraciones que la actual no conoce (por ejemplo tras volver a una rama con migraciones en otro orden), Flyway falla por orden. Escribe migraciones compatibles hacia atrás y, ante un fallo así, restaura un respaldo.
+- Una simulación cuyo proceso muere varias veces seguidas se reencola en cada ciclo de recuperación (cada 15 min, ventana de 24 h); no hay contador de recuperaciones porque exigiría una migración. Vigila el gasto de IA si ves el mismo id repetido en los registros.
 
 Los respaldos viven en el mismo servidor: copia `~/parcheu/backups` fuera de él (p. ej. a Seafile) si los datos importan.
 
@@ -41,8 +47,8 @@ El backend arranca con `ENV=local`: autenticación Fake (`Authorization: Bearer 
 Funciona: `GET /v1/health`, sesión y términos, perfil, gemelo (`build-persona` en línea), grafo, invitaciones, cuotas, `grant-plus` de prueba, `seed-demo`, y todo con Postgres real. Se prueba con `curl`:
 
 ```bash
-curl http://homelab:8090/v1/health
-curl -XPOST -H 'Authorization: Bearer fake-ana' http://homelab:8090/v1/session
+curl http://192.168.0.10:8090/v1/health        # desde la LAN (o https://api-parcheu.homeserverlab.site si ya hay Proxy Host)
+curl -XPOST -H 'Authorization: Bearer fake-ana' http://192.168.0.10:8090/v1/session
 ```
 
 No funciona: iniciar sesión desde la app Android (envía un ID token real de Firebase, que en modo `local` no se valida), IA real (Vertex), notificaciones push, espejos de Firestore (chat y progreso en vivo), borrado de usuarios en Firebase Auth, verificación de compras en Play (`verify` responde 500; Plus se prueba con `grant-plus`). El gemelo y las simulaciones corren en proceso, con IA falsa.
@@ -117,7 +123,7 @@ Fuera de alcance por ahora: no hay testers ni publicación en Play. Para publica
 
 ## Probar la app de debug en el teléfono
 
-Ver «Backend en el homeserver» en [docs/desarrollo-local.md](../../docs/desarrollo-local.md): `parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/` en `android/local.properties` (respaldo HTTP: `http://192.168.0.10:8090/`). El `devDebug` permite HTTP, como respaldo, solo hacia 192.168.0.10, 100.104.43.91, `homelab` y 10.0.2.2; el release y el flavor `prod` no.
+Ver «Backend en el homeserver» en [docs/desarrollo-local.md](../../docs/desarrollo-local.md): `parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/` en `android/local.properties` (respaldo HTTP: `http://192.168.0.10:8090/`). El `devDebug` permite HTTP, como respaldo, solo hacia 192.168.0.10 y 10.0.2.2; el release y el flavor `prod` no.
 
 ## Volver a Cloud SQL y Cloud Run
 
