@@ -195,7 +195,11 @@ class AppContainer(
         ),
 ) {
     companion object {
-        /** Con `ENV=local`, el token `fake-admin` lleva el claim `admin` (E8.5). Nunca existe en dev ni prod. */
+        /**
+         * Con `ENV=local` y `LOCAL_FAKE_ADMIN=true`, el token `fake-admin` lleva el claim `admin` (E8.5).
+         * Es opt-in porque el homeserver arranca en `local` con datos reales de testers: sin la variable
+         * nadie puede moderar ni leer reportes con un token inventado. Nunca existe en dev ni prod.
+         */
         const val LOCAL_ADMIN_UID = "admin"
 
         /**
@@ -206,7 +210,7 @@ class AppContainer(
         fun fromConfig(config: AppConfig, vars: Map<String, String> = System.getenv()): AppContainer {
             val local = config.env == Env.LOCAL
             val tokenVerifier = if (local) {
-                FakeTokenVerifier(adminUids = setOf(LOCAL_ADMIN_UID))
+                FakeTokenVerifier(adminUids = if (vars["LOCAL_FAKE_ADMIN"] == "true") setOf(LOCAL_ADMIN_UID) else emptySet())
             } else {
                 FirebaseTokenVerifier(requireNotNull(config.firebaseProjectId))
             }

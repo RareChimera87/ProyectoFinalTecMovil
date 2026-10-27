@@ -46,12 +46,21 @@ class PlusNavigationTest {
         override fun canGoBack(): Boolean = true
     }
 
-    private fun open(error: AppError, navigator: AppNavigator = RecordingNavigator()) {
+    private fun open(
+        error: AppError,
+        navigator: AppNavigator = RecordingNavigator(),
+        isPlus: Boolean = false
+    ) {
         val route = PlusErrorRouter.route(error, "test") as Paywall
         composeRule.setContent {
             ParcheUTheme(darkTheme = true) {
                 // G1 se sustituye por una marca: su ViewModel necesita Koin y Play, y aquí solo importa cuál se abre.
-                PaywallEntry(route = route, navigator = navigator, paywall = { _, _ -> Text("G1") })
+                PaywallEntry(route = route, navigator = navigator, isPlus = isPlus, paywall = {
+                        _,
+                        _
+                    ->
+                    Text("G1")
+                })
             }
         }
     }
@@ -60,6 +69,15 @@ class PlusNavigationTest {
     fun plusRequiredOpensG1() {
         open(AppError.PlusRequired)
         composeRule.onNodeWithText("G1").assertIsDisplayed()
+    }
+
+    @Test
+    fun quotaExceededForAPlusPersonShowsTheFairUseSheetWithoutSellingPlus() {
+        open(AppError.QuotaExceeded(QuotaKind.RANDOM_MATCH, null), isPlus = true)
+        composeRule.onNodeWithTag(PlusTags.LIMIT).assertIsDisplayed()
+        composeRule.onNodeWithText("Llegaste al uso justo de hoy").assertIsDisplayed()
+        composeRule.onNodeWithTag(PlusTags.LIMIT_SEE_PLUS).assertDoesNotExist()
+        composeRule.onNodeWithTag(PlusTags.LIMIT_WAIT).assertIsDisplayed()
     }
 
     @Test

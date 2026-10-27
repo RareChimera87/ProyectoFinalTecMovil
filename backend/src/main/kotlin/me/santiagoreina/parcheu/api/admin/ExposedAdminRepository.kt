@@ -48,6 +48,16 @@ class ExposedAdminRepository(private val db: Database) : AdminRepository {
             it[resolvedAt] = OffsetDateTime.ofInstant(now, ZoneOffset.UTC)
         } == 1
     }
+
+    override suspend fun reopen(id: UUID): Unit = tx {
+        Reports.update({ (Reports.id eq id) and (Reports.status eq ReportStatus.RESOLVED) }) {
+            it[Reports.status] = ReportStatus.OPEN
+            it[Reports.resolution] = null
+            it[Reports.resolvedBy] = null
+            it[resolvedAt] = null
+        }
+        Unit
+    }
 }
 
 private fun ResultRow.toAdminReport() = AdminReport(

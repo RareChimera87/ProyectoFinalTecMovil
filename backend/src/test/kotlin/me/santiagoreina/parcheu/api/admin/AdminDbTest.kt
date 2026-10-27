@@ -5,6 +5,9 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
@@ -81,6 +84,27 @@ class AdminDbTest : FunSpec({
             doc.hidden shouldBe true
             doc.text shouldBe ""
             env.admin.reports(null, ReportStatus.RESOLVED, null, null).items.single().id shouldBe harassment.id
+        }
+    }
+
+    test("dos resolve a la vez: solo uno gana la marca y la sanción queda aplicada solo si ganó el BAN").config(enabled = TestDatabase.enabled) {
+        withDb { env ->
+            val ana = env.user("Ana")
+            val beto = env.user("Beto")
+            repeat(5) {
+                env.safety.report(ana.id, ReportRequest(ReportKind.USER, targetUserId = beto.id.toString(), reason = ReportReason.OTHER))
+            }
+            for (id in env.admin.reports(null, ReportStatus.OPEN, null, null).items.map { it.id }) {
+                val results = listOf(AdminAction.DISMISS, AdminAction.BAN).map { action ->
+                    async(Dispatchers.Default) { runCatching { env.admin.resolve(null, id, Resolve(action)) } }
+                }.awaitAll()
+                results.count { it.isSuccess } shouldBe 1
+                val report = env.admin.reports(null, ReportStatus.RESOLVED, null, null).items.single { it.id == id }
+                val banned = env.identity.findByFirebaseUid(beto.firebaseUid)!!.suspendedUntil != null
+                // Si ganó DISMISS no hay baneo; si ganó BAN, el reporte lo dice. Nunca un baneo con DISMISS.
+                if (report.resolution == "DISMISS") banned shouldBe false else report.resolution shouldBe "BAN"
+                if (banned) break
+            }
         }
     }
 

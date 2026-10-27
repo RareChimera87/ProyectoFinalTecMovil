@@ -38,11 +38,25 @@ internal fun isExemptFromUnderage(method: HttpMethod, path: String): Boolean =
     (method to path.trimEnd('/')) in UNDERAGE_EXEMPT
 
 /**
+ * Lo que una cuenta suspendida o baneada (E8.5: BAN es una suspensión hasta 2999) sigue pudiendo hacer
+ * para salir de la app y ejercer sus derechos (Ley 1581): ver sus ajustes de privacidad y quitar el token
+ * FCM (cerrar sesión). `DELETE /v1/me` y `GET /v1/me/export` ya son exentas (E8.3). Siguen pasando por la
+ * puerta de edad y de términos; solo se salta la suspensión.
+ */
+private val SUSPENSION_EXEMPT: Set<Pair<HttpMethod, String>> = setOf(
+    HttpMethod.Get to "/v1/me/privacy",
+    HttpMethod.Delete to "/v1/me/fcm-token",
+)
+
+internal fun isExemptFromSuspension(method: HttpMethod, path: String): Boolean =
+    (method to path.trimEnd('/')) in SUSPENSION_EXEMPT
+
+/**
  * Plugin de ruta que se instala una sola vez desde `IdentityRoutes` sobre la ruta autenticada de
  * `/v1`: cubre las rutas de todos los dominios sin tocar `Application.kt`. Corre después de la
  * autenticación; si el usuario no tiene TERMS y PRIVACY en la versión vigente responde 403
  * `TERMS_REQUIRED` (o `SUSPENDED` si está suspendido). Una cuenta de menor de edad (E2.6) recibe 403
- * `UNDERAGE` en todas las rutas, incluidas `session` y `terms`, salvo `GET` y `DELETE /v1/me` y `GET /v1/me/export`.
+ * `UNDERAGE` en todas las rutas, incluidas `session` y `terms`, salvo `GET` y `DELETE /v1/me` y `GET /v1/me/export`. Una cuenta suspendida solo conserva las rutas de [SUSPENSION_EXEMPT].
  */
 internal val TermsGate = createRouteScopedPlugin("TermsGate", ::TermsGateConfig) {
     val service = pluginConfig.service
@@ -53,6 +67,7 @@ internal val TermsGate = createRouteScopedPlugin("TermsGate", ::TermsGateConfig)
         when {
             isExemptFromUnderage(method, path) -> return@on
             isExemptFromTerms(method, path) -> service.requireNotUnderage(user)
+            isExemptFromSuspension(method, path) -> service.requireFullAccess(user, ignoreSuspension = true)
             else -> service.requireFullAccess(user)
         }
     }
