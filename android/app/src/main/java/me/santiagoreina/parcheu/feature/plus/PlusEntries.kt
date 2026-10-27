@@ -32,13 +32,15 @@ const val PAYWALL_SOURCE_MANAGE = "manage"
 
 /**
  * Ruta [Paywall]: G1 o, si el `source` es un límite (`PlusSources.limit`), la hoja G2 de ese cupo.
- * "Ver ParcheU+" en G2 reemplaza la hoja por G1.
+ * "Ver ParcheU+" en G2 reemplaza la hoja por G1. Si la persona ya es Plus ([isPlus]), un cupo agotado es
+ * el uso justo diario: la hoja no vende ParcheU+ y habla de "mañana".
  */
 @Composable
 fun PaywallEntry(
     route: Paywall,
     navigator: AppNavigator,
     modifier: Modifier = Modifier,
+    isPlus: Boolean = false,
     paywall: @Composable (AppNavigator, Modifier) -> Unit = { nav, mod -> PaywallRoute(nav, mod) }
 ) {
     when (val entry = PlusSources.parse(route.source)) {
@@ -50,7 +52,8 @@ fun PaywallEntry(
                     navigator.navigateReplacing(Paywall(PAYWALL_SOURCE_LIMIT), Paywall::class)
                 },
                 onDismiss = { navigator.back() },
-                modifier = modifier
+                modifier = modifier,
+                fairUse = isPlus
             )
         is PlusEntry.Paywall -> paywall(navigator, modifier)
     }

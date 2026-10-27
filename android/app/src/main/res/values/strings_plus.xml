@@ -69,6 +69,8 @@
     <string name="plus_limit_body_simulation_soon">Se renuevan pronto. Mientras tanto puedes chatear con tu parche y seguir entrenando a tu gemelo.</string>
     <string name="plus_limit_body_random_match_soon">Se renueva pronto. Mientras tanto puedes simular con tu parche y seguir entrenando a tu gemelo.</string>
     <string name="plus_limit_body_full_report_soon">Se renueva pronto. Mientras tanto puedes ver el resumen de tus resultados.</string>
+    <string name="plus_limit_title_fair_use">Llegaste al uso justo de hoy</string>
+    <string name="plus_limit_body_fair_use">Se renueva mañana. Tu ParcheU+ sigue activo; este tope existe para cuidar el servicio para todos.</string>
     <string name="plus_limit_quota_description">Cupo agotado</string>
     <string name="plus_limit_see_plus">Ver ParcheU+</string>
     <string name="plus_limit_wait_simulation">Espero al lunes</string>

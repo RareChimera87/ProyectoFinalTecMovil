@@ -38,7 +38,8 @@ private const val LIMIT_SEGMENTS = 5
 /**
  * G2 Límite alcanzado: hoja sobre un fondo atenuado con el cupo agotado de [kind] (simulaciones, match
  * al azar o informe mensual). [resetsAt] dice cuándo se renueva; sin él el texto dice "pronto". "Ver
- * ParcheU+" abre G1 y "Esperar" cierra. Se compone sin ventana modal para poder capturarla.
+ * ParcheU+" abre G1 y "Esperar" cierra. Con [fairUse] (la persona ya es Plus y llegó al uso justo diario) la hoja
+ * no vende ParcheU+: dice que el cupo se renueva mañana y solo ofrece "Esperar". Se compone sin ventana modal para poder capturarla.
  */
 @Composable
 fun LimitSheet(
@@ -46,7 +47,8 @@ fun LimitSheet(
     resetsAt: Instant?,
     onSeePlus: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    fairUse: Boolean = false
 ) {
     val colors = ParcheUTheme.colors
     Box(modifier.fillMaxSize().background(colors.bg).testTag(PlusTags.LIMIT)) {
@@ -70,7 +72,9 @@ fun LimitSheet(
                 modifier = Modifier.alpha(0.85f)
             )
             Text(
-                stringResource(limitTitle(kind)),
+                stringResource(
+                    if (fairUse) R.string.plus_limit_title_fair_use else limitTitle(kind)
+                ),
                 style = MaterialTheme.typography.headlineSmall.copy(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                 ),
@@ -78,7 +82,13 @@ fun LimitSheet(
                 textAlign = TextAlign.Center
             )
             Text(
-                limitBody(kind, resetsAt),
+                if (fairUse) {
+                    stringResource(
+                        R.string.plus_limit_body_fair_use
+                    )
+                } else {
+                    limitBody(kind, resetsAt)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.mu,
                 textAlign = TextAlign.Center
@@ -90,14 +100,16 @@ fun LimitSheet(
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                PrimaryButton(
-                    text = stringResource(R.string.plus_limit_see_plus),
-                    onClick = onSeePlus,
-                    modifier = Modifier.fillMaxWidth().testTag(PlusTags.LIMIT_SEE_PLUS)
-                )
+                if (!fairUse) {
+                    PrimaryButton(
+                        text = stringResource(R.string.plus_limit_see_plus),
+                        onClick = onSeePlus,
+                        modifier = Modifier.fillMaxWidth().testTag(PlusTags.LIMIT_SEE_PLUS)
+                    )
+                }
                 ParcheUTextButton(
                     text = stringResource(
-                        if (kind == QuotaKind.SIMULATION) {
+                        if (kind == QuotaKind.SIMULATION && !fairUse) {
                             R.string.plus_limit_wait_simulation
                         } else {
                             R.string.plus_limit_wait
