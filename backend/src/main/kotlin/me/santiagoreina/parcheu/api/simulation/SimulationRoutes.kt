@@ -58,7 +58,7 @@ class SimulationRoutes(
     }
 
     override fun Route.internal() {
-        post("/tasks/simulate") {
+        post(SimulationService.SIMULATE_PATH) {
             simulation.engine.run(call.receive<TaskPayload>().uuid())
             call.respond(HttpStatusCode.NoContent)
         }
