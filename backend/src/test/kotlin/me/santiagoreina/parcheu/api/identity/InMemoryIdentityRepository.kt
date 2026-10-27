@@ -80,7 +80,9 @@ class InMemoryIdentityRepository : IdentityRepository {
         parejaConfirmedAt: Instant?,
         now: Instant,
         consentRevocations: List<NewConsent>,
+        discardPendingModes: Set<Mode>,
     ) {
+        memories[userId]?.removeAll { (mode, status) -> mode in discardPendingModes && status == MemoryStatus.PENDING }
         enabledModes[userId] = modes.filterValues { it }.keys.toMutableSet()
         if (parejaConfirmedAt != null) replace(users.first { it.id == userId }.copy(parejaConfirmedAt = parejaConfirmedAt))
         appendConsents(userId, consentRevocations, now)

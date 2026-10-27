@@ -32,7 +32,7 @@ class AppModulesTest {
         assertNotNull(koin.get<ApiErrorMapper>())
         // Cerrar sesión borra la caché del grafo y el progreso de B1: el repositorio de auth recibe sus limpiadores.
         assertNotNull(koin.get<AuthRepository>())
-        assertEquals(2, koin.getAll<SessionCleaner>().size)
+        assertEquals(3, koin.getAll<SessionCleaner>().size)
         assertEquals(BuildConfig.API_URL, koin.get<Retrofit>().baseUrl().toString())
     }
 }

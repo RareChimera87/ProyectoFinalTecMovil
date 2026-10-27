@@ -25,7 +25,7 @@ import org.robolectric.annotation.GraphicsMode
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w360dp-h1150dp-xhdpi")
+@Config(sdk = [35], qualifiers = "w360dp-h1400dp-xhdpi")
 class PrivacySettingsScreenshotTest(private val dark: Boolean) {
     @get:Rule
     val composeRule = createComposeRule()

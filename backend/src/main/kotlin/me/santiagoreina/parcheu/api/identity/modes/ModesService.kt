@@ -20,7 +20,8 @@ import me.santiagoreina.parcheu.contract.UpdateModes
  *   (`parejaConfirmed = true`; si falta, 400 VALIDATION). La confirmación queda en
  *   `users.pareja_confirmed_at`. Mantener Pareja encendido no vuelve a pedirla.
  * - Apagar Pareja revoca `CHAT_LEARNING_PAREJA` (si estaba concedido) en la misma transacción: ese
- *   aprendizaje exige Pareja activo, así que volver a encenderlo no lo reanuda sin pasar por H3.
+ *   aprendizaje exige Pareja activo, así que volver a encenderlo no lo reanuda sin pasar por H3. También borra las memorias PENDING
+ *   de Pareja (arquitectura.md: revocar borra las memorias PENDING del modo), igual que PATCH /me/privacy.
  */
 class ModesService(private val identity: IdentityService, private val repo: ModesRepository) {
 
@@ -54,6 +55,7 @@ class ModesService(private val identity: IdentityService, private val repo: Mode
             parejaConfirmedAt = if (turningOnPareja) now else null,
             now = now,
             consentRevocations = revocations,
+            discardPendingModes = if (turningOffPareja) setOf(Mode.PAREJA) else emptySet(),
         )
         return identity.me(firebase)
     }
