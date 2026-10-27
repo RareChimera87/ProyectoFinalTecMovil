@@ -15,7 +15,7 @@ import me.santiagoreina.parcheu.api.simulation.MemorySelection
  */
 object MemorySanitizer {
     private val EMAIL = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}")
-    private val AT_HANDLE_EMAIL = Regex("\\S+@\\S+")
+    private val AT_HANDLE_EMAIL = Regex("\\S*@\\S*")
     private val URL = Regex("(?i)\\b(?:https?://|www\\.)\\S+")
 
     /** Dirección colombiana: tipo de vía + número, con `# 23-10` y complemento opcionales. */

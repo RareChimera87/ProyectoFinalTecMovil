@@ -15,6 +15,14 @@ class MemorySanitizerTest : FunSpec({
         out shouldContain "cuadramos el parche"
     }
 
+    test("quita restos con arroba que no son un correo completo ('ana@', '@usuario.co')") {
+        val out = MemorySanitizer.sanitize("Búscame como @usuario.co o escríbele a ana@ para el parche")
+        out shouldNotContain "@"
+        out shouldNotContain "usuario.co"
+        out shouldNotContain "ana"
+        out shouldContain "para el parche"
+    }
+
     test("quita teléfonos con prefijo, espacios, guiones o paréntesis") {
         listOf("+57 300 123 4567", "300-123-4567", "(607) 634 5678", "300.123.45.67", "6345678").forEach { phone ->
             val out = MemorySanitizer.sanitize("Mi número es $phone, llámame")
