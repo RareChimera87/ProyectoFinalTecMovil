@@ -21,6 +21,11 @@ import me.santiagoreina.parcheu.contract.TicketDto
 import me.santiagoreina.parcheu.contract.TicketStatus
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
+import me.santiagoreina.parcheu.feature.plus.PlusErrorRouter
+import me.santiagoreina.parcheu.navigation.AppRoute
+
+/** Origen de la G2 del match diario agotado (analítica y regreso). */
+const val PAYWALL_SOURCE_MATCH_LIMIT = "match_limit"
 
 /** Fase de F1. */
 sealed interface QueuePhase {
@@ -36,15 +41,11 @@ sealed interface QueuePhase {
     data class Error(val error: AppError) : QueuePhase
 }
 
-/** Hoja de límite de match diario (G2 de RANDOM_MATCH, que el inventario no diseñó aparte). */
-data class MatchLimitSheet(val resetsAt: Instant?)
-
 data class MatchQueueUiState(
     val mode: Mode,
     /** Modos que el usuario puede elegir (los que tiene activos). */
     val activeModes: List<Mode> = Mode.entries,
-    val phase: QueuePhase = QueuePhase.Searching,
-    val limitSheet: MatchLimitSheet? = null
+    val phase: QueuePhase = QueuePhase.Searching
 )
 
 sealed interface MatchQueueEffect {
@@ -54,8 +55,8 @@ sealed interface MatchQueueEffect {
     /** Sale de F1 (cancelar, cerrar la hoja de límite). */
     data object Close : MatchQueueEffect
 
-    /** Abre G1 desde la hoja de límite. */
-    data object OpenPaywall : MatchQueueEffect
+    /** Reemplaza F1 por la hoja G2 del match diario agotado (E7.3, vía [PlusErrorRouter]). */
+    data class OpenLimit(val route: AppRoute) : MatchQueueEffect
 }
 
 /**
@@ -121,16 +122,6 @@ class MatchQueueViewModel(
         }
     }
 
-    fun onLimitDismissed() {
-        _state.update { it.copy(limitSheet = null) }
-        viewModelScope.launch { _effects.send(MatchQueueEffect.Close) }
-    }
-
-    fun onLimitSeePlus() {
-        _state.update { it.copy(limitSheet = null) }
-        viewModelScope.launch { _effects.send(MatchQueueEffect.OpenPaywall) }
-    }
-
     /**
      * Entra a la fila. Si [cancelPrevious] es falso primero reanuda un ticket vivo
      * (`GET /v1/match/queue`), por ejemplo tras morir la app o perderse la respuesta del POST.
@@ -138,7 +129,7 @@ class MatchQueueViewModel(
     private fun search(cancelPrevious: Boolean) {
         searchJob?.cancel()
         opened = false
-        _state.update { it.copy(phase = QueuePhase.Searching, limitSheet = null) }
+        _state.update { it.copy(phase = QueuePhase.Searching) }
         searchJob = viewModelScope.launch {
             if (cancelPrevious) {
                 repository.cancel()
@@ -198,8 +189,14 @@ class MatchQueueViewModel(
     }
 
     private fun onEnqueueFailed(error: AppError) {
-        if (error is AppError.QuotaExceeded && error.kind == QuotaKind.RANDOM_MATCH) {
-            _state.update { it.copy(limitSheet = MatchLimitSheet(error.resetsAt)) }
+        val limitRoute =
+            if (error is AppError.QuotaExceeded && error.kind == QuotaKind.RANDOM_MATCH) {
+                PlusErrorRouter.route(error, PAYWALL_SOURCE_MATCH_LIMIT)
+            } else {
+                null
+            }
+        if (limitRoute != null) {
+            viewModelScope.launch { _effects.send(MatchQueueEffect.OpenLimit(limitRoute)) }
         } else {
             _state.update { it.copy(phase = QueuePhase.Error(error)) }
         }

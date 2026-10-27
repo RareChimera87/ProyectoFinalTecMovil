@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.QuotaKind
+import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.data.billing.PurchaseFailure
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import org.junit.Assert.assertEquals
@@ -129,6 +130,25 @@ class PlusScreenTest {
     fun purchaseInProgressDisablesSubscribe() {
         paywall(loaded.copy(purchasing = true))
         composeRule.onNodeWithTag(PlusTags.SUBSCRIBE).assertIsNotEnabled()
+    }
+
+    @Test
+    fun verificationFailureDoesNotClaimNothingWasCharged() {
+        paywall(
+            loaded.copy(
+                message = PlusMessage.PurchaseFailed(
+                    PurchaseFailure.Verification(AppError.Validation("rechazada"))
+                )
+            )
+        )
+        composeRule.onNodeWithText("registró tu pago", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("No te cobramos", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun playFailureStillSaysNothingWasCharged() {
+        paywall(loaded.copy(message = PlusMessage.PurchaseFailed(PurchaseFailure.Play(6))))
+        composeRule.onNodeWithText("No te cobramos nada", substring = true).assertIsDisplayed()
     }
 
     @Test

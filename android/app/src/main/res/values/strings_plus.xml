@@ -50,6 +50,7 @@
     <string name="plus_retry">Reintentar</string>
 
     <string name="plus_msg_purchase_failed">No se pudo completar la compra. No te cobramos nada; inténtalo de nuevo.</string>
+    <string name="plus_msg_purchase_unverified">Google Play registró tu pago, pero todavía no pudimos activar ParcheU+. Si no se activa, Play te devuelve el dinero. Antes de pagar otra vez, toca Restaurar compras o vuelve a intentarlo en un rato.</string>
     <string name="plus_msg_purchase_unavailable">Google Play no está disponible ahora. Inténtalo de nuevo en un momento.</string>
     <string name="plus_msg_purchase_forbidden">Esta compra pertenece a otra cuenta de ParcheU. Entra con la cuenta con la que pagaste.</string>
     <string name="plus_msg_nothing_to_restore">No encontramos compras activas de ParcheU+ en esta cuenta de Google Play.</string>

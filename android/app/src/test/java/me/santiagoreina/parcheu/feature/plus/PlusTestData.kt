@@ -52,5 +52,6 @@ object PlusTestData {
     val activeMonthly = entitlement(basePlan = "mensual")
     val canceled = entitlement(EntitlementState.CANCELED)
     val grace = entitlement(EntitlementState.IN_GRACE_PERIOD, autoRenewing = true)
+    val paused = entitlement(EntitlementState.PAUSED, autoRenewing = false)
     val free = EntitlementDto(plus = false, state = EntitlementState.NONE)
 }

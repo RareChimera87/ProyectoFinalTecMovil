@@ -330,7 +330,7 @@ internal fun messageText(message: PlusMessage): String = stringResource(
                     if (failure.error == AppError.Forbidden) {
                         R.string.plus_msg_purchase_forbidden
                     } else {
-                        R.string.plus_msg_purchase_failed
+                        R.string.plus_msg_purchase_unverified
                     }
                 is PurchaseFailure.Play -> R.string.plus_msg_purchase_failed
             }

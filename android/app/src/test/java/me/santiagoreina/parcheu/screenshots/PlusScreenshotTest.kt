@@ -163,6 +163,9 @@ class PlusScreenshotTest(private val dark: Boolean) {
     fun manageGrace() = capture("g4_gracia", manage(PlusTestData.grace))
 
     @Test
+    fun managePaused() = capture("g4_en_pausa", manage(PlusTestData.paused))
+
+    @Test
     fun manageInactive() = capture("g4_sin_suscripcion", manage(PlusTestData.free))
 
     @Test
