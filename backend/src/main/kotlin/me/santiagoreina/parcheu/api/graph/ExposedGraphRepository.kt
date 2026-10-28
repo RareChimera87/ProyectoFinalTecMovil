@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.api.graph
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.santiagoreina.parcheu.api.platform.db.tables.Blocks
+import me.santiagoreina.parcheu.api.platform.db.tables.Communities
 import me.santiagoreina.parcheu.api.platform.db.tables.CommunityMembers
 import me.santiagoreina.parcheu.api.platform.db.tables.Edges
 import me.santiagoreina.parcheu.api.platform.db.tables.EdgesView
@@ -83,6 +84,7 @@ class ExposedGraphRepository(private val db: Database) : GraphRepository {
                     affinity = row[EdgesView.affinity]?.toInt(),
                     lastSimulationId = row[EdgesView.lastSimulationId],
                     connectedAt = row[EdgesView.connectedAt]?.toInstant(),
+                    createdAt = row[EdgesView.createdAt].toInstant(),
                 )
             }
     }
@@ -107,6 +109,17 @@ class ExposedGraphRepository(private val db: Database) : GraphRepository {
             .where { Users.id eq userId }
             .singleOrNull()
             ?.toPerson()
+    }
+
+    override suspend fun firstCommunityAt(userId: UUID): Instant? = tx {
+        CommunityMembers.join(Communities, JoinType.INNER, CommunityMembers.communityId, Communities.id)
+            .select(Communities.createdAt)
+            .where { CommunityMembers.userId eq userId }
+            .orderBy(Communities.createdAt, SortOrder.ASC)
+            .limit(1)
+            .singleOrNull()
+            ?.get(Communities.createdAt)
+            ?.toInstant()
     }
 
     override suspend fun lastSimulation(a: UUID, b: UUID): SimulationRow? = tx {

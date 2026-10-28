@@ -23,6 +23,9 @@ interface GraphRepository {
 
     suspend fun person(userId: UUID): PersonRow?
 
+    /** Primer instante en que [userId] entró a una comunidad (`communities.created_at` más antigua), o null. */
+    suspend fun firstCommunityAt(userId: UUID): Instant? = null
+
     /**
      * Simulación más reciente entre los dos usuarios, en cualquier modo y estado. No cuenta las de una
      * presentación (`INTRODUCTION`, E6.2), que no se consultan por `/v1/simulations`.

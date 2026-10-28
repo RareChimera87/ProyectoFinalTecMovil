@@ -55,7 +55,7 @@ class InMemoryGraphRepository : GraphRepository {
                 filter.mode != null && key.mode != filter.mode -> null
                 filter.minAffinity != null && (edge.affinity == null || edge.affinity < filter.minAffinity) -> null
                 community != null && other !in communities[community].orEmpty() -> null
-                else -> EgoEdgeRow(person, key.mode, edge.state, edge.affinity, edge.lastSimulationId, edge.connectedAt)
+                else -> EgoEdgeRow(person, key.mode, edge.state, edge.affinity, edge.lastSimulationId, edge.connectedAt, edge.createdAt)
             }
         }
     }
@@ -77,6 +77,13 @@ class InMemoryGraphRepository : GraphRepository {
     }
 
     override suspend fun person(userId: UUID): PersonRow? = synchronized(lock) { people[userId] }
+
+    /** Fechas de creación de las comunidades de [communities] (fixtures); sin dato, null. */
+    val communityCreatedAt = mutableMapOf<UUID, Instant>()
+
+    override suspend fun firstCommunityAt(userId: UUID): Instant? = synchronized(lock) {
+        communities.filter { userId in it.value }.keys.mapNotNull { communityCreatedAt[it] }.minOrNull()
+    }
 
     override suspend fun lastSimulation(a: UUID, b: UUID): SimulationRow? = synchronized(lock) {
         simulations.filter { (x, y, _) -> (x == a && y == b) || (x == b && y == a) }

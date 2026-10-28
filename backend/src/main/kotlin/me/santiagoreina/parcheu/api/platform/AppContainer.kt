@@ -29,6 +29,7 @@ import me.santiagoreina.parcheu.api.graph.GraphRoutes
 import me.santiagoreina.parcheu.api.graph.fof.ExposedFofRepository
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
+import me.santiagoreina.parcheu.api.graph.history.HistoryService
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.home.HomeService
@@ -215,6 +216,9 @@ class AppContainer(
         /** Hora de Bogotá del job `memories` en el homeserver (la misma que `scheduler.tf`: `0 2 * * *`). */
         val MEMORIES_AT: LocalTime = LocalTime.of(2, 0)
 
+        /** El job `retention` corre a diario a las 03:30 de Bogotá, como `scheduler.tf` (E8.8). */
+        val RETENTION_AT: LocalTime = LocalTime.of(3, 30)
+
         /**
          * Cableado de producción: verificadores reales (Fake solo con `ENV=local`). La
          * configuración de IA se valida aquí, así que un `AI_PROVIDER` inválido hace fallar el
@@ -322,7 +326,7 @@ class AppContainer(
          * Handlers de las cuatro tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
          * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
          * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
-         * Retention, communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
+         * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. Communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
          */
         private fun inlineBackground(
             queue: InProcessTaskQueue,
@@ -345,6 +349,9 @@ class AppContainer(
                 }
                 scheduler.every("memories", Duration.ofDays(1), InProcessScheduler.delayUntil(MEMORIES_AT, clock)) {
                     twin.memories.enqueueNightly()
+                }
+                scheduler.every("retention", Duration.ofDays(1), InProcessScheduler.delayUntil(RETENTION_AT, clock)) {
+                    account.retention.run()
                 }
             }
         }
@@ -406,7 +413,12 @@ fun allDomains(
     MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
     ScenarioRoutes(),
-    GraphRoutes(graph.service, fofService(graph, twin, quota, matching.flags.demoUsersEnabled)) { firebase ->
+    GraphRoutes(
+        graph.service,
+        fofService(graph, twin, quota, matching.flags.demoUsersEnabled),
+        // Evolución de la red (E6.5): derivada de las aristas en cada consulta, sin tarea ni job.
+        HistoryService(graph.repository, graph.policy, { quota.service.isPlus(it) }, quota.clock),
+    ) { firebase ->
         identity.requireUser(firebase).id
     },
     SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },

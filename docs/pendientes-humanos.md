@@ -1019,6 +1019,12 @@ Todo el código quedó hecho y probado en local: el recorrido (`backend/src/e2eT
 
 Para correrlo a mano contra dev con tu propio `gcloud`: ver "Smoke e2e (E10.6)" en `docs/desarrollo-local.md`.
 
+## E6.5 · Evolución de la red
+
+No requiere infraestructura ni secretos: el historial se calcula en cada consulta (sin tareas, jobs ni migraciones).
+
+- [ ] **Decisión de producto (I3 / diseño):** el mockup D9 dice 'Mes → 08a en esa fecha'. El historial solo devuelve conteos por mes y D1 no tiene fecha por nodo, así que tocar un mes selecciona su detalle en D9 en vez de abrir D1 con ese snapshot. Para hacerlo literal haría falta devolver las personas por mes (con la policy) o las fechas por nodo en `GET /v1/graph`. Decidir si entra antes del 30 nov.
+- [ ] Revisar con datos reales: el momento 'Tu primera comunidad' aparecerá cuando E6.4 (comunidades) cree filas en `communities`/`community_members`.
 ## E6.6 · Quién quiere conectar contigo
 
 No hay pasos humanos: es una lectura de `connection_decisions` con la API que ya existe (sin Terraform, secretos, Play Console ni tareas asíncronas nuevas, así que tampoco toca `InProcessTaskQueue` ni `InProcessScheduler`).
@@ -1034,3 +1040,11 @@ Para revisarla a mano con el backend en marcha: bloquear a alguien desde F2 debe
 tickets de ambos en `EXPIRED` (`matchTickets/{uid}` en Firestore), y 'Personas bloqueadas' (H3) debe listarlo con
 'Desbloquear'. Un reporte de contenido de la IA aparece en `admin.html` con el tipo `AI_CONTENT` y el texto del
 turno en el snapshot.
+
+## E8.8 · Retención y purga de datos
+
+No hay secretos, Play Console ni recursos nuevos de GCP: el job `retention` ya estaba declarado en `infra/terraform/modules/platform/scheduler.tf` (diario 03:30 Bogotá, `POST /internal/jobs/retention`) y las consultas de Firestore son de un solo campo, así que no piden índices. En el homeserver (`TASKS_MODE=inline`) lo programa `InProcessScheduler` a las 03:30 de Bogotá; no hay tareas nuevas, así que `InProcessTaskQueue` no cambia.
+
+- [ ] **Opcional (observabilidad):** la métrica `retention_purged_total{regla}` sale como log INFO por regla (`event = retention_purged`, `regla`, `count`; solo cuando se purgó algo). Si se quiere verla en Cloud Monitoring, crear una métrica basada en logs con filtro `jsonPayload.message="retention_purged"` y etiqueta `regla` (extraída de `jsonPayload.regla`) en `monitoring.tf`; no se hizo aquí para no tocar Terraform fuera del alcance de la ficha.
+- [ ] **Verificar en dev (con el homeserver):** tras la primera noche, revisar en los logs del backend las líneas `retention_purged` y `Retención: N registros purgados`. Para forzarlo a mano: `POST /internal/jobs/retention` con un token OIDC del servicio.
+- [ ] **Decisiones de interpretación para revisar con el docente / I1** (documentadas en arquitectura.md §10.2): `matches` se purga solo si están `EXPIRED`; un chat SCENARIO se considera cerrado en su `ends_at`; el plazo de `transcript` son 12 meses calendario de Bogotá.
