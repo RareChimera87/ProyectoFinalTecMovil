@@ -1,7 +1,9 @@
 package me.santiagoreina.parcheu.feature.scenariochat
 
+import me.santiagoreina.parcheu.feature.conocer.scenario.conocerScenarioModule
 import org.koin.dsl.module
 
-/** Dependencias de la feature de [ScenarioChatRoute]. Vacío en E0.7; ya está registrado en AppModules.kt. */
+/** Dependencias de [ScenarioChatRoute]: la feature vive en `feature/conocer/scenario` (E4.8). */
 val scenarioChatModule = module {
+    includes(conocerScenarioModule)
 }

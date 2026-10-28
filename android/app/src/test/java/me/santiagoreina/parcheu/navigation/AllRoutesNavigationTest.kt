@@ -99,6 +99,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 FriendsOfFriends::class,
                 MatchQueue::class,
                 MatchFound::class,
+                ScenarioChat::class,
                 Simulation::class,
                 Simulations::class,
                 Results::class,

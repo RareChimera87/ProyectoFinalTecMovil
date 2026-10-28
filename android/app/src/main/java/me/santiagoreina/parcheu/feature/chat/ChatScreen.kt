@@ -50,7 +50,15 @@ data class ChatActions(
 
 /** F9 · Chat en vivo. Sin estado propio salvo el menú: todo llega en [state]. */
 @Composable
-fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Modifier) {
+fun ChatScreen(
+    state: ChatUiState,
+    actions: ChatActions,
+    modifier: Modifier = Modifier,
+    /** Contenido fijado bajo la barra (la tarjeta del escenario de F3, E4.8). */
+    pinned: @Composable () -> Unit = {},
+    /** Contenido sobre la caja de texto (el acuerdo de F3, E4.8). */
+    footer: @Composable () -> Unit = {}
+) {
     val colors = ParcheUTheme.colors
     val header = state.header
     var menuOpen by remember { mutableStateOf(false) }
@@ -107,9 +115,11 @@ fun ChatScreen(state: ChatUiState, actions: ChatActions, modifier: Modifier = Mo
         if (state.consentBannerVisible && header != null) {
             ConsentBanner(onSettings = actions.onPrivacy, onDismiss = actions.onDismissConsent)
         }
+        pinned()
         state.headerError?.let { InlineError(it, onRetry = actions.onRetryLoad) }
         state.liveError?.let { InlineError(it, onRetry = actions.onRetryLive) }
         MessageList(state, actions, Modifier.weight(1f))
+        footer()
         if (state.header?.closed == true) {
             Text(
                 text = "Este chat terminó. Ya no se pueden enviar mensajes.",
