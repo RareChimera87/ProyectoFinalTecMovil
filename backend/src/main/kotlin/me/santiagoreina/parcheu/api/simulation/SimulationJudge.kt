@@ -31,12 +31,16 @@ data class JudgeResult(val verdict: JudgeVerdict, val usage: UsageTotals)
  */
 class SimulationJudge(private val ai: AiGateway) {
 
-    suspend fun evaluate(mode: Mode, scenario: ScenarioDef, turns: List<StoredTurn>, billedTo: UUID?): JudgeResult {
+    /**
+     * [humans] = true en el modo escenario (E4.8): la conversación la escribieron las dos personas de verdad, no
+     * sus gemelos. Misma rúbrica, mismo esquema y misma salida; solo cambia la frase que lo aclara.
+     */
+    suspend fun evaluate(mode: Mode, scenario: ScenarioDef, turns: List<StoredTurn>, billedTo: UUID?, humans: Boolean = false): JudgeResult {
         val result = ai.json(
             AiCall(
                 purpose = AiPurpose.SIMULATION_JUDGE,
-                prompt = prompt(scenario, turns),
-                system = system(mode, scenario.rubric),
+                prompt = prompt(scenario, turns, humans),
+                system = system(mode, scenario.rubric, humans),
                 userId = billedTo,
                 maxOutputTokens = 2048,
                 temperature = 0.2,
@@ -90,9 +94,10 @@ class SimulationJudge(private val ai: AiGateway) {
             put("required", buildJsonArray { listOf("afinidad", "dimensiones", "porQue", "dondeChocarian", "resumen").forEach { add(it) } })
         }
 
-        fun system(mode: Mode, rubric: List<RubricItem>): String = buildString {
+        fun system(mode: Mode, rubric: List<RubricItem>, humans: Boolean = false): String = buildString {
             append("Eres un juez imparcial que evalúa qué tan compatibles son dos estudiantes universitarios en modo ")
-            append(mode.name.lowercase()).append(" a partir de una conversación entre sus gemelos digitales. ")
+            append(mode.name.lowercase())
+            append(if (humans) " a partir de la conversación real que tuvieron entre ellos. " else " a partir de una conversación entre sus gemelos digitales. ")
             append("Sé honesto: no suavices ni infles la afinidad. Evalúa cada dimensión de la rúbrica de 0 a 100 con una nota corta, ")
             append("da exactamente 3 razones de por qué encajarían (porQue), 2 puntos donde chocarían (dondeChocarian) y un resumen ")
             append("de una o dos frases. Escribe en español colombiano neutro, en segunda persona del plural (\"ustedes\"), sin nombres ")
@@ -100,8 +105,10 @@ class SimulationJudge(private val ai: AiGateway) {
             rubric.forEach { append("- ").append(it.name).append(" (peso ").append(it.weight).append("): ").append(it.description).append('\n') }
         }
 
-        fun prompt(scenario: ScenarioDef, turns: List<StoredTurn>): String = buildString {
-            append("Escenario: ").append(scenario.title).append('\n').append(scenario.prompt).append("\n\nConversación:\n")
+        fun prompt(scenario: ScenarioDef, turns: List<StoredTurn>, humans: Boolean = false): String = buildString {
+            append("Escenario: ").append(scenario.title).append('\n').append(scenario.prompt)
+            if (humans && scenario.budgetCop > 0) append("\nPresupuesto: ").append(scenario.budgetCop).append(" COP")
+            append("\n\nConversación:\n")
             turns.forEach { append(if (it.speaker == Side.A) "Persona A: " else "Persona B: ").append(it.text).append('\n') }
         }
 

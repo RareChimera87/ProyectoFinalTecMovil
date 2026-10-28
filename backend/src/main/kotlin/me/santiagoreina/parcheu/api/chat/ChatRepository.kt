@@ -61,4 +61,24 @@ interface ChatRepository {
 
     /** Silencia o reactiva los avisos del chat para [userId]. Devuelve false si no es miembro. */
     suspend fun setMuted(chatId: UUID, userId: UUID, muted: Boolean): Boolean
+
+    // --- modo escenario (E4.8) ---------------------------------------------------------------
+
+    /**
+     * Marca 'Llegamos a un acuerdo' de [userId] (`chat_members.agreed_at`) solo si aún no estaba marcado
+     * (repetirlo no mueve la fecha). Devuelve el chat actualizado, o null si no existe o no es miembro.
+     */
+    suspend fun agree(chatId: UUID, userId: UUID, now: Instant): ChatRecord?
+
+    /**
+     * OPEN -> CLOSED de forma atómica: devuelve true solo a la llamada que hizo el cambio. Así el juez de un
+     * escenario se dispara una sola vez aunque lleguen varios mensajes o acuerdos a la vez.
+     */
+    suspend fun closeIfOpen(chatId: UUID): Boolean
+
+    /** Mensajes visibles (no ocultos por moderación) del chat, del más antiguo al más reciente. */
+    suspend fun messages(chatId: UUID): List<MessageRecord>
+
+    /** Chats SCENARIO abiertos cuyo `ends_at` ya pasó ([now] incluido), los más antiguos primero. */
+    suspend fun expiredOpenScenarios(now: Instant, limit: Int): List<UUID>
 }

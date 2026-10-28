@@ -1019,6 +1019,18 @@ Todo el código quedó hecho y probado en local: el recorrido (`backend/src/e2eT
 
 Para correrlo a mano contra dev con tu propio `gcloud`: ver "Smoke e2e (E10.6)" en `docs/desarrollo-local.md`.
 
+## E4.8 · Modo escenario
+
+Lo automatizable ya quedó hecho: acuerdo de los dos (`POST /v1/scenario-sessions/{chatId}/agreement`), estado y tarjeta de F3 (`GET .../{chatId}`), cierre atómico por acuerdo o por `ends_at`, tarea `judge-scenario` registrada en `InProcessTaskQueue` (homeserver) y en `/internal/tasks/judge-scenario`, job `scenario-sweep` en `InProcessScheduler`, escritura de `chats/{id}` en Firestore al crear el chat SCENARIO (cierra el paso 4 de E4.2), `MatchDto.chatId`, pantalla F3 con temporizador, presupuesto y acuerdo, y `SCENARIO_MODE_ENABLED` encendida por defecto fuera de prod. No hay migraciones.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Cloud Scheduler `scenario-sweep` (cada minuto)** si se despliega en Cloud Run: `POST <SERVICE_URL>/internal/jobs/scenario-sweep` con OIDC de `sa-tasks`, como `match-sweep`. No se agregó al Terraform (sin `apply` por ahora); en el homeserver lo cubre `InProcessScheduler`. Sin el job, un escenario vencido sin mensajes ni consultas se cierra en la siguiente consulta de la sesión. | I1 / usuario (prod) | Con el `apply` de dev |
+| 2 | **`SCENARIO_MODE_ENABLED=true` en prod desde la 0.9** (en `run_env` de Terraform de prod). Hasta entonces el valor por defecto en prod es `false`. | usuario | 0.9 |
+| 3 | **Verificación en dev con dos cuentas:** ambas eligen Escenario en F2, escriben, una propone el acuerdo (la otra ve el aviso), la otra confirma y aparece F7/F8; repetir dejando vencer el tiempo. Comprobar `chats/{id}` en Firestore de `parcheu-dev` y que el chat aparece en tiempo real. | I1 + I2 | Con el despliegue |
+
+Limitación conocida: la fila de evaluación se crea antes de cerrar el chat, así que cualquier caída del proceso (antes o después de cerrar, y antes de encolar) la deja en QUEUED y el barrido `scenario-sweep` la re-encola; no queda ningún chat cerrado sin resultado. En el homeserver la tarea `judge-scenario` corre en la cola en proceso, fuera de la petición HTTP.
+
 ## E6.5 · Evolución de la red
 
 No requiere infraestructura ni secretos: el historial se calcula en cada consulta (sin tareas, jobs ni migraciones).

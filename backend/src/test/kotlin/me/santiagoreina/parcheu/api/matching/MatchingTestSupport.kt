@@ -47,7 +47,12 @@ class MatchFixture(
     val matchRepo = InMemoryMatchingRepository()
     val mirror = RecordingMatchTicketMirror()
     val notifier = FakeNotifier()
-    val module = inMemoryMatchingModule(clock, quota, simulation, graph, notifier, matchRepo, mirrorOverride ?: mirror, flags)
+    /** Chats SCENARIO que el match mandó replicar a Firestore (E4.8). */
+    val mirroredChats = java.util.concurrent.CopyOnWriteArrayList<UUID>()
+    val module = inMemoryMatchingModule(
+        clock, quota, simulation, graph, notifier, matchRepo, mirrorOverride ?: mirror, flags,
+        onScenarioChatCreated = { mirroredChats += it },
+    )
     val service get() = module.service
 
     /** Persona con gemelo listo, modos activos y datos de B0; devuelve su `users.id`. */

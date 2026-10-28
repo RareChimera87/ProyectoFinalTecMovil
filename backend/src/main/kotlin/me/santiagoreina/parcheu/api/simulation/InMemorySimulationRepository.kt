@@ -70,7 +70,7 @@ class InMemorySimulationRepository(scenarios: List<ScenarioDef> = DefaultScenari
     ): SimulationRecord? = synchronized(lock) {
         simulations.values
             .filter { it.id != excluding && it.mode == mode && it.status == SimulationStatus.DONE && it.score != null }
-            .filter { it.origin != SimulationOrigin.INTRODUCTION }
+            .filter { it.origin != SimulationOrigin.INTRODUCTION && it.origin != SimulationOrigin.SCENARIO }
             .filter { it.finishedAt != null && it.finishedAt > since }
             .filter {
                 (it.userA == userA && it.twinVersionA == versionA && it.userB == userB && it.twinVersionB == versionB) ||
@@ -82,10 +82,19 @@ class InMemorySimulationRepository(scenarios: List<ScenarioDef> = DefaultScenari
     override suspend fun unfinished(createdBefore: Instant, createdAfter: Instant, limit: Int): List<SimulationRecord> =
         synchronized(lock) {
             simulations.values
-                .filter { it.status in UNFINISHED && it.createdAt < createdBefore && it.createdAt > createdAfter }
+                .filter {
+                    it.status in UNFINISHED && it.origin != SimulationOrigin.SCENARIO && it.createdAt < createdBefore && it.createdAt > createdAfter
+                }
                 .sortedWith(compareBy<SimulationRecord> { it.createdAt }.thenBy { it.id })
                 .take(limit)
         }
+
+    override suspend fun unfinishedScenarios(createdBefore: Instant, limit: Int): List<SimulationRecord> = synchronized(lock) {
+        simulations.values
+            .filter { it.status in UNFINISHED && it.origin == SimulationOrigin.SCENARIO && it.createdAt < createdBefore }
+            .sortedWith(compareBy<SimulationRecord> { it.createdAt }.thenBy { it.id })
+            .take(limit)
+    }
 
     override suspend fun markRunning(id: UUID): Boolean = synchronized(lock) {
         val r = simulations[id] ?: return false

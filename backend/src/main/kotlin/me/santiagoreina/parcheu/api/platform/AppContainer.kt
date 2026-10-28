@@ -77,8 +77,12 @@ import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.safety.safetyModule
+import me.santiagoreina.parcheu.api.scenario.ScenarioModule
 import me.santiagoreina.parcheu.api.social.invites.ExposedInviteRepository
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
+import me.santiagoreina.parcheu.api.scenario.ScenarioService
+import me.santiagoreina.parcheu.api.scenario.inMemoryScenarioModule
+import me.santiagoreina.parcheu.api.scenario.scenarioModule
 import me.santiagoreina.parcheu.api.simulation.NotifierSimulationNotifier
 import me.santiagoreina.parcheu.api.simulation.SimulationModule
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
@@ -193,6 +197,8 @@ class AppContainer(
     val billing: BillingModule = inMemoryBillingModule(clock),
     /** Administración de reportes (E8.5). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
     val admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, clock),
+    /** Modo escenario (E4.8): acuerdo, cierre y juez sobre [chat] y [simulation]. Por defecto en memoria. */
+    val scenario: ScenarioModule = inMemoryScenarioModule(clock, ai, quota, graph, chat, simulation, notifier),
     /**
      * Cola en proceso y programador de jobs (`TASKS_MODE=inline`, ADR-0033); null con Cloud Tasks o Fake.
      * Main lo arranca (`start`) en modo `serve` y lo cierra al parar.
@@ -202,7 +208,7 @@ class AppContainer(
     val domains: List<DomainRoutes> =
         allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
-            invites, billing, config.env, introductions, admin, connectRequests,
+            invites, billing, config.env, introductions, admin, scenario, connectRequests,
         ),
 ) {
     companion object {
@@ -276,10 +282,14 @@ class AppContainer(
                 demo = DemoConnectPolicy(demo.connectProbability), demoUsersEnabled = demo.enabled,
             )
             // Fila de match (E4.2): misma base, cuotas, simulación, grafo y avisos; espejo matchTickets en Firestore fuera de local.
+            // Al crear el chat SCENARIO se escribe `chats/{id}` en Firestore (E4.8; pendientes-humanos E4.2 paso 4).
             val matching = matchingModule(
                 config.env, database, clock, quota, simulation, graph, notifier, config.firebaseProjectId,
                 MatchingFlags.fromEnv(config.env, vars),
+                onScenarioChatCreated = { chatId -> chat.service.mirrorChat(chatId) },
             )
+            // Modo escenario (E4.8): acuerdo, cierre y juez; `judge-scenario` va por la cola `simulations`.
+            val scenario = scenarioModule(clock, ai, quota, graph, chat, simulation, tasks, notifier)
             // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
             // E8.7: el `anonId` de un reporte o bloqueo también se resuelve entre los canjes de C5, los amigos de
             // amigos de D6 y las presentaciones de E3 del observador.
@@ -308,7 +318,7 @@ class AppContainer(
             val connectRequests = exposedConnectRequestModule(database, graph, quota, demo.enabled)
             // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.
             val billing = billingModule(config.env, database, clock, vars)
-            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account) }
+            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account, scenario) }
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
@@ -318,6 +328,8 @@ class AppContainer(
                 billing = billing,
                 invites = invites,
                 connectRequests = connectRequests,
+                // Sin esto el valor por defecto (en memoria, FakeTaskQueue inline) atendería las rutas y pisaría el gancho del chat.
+                scenario = scenario,
                 background = background,
             )
         }
@@ -327,6 +339,7 @@ class AppContainer(
          * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
          * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
          * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. Communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
+         * `judge-scenario` y `scenario-sweep` (E4.8) corren con el módulo real de escenario.
          */
         private fun inlineBackground(
             queue: InProcessTaskQueue,
@@ -335,14 +348,17 @@ class AppContainer(
             simulation: SimulationModule,
             matching: MatchingModule,
             account: AccountModule,
+            scenario: ScenarioModule,
         ): BackgroundWork {
             fun id(body: String) = ContractJson.decodeFromString<TaskPayload>(body).uuid()
             queue.register(TwinService.BUILD_PERSONA_PATH) { twin.service.buildPersona(id(it)) }
             queue.register(SimulationService.SIMULATE_PATH) { simulation.engine.run(id(it)) }
             queue.register(AccountDeletionService.PURGE_PATH) { account.deletion.purge(id(it)) }
+            queue.register(ScenarioService.JUDGE_PATH) { scenario.service.judge(id(it)) }
             queue.register(MemoryService.TASK_PATH) { twin.memories.extract(id(it)) }
             return BackgroundWork(queue, InProcessScheduler()) { scheduler ->
                 scheduler.every("match-sweep", Duration.ofSeconds(60)) { matching.service.sweep() }
+                scheduler.every("scenario-sweep", Duration.ofSeconds(60), Duration.ofSeconds(20)) { scenario.service.sweep() }
                 scheduler.every("purge-sweep", Duration.ofHours(1), Duration.ofMinutes(2)) { account.deletion.sweepStalled() }
                 scheduler.every("simulation-recovery", Duration.ofMinutes(15), Duration.ofSeconds(30)) {
                     simulation.service.requeueUnfinished()
@@ -405,6 +421,7 @@ fun allDomains(
     introductions: IntroductionModule =
         introductionModule(InMemoryIntroductionRepository(), simulation, graph, chat, quota, NoopNotifier, systemClock()),
     admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, systemClock()),
+    scenario: ScenarioModule = inMemoryScenarioModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph, chat, simulation, NoopNotifier),
     connectRequests: ConnectRequestModule = inMemoryConnectRequestModule(simulation, graph, quota),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
@@ -412,7 +429,7 @@ fun allDomains(
     QuotaRoutes(quota),
     MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
-    ScenarioRoutes(),
+    ScenarioRoutes(scenario.service) { firebase -> identity.requireUser(firebase).id },
     GraphRoutes(
         graph.service,
         fofService(graph, twin, quota, matching.flags.demoUsersEnabled),

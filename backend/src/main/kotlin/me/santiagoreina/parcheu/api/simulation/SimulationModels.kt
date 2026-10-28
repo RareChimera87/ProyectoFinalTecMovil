@@ -167,6 +167,10 @@ data class ScenarioDef(
     val prompt: String,
     val isBasic: Boolean,
     val rubric: List<RubricItem>,
+    /** Duración del modo escenario (E4.8): `ends_at = inicio + timerSec`. */
+    val timerSec: Int = 600,
+    /** Presupuesto en COP que muestra la tarjeta fijada de F3 (0 = el escenario no lo usa). */
+    val budgetCop: Int = 0,
 )
 
 /** Datos de cuenta que valida `POST /v1/simulations`. */

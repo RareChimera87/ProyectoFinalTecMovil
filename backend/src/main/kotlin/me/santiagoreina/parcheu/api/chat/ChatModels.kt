@@ -28,6 +28,8 @@ data class ChatMemberRecord(
     val firebaseUid: String,
     val muted: Boolean,
     val lastReadAt: Instant?,
+    /** Cuándo pulsó 'Llegamos a un acuerdo' en un chat SCENARIO (E4.8); nulo si aún no. */
+    val agreedAt: Instant? = null,
 )
 
 /** Fila de `chat_messages`. `senderId` nulo = mensaje del sistema o autor anonimizado. */

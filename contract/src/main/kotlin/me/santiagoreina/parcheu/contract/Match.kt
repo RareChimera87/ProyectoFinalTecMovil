@@ -57,6 +57,8 @@ public data class MatchDto(
     val myChoice: MatchChoice? = null,
     val decideBy: Instant,
     val scenarioAvailable: Boolean = false,
+    /** Chat SCENARIO (F3) del match cuando `status = SCENARIO` (E4.8); la app lo abre con `ScenarioChat(chatId)`. */
+    val chatId: String? = null,
 )
 
 /** POST /v1/matches/{id}/choice */
@@ -74,9 +76,21 @@ public data class ScenarioDto(
     val locked: Boolean = false,
 )
 
-/** POST /v1/scenario-sessions/{chatId}/agreement */
+/**
+ * GET /v1/scenario-sessions/{chatId} y POST /v1/scenario-sessions/{chatId}/agreement (E4.8).
+ *
+ * `OPEN` = en curso, `WAITING_OTHER` = yo ya marqué el acuerdo, `JUDGING` = el juez evalúa la conversación,
+ * `DONE` = terminó: con `simulationId` hay resultado (F7/F8); sin él no hubo nada que evaluar o falló.
+ * Lo demás alimenta la tarjeta fijada de F3 (título, consigna, presupuesto en COP y fin del tiempo).
+ */
 @Serializable
 public data class ScenarioSessionDto(
     val status: ScenarioSessionStatus,
     val simulationId: String? = null,
+    val title: String? = null,
+    val prompt: String? = null,
+    val budgetCop: Int? = null,
+    val endsAt: Instant? = null,
+    val iAgreed: Boolean = false,
+    val otherAgreed: Boolean = false,
 )

@@ -30,13 +30,14 @@ object MatchingRules {
  *
  * - `DEMO_USERS_ENABLED` (ADR-0027): sin ella nadie se empareja con un usuario `is_demo`. Por defecto
  *   encendida en local y dev, apagada en prod (la prueba cerrada la enciende a propósito).
- * - `SCENARIO_MODE_ENABLED`: apagada hasta que E4.8 se mezcle; con ella apagada elegir SCENARIO es 400.
+ * - `SCENARIO_MODE_ENABLED` (E4.8): por defecto encendida en local y dev, apagada en prod hasta la 0.9; con ella
+ *   apagada elegir SCENARIO es 400.
  */
 data class MatchingFlags(val demoUsersEnabled: Boolean, val scenarioModeEnabled: Boolean) {
     companion object {
         fun fromEnv(env: Env, vars: Map<String, String> = System.getenv()): MatchingFlags = MatchingFlags(
             demoUsersEnabled = vars["DEMO_USERS_ENABLED"].toBoolOrNull() ?: (env != Env.PROD),
-            scenarioModeEnabled = vars["SCENARIO_MODE_ENABLED"].toBoolOrNull() ?: false,
+            scenarioModeEnabled = vars["SCENARIO_MODE_ENABLED"].toBoolOrNull() ?: (env != Env.PROD),
         )
 
         private fun String?.toBoolOrNull(): Boolean? = when (this?.trim()?.lowercase()) {

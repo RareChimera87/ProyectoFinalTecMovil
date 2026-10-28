@@ -39,7 +39,7 @@ fun MatchFoundRoute(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is MatchFoundEffect.OpenScenario -> navigator.navigate(ScenarioChat(effect.matchId))
+                is MatchFoundEffect.OpenScenario -> navigator.navigate(ScenarioChat(effect.chatId))
                 is MatchFoundEffect.OpenSimulation -> navigator.navigate(Simulation(effect.matchId))
                 is MatchFoundEffect.SearchAgain ->
                     navigator.navigateReplacing(MatchQueue(mode = effect.mode), MatchQueue::class)

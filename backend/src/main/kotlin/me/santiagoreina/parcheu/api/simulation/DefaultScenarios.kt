@@ -30,6 +30,13 @@ object DefaultScenarios {
         RubricItem("estilo_de_trabajo", 0.15, "Sus formas de trabajar (solo o en grupo, detalle o visión) se complementan."),
     )
 
+    /** `timer_sec` y `budget_cop` de la semilla por id de escenario (E4.8: tarjeta fijada de F3). */
+    private val timerAndBudget: Map<Int, Pair<Int, Int>> = mapOf(
+        1 to (600 to 80_000), 2 to (600 to 120_000), 3 to (600 to 150_000), 4 to (600 to 50_000), 5 to (900 to 1_200_000),
+        6 to (600 to 100_000), 7 to (600 to 60_000), 8 to (600 to 80_000), 9 to (900 to 1_500_000), 10 to (600 to 0),
+        11 to (600 to 50_000), 12 to (600 to 30_000), 13 to (600 to 20_000), 14 to (600 to 0), 15 to (900 to 100_000),
+    )
+
     private fun s(id: Int, mode: Mode, slug: String, title: String, basic: Boolean, prompt: String) = ScenarioDef(
         id = id,
         mode = mode,
@@ -37,6 +44,8 @@ object DefaultScenarios {
         title = title,
         prompt = prompt,
         isBasic = basic,
+        timerSec = timerAndBudget.getValue(id).first,
+        budgetCop = timerAndBudget.getValue(id).second,
         rubric = when (mode) {
             Mode.AMISTAD -> amistad
             Mode.PAREJA -> pareja
