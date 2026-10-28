@@ -42,4 +42,4 @@ Enmiendas del 22 oct 2026 (ronda de corrección): 0001 (merge y releases interme
 
 Actualizaciones del 28 oct 2026 (E10.7, "lo aprendido"): 0010 (números reales y techo físico en dev), 0011 (migraciones en el homeserver), 0016 (prioridad del usuario), 0019 (cola y programador en proceso) y 0033 (operación).
 
-Estados: **Aceptada** (vigente), **Propuesta** (pendiente de confirmación: hoy solo 0029), **Reemplazada** y **Rechazada**. Cada ADR con un spike (0005, 0008) tiene su sección *Resultado* completa. `scripts/check-adr.sh` lo verifica en CI (`docs-ci`): falla si queda una marca `_Completar_`, si falta el estado, si un spike no tiene resultado o si un ADR no está en esta tabla. Diagramas: [c4.md](../c4.md).
+Estados: **Aceptada** (vigente), **Propuesta** (pendiente de confirmación: hoy solo 0029), **Reemplazada** y **Rechazada**. Cada ADR con un spike (0005, 0008) tiene su sección *Resultado* completa. `scripts/check-adr.sh` lo verifica en CI (`docs-ci`): falla si queda una marca `_Completar_` o `_Completar en ...`, si falta el estado, si un spike no tiene resultado o si un ADR no está en esta tabla. Diagramas: [c4.md](../c4.md).

@@ -21,6 +21,8 @@ caso() { # caso <esperado: acepta|rechaza> <nombre>
 
 nuevo valido;            caso acepta valido
 nuevo completar;         printf '\n## Resultado\n_Completar_\n' >>"$tmp/completar/0001-uno.md"; caso rechaza completar
+nuevo completar-real;    printf '\n## Resultado del spike\n- **Fecha:** 1 nov.\n_Completar en E0.7, **a más tardar el 25 oct 2026**: versión del plugin._\n' >>"$tmp/completar-real/0001-uno.md"; caso rechaza completar-real
+nuevo completar-seguim;  printf '\n## Seguimiento\n_Completar en E10.9: medir el costo real._\n' >>"$tmp/completar-seguim/0001-uno.md"; caso rechaza completar-seguim
 nuevo sin-estado;        printf '# ADR-0001\n\n## Contexto\nx\n' >"$tmp/sin-estado/0001-uno.md"; caso rechaza sin-estado
 nuevo estado-raro;       sed -i 's/Aceptada/Quizá/' "$tmp/estado-raro/0001-uno.md"; caso rechaza estado-raro
 nuevo propuesta;         sed -i 's/Aceptada/**Propuesta, pendiente**/' "$tmp/propuesta/0001-uno.md"; caso acepta propuesta

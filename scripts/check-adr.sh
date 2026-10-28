@@ -4,7 +4,7 @@
 # Uso: scripts/check-adr.sh [directorio-de-adr]   (por defecto docs/adr)
 #
 # Falla (código 1) si algún ADR:
-#   - conserva una sección o marca '_Completar_';
+#   - conserva una marca '_Completar_' o '_Completar en E0.x, ...: ..._' (sin distinguir mayúsculas);
 #   - no tiene la línea '- **Estado:**' con un estado válido (Aceptada, Propuesta, Reemplazada o Rechazada);
 #   - menciona un spike pero no tiene la sección '## Resultado' con contenido;
 #   - no figura en la tabla de docs/adr/README.md.
@@ -25,8 +25,8 @@ adrs=("$DIR"/[0-9][0-9][0-9][0-9]-*.md)
 for f in "${adrs[@]}"; do
   nombre="$(basename "$f")"
 
-  if grep -q '_Completar_' "$f"; then
-    fallo "$nombre: queda una marca '_Completar_'"
+  if grep -qiE '_Completar([[:space:]_.,:]|$)' "$f"; then
+    fallo "$nombre: queda una marca '_Completar_' o '_Completar en ...'"
   fi
 
   estado="$(grep -m1 -E '^- \*\*Estado:\*\*' "$f" || true)"

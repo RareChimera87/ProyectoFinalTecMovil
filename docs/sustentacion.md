@@ -211,7 +211,7 @@ Datos de [ADR-0008](adr/0008-ia-vertex-proveedores-intercambiables.md) (precios 
 | Una llamada del juez (352 tokens de entrada, 241 de salida) | ≈ 0,0013 USD |
 | Una simulación (unas 25 llamadas cortas) | del orden de 1 a 3 centavos de USD |
 | Cuota gratis | 5 simulaciones por semana, 1 match al día, 1 informe al mes ([ADR-0010](adr/0010-control-de-costo-ia.md)) |
-| Peor caso gratis por persona y semana | 5 × 3 centavos = 0,15 USD (cota alta de la estimación) |
+| Simulaciones gratis por persona y semana | 5 × 3 centavos = 0,15 USD son solo las que cobran cupo. Las de match aleatorio y las de presentación se crean con `chargeQuota=false` y no cuentan en la cuota: con 7 matches a la semana serían unas 12 simulaciones, ≈ 0,36 USD, sin contar moderación, memorias, gemelo ni escenario (también usan IA). No hay cota por persona garantizada |
 | Tope diario por defecto | `AI_DAILY_BUDGET_USD=3` (con 3 centavos por simulación, ≈ 100 simulaciones al día) |
 
 Control escalonado (`DailyBudgetGuard`): por debajo del 70 % del tope todo normal; entre el 70 y el 100 %, todo
@@ -221,8 +221,10 @@ proceso) y el presupuesto de facturación de GCP avisa al 50 % y al 90 %. Qué h
 [operacion.md](operacion.md#ai-budget-exceeded).
 
 Para la pregunta "¿cuánto cuesta con 1000 usuarios activos?": con los supuestos de arriba y todos agotando la
-cuota gratis cada semana, el gasto de IA estaría por debajo de 150 USD por semana; con el tope diario de 3 USD
-nunca pasa de 21 USD por semana. Decirlo como cota, no como pronóstico.
+cuota gratis cada semana, la estimación es de unos 150 USD por semana solo en simulaciones con cupo, y es una
+estimación, no una cota: faltan las simulaciones de match y presentación (`chargeQuota=false`) y los demás usos de
+IA (moderación, memorias, gemelo, escenario). El único techo garantizado es el tope diario: con
+`AI_DAILY_BUDGET_USD=3` nunca pasa de 21 USD por semana. Decir solo ese número como cota.
 
 ## 8. Estado honesto y preguntas esperadas
 
