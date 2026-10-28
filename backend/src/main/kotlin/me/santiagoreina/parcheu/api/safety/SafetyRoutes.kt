@@ -51,6 +51,11 @@ class SafetyRoutes(
             moderation.moderate(call.receive<TaskPayload>().uuid())
             call.respond(HttpStatusCode.NoContent)
         }
+        // Reintento del aviso de ayuda por autolesión, sin LLM (E8.6).
+        post(ModerationService.HELP_TASK_PATH) {
+            moderation.deliverHelp(call.receive<TaskPayload>().uuid())
+            call.respond(HttpStatusCode.NoContent)
+        }
     }
 
     private suspend fun ApplicationCall.userId(): UUID = currentUserId(principal<FirebaseUser>() ?: throw Unauthenticated())

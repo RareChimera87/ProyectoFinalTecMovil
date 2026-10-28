@@ -231,6 +231,32 @@ class ModerationServiceTest : FunSpec({
         f.safetyRepo.allReports shouldHaveSize 1
     }
 
+    test("solo autolesión con el aviso fallando: encola el reintento sin LLM y la ayuda llega") {
+        val f = Fixture()
+        f.llm.jsonResponder = { _, _ -> finding("SELF_HARM", "HIGH") }
+        val id = f.send("ya no quiero seguir")
+        f.flakyNotifier.failOnce = true
+        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.ACTED
+        f.notifier.sent.shouldBeEmpty()
+        f.queue.tasks.single { it.path == ModerationService.HELP_TASK_PATH }.name shouldBe "moderate-help-$id"
+        f.llm.jsonResponder = { _, _ -> error("no debe volver a llamar al LLM") }
+        runBlocking { f.moderation.deliverHelp(id) }
+        f.notifier.sent.single().userId shouldBe f.beto.id
+        f.safetyRepo.allReports.shouldBeEmpty()
+    }
+
+    test("solo autolesión con el aviso y la cola fallando: se relanza el error") {
+        val f = Fixture()
+        f.llm.jsonResponder = { _, _ -> finding("SELF_HARM", "HIGH") }
+        val id = f.send("ya no quiero seguir")
+        f.flakyNotifier.failOnce = true
+        f.queue.tasks.size
+        val before = f.queue.tasks.size
+        f.queue.failWith = IllegalStateException("cola caída")
+        runCatching { runBlocking { f.moderation.moderate(id) } }.isFailure shouldBe true
+        f.queue.tasks.size shouldBe before
+    }
+
     test("reintento tras fallar insertReport: el mensaje no queda oculto sin reporte") {
         val f = Fixture()
         f.llm.jsonResponder = { _, _ -> finding("THREAT", "HIGH") }

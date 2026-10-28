@@ -41,7 +41,8 @@ import java.util.UUID
  * oculto sin reporte) y se crea una sola vez por mensaje. Con el reporte ya creado, el reintento no vuelve a llamar
  * al LLM: aplica lo que el reporte dice (`details` marca si se oculta y si falta la ayuda) y ocultar es idempotente
  * y repara el espejo de Firestore. El aviso de ayuda va primero y, si falla, no impide reportar ni ocultar; luego se
- * relanza el error. Un reintento puede duplicar el aviso, pero nunca se pierde.
+ * relanza el error. Un reintento puede duplicar el aviso, pero nunca se pierde. Con solo SELF_HARM no hay reporte, así que
+ * si el aviso falla se encola `moderate-help` (sin LLM) en vez de relanzar el error: el reintento no depende del modelo.
  */
 class ModerationService(
     private val moderator: MessageModerator,
@@ -123,11 +124,40 @@ class ModerationService(
             safety.insertReport(autoReport(message, author, reportable, hide, selfHarm))
             if (hide) chat.hideMessage(messageId)
         }
-        helpError?.let { throw it }
+        helpError?.let { error ->
+            // Solo autolesión: no hay reporte que registre la decisión, así que un reintento de `moderate` volvería a
+            // llamar al LLM y la ayuda podría perderse. Se reintenta el aviso en una tarea propia, sin LLM.
+            if (reportable.isNotEmpty() || !enqueueHelp(messageId)) throw error
+            log.atWarn().setMessage(HELP_DEFERRED).addKeyValue("event", HELP_DEFERRED)
+                .addKeyValue("messageId", messageId.toString()).addKeyValue("error", error.javaClass.simpleName).log()
+        }
         log.atInfo().setMessage(MODERATION_ACTED).addKeyValue("event", MODERATION_ACTED)
             .addKeyValue("messageId", messageId.toString()).addKeyValue("categories", high.joinToString(",") { it.name })
             .addKeyValue("hidden", hide).log()
         return ModerationOutcome.ACTED
+    }
+
+    /** Handler de `POST /internal/tasks/moderate-help`: entrega la ayuda al autor de [messageId] sin llamar al LLM. */
+    suspend fun deliverHelp(messageId: UUID) {
+        val author = chats.message(messageId)?.senderId ?: return
+        sendHelp(author)
+    }
+
+    /** Encola el reintento del aviso de ayuda; false si ni eso se pudo (entonces falla la tarea y se reintenta todo). */
+    private suspend fun enqueueHelp(messageId: UUID): Boolean = try {
+        tasks.enqueue(
+            TaskRequest(
+                queue = QueueKind.AI_LIGHT,
+                path = HELP_TASK_PATH,
+                name = "moderate-help-$messageId",
+                body = buildJsonObject { put("id", JsonPrimitive(messageId.toString())) }.toString(),
+            ),
+        )
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
     }
 
     /** Las líneas de ayuda van solo a [author] (aviso del centro + push), nunca al chat que ve la otra persona. */
@@ -169,6 +199,8 @@ class ModerationService(
 
     companion object {
         const val TASK_PATH = "/tasks/moderate"
+        const val HELP_TASK_PATH = "/tasks/moderate-help"
+        const val HELP_DEFERRED = "moderation_help_deferred"
         const val MODERATION_FAILED = "moderation_failed"
         const val MODERATION_ACTED = "moderation_acted"
         const val ENQUEUE_FAILED = "moderation_enqueue_failed"
