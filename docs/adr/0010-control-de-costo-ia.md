@@ -21,3 +21,7 @@ Los créditos de GCP son finitos y no hay App Check en la 1.0 (ADR-0015). Un buc
 ## Consecuencias
 - El gasto diario tiene techo conocido.
 - La degradación al modelo lite puede bajar la calidad en días de mucho uso; queda registrada en `simulations.model`.
+
+## Actualización (E10.7, 28 oct 2026): números reales y techo físico en dev
+- Con los precios fijados al elegir los modelos en [ADR-0008](0008-ia-vertex-proveedores-intercambiables.md), una llamada del juez cuesta ≈ 0,0013 USD y una simulación de unas 25 llamadas, de 1 a 3 centavos; el tope diario por defecto es `AI_DAILY_BUDGET_USD=3`. El cálculo completo para la sustentación está en [sustentacion.md](../sustentacion.md#7-costo-de-la-ia).
+- En dev (sin Cloud Tasks) el techo físico de gasto es la concurrencia de `InProcessTaskQueue` (simulaciones 2, IA ligera 4, mantenimiento 1) en vez de la tasa de las colas de Cloud Tasks; el `DailyBudgetGuard` y las cuotas funcionan igual.

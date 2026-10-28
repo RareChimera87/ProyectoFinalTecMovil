@@ -1,0 +1,44 @@
+name: docs-ci
+
+# E10.7. Verifica la documentación: enlaces internos de README.md y docs/** (scripts/check-links.sh),
+# estado y secciones de resultado de los ADR (scripts/check-adr.sh) y los diagramas Mermaid de docs/c4.md.
+# No es un check obligatorio de rama; corre solo cuando el PR toca la documentación o sus scripts.
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - 'scripts/check-adr.sh'
+      - 'scripts/check-links.sh'
+      - 'scripts/test/check-adr.test.sh'
+      - 'scripts/test/check-links.test.sh'
+      - '.github/workflows/docs-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-ci:
+    name: docs-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pruebas de los verificadores
+        run: |
+          scripts/test/check-adr.test.sh
+          scripts/test/check-links.test.sh
+      - name: Enlaces internos
+        run: scripts/check-links.sh
+      - name: ADR
+        run: scripts/check-adr.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Diagramas Mermaid de docs/c4.md
+        run: scripts/check-mermaid.sh

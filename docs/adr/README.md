@@ -39,3 +39,7 @@ Formato: contexto, decisión, alternativas, consecuencias. Una decisión nueva o
 | [0033](0033-backend-en-homeserver.md) | Backend de pruebas en el homeserver en vez de Cloud SQL + Cloud Run |
 
 Enmiendas del 22 oct 2026 (ronda de corrección): 0001 (merge y releases intermedios), 0005 y 0008 (fecha límite de los spikes), 0012 (memorias), 0016 (billing, login y tiempos de Play), 0017 (términos, política y aviso de IA).
+
+Actualizaciones del 28 oct 2026 (E10.7, "lo aprendido"): 0010 (números reales y techo físico en dev), 0011 (migraciones en el homeserver), 0016 (prioridad del usuario), 0019 (cola y programador en proceso) y 0033 (operación).
+
+Estados: **Aceptada** (vigente), **Propuesta** (pendiente de confirmación: hoy solo 0029), **Reemplazada** y **Rechazada**. Cada ADR con un spike (0005, 0008) tiene su sección *Resultado* completa. `scripts/check-adr.sh` lo verifica en CI (`docs-ci`): falla si queda una marca `_Completar_` o `_Completar en ...`, si falta el estado, si un spike no tiene resultado o si un ADR no está en esta tabla. Diagramas: [c4.md](../c4.md).

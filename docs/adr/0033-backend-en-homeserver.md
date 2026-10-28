@@ -27,3 +27,7 @@ Aplicar el Terraform de `parcheu-dev` (Cloud SQL, Cloud Run, Cloud Tasks, Schedu
 - En modo `local` la app real no inicia sesión; para eso hace falta la llave de Google (`deploy/homelab/README.md`).
 - Las tareas son en proceso: sin garantía de entrega ante un reinicio (los barridos recuperan simulaciones y purgas) y sin las notificaciones RTDN de Play (renovaciones y cancelaciones no se sincronizan).
 - Cloud Run y Cloud SQL siguen siendo el destino de prod; este despliegue no sustituye a prod.
+
+## Actualización (E10.7, 28 oct 2026): operación
+- El procedimiento de operación (salud, despliegue y reversión, respaldo y restauración, incidentes por síntoma) quedó en [operacion.md](../operacion.md#backend-de-dev-en-el-homeserver) y los diagramas del entorno en [c4.md](../c4.md#3-contenedores-de-dev-en-el-homeserver).
+- Lo aprendido: sin alertas de GCP la vigilancia es manual, por eso el respaldo diario, el barrido de simulaciones y el aviso de `desplegar.sh` si el HTTPS responde con `PARCHEU_ENV=local` son parte de la decisión y no detalles.
