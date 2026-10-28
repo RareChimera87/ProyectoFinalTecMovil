@@ -16,7 +16,7 @@ interface SafetyRepository {
     suspend fun person(userId: UUID): PersonRow?
 
     /** Inserta el bloqueo; false si ya existía (idempotente). */
-    suspend fun block(blocker: UUID, blocked: UUID, now: Instant): Boolean
+    suspend fun block(blocker: UUID, blocked: UUID, now: Instant, wasConnected: Boolean = false): Boolean
 
     /** Quita el bloqueo de [blocker] a [blocked]; false si no existía. */
     suspend fun unblock(blocker: UUID, blocked: UUID): Boolean

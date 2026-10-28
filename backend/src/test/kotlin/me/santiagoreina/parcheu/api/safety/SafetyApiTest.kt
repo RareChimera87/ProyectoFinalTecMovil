@@ -495,6 +495,21 @@ class SafetyApiTest : FunSpec({
         }
     }
 
+    test("una conexión con nombre bloqueada sigue con nombre en GET /v1/blocks y DELETE con ese id desbloquea") {
+        val w = World()
+        w.f.graphRepo.putEdge(w.ana, w.beto, Mode.AMISTAD, EdgeState.CONNECTED, 80)
+        testApplication {
+            val client = app(w)
+            client.post("/v1/blocks/${w.beto}") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
+            // La arista ya no existe, pero quien bloquea conocía a la persona por nombre.
+            val listed = client.get("/v1/blocks") { auth("ana") }.body<List<BlockedDto>>().single()
+            listed.userId shouldBe w.beto.toString()
+            listed.label shouldBe w.f.graphRepo.people.getValue(w.beto).displayName
+            client.delete("/v1/blocks/${listed.userId}") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
+            w.safetyRepo.allBlocks.shouldBeEmpty()
+        }
+    }
+
     test("silenciar (H1) solo cambia muted: no bloquea") {
         val w = World()
         val chat = w.direct()

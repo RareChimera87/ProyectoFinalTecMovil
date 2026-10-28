@@ -107,8 +107,11 @@ class SafetyDbTest : FunSpec({
             env.graph.repository.connectedWith(ana.id) shouldBe setOf(beto.id)
 
             env.service.block(ana.id, beto.id.toString())
-            val anonId = env.graph.anonIds.anonId(ana.id, beto.id)
-            env.service.unblock(ana.id, anonId)
+            // Quien bloquea ya conocía a Beto por nombre: la lista lo presenta con su id y nombre (was_connected).
+            val listed = env.service.blocks(ana.id).single()
+            listed.userId shouldBe beto.id.toString()
+            env.service.unblock(ana.id, listed.userId)
+            env.service.blocks(ana.id).shouldBeEmpty()
 
             env.graph.repository.connectedWith(ana.id).shouldBeEmpty()
             env.graph.repository.egoEdges(ana.id, GraphFilter()).shouldBeEmpty()
