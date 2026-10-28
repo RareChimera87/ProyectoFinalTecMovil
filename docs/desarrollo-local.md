@@ -25,7 +25,7 @@ Guía para preparar una máquina de desarrollo de ParcheU. Las decisiones de fon
 
 ```bash
 # Android
-cd android && ./gradlew :app:testDebugUnitTest
+cd android && ./gradlew :app:testDevDebugUnitTest
 
 # Backend: sin contenedores en local (el backend tiene su propio wrapper)
 cd backend && ./gradlew build -PsinContenedores
@@ -81,6 +81,21 @@ cd backend && PARCHEU_TEST_DB_URL=jdbc:postgresql://localhost:54329/e04test ./gr
 3. Colócalo en `android/app/src/dev/google-services.json` (y `src/prod/` para prod).
 
 Hasta que exista, la app compila solo las partes que no dependen de Firebase.
+
+## Compilar, instalar y registrar tu huella de debug
+
+```bash
+cd android && ./gradlew :app:installDevDebug   # compila e instala el flavor dev en el dispositivo o emulador conectado
+```
+
+El login con Google (Credential Manager con `default_web_client_id`) solo funciona si la **SHA-1 del keystore de debug con el que firmas** está registrada en la app Android de `parcheu-dev`. En el proyecto hoy solo está la de la máquina del usuario, así que cada persona nueva debe registrar la suya (o compartir un keystore de debug común). Sin ese paso, "Continuar con Google" falla con "Developer console is not set up correctly" o sin credenciales, aunque el backend del homelab esté en `PARCHEU_ENV=dev`.
+
+```bash
+keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1
+firebase apps:android:sha:create 1:388770932007:android:d6f5452d14d98bf1d43502 <SHA-1> --project parcheu-dev
+```
+
+Pídele a I1 o I3 que ejecute el segundo comando (necesita permiso de edición en el proyecto) y luego vuelve a descargar `google-services.json`.
 
 ## Secretos
 

@@ -275,6 +275,39 @@ class MatchQueueViewModelTest {
     }
 
     @Test
+    fun enqueuesOnlyInAnActiveModeWhenUserHasOnlyEstudio() {
+        val vm = MatchQueueViewModel(
+            initialMode = null,
+            repository = repository,
+            loadActiveModes = { listOf(Mode.ESTUDIO) }
+        )
+
+        assertEquals(listOf(Mode.ESTUDIO), repository.enqueued)
+        assertEquals(Mode.ESTUDIO, vm.state.value.mode)
+        assertEquals(listOf(Mode.ESTUDIO), vm.state.value.activeModes)
+    }
+
+    @Test
+    fun routeModeNotActiveFallsBackToAnActiveOne() {
+        val vm = MatchQueueViewModel(
+            initialMode = Mode.PAREJA,
+            repository = repository,
+            loadActiveModes = { listOf(Mode.AMISTAD, Mode.ESTUDIO) }
+        )
+
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
+        assertEquals(listOf(Mode.AMISTAD, Mode.ESTUDIO), vm.state.value.activeModes)
+    }
+
+    @Test
+    fun unreadableModesKeepAllOptions() {
+        val vm = MatchQueueViewModel(Mode.AMISTAD, repository, loadActiveModes = { null })
+
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
+        assertEquals(Mode.entries, vm.state.value.activeModes)
+    }
+
+    @Test
     fun ignoresTicketOfAnotherMode() = runTest {
         val vm = viewModel(Mode.ESTUDIO)
         vm.effects.test {

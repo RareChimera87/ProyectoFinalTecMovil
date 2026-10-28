@@ -371,7 +371,7 @@ class AppContainer(
         }
 
         /**
-         * Handlers de las siete tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
+         * Handlers de las ocho tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
          * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
          * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
          * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. `twin-accuracy` (E9.3) corre los domingos a las 23:00 de Bogotá.

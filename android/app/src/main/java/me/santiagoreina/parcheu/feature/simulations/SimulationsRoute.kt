@@ -31,7 +31,7 @@ fun SimulationsRoute(
                 if (item.status == SimulationStatus.DONE) Results(item.id) else Simulation(item.id)
             )
         },
-        onPickFromParche = { navigator.navigate(Parche()) },
+        onPickFromParche = { navigator.navigateToTopLevel(Parche()) },
         onRandomMatch = { navigator.navigate(MatchQueue()) },
         onLoadMore = viewModel::loadMore,
         onRetry = viewModel::load,

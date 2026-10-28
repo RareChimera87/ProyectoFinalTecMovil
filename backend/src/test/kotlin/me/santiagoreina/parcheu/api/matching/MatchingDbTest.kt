@@ -368,6 +368,8 @@ class MatchingDbTest : FunSpec({
                 val sim = Simulations.selectAll().single()
                 sim[Simulations.origin] shouldBe SimulationOrigin.RANDOM
                 Matches.selectAll().where { Matches.id eq UUID.fromString(second) }.single()[Matches.simulationId] shouldBe sim[Simulations.id]
+                // F2 abre F4 con el id del match: la simulación debe tener ese mismo id.
+                sim[Simulations.id] shouldBe UUID.fromString(second)
                 UsageEvents.selectAll().count { it[UsageEvents.kind] == me.santiagoreina.parcheu.contract.QuotaKind.SIMULATION } shouldBe 0
             }
         }

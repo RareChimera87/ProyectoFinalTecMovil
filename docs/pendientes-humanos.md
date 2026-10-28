@@ -128,12 +128,6 @@ Lo automatizable ya quedó hecho: tokens, fuentes Sora e Inter (OFL) en `android
 | 2 | **Aprobación del revisor par** del PR (feature major, check `major-gate`): según `docs/equipo.md` el par de E1.1 es I3. | I3 | Antes del merge |
 | 3 | **Mezclar primero E0.7 (PR #8).** Esta rama parte de `feature/android-skeleton` porque el módulo `:designsystem` nace ahí; el PR de E1.1 muestra también los commits de E0.7 hasta que #8 se mezcle en `dev`. | I2 | Antes del merge de E1.1 |
 
-## E0.1 · Monorepo y git flow
-
-1. ~~**Protección de `dev` con checks requeridos.**~~ Hecho el 2026-10-23 (fix del issue #49): `scripts/proteger-ramas.sh dev` exige por defecto los 10 checks que siempre reportan (`pr-title`, `gitleaks`, `major-gate`, `revision-agente`, `android-ci`, `backend-ci`, `contract-ci`, `infra-ci`, `rules-ci`, `migration-order`) con `strict: false`, para que los PR paralelos con auto-merge no queden detrás esperando un `update-branch`.
-2. ~~**Protección de `main`.**~~ Hecho el 2026-10-23: `scripts/proteger-ramas.sh main` deja PR obligatorio, 0 aprobaciones (una sola cuenta: GitHub no deja aprobar el PR propio), `enforce_admins: true` y sin force push. Los agentes abren el PR `release/*` → `main` y tú lo mezclas; ese merge es tu aprobación explícita. Cuando entre un segundo colaborador (I2/I3) se puede exigir 1 aprobación.
-3. **Agregar a I2 e I3 como colaboradores** del repo y reemplazar los comentarios de `.github/CODEOWNERS` con sus usuarios de GitHub.
-
 ## E0.3 · Esqueleto del backend
 
 No hay pasos exclusivos de una persona para esta feature. Dos cosas a tener en cuenta:
@@ -672,61 +666,6 @@ No hay pasos en consolas externas. Queda una decisión de contrato:
 
 Sigue abierta (revisión de la ola 12, E7.4): si se elige (a), `POST /v1/simulations` pasaría a aceptar contenido de fof (premium), así que su ficha debe exigir `@Premium("POST /v1/simulations")` y una sonda en `PremiumEndpoints`. Si se elige (b), cerrar el pendiente enmendando ADR-0023.
 | 2 | **Aprobación del revisor par** del PR (feature major, check `major-gate`) según `docs/equipo.md`. | Par de E6.3 | Ventana de la ola 10 (12 nov) |
-
-## E0.8 · Configuración de Firebase
-
-Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,
-APIs `firestore`, `firebaserules`, `firebasehosting` e `identitytoolkit` habilitadas, base Firestore `(default)` en
-`nam5`, app Android `me.santiagoreina.parcheu.dev` (`1:388770932007:android:d6f5452d14d98bf1d43502`) con SHA-1 y
-SHA-256 de debug, reglas, índices y Hosting desplegados (`https://parcheu-dev.web.app` responde 200),
-environment `production` de GitHub con el usuario como revisor y secreto `GOOGLE_SERVICES_JSON_DEV`.
-
-1. **Importar al estado de Terraform lo que se creó por CLI en dev** (E0.5 declara estos recursos; sin importarlos el
-   `apply` fallará con "already exists"):
-
-   ```bash
-   cd infra/terraform/envs/dev && terraform init
-   terraform import module.platform.google_firebase_project.this projects/parcheu-dev
-   terraform import module.platform.google_firestore_database.default projects/parcheu-dev/databases/'(default)'
-   ```
-
-2. **Activar el acceso con Google en dev** (la consola es la única vía sin crear un cliente OAuth a mano): consola
-   Firebase → `parcheu-dev` → Authentication → Comenzar → Método de acceso → Google → Habilitar, con
-   `sanctireinadiaz@gmail.com` como correo de asistencia. Al guardarlo se crean los clientes OAuth (Android y web).
-   Luego regenera y recarga el archivo (hoy `oauth_client` viene vacío):
-
-   ```bash
-   firebase apps:sdkconfig ANDROID 1:388770932007:android:d6f5452d14d98bf1d43502 --project parcheu-dev > ~/.parcheu/google-services.dev.json
-   base64 -w0 ~/.parcheu/google-services.dev.json | gh secret set GOOGLE_SERVICES_JSON_DEV -R RareChimera87/ProyectoFinalTecMovil
-   ```
-
-3. **Verificación manual del criterio de inicio de sesión** (cuando E2.2 exista): instala la variante `devDebug`
-   firmada con el keystore de debug cuyo SHA-1 está registrado, en un emulador con Google Play, e inicia sesión con
-   Google; debe aparecer el usuario en Authentication → Usuarios. Anótalo en el PR de E2.2.
-
-4. **Secretos de WIF** (dependen del `apply` del bootstrap de E0.5, ver su sección): `WIF_PROVIDER`,
-   `WIF_SERVICE_ACCOUNT_DEV`, `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_PROD`. Hasta entonces `firebase-deploy`
-   no puede autenticarse en CI. Verifica que `sa-deployer` ya tiene `firebasehosting.admin`, `firebaserules.admin` y
-   `datastore.indexAdmin` (los declara E0.5) y que puede usar el proyecto (`serviceusage.serviceUsageConsumer`).
-
-5. **Prod, cuando exista `parcheu-prod`** (necesita el cupo de facturación de E0.5, punto 4, y su `apply`):
-
-   ```bash
-   firebase projects:addfirebase parcheu-prod            # solo si google_firebase_project no lo creó
-   firebase apps:create ANDROID "ParcheU" --package-name me.santiagoreina.parcheu --project parcheu-prod
-   firebase apps:android:sha:create <APP_ID_PROD> <SHA-1 de la llave de subida> --project parcheu-prod
-   firebase apps:android:sha:create <APP_ID_PROD> <SHA-256 de la llave de subida> --project parcheu-prod
-   firebase deploy --only firestore:rules,firestore:indexes,hosting --project parcheu-prod   # o el tag v*
-   base64 -w0 google-services.json | gh secret set GOOGLE_SERVICES_JSON_PROD -R RareChimera87/ProyectoFinalTecMovil
-   ```
-
-   Después de la primera subida a Play registra también el SHA-1/SHA-256 de la **firma de la app de Play**
-   (Play Console → Integridad de la app) o el login con Google fallará en producción. Si el ID real de prod lleva
-   sufijo, cámbialo en `firebase/.firebaserc` y en `.github/workflows/firebase-deploy.yml`.
-
-6. **Probar la aprobación de producción** (criterio de la ficha): en una rama descartable crea y sube el tag
-   `v0.0.0-rc` (`git tag v0.0.0-rc && git push origin v0.0.0-rc`); el job `deploy-prod` debe quedar en espera de tu
-   aprobación del environment `production`. Recházalo y borra el tag. No se probó aquí porque solo el usuario aprueba.
 
 ## E5.1 · API de chat
 

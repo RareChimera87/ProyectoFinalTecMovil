@@ -46,7 +46,8 @@ Algunas carpetas solo tienen un README hasta que llega su feature (ver `docs/bac
 ```bash
 scripts/instalar-hooks.sh                 # valida tus commits localmente
 scripts/test/commit-lint.test.sh          # pruebas del validador
-cd android && ./gradlew :app:testDebugUnitTest
+cd android && ./gradlew :app:testDevDebugUnitTest
+cd android && ./gradlew :app:installDevDebug   # instala la app dev (ver el paso de la SHA-1 de debug en docs/desarrollo-local.md)
 ```
 
 Documentación: `scripts/check-links.sh` (enlaces internos) y `scripts/check-adr.sh` (estado y resultados de los ADR) corren en CI (`docs-ci`); sus pruebas están en `scripts/test/check-links.test.sh` y `scripts/test/check-adr.test.sh`.
