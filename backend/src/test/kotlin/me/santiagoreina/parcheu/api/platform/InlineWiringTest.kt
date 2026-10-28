@@ -63,13 +63,16 @@ class InlineWiringTest : FunSpec({
             }
             container.background.shouldNotBeNull().scheduleOn(recorder)
             recorder.close()
-            initialDelays.keys.shouldContainAll("memories", "retention", "purge-sweep", "match-sweep")
+            initialDelays.keys.shouldContainAll("memories", "retention", "purge-sweep", "match-sweep", "twin-accuracy")
             // Cada job diario queda anclado a su hora: un cambio de reloj o de constante rompe este test.
             // El reloj es el del sistema: se tolera el segundo que pasa entre las dos lecturas.
             listOf("retention" to AppContainer.RETENTION_AT, "memories" to AppContainer.MEMORIES_AT).forEach { (job, at) ->
                 val expected = InProcessScheduler.delayUntil(at, container.clock)
                 (initialDelays.getValue(job) - expected).abs().seconds shouldBeLessThan 5L
             }
+            // E9.3: `twin-accuracy` queda anclado a los domingos a las 23:00 de Bogotá.
+            val weekly = InProcessScheduler.delayUntilWeekly(AppContainer.TWIN_ACCURACY_DAY, AppContainer.TWIN_ACCURACY_AT, container.clock)
+            (initialDelays.getValue("twin-accuracy") - weekly).abs().seconds shouldBeLessThan 5L
         } finally {
             container.background?.close()
         }

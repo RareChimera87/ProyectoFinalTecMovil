@@ -112,6 +112,7 @@ import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.twin.twinModule
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalTime
 import me.santiagoreina.parcheu.api.platform.jobs.InProcessScheduler
@@ -224,6 +225,10 @@ class AppContainer(
 
         /** El job `retention` corre a diario a las 03:30 de Bogotá, como `scheduler.tf` (E8.8). */
         val RETENTION_AT: LocalTime = LocalTime.of(3, 30)
+
+        /** El job `twin-accuracy` corre los domingos a las 23:00 de Bogotá, como `scheduler.tf` (E9.3). */
+        val TWIN_ACCURACY_DAY: DayOfWeek = DayOfWeek.SUNDAY
+        val TWIN_ACCURACY_AT: LocalTime = LocalTime.of(23, 0)
 
         /**
          * Cableado de producción: verificadores reales (Fake solo con `ENV=local`). La
@@ -338,7 +343,7 @@ class AppContainer(
          * Handlers de las cuatro tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
          * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
          * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
-         * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. Communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
+         * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. `twin-accuracy` (E9.3) corre los domingos a las 23:00 de Bogotá. Communities se omite: hoy es un stub (`stubPost`) sin lógica.
          * `judge-scenario` y `scenario-sweep` (E4.8) corren con el módulo real de escenario.
          */
         private fun inlineBackground(
@@ -368,6 +373,13 @@ class AppContainer(
                 }
                 scheduler.every("retention", Duration.ofDays(1), InProcessScheduler.delayUntil(RETENTION_AT, clock)) {
                     account.retention.run()
+                }
+                scheduler.every(
+                    "twin-accuracy",
+                    Duration.ofDays(7),
+                    InProcessScheduler.delayUntilWeekly(TWIN_ACCURACY_DAY, TWIN_ACCURACY_AT, clock),
+                ) {
+                    twin.feedback.computeAccuracy()
                 }
             }
         }

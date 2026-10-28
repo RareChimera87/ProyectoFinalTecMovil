@@ -1069,3 +1069,9 @@ No requiere infraestructura, secretos ni Play Console. Queda la parte que el ADR
 - [ ] **Generar la comparación**: `scripts/lado-a-lado.sh` (deja `docs/mockups/png/lado-a-lado/I*_lado-a-lado.png`).
 - [ ] **Revisar con la checklist** (tokens de color exactos, espaciados ±4dp, tipografía y jerarquía) y completar en el PR la tabla 'pantalla → diferencias aceptadas'. Diferencia ya conocida y aceptada: `ort` #9E480B y `mintt` #0B6B59 en lugar de los hex del mockup (ADR-0030), y la regla de texto sobre avatares.
 - [ ] **Prueba manual con TalkBack** en un dispositivo (las pruebas automáticas solo verifican que todo accionable tenga etiqueta; el orden de lectura y el texto de las descripciones se revisan a oído).
+## E9.3 · Entrena a tu gemelo
+
+No hay pasos humanos obligatorios para la variante dev en el homeserver: el job `twin-accuracy` se programa solo en el programador en proceso (`TASKS_MODE=inline`, domingos 23:00 de Bogotá) y la migración `V20261027_1200__calificacion_unica_por_turno.sql` la aplica Flyway al arrancar la API.
+
+- Cuando exista infraestructura de GCP (no ahora): el Cloud Scheduler `twin-accuracy` ya está declarado en `infra/terraform/modules/platform/scheduler.tf` y apunta a `/internal/jobs/twin-accuracy`, que ya no es un stub; requiere el `terraform apply` habitual del usuario.
+- Prueba manual sugerida con el gemelo ya creado: abrir C4 desde C3, contestar la pregunta de la semana, calificar una respuesta (necesita una simulación terminada) y ejecutar `POST /internal/jobs/twin-accuracy` con un token OIDC para ver el punto en C3.
