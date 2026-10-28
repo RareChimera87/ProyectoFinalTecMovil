@@ -1025,3 +1025,8 @@ No requiere infraestructura ni secretos: el historial se calcula en cada consult
 
 - [ ] **Decisión de producto (I3 / diseño):** el mockup D9 dice 'Mes → 08a en esa fecha'. El historial solo devuelve conteos por mes y D1 no tiene fecha por nodo, así que tocar un mes selecciona su detalle en D9 en vez de abrir D1 con ese snapshot. Para hacerlo literal haría falta devolver las personas por mes (con la policy) o las fechas por nodo en `GET /v1/graph`. Decidir si entra antes del 30 nov.
 - [ ] Revisar con datos reales: el momento 'Tu primera comunidad' aparecerá cuando E6.4 (comunidades) cree filas en `communities`/`community_members`.
+## E6.6 · Quién quiere conectar contigo
+
+No hay pasos humanos: es una lectura de `connection_decisions` con la API que ya existe (sin Terraform, secretos, Play Console ni tareas asíncronas nuevas, así que tampoco toca `InProcessTaskQueue` ni `InProcessScheduler`).
+
+Para verla en la variante dev contra el homeserver: con dos cuentas de prueba, que A simule con B, que B decida "Conectar" en F7/F8 y que A (con ParcheU+ de `POST /internal/dev/grant-plus`) abra C2: la sección lista a B enmascarado; sin ParcheU+ A ve el ítem bloqueado con el conteo.

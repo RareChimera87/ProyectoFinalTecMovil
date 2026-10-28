@@ -23,6 +23,7 @@ import me.santiagoreina.parcheu.feature.matchfound.matchFoundModule
 import me.santiagoreina.parcheu.feature.matchqueue.matchQueueModule
 import me.santiagoreina.parcheu.feature.modes.modesModule
 import me.santiagoreina.parcheu.feature.notifications.notificationsModule
+import me.santiagoreina.parcheu.feature.notifications.requests.connectRequestsModule
 import me.santiagoreina.parcheu.feature.onboarding.onboardingModule
 import me.santiagoreina.parcheu.feature.parche.parcheModule
 import me.santiagoreina.parcheu.feature.paywall.paywallModule
@@ -60,6 +61,7 @@ val featureModules: List<Module> =
         twinReadyModule,
         homeModule,
         notificationsModule,
+        connectRequestsModule,
         profileModule,
         trainTwinModule,
         addFriendsModule,

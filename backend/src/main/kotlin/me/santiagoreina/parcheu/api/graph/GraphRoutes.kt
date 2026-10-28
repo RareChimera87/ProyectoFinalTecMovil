@@ -45,7 +45,6 @@ class GraphRoutes(
             call.respond(history.history(viewerId(call.firebaseUser())))
         }
         stubGet("/communities")
-        stubGet("/connect-requests")
     }
 
     override fun Route.internal() {

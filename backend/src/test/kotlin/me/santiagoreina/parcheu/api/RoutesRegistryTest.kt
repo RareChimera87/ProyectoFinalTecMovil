@@ -32,8 +32,9 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Simulation: E4.3 (SimulationApiTest) y E4.6 (ReportApiTest) implementaron todas sus rutas /v1.
     "scenario" to listOf(HttpMethod.Get to "/v1/scenarios", HttpMethod.Post to "/v1/scenario-sessions/c1/agreement"),
     "graph" to listOf(
-        // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest) /v1/graph/fof E6.3 (FofApiTest) y /v1/graph/history E6.5 (HistoryApiTest).
-        HttpMethod.Get to "/v1/communities", HttpMethod.Get to "/v1/connect-requests",
+        // GET /v1/connect-requests lo implementa E6.6 (ConnectRequestApiTest).
+        // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest), /v1/graph/fof E6.3 (FofApiTest) y /v1/graph/history E6.5 (HistoryApiTest).
+        HttpMethod.Get to "/v1/communities",
     ),
     // Social: E6.1 implementa las invitaciones (InviteApiTest) y E6.2 las presentaciones (IntroductionApiTest); ya no queda ningún stub.
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
