@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import me.santiagoreina.parcheu.api.platform.BogotaZone
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.contract.MarkRead
 import me.santiagoreina.parcheu.contract.NotificationDto
@@ -39,6 +40,7 @@ class NotificationCenterService(
     /** Personas bloqueadas por [viewer] o que lo bloquearon (`GraphRepository.blockedEitherWay`). */
     private val blockedOf: suspend (UUID) -> Set<UUID>,
 ) {
+    @Premium("GET /v1/notifications")
     suspend fun list(viewer: UUID): NotificationsDto {
         val all = store.recent(viewer, MAX_ITEMS)
         if (all.isEmpty()) return NotificationsDto()

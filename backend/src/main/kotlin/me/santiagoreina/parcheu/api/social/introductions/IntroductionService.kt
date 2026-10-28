@@ -10,6 +10,7 @@ import me.santiagoreina.parcheu.api.graph.EdgeSource
 import me.santiagoreina.parcheu.api.graph.GraphFilter
 import me.santiagoreina.parcheu.api.graph.GraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.platform.db.tables.IntroRequestStatus
 import me.santiagoreina.parcheu.api.platform.db.tables.IntroResponse
 import me.santiagoreina.parcheu.api.platform.errors.Blocked
@@ -265,6 +266,7 @@ class IntroductionService(
      * `POST /v1/introductions/request` (202, ParcheU+). [IntroRequest.anonId] es el que [requester] ve en D6.
      * Idempotente: una solicitud PENDING para la misma persona no vuelve a avisar.
      */
+    @Premium("POST /v1/introductions/request")
     suspend fun request(requester: UUID, body: IntroRequest) {
         if (!quota.isPlus(requester)) throw PlusRequired("Pedir una presentación es de ParcheU+")
         val (target, via) = people.resolveFof(requester, body.anonId.trim()) ?: throw NotFound("La persona no existe")

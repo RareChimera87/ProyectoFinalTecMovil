@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.PersonView
 import me.santiagoreina.parcheu.api.graph.ThirdPartyView
 import me.santiagoreina.parcheu.api.graph.ViewContext
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.contract.CommunitiesDto
 import me.santiagoreina.parcheu.contract.CommunityDto
 import me.santiagoreina.parcheu.contract.EdgeState
@@ -65,6 +66,7 @@ class CommunitiesView(
     }
 
     /** `CommunitiesDto`: `count` para todos; `items` solo con ParcheU+. */
+    @Premium("GET /v1/communities")
     suspend fun communitiesDto(viewer: UUID): CommunitiesDto {
         val all = communities(viewer)
         if (!isPlus(viewer)) return CommunitiesDto(count = all.size)

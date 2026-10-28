@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.home
 
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.quota.QuotaService
 import me.santiagoreina.parcheu.api.simulation.SimulationService
 import me.santiagoreina.parcheu.contract.HomeDto
@@ -18,6 +19,7 @@ class HomeService(
     private val suggestions: HomeSuggestions,
     private val unread: UnreadCounter,
 ) {
+    @Premium("GET /v1/home")
     suspend fun home(viewer: UUID): HomeDto {
         val status = quota.status(viewer)
         // La primera página (más recientes primero) basta: la simulación en curso es reciente.

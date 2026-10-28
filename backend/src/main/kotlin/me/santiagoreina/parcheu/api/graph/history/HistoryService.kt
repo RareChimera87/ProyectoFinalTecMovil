@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.ViewContext
 import me.santiagoreina.parcheu.api.platform.BogotaZone
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.platform.errors.PlusRequired
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.HistoryDto
@@ -41,6 +42,7 @@ class HistoryService(
 ) {
     private class Link(val person: PersonRow, val createdAt: Instant?, val connectedAt: Instant?, val affinity: Int?, val connected: Boolean)
 
+    @Premium("GET /v1/graph/history")
     suspend fun history(viewer: UUID): HistoryDto {
         if (!isPlus(viewer)) throw PlusRequired("La evolución de la red es de ParcheU+")
         val blocked = repo.blockedEitherWay(viewer)

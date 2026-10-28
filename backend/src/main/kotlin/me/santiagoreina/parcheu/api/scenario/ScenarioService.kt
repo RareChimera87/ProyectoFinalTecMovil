@@ -9,6 +9,7 @@ import me.santiagoreina.parcheu.api.chat.ChatService
 import me.santiagoreina.parcheu.api.chat.ScenarioEndedHook
 import me.santiagoreina.parcheu.api.graph.EdgeEvent
 import me.santiagoreina.parcheu.api.graph.EdgeService
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
 import me.santiagoreina.parcheu.api.platform.errors.Blocked
 import me.santiagoreina.parcheu.api.platform.errors.Forbidden
@@ -81,6 +82,7 @@ class ScenarioService(
     // --- rutas -------------------------------------------------------------------------------
 
     /** `GET /v1/scenarios?mode=`: los escenarios del modo (o de todos); los premium salen `locked` para quien no es Plus. */
+    @Premium("GET /v1/scenarios")
     suspend fun list(viewer: UUID, mode: Mode?): List<ScenarioDto> {
         val plus = quota.isPlus(viewer)
         return (mode?.let { listOf(it) } ?: Mode.entries).flatMap { sims.scenarios(it) }
