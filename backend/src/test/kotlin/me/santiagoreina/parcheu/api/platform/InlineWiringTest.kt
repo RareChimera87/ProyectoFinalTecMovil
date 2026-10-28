@@ -9,6 +9,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.types.shouldBeInstanceOf
+import me.santiagoreina.parcheu.api.graph.communities.CommunityService
 import me.santiagoreina.parcheu.api.identity.deletion.AccountDeletionService
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
 import me.santiagoreina.parcheu.api.platform.auth.GoogleOidcVerifier
@@ -29,7 +30,7 @@ class InlineWiringTest : FunSpec({
         "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://localhost:1/parcheu",
     )
 
-    test("ENV=dev + TASKS_MODE=inline: verificadores reales y los 5 handlers registrados, sin arrancar bucles") {
+    test("ENV=dev + TASKS_MODE=inline: verificadores reales y los handlers de todas las tareas registrados, sin arrancar bucles") {
         val vars = devVars + ("TASKS_MODE" to "inline")
         val container = AppContainer.fromConfig(AppConfig.fromEnv(vars), vars)
         try {
@@ -39,6 +40,7 @@ class InlineWiringTest : FunSpec({
             // Cobertura: exactamente las tareas reales de /internal/tasks (el resto son stubs 501).
             background.queue.registeredPaths shouldBe setOf(
                 TwinService.BUILD_PERSONA_PATH, SimulationService.SIMULATE_PATH, AccountDeletionService.PURGE_PATH,
+                CommunityService.NAME_PATH,
                 ScenarioService.JUDGE_PATH,
                 MemoryService.TASK_PATH, ModerationService.TASK_PATH,
             )
@@ -52,7 +54,7 @@ class InlineWiringTest : FunSpec({
         }
     }
 
-    test("TASKS_MODE=inline programa los jobs memories y retention a su hora local (sin lanzar bucles)") {
+    test("TASKS_MODE=inline programa los jobs memories, retention, communities y twin-accuracy (sin lanzar bucles)") {
         val vars = devVars + ("TASKS_MODE" to "inline")
         val container = AppContainer.fromConfig(AppConfig.fromEnv(vars), vars)
         try {
@@ -64,7 +66,7 @@ class InlineWiringTest : FunSpec({
             }
             container.background.shouldNotBeNull().scheduleOn(recorder)
             recorder.close()
-            initialDelays.keys.shouldContainAll("memories", "retention", "purge-sweep", "match-sweep", "twin-accuracy")
+            initialDelays.keys.shouldContainAll("memories", "retention", "communities", "purge-sweep", "match-sweep", "twin-accuracy")
             // Cada job diario queda anclado a su hora: un cambio de reloj o de constante rompe este test.
             // El reloj es el del sistema: se tolera el segundo que pasa entre las dos lecturas.
             listOf("retention" to AppContainer.RETENTION_AT, "memories" to AppContainer.MEMORIES_AT).forEach { (job, at) ->

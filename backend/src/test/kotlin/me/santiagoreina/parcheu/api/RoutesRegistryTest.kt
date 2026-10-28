@@ -31,7 +31,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     "graph" to listOf(
         // GET /v1/connect-requests lo implementa E6.6 (ConnectRequestApiTest).
         // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest), /v1/graph/fof E6.3 (FofApiTest) y /v1/graph/history E6.5 (HistoryApiTest).
-        HttpMethod.Get to "/v1/communities",
+        // GET /v1/communities lo implementa E6.4 (CommunityApiTest); ya no queda ningún stub en graph.
     ),
     // Social: E6.1 implementa las invitaciones (InviteApiTest) y E6.2 las presentaciones (IntroductionApiTest); ya no queda ningún stub.
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
@@ -44,12 +44,12 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
 
 // `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest),
 // `/internal/tasks/purge-user`, E8.3 (AccountApiTest) y `/internal/tasks/extract-memories` y
-// `/internal/jobs/memories`, E9.2 (MemoryApiTest); `/internal/jobs/retention`, E8.8 (RetentionApiTest) y `/internal/jobs/twin-accuracy`, E9.3 (FeedbackApiTest).
-// `/internal/tasks/judge-scenario` y `/internal/jobs/scenario-sweep` los implementa E4.8 (ScenarioApiTest); `/internal/tasks/moderate`, E8.6 (ModerationServiceTest).
-private val internalRoutes = listOf(
-    "/internal/tasks/name-community",
-    "/internal/jobs/communities",
-)
+// `/internal/jobs/memories`, E9.2 (MemoryApiTest); `/internal/jobs/retention`, E8.8 (RetentionApiTest).
+// `/internal/tasks/judge-scenario` y `/internal/jobs/scenario-sweep` los implementa E4.8 (ScenarioApiTest);
+// `/internal/tasks/name-community` y `/internal/jobs/communities`, E6.4 (CommunityApiTest);
+// `/internal/tasks/moderate`, E8.6 (ModerationServiceTest) y `/internal/jobs/twin-accuracy`, E9.3 (FeedbackApiTest).
+// Ya no queda ningún stub /internal: la lista vacía se conserva por si aparece una ruta nueva.
+private val internalRoutes = emptyList<String>()
 
 class RoutesRegistryTest : FunSpec({
     fun HttpRequestBuilder.auth(token: String) = header(HttpHeaders.Authorization, "Bearer $token")

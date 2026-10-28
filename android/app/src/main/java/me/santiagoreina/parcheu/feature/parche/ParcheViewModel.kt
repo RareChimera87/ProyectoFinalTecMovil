@@ -70,7 +70,11 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
     private var loadJob: Job? = null
     private var started = false
 
-    /** Primera carga; [community] llega de D8 ("Ver en el grafo"). Repetirla no hace nada. */
+    /**
+     * Primera carga; [community] llega de D8 ("Ver en el grafo"), que abre D1 como entrada nueva (con su
+     * propio ViewModel), así que cada "Ver en el grafo" arranca filtrado. Repetir la llamada no hace nada
+     * (rotación, recomposición).
+     */
     fun start(community: String? = null) {
         if (started) return
         started = true

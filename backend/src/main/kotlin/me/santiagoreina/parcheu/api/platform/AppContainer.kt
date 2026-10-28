@@ -26,6 +26,12 @@ import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.GraphRoutes
+import me.santiagoreina.parcheu.api.graph.communities.CommunityModule
+import me.santiagoreina.parcheu.api.graph.communities.CommunityService
+import me.santiagoreina.parcheu.api.graph.communities.CommunityRoutes
+import me.santiagoreina.parcheu.api.graph.communities.ExposedCommunityRepository
+import me.santiagoreina.parcheu.api.graph.communities.communityModule
+import me.santiagoreina.parcheu.api.graph.communities.inMemoryCommunityModule
 import me.santiagoreina.parcheu.api.graph.fof.ExposedFofRepository
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
@@ -205,6 +211,11 @@ class AppContainer(
     /** Modo escenario (E4.8): acuerdo, cierre y juez sobre [chat] y [simulation]. Por defecto en memoria. */
     val scenario: ScenarioModule = inMemoryScenarioModule(clock, ai, quota, graph, chat, simulation, notifier),
     /**
+     * Comunidades (E6.4): job semanal, nombre con el modelo lite y `GET /v1/communities`. Por defecto en
+     * memoria sobre [graph]: solo [fromConfig] cablea Postgres y la cola de tareas.
+     */
+    val communities: CommunityModule = inMemoryCommunityModule(graph, ai, quota, clock, traitsOf = { twin.repository.state(it)?.traits }),
+    /**
      * Moderación con IA (E8.6, ADR-0026). Por defecto con Fake y sin engancharse al chat: solo [fromConfig]
      * la conecta con la cola `ai-light` (salvo `MODERATION_ENABLED=false`).
      */
@@ -218,7 +229,7 @@ class AppContainer(
     val domains: List<DomainRoutes> =
         allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
-            invites, billing, config.env, introductions, admin, scenario, connectRequests, moderation,
+            invites, billing, config.env, introductions, admin, communities, scenario, connectRequests, moderation,
         ),
 ) {
     companion object {
@@ -335,7 +346,13 @@ class AppContainer(
             val connectRequests = exposedConnectRequestModule(database, graph, quota, demo.enabled)
             // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.
             val billing = billingModule(config.env, database, clock, vars)
-            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account, scenario, moderation) }
+            // Comunidades (E6.4): la tarea name-community y el job semanal también corren en el homeserver.
+            val communities = communityModule(
+                ExposedCommunityRepository(database), graph, ai, quota, tasks, clock, matching.flags.demoUsersEnabled,
+            )
+            val background = inlineQueue?.let { queue ->
+                inlineBackground(queue, clock, twin, simulation, matching, account, scenario, communities, moderation)
+            }
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
@@ -344,6 +361,7 @@ class AppContainer(
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
                 billing = billing,
                 invites = invites,
+                communities = communities,
                 connectRequests = connectRequests,
                 // Sin esto el valor por defecto (en memoria, FakeTaskQueue inline) atendería las rutas y pisaría el gancho del chat.
                 scenario = scenario,
@@ -352,11 +370,12 @@ class AppContainer(
         }
 
         /**
-         * Handlers de las cinco tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
+         * Handlers de las siete tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
          * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
          * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
-         * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. `twin-accuracy` (E9.3) corre los domingos a las 23:00 de Bogotá. Communities se omite: hoy es un stub (`stubPost`) sin lógica.
+         * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. `twin-accuracy` (E9.3) corre los domingos a las 23:00 de Bogotá.
          * `judge-scenario` y `scenario-sweep` (E4.8) corren con el módulo real de escenario.
+         * `name-community` y el job `communities` (E6.4) corren con el módulo real de comunidades.
          */
         private fun inlineBackground(
             queue: InProcessTaskQueue,
@@ -366,12 +385,14 @@ class AppContainer(
             matching: MatchingModule,
             account: AccountModule,
             scenario: ScenarioModule,
+            communities: CommunityModule,
             moderation: ModerationService,
         ): BackgroundWork {
             fun id(body: String) = ContractJson.decodeFromString<TaskPayload>(body).uuid()
             queue.register(TwinService.BUILD_PERSONA_PATH) { twin.service.buildPersona(id(it)) }
             queue.register(SimulationService.SIMULATE_PATH) { simulation.engine.run(id(it)) }
             queue.register(AccountDeletionService.PURGE_PATH) { account.deletion.purge(id(it)) }
+            queue.register(CommunityService.NAME_PATH) { communities.service.nameCommunity(id(it)) }
             queue.register(ScenarioService.JUDGE_PATH) { scenario.service.judge(id(it)) }
             queue.register(MemoryService.TASK_PATH) { twin.memories.extract(id(it)) }
             queue.register(ModerationService.TASK_PATH) { moderation.moderate(id(it)) }
@@ -379,6 +400,8 @@ class AppContainer(
                 scheduler.every("match-sweep", Duration.ofSeconds(60)) { matching.service.sweep() }
                 scheduler.every("scenario-sweep", Duration.ofSeconds(60), Duration.ofSeconds(20)) { scenario.service.sweep() }
                 scheduler.every("purge-sweep", Duration.ofHours(1), Duration.ofMinutes(2)) { account.deletion.sweepStalled() }
+                // Comunidades (E6.4): revisa cada hora y corre una vez por semana desde el lunes 03:00 de Bogotá.
+                scheduler.every("communities", Duration.ofHours(1), Duration.ofMinutes(3)) { communities.service.runIfDue() }
                 scheduler.every("simulation-recovery", Duration.ofMinutes(15), Duration.ofSeconds(30)) {
                     simulation.service.requeueUnfinished()
                 }
@@ -447,6 +470,9 @@ fun allDomains(
     introductions: IntroductionModule =
         introductionModule(InMemoryIntroductionRepository(), simulation, graph, chat, quota, NoopNotifier, systemClock()),
     admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, systemClock()),
+    communities: CommunityModule = inMemoryCommunityModule(
+        graph, AppContainer.localAiGateway(systemClock()), quota, systemClock(), traitsOf = { twin.repository.state(it)?.traits },
+    ),
     scenario: ScenarioModule = inMemoryScenarioModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph, chat, simulation, NoopNotifier),
     connectRequests: ConnectRequestModule = inMemoryConnectRequestModule(simulation, graph, quota),
     moderation: ModerationService =
@@ -466,6 +492,8 @@ fun allDomains(
     ) { firebase ->
         identity.requireUser(firebase).id
     },
+    // Comunidades semanales (E6.4).
+    CommunityRoutes(communities) { firebase -> identity.requireUser(firebase).id },
     SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },
     // Quién quiere conectar contigo (E6.6).
     ConnectRequestRoutes(connectRequests.service) { firebase -> identity.requireUser(firebase).id },

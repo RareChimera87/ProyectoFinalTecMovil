@@ -1019,6 +1019,14 @@ Todo el código quedó hecho y probado en local: el recorrido (`backend/src/e2eT
 
 Para correrlo a mano contra dev con tu propio `gcloud`: ver "Smoke e2e (E10.6)" en `docs/desarrollo-local.md`.
 
+## E6.4 · Comunidades
+
+Todo el código corre sin infraestructura nueva de GCP (el homeserver usa la cola y el programador en proceso). Solo queda, cuando se despliegue en la nube:
+
+- [ ] **Cloud Scheduler** (solo en la nube, no en el homeserver): crear el job `communities` con cron `0 3 * * 1` (zona `America/Bogota`) que haga `POST /internal/jobs/communities` con OIDC de `sa-tasks`. En el homeserver (`TASKS_MODE=inline`) ya lo cubre `InProcessScheduler`, que revisa cada hora y corre una vez por semana desde el lunes 03:00 de Bogotá.
+- [ ] **Cloud Tasks**: confirmar que la cola `ai-light` ya enruta `/internal/tasks/name-community` (ya estaba declarada en arquitectura.md §9; sin cambios de Terraform en este PR).
+- [ ] Probar en dev con datos reales: `POST /internal/jobs/communities` (token OIDC) y luego `GET /v1/communities` con una cuenta ParcheU+ que tenga al menos 3 conexiones mutuas entre sí; el nombre lo pone el modelo lite en segundo plano (mientras tanto se ve "Comunidad nueva").
+
 ## E4.8 · Modo escenario
 
 Lo automatizable ya quedó hecho: acuerdo de los dos (`POST /v1/scenario-sessions/{chatId}/agreement`), estado y tarjeta de F3 (`GET .../{chatId}`), cierre atómico por acuerdo o por `ends_at`, tarea `judge-scenario` registrada en `InProcessTaskQueue` (homeserver) y en `/internal/tasks/judge-scenario`, job `scenario-sweep` en `InProcessScheduler`, escritura de `chats/{id}` en Firestore al crear el chat SCENARIO (cierra el paso 4 de E4.2), `MatchDto.chatId`, pantalla F3 con temporizador, presupuesto y acuerdo, y `SCENARIO_MODE_ENABLED` encendida por defecto fuera de prod. No hay migraciones.

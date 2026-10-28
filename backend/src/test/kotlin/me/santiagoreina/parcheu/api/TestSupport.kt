@@ -28,6 +28,8 @@ import me.santiagoreina.parcheu.api.social.requests.inMemoryConnectRequestModule
 import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
+import me.santiagoreina.parcheu.api.graph.communities.CommunityModule
+import me.santiagoreina.parcheu.api.graph.communities.inMemoryCommunityModule
 import me.santiagoreina.parcheu.api.home.UnreadCounter
 import me.santiagoreina.parcheu.api.notifications.center.NotificationCenterModule
 import me.santiagoreina.parcheu.api.notifications.center.inMemoryNotificationCenter
@@ -110,6 +112,8 @@ fun testContainer(
     billing: BillingModule = inMemoryBillingModule(clock),
     // Administración de reportes (E8.5): por defecto lee el repositorio de safety en memoria y suspende en [repo].
     admin: AdminModule = inMemoryAdminModule(repo, chat, safety, clock),
+    // Comunidades (E6.4): por defecto sobre el grafo en memoria y los rasgos del gemelo en memoria.
+    communities: CommunityModule = inMemoryCommunityModule(graph, ai, quota, clock, traitsOf = { twin.repository.state(it)?.traits }),
     // Moderación con IA (E8.6): por defecto con la misma pasarela [ai] y sin engancharse al chat.
     moderation: ModerationService = moderationService(ai, chat, safety, FakeTaskQueue(), clock, notifier),
     // Modo escenario (E4.8): ScenarioApiTest pasa uno con su propia cola y reloj.
@@ -144,12 +148,13 @@ fun testContainer(
         unread = unread,
         billing = billing,
         invites = invites,
+        communities = communities,
         connectRequests = connectRequests,
         moderation = moderation,
         scenario = scenario,
         domains = allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
-            invites, billing, config.env, introductions, admin, scenario, connectRequests, moderation,
+            invites, billing, config.env, introductions, admin, communities, scenario, connectRequests, moderation,
         ) + extra,
     )
 }

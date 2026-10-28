@@ -32,6 +32,13 @@ class InMemoryGraphRepository : GraphRepository {
         edges[Key(low, high, mode)] = EdgeSnapshot(state, affinity, null, at, if (state == EdgeState.CONNECTED) at else null)
     }
 
+    /** Una arista guardada con sus extremos ordenados (`low < high`), para lecturas globales como las de comunidades (E6.4). */
+    data class StoredEdge(val low: UUID, val high: UUID, val mode: Mode, val state: EdgeState, val affinity: Int?)
+
+    fun allEdges(): List<StoredEdge> = synchronized(lock) {
+        edges.map { (key, edge) -> StoredEdge(key.low, key.high, key.mode, edge.state, edge.affinity) }
+    }
+
     fun edge(a: UUID, b: UUID, mode: Mode): EdgeSnapshot? = synchronized(lock) {
         val (low, high) = ordered(a, b)
         edges[Key(low, high, mode)]

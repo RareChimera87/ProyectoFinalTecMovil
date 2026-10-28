@@ -154,6 +154,20 @@ class ParcheViewModelTest {
     }
 
     @Test
+    fun startTwiceDoesNotReloadNorReapplyCommunity() {
+        val fake = repo(ApiResult.Success(ParcheSamples.content))
+        val vm = ParcheViewModel(fake)
+        vm.start(community = "c1")
+        assertEquals("c1", loaded(vm).filters.communityId)
+
+        // Rotación o recomposición: no vuelve a filtrar tras quitar la comunidad.
+        vm.onClearCommunity()
+        vm.start(community = "c1")
+        assertEquals(listOf<String?>("c1", null), fake.graphCalls)
+        assertNull(loaded(vm).filters.communityId)
+    }
+
+    @Test
     fun tappingNodeOpensSheetWithDetail() {
         val vm = ParcheViewModel(repo(ApiResult.Success(ParcheSamples.content)))
         vm.start()
