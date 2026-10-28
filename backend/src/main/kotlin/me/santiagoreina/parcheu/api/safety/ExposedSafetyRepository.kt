@@ -46,11 +46,12 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
             ?.toPerson()
     }
 
-    override suspend fun block(blocker: UUID, blocked: UUID, now: Instant): Boolean = tx {
+    override suspend fun block(blocker: UUID, blocked: UUID, now: Instant, wasConnected: Boolean): Boolean = tx {
         Blocks.insertIgnore {
             it[blockerId] = blocker
             it[blockedId] = blocked
             it[createdAt] = now.odt()
+            it[Blocks.wasConnected] = wasConnected
         }.insertedCount == 1
     }
 
@@ -64,7 +65,7 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
             .selectAll()
             .where { (Blocks.blockerId eq blocker) and Users.deletedAt.isNull() }
             .orderBy(Blocks.createdAt to SortOrder.DESC)
-            .map { BlockRow(it.toPerson(), it[Blocks.createdAt].toInstant()) }
+            .map { BlockRow(it.toPerson(), it[Blocks.createdAt].toInstant(), it[Blocks.wasConnected]) }
     }
 
     override suspend fun recentMessages(chatId: UUID, limit: Int): List<SnapshotMessage> = tx {

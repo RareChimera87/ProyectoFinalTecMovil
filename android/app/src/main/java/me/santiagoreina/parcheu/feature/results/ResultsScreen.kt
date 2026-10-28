@@ -442,12 +442,10 @@ private fun TranscriptScreen(
                             if (mine) Arrangement.End else Arrangement.Start,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // E8.7: cada turno se puede reportar como contenido de la IA.
-                            if (mine) {
-                                ReportAiContentAction(
-                                    onClick = { actions.onReportAi(thisTurn) },
-                                    modifier = Modifier.size(36.dp)
-                                )
+                            // E8.7: cada turno se puede reportar como contenido de la IA, salvo en
+                            // evaluaciones de escenario (E4.8): ahí los turnos son de personas.
+                            if (mine && !content.fromScenario) {
+                                ReportAiContentAction(onClick = { actions.onReportAi(thisTurn) })
                             }
                             Text(
                                 turn.text,
@@ -458,11 +456,8 @@ private fun TranscriptScreen(
                                     .background(if (mine) colors.prc else colors.s1)
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
-                            if (!mine) {
-                                ReportAiContentAction(
-                                    onClick = { actions.onReportAi(thisTurn) },
-                                    modifier = Modifier.size(36.dp)
-                                )
+                            if (!mine && !content.fromScenario) {
+                                ReportAiContentAction(onClick = { actions.onReportAi(thisTurn) })
                             }
                         }
                     }

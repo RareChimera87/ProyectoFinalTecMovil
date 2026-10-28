@@ -146,7 +146,10 @@ class SafetyService(
     suspend fun block(blocker: UUID, rawTarget: String) {
         val target = resolveTarget(blocker, rawTarget, chatId = null)
         if (target == blocker) throw ValidationFailed("No puedes bloquearte a ti mismo")
-        val inserted = repo.block(blocker, target, clock.instant())
+        // La conexión se borra al bloquear; se guarda si existía para seguir mostrando el nombre
+        // en 'Personas bloqueadas': quien bloquea ya la conocía (E8.7).
+        val wasConnected = target in graph.connectedWith(blocker)
+        val inserted = repo.block(blocker, target, clock.instant(), wasConnected)
 
         // Bloquear termina la conexión: desbloquear después no la restaura (E8.7).
         graph.removeConnections(blocker, target)
@@ -191,7 +194,7 @@ class SafetyService(
     private suspend fun presentedBlocks(viewer: UUID): List<Pair<UUID, BlockedDto>> {
         val connected = graph.connectedWith(viewer)
         return repo.blocksOf(viewer).map { row ->
-            val view = policy.present(viewer, row.blocked, connected = row.blocked.id in connected, context = ViewContext.EGO)
+            val view = policy.present(viewer, row.blocked, connected = row.wasConnected || row.blocked.id in connected, context = ViewContext.EGO)
             row.blocked.id to BlockedDto(
                 userId = view.id,
                 label = view.label,

@@ -14,6 +14,8 @@ import java.util.UUID
 data class BlockRow(
     val blocked: PersonRow,
     val createdAt: Instant,
+    /** Había conexión mutua al bloquear: quien bloquea ya la conocía por nombre (E8.7). */
+    val wasConnected: Boolean = false,
 )
 
 /** Mensaje copiado a `reports.snapshot` (dato personal: lo limpian E8.3 y E8.8). */

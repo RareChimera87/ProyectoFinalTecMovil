@@ -20,11 +20,11 @@ import kotlin.coroutines.CoroutineContext
  * Sustituto de Cloud Scheduler en el homeserver (`TASKS_MODE=inline`, ADR-0033): un bucle por job.
  * Un fallo se registra y el siguiente ciclo reintenta; nunca tumba el proceso.
  */
-class InProcessScheduler(context: CoroutineContext = Dispatchers.IO) : AutoCloseable {
+open class InProcessScheduler(context: CoroutineContext = Dispatchers.IO) : AutoCloseable {
     private val log = LoggerFactory.getLogger(InProcessScheduler::class.java)
     private val scope = CoroutineScope(SupervisorJob() + context)
 
-    fun every(name: String, period: Duration, initialDelay: Duration = Duration.ZERO, block: suspend () -> Unit) {
+    open fun every(name: String, period: Duration, initialDelay: Duration = Duration.ZERO, block: suspend () -> Unit) {
         scope.launch {
             delay(initialDelay.toMillis())
             while (true) {

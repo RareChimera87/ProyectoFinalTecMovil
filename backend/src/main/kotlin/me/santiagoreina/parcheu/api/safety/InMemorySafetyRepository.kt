@@ -20,7 +20,7 @@ class InMemorySafetyRepository(
     private val reportText: suspend (UUID) -> String? = { null },
 ) : SafetyRepository {
     private val lock = Any()
-    private val blocks = LinkedHashMap<Pair<UUID, UUID>, Instant>()
+    private val blocks = LinkedHashMap<Pair<UUID, UUID>, Pair<Instant, Boolean>>()
     private val reports = mutableListOf<NewReport>()
     private val blockListeners = mutableListOf<(UUID, UUID) -> Unit>()
     private val unblockListeners = mutableListOf<(UUID, UUID) -> Unit>()
@@ -37,10 +37,10 @@ class InMemorySafetyRepository(
 
     override suspend fun person(userId: UUID): PersonRow? = people(userId)
 
-    override suspend fun block(blocker: UUID, blocked: UUID, now: Instant): Boolean {
+    override suspend fun block(blocker: UUID, blocked: UUID, now: Instant, wasConnected: Boolean): Boolean {
         val listeners = synchronized(lock) {
             if (blocks.containsKey(blocker to blocked)) return false
-            blocks[blocker to blocked] = now
+            blocks[blocker to blocked] = now to wasConnected
             blockListeners.toList()
         }
         listeners.forEach { it(blocker, blocked) }
@@ -58,7 +58,7 @@ class InMemorySafetyRepository(
 
     override suspend fun blocksOf(blocker: UUID): List<BlockRow> {
         val own = synchronized(lock) { blocks.filterKeys { it.first == blocker }.toList() }
-        return own.mapNotNull { (pair, at) -> people(pair.second)?.takeIf { it.deletedAt == null }?.let { BlockRow(it, at) } }
+        return own.mapNotNull { (pair, meta) -> people(pair.second)?.takeIf { it.deletedAt == null }?.let { BlockRow(it, meta.first, meta.second) } }
             .sortedByDescending { it.createdAt }
     }
 

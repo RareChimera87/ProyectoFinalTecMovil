@@ -182,15 +182,43 @@ class SafetyEntryPointsTest {
         assertEquals("Alguien", reported.single().second)
     }
 
-    private fun results(transcript: TranscriptState? = null) = ResultsContent(
-        otherLabel = "Alguien de la UIS",
-        mode = Mode.ESTUDIO,
-        isDemo = false,
-        plus = true,
-        report = fullReport(),
-        decision = DecisionState.PENDING,
-        transcript = transcript
-    )
+    private fun results(transcript: TranscriptState? = null, fromScenario: Boolean = false) =
+        ResultsContent(
+            otherLabel = "Alguien de la UIS",
+            mode = Mode.ESTUDIO,
+            isDemo = false,
+            plus = true,
+            report = fullReport(),
+            decision = DecisionState.PENDING,
+            transcript = transcript,
+            fromScenario = fromScenario
+        )
+
+    @Test
+    fun scenarioTranscriptTurnsAreNotReportableAsAiContent() {
+        val transcript = TranscriptState.Loaded(
+            TranscriptDto(
+                listOf(
+                    ScenarioTranscript(
+                        "Café",
+                        listOf(Turn(Speaker.ME, "Hola"), Turn(Speaker.OTHER, "¿Qué tal?"))
+                    )
+                )
+            )
+        )
+        composeRule.setContent {
+            ParcheUTheme {
+                ResultsScreen(
+                    ResultsUiState.Loaded(results(transcript, fromScenario = true)),
+                    ResultsActions()
+                )
+            }
+        }
+        // Los turnos son mensajes de personas: no hay "Reportar contenido de la IA" en la transcripción.
+        composeRule.onAllNodesWithContentDescription(
+            REPORT_AI_CONTENT_DESCRIPTION
+        ).assertCountEquals(0)
+    }
 
     @Test
     fun f8FullReportHasReportAiContent() {

@@ -18,6 +18,7 @@ import me.santiagoreina.parcheu.contract.DecisionStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.ReportDto
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.TranscriptDto
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
@@ -73,7 +74,9 @@ data class ResultsContent(
     val busy: Busy? = null,
     val notice: ResultsNotice? = null,
     /** No nulo mientras se muestra la conversación de los gemelos. */
-    val transcript: TranscriptState? = null
+    val transcript: TranscriptState? = null,
+    /** Evaluación de un chat de escenario (E4.8): los turnos los escribieron personas, no la IA. */
+    val fromScenario: Boolean = false
 ) {
     /** F8 (completo) o F7 (bloqueado). */
     val full: Boolean get() = !report.locked
@@ -152,7 +155,8 @@ class ResultsViewModel(
                     decision = decisionOf(dto),
                     chatId = dto.chatId,
                     usedMonth = months?.first,
-                    resetMonth = months?.second
+                    resetMonth = months?.second,
+                    fromScenario = summary.origin == SimulationOrigin.SCENARIO
                 )
             )
         }
