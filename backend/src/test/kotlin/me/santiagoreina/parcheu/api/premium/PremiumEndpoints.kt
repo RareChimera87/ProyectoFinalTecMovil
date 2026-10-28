@@ -101,6 +101,8 @@ object PremiumEndpoints {
             hides = setOf("[escenarios premium]"),
             freeGets = "simulación solo con escenarios básicos del modo",
         ) {
+            // caro es ParcheU+ en los dos mundos: con ana gratis, el plan que cuenta es el de ana, no el de él.
+            world.sim.plus(world.id("caro"))
             // Cuatro simulaciones (gratis tiene 5 por semana y ya gastó una con fran). Con ParcheU+ el pool
             // tiene 3 básicos y 14 premium: que las cuatro salgan solo con básicos es ~1e-11.
             val used = listOf("caro", "dani", "eva", "gabi").flatMap { other ->
@@ -181,7 +183,8 @@ object PremiumEndpoints {
             hides = setOf("[escenario premium en el chat]"),
             freeGets = "chat SCENARIO con un escenario básico (premium solo si los dos son ParcheU+)",
         ) {
-            if (world.plus) world.sim.plus(world.id("ivan"))
+            // ivan siempre es ParcheU+: con ana gratis el chat no puede ser premium (cuenta el plan de ambos).
+            world.sim.plus(world.id("ivan"))
             suspend fun enqueue(uid: String) = client.post("/v1/match/queue") {
                 auth(uid)
                 contentType(ContentType.Application.Json)
