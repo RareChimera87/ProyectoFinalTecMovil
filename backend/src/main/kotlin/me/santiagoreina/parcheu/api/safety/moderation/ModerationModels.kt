@@ -37,7 +37,7 @@ data class ModerationFinding(val category: ModerationCategory, val severity: Mod
 
 /** Qué hizo [ModerationService.moderate] con un mensaje; las pruebas y el log lo usan. */
 enum class ModerationOutcome {
-    /** El mensaje no existe, es del sistema o ya estaba oculto. */
+    /** El mensaje no existe, es del sistema o ya tiene reporte AUTO (reintento: se repite lo que faltó sin llamar al LLM). */
     SKIPPED,
 
     /** Sin hallazgos de severidad alta. */

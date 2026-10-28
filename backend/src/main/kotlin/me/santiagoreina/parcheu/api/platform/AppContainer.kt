@@ -397,6 +397,7 @@ class AppContainer(
             queue.register(ScenarioService.JUDGE_PATH) { scenario.service.judge(id(it)) }
             queue.register(MemoryService.TASK_PATH) { twin.memories.extract(id(it)) }
             queue.register(ModerationService.TASK_PATH) { moderation.moderate(id(it)) }
+            queue.register(ModerationService.HELP_TASK_PATH) { moderation.deliverHelp(id(it)) }
             return BackgroundWork(queue, InProcessScheduler()) { scheduler ->
                 scheduler.every("match-sweep", Duration.ofSeconds(60)) { matching.service.sweep() }
                 scheduler.every("scenario-sweep", Duration.ofSeconds(60), Duration.ofSeconds(20)) { scenario.service.sweep() }

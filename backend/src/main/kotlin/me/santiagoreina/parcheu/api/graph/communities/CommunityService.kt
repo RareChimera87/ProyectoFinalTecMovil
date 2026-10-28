@@ -57,9 +57,15 @@ class CommunityService(
         val now = ZonedDateTime.now(clock.withZone(BogotaZone))
         val week = now.toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         if (now.toLocalDateTime().isBefore(week.atTime(RUN_AT))) return false
-        if (lastRunWeek.get() == week) return false
+        // Salidas tempranas: si el proceso se reinició o name-community agotó intentos tras runWeekly, las comunidades que
+        // siguen sin nombre se reencolan (dedup de 1 h en la tarea; nameCommunity es idempotente).
+        if (lastRunWeek.get() == week) {
+            requeuePendingNames()
+            return false
+        }
         if (repo.all().any { it.week >= week }) {
             lastRunWeek.set(week)
+            requeuePendingNames()
             return false
         }
         runWeekly()
@@ -79,6 +85,10 @@ class CommunityService(
             .filter { it.a.id in members && it.b.id in members }
             .map { it.mode }
         return CommunityProfile.of(members.size, repo.traitsOf(members), modes)
+    }
+
+    private suspend fun requeuePendingNames() {
+        repo.all().filter { it.name == CommunityDetector.PENDING_NAME }.forEach { enqueueName(it.id) }
     }
 
     private suspend fun enqueueName(id: UUID) {

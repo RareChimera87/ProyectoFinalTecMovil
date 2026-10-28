@@ -42,7 +42,7 @@ class InlineWiringTest : FunSpec({
                 TwinService.BUILD_PERSONA_PATH, SimulationService.SIMULATE_PATH, AccountDeletionService.PURGE_PATH,
                 CommunityService.NAME_PATH,
                 ScenarioService.JUDGE_PATH,
-                MemoryService.TASK_PATH, ModerationService.TASK_PATH,
+                MemoryService.TASK_PATH, ModerationService.TASK_PATH, ModerationService.HELP_TASK_PATH,
             )
             // E4.8: rutas, gancho del chat y juez comparten el módulo real, que encola en la cola en proceso
             // (no en la FakeTaskQueue del valor por defecto, que ejecutaría el juez dentro de la petición HTTP).

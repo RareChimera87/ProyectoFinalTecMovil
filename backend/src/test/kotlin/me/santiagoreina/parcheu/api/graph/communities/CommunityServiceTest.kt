@@ -136,4 +136,21 @@ class CommunityServiceTest : FunSpec({
         service(at(28, 12, 0)).runIfDue() shouldBe false // otro proceso: ya hay filas de la semana
         repo.all().single().week shouldBe LocalDate.parse("2026-10-26")
     }
+
+    test("runIfDue reencola las comunidades sin nombre en la salida temprana (reinicio o name-community agotado)") {
+        val f = Fixture()
+        f.graph.group(1, 3).also { f.graph.clique(it) }
+        f.service.runWeekly()
+        f.queue.tasks shouldHaveSize 1
+        val id = f.repo.all().single().id
+        // Simula la pérdida de la cola: un proceso nuevo ve las filas de la semana y reencola el nombre pendiente.
+        val queue2 = FakeTaskQueue()
+        CommunityService(f.repo, queue2, CommunityNamer(testGateway(f.llm)), FIXED_CLOCK).runIfDue() shouldBe false
+        queue2.tasks.single().name shouldBe CommunityService.nameTask(id).name
+        // Ya nombrada, no hay nada que reencolar.
+        f.service.nameCommunity(id)
+        val queue3 = FakeTaskQueue()
+        CommunityService(f.repo, queue3, CommunityNamer(testGateway(f.llm)), FIXED_CLOCK).runIfDue() shouldBe false
+        queue3.tasks shouldHaveSize 0
+    }
 })

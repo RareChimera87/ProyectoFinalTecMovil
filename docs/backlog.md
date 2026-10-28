@@ -1268,12 +1268,12 @@ Reportar y bloquear desde todas partes (incluido contenido de IA), ajustes de pr
 - **Pantallas del inventario:** -
 - **Archivos y módulos:** backend/.../safety/moderation/**
 
-**Descripción.** Moderación asíncrona por la cola `ai-light` con el modelo lite: categorías acoso, sexual, odio, amenaza, autolesión, spam, datos personales y posible menor. Severidad alta → mensaje oculto (Postgres y Firestore) y reporte automático. Autolesión → mensaje del sistema al autor con recursos de ayuda. 'Posible menor' → reporte automático de prioridad alta (la app es 18+; un admin decide si suspende). Decisión fail-open en ADR-0026. Si el LLM falla, el mensaje queda visible y se registra (fail-open). Recortable si el presupuesto de IA se aprieta (no es una de las 17 funciones).
+**Descripción.** Moderación asíncrona por la cola `ai-light` con el modelo lite: categorías acoso, sexual, odio, amenaza, autolesión, spam, datos personales y posible menor. Severidad alta → mensaje oculto (Postgres y Firestore) y reporte automático. Autolesión → aviso de la cuenta (centro de notificaciones C2 + push) solo al autor con recursos de ayuda; no entra al chat (ADR-0026). 'Posible menor' → reporte automático de prioridad alta (la app es 18+; un admin decide si suspende). Decisión fail-open en ADR-0026. Si el LLM falla, el mensaje queda visible y se registra (fail-open). Recortable si el presupuesto de IA se aprieta (no es una de las 17 funciones).
 
 **Criterios de aceptación (verificables):**
 
 - [ ] Test con FakeLlm: severidad alta oculta el mensaje y crea un reporte AUTO.
-- [ ] Test: autolesión inserta el mensaje de recursos; severidad baja no hace nada.
+- [ ] Test: autolesión avisa solo al autor con los recursos (aviso ACCOUNT + push); severidad baja no hace nada.
 - [ ] Test: error del LLM → mensaje visible y log `moderation_failed`.
 
 #### E8.7 · Reportar y bloquear desde todas partes
