@@ -683,7 +683,7 @@ La tabla vive en `android/.../push/DeepLinks.kt` (con su test de casos) y la usa
 | Términos y política | Aceptación expresa en A4 tras el login (`POST /v1/me/terms`), versionada en `consents` (TERMS y PRIVACY); sin ella la API responde 403 `TERMS_REQUIRED` (Ley 1581: autorización previa, expresa e informada) |
 | Memorias por modo | Las memorias solo entran a simulaciones de su mismo modo; nunca a la persona general; propiedad en la suite E3.5 (ADR-0032) |
 | Modos por defecto | Todos apagados |
-| Premium | El servidor omite los datos premium para gratis; auditoría E7.4 |
+| Premium | El servidor omite los datos premium para gratis; auditoría E7.4: cada función de servicio que decide un dato premium lleva `@Premium("MÉTODO /ruta")` (`platform/Premium.kt`) y su entrada en `PremiumEndpoints` (`backend/src/test/.../premium/`), con una sonda que compara gratis y ParcheU+ en un mundo con contenido en todas las superficies; `PremiumEndpointsRegistryTest` falla si una función marcada no está en la lista, y `SafetyNeverPaywalledTest` comprueba que reportar y bloquear con todos los cupos agotados nunca da 402 |
 | Consentimiento | Tabla `consents` que solo agrega filas, por modo y con versión del texto; `learnable` fijado al escribir; la extracción exige también consentimiento vigente; revocar borra memorias PENDING del modo |
 | Bloqueo | Inmediato y transversal (grafo, fof, fila, chat, presentaciones); reportar y bloquear nunca devuelven 402 |
 | Reportar y bloquear | Desde F9, F3 (E8.1) y D2, F2, C5, E3, D6 y F8 (E8.7); reportes de **contenido generado por IA** (`kind=AI_CONTENT`) desde F8 y C4; lista de bloqueados con desbloquear; 'Silenciar' en H1 |
