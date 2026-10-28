@@ -7,7 +7,7 @@ El workflow `review-counter` (E0.6) actualiza el contador de abajo.
 ## Contador de features pequeñas
 
 - Features pequeñas (no major) mezcladas desde la última revisión: 0
-- Última revisión de 3 features pequeñas: 2026-10-27 (E4.8, E6.5 y E6.6, ola 11)
+- Última revisión de 3 features pequeñas: 2026-10-28 (E10.7, ola 13)
 
 ## Registro
 
@@ -29,3 +29,4 @@ El workflow `review-counter` (E0.6) actualiza el contador de abajo.
 | Hallazgos bajos acumulados (E6.1, E6.2, E6.3, E6.4, E7.1, E8.6) | 3 pequeñas | 2026-10-28 | agente | Corrección de bajos pendientes de revisiones previas. Corregidos: E8.6 SELF_HARM sin reporte (si el aviso falla se encola `moderate-help`, sin LLM, en vez de re-llamar al modelo), ficha E8.6 y KDoc SKIPPED, E6.4 reencola comunidades PENDING_NAME en la salida temprana de `runIfDue`. Los demás ya estaban corregidos en dev o quedan pendientes (ver PR). | fix/hallazgos-bajos |
 
 Tipos: `post-merge major`, `3 pequeñas`, `cierre de épica`.
+| E10.7 Documentación final (#96, 862e82b), ola 13; interacción con el despliegue en homeserver (#76), E8.6, E6.2 y E7.4 | 3 pequeñas (lote de 1) | 2026-10-28 | agente (opus) | 6 hallazgos (0 altos, 1 medio, 5 bajos). Medio: operacion.md manda cambiar `AI_MODEL_*`, `DEMO_USERS_ENABLED`, `SCENARIO_MODE_ENABLED` y `MODERATION_ENABLED` en `~/parcheu/.env`, pero `deploy/homelab/compose.yaml` no los pasaba al contenedor (sin `env_file`) y el cambio se ignoraba en silencio. Bajos: (1) la restauración 'con la base vacía' no decía cómo vaciarla ni que hay que parar la API; `down -v && up -d` corre Flyway antes y `psql` sin `ON_ERROR_STOP` deja una restauración parcial; (2) sustentacion.md §7 decía que las presentaciones usan `chargeQuota=false` y `IntroductionService` cobra cupo; (3) docs-ci solo corría con cambios en docs/ y no es obligatorio, así que los enlaces a deploy/, scripts/ o capturas se rompían sin aviso, y faltaba `check-mermaid.sh` en `paths`; (4) el runbook de reinicio omitía que `moderate` y `moderate-help` (ayuda SELF_HARM) se pierden sin barrido; (5) el guion mandaba decir 'backend en GCP' y contradecía §8. Verificados: check-links (233 enlaces), check-adr (33 ADR), pruebas de ambos, anclas de la demo de mutación y docs-ci en CI con Mermaid renderizado. Corregidos los 6 (compose y `.env.example` pasan las variables; docs y docs-ci ampliados); pendiente de código el barrido de moderación. | fix/revision-ola-13-0 |
