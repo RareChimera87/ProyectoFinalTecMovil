@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.PersonView
 import me.santiagoreina.parcheu.api.graph.ThirdPartyView
 import me.santiagoreina.parcheu.api.graph.ViewContext
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.simulation.SimulationScoring
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.FofCandidate
@@ -102,6 +103,7 @@ class FofService(
     }
 
     /** `FofDto`: `count` para todos; `items` (los primeros [MAX_ITEMS]) solo con ParcheU+. */
+    @Premium("GET /v1/graph/fof")
     suspend fun fof(viewer: UUID): FofDto {
         val all = candidates(viewer)
         if (!isPlus(viewer)) return FofDto(count = all.size)

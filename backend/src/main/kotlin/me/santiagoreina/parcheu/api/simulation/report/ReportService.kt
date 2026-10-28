@@ -5,6 +5,7 @@ import me.santiagoreina.parcheu.api.demo.DemoConnectPolicy
 import me.santiagoreina.parcheu.api.graph.EdgeEvent
 import me.santiagoreina.parcheu.api.graph.EdgeService
 import me.santiagoreina.parcheu.api.graph.EdgeSource
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.platform.errors.Blocked
 import me.santiagoreina.parcheu.api.platform.errors.Conflict
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
@@ -64,6 +65,7 @@ class ReportService(
      * quien presentó (E2), con la misma regla del informe mensual y sin campos de decisión; para las
      * personas presentadas es 404 (ver [Access.REPORT]).
      */
+    @Premium("GET /v1/simulations/{id}/report")
     suspend fun report(viewer: UUID, id: String): ReportDto {
         val record = finished(viewer, id, Access.REPORT)
         return build(viewer, record, checkNotNull(record.report))
@@ -75,6 +77,7 @@ class ReportService(
      * propuesta ya le llegó a [viewer]. Las personas presentadas no lo desbloquean (`unlockAvailable = false`):
      * por `/v1/simulations` la presentación no existe para ellas.
      */
+    @Premium("GET /v1/introductions/{id}")
     suspend fun introductionReport(viewer: UUID, simulationId: UUID): ReportDto {
         val record = finished(viewer, simulationId.toString(), Access.INTRODUCTION)
         val dto = build(viewer, record, checkNotNull(record.report))

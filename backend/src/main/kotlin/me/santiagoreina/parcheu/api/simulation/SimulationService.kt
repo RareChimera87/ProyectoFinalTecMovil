@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.simulation
 
 import kotlinx.coroutines.CancellationException
 import me.santiagoreina.parcheu.api.ai.AiGateway
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.platform.errors.AgeRequired
 import me.santiagoreina.parcheu.api.platform.errors.Blocked
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
@@ -54,6 +55,7 @@ class SimulationService(
      * comprueba el presupuesto de IA (503 `AI_BUDGET` **sin** cobrar), cobra el cupo con
      * `ref_id = id de la simulación` y encola `simulate`.
      */
+    @Premium("POST /v1/simulations")
     suspend fun start(requester: UUID, body: StartSimulation): SimulationSummary {
         val other = runCatching { UUID.fromString(body.otherUserId.trim()) }.getOrNull()
             ?: throw ValidationFailed("otherUserId debe ser el id de una persona de tu parche")
@@ -168,6 +170,7 @@ class SimulationService(
      * `GET /v1/simulations/{id}/transcript`: turnos como ME/OTHER desde quien consulta. Solo con
      * ParcheU+ o con el informe de esta simulación desbloqueado (E4.6); si no, 402 PLUS_REQUIRED.
      */
+    @Premium("GET /v1/simulations/{id}/transcript")
     suspend fun transcript(viewer: UUID, id: String): TranscriptDto {
         val record = visible(viewer, id)
         if (!fullAccess.hasFullAccess(viewer, record.id)) throw PlusRequired("La transcripción completa es de ParcheU+ o del informe desbloqueado")

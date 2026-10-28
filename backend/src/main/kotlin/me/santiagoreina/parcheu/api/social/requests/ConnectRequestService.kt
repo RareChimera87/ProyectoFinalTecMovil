@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.PersonView
 import me.santiagoreina.parcheu.api.graph.ThirdPartyView
 import me.santiagoreina.parcheu.api.graph.ViewContext
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.contract.ConnectRequest
 import me.santiagoreina.parcheu.contract.ConnectRequestsDto
 import me.santiagoreina.parcheu.contract.EdgeState
@@ -64,6 +65,7 @@ class ConnectRequestService(
             }
     }
 
+    @Premium("GET /v1/connect-requests")
     suspend fun requests(viewer: UUID): ConnectRequestsDto {
         val list = candidates(viewer)
         if (!isPlus(viewer)) return ConnectRequestsDto(count = list.size)

@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.identity.deletion.ClosedMatch
 import me.santiagoreina.parcheu.api.identity.profile.AgeRules
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.platform.errors.AgeRequired
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
 import me.santiagoreina.parcheu.api.platform.errors.Conflict
@@ -67,6 +68,7 @@ class MatchingService(
     // ---- Fila -------------------------------------------------------------------------------
 
     /** `POST /v1/match/queue`. */
+    @Premium("POST /v1/match/queue")
     suspend fun enqueue(userId: UUID, mode: Mode): TicketDto {
         val person = repo.person(userId)?.takeIf { !it.deleted } ?: throw NotFound("Usuario no encontrado")
         validateCanQueue(person, mode)
@@ -305,6 +307,7 @@ class MatchingService(
      * misma transacción: si alguno falla el match queda EXPIRED, se devuelve el cupo a las dos personas
      * (siguen disponibles para buscar otro parche) y se les avisa.
      */
+    @Premium("POST /v1/matches/{id}/choice")
     private suspend fun createScenarioChat(match: MatchRecord) {
         val outcome = try {
             repo.createScenarioChat(match.id, clock.instant(), allowPremium = quota.isPlus(match.userA) && quota.isPlus(match.userB))
