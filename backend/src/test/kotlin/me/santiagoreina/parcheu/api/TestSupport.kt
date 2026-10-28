@@ -109,7 +109,7 @@ fun testContainer(
     // Administración de reportes (E8.5): por defecto lee el repositorio de safety en memoria y suspende en [repo].
     admin: AdminModule = inMemoryAdminModule(repo, chat, safety, clock),
     // Moderación con IA (E8.6): por defecto con la misma pasarela [ai] y sin engancharse al chat.
-    moderation: ModerationService = moderationService(ai, chat, safety, FakeTaskQueue(), clock),
+    moderation: ModerationService = moderationService(ai, chat, safety, FakeTaskQueue(), clock, notifier),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {

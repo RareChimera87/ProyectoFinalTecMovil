@@ -22,6 +22,7 @@ import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.runMigrations
 import me.santiagoreina.parcheu.api.platform.db.tables.ChatMessages
 import me.santiagoreina.parcheu.api.platform.db.tables.Reports
+import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.safety.ExposedSafetyRepository
@@ -30,18 +31,17 @@ import me.santiagoreina.parcheu.api.safety.SafetyService
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.ReportSource
 import me.santiagoreina.parcheu.contract.SendMessage
-import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 
-/** E8.6 contra Postgres 16 real: ocultar, reporte AUTO sin `reporter_id` y mensaje del sistema idempotente. */
+/** E8.6 contra Postgres 16 real: ocultar, reporte AUTO sin `reporter_id` y ayuda de autolesión solo al autor. */
 class ModerationDbTest : FunSpec({
     fun json(category: String, severity: String) = buildJsonObject {
         put("findings", buildJsonArray { add(buildJsonObject { put("category", category); put("severity", severity) }) })
     }
 
-    fun withDb(block: suspend (ModerationService, ChatModule, org.jetbrains.exposed.v1.jdbc.Database, FakeLlmClient) -> Unit) =
+    fun withDb(block: suspend (ModerationService, ChatModule, org.jetbrains.exposed.v1.jdbc.Database, FakeLlmClient, FakeNotifier) -> Unit) =
         TestDatabase.withCleanDatabase { ds ->
             runMigrations(ds)
             val db = connectExposed(ds)
@@ -53,8 +53,9 @@ class ModerationDbTest : FunSpec({
                 SafetyService(safetyRepo, chat.service, chat.repository, graph.repository, graph.policy, graph.anonIds, null, FIXED_CLOCK),
             )
             val llm = FakeLlmClient()
-            val moderation = moderationService(testGateway(llm), chat, safety, FakeTaskQueue(), FIXED_CLOCK)
-            runBlocking { block(moderation, chat, db, llm) }
+            val notifier = FakeNotifier()
+            val moderation = moderationService(testGateway(llm), chat, safety, FakeTaskQueue(), FIXED_CLOCK, notifier)
+            runBlocking { block(moderation, chat, db, llm, notifier) }
         }
 
     suspend fun twoUsers(db: org.jetbrains.exposed.v1.jdbc.Database) = ExposedIdentityRepository(db).let { identity ->
@@ -63,7 +64,7 @@ class ModerationDbTest : FunSpec({
     }
 
     test("severidad alta oculta el mensaje y guarda un reporte AUTO sin reporter_id").config(enabled = TestDatabase.enabled) {
-        withDb { moderation, chat, db, llm ->
+        withDb { moderation, chat, db, llm, notifier ->
             val (ana, beto) = twoUsers(db)
             val room = chat.service.createDirect(ana.id, beto.id, Mode.AMISTAD)
             chat.service.send(beto, room.id, SendMessage("b-1", "mensaje agresivo"))
@@ -85,8 +86,8 @@ class ModerationDbTest : FunSpec({
         }
     }
 
-    test("autolesión inserta una sola vez el mensaje del sistema").config(enabled = TestDatabase.enabled) {
-        withDb { moderation, chat, db, llm ->
+    test("autolesión avisa solo al autor y no agrega mensajes al chat").config(enabled = TestDatabase.enabled) {
+        withDb { moderation, chat, db, llm, notifier ->
             val (ana, beto) = twoUsers(db)
             val room = chat.service.createDirect(ana.id, beto.id, Mode.AMISTAD)
             chat.service.send(beto, room.id, SendMessage("b-1", "ya no quiero seguir"))
@@ -94,11 +95,9 @@ class ModerationDbTest : FunSpec({
             llm.jsonResponder = { _, _ -> json("SELF_HARM", "HIGH") }
 
             moderation.moderate(id)
-            moderation.moderate(id)
 
-            val system = transaction(db) { ChatMessages.selectAll().where { ChatMessages.id neq id }.toList() }
-            system shouldHaveSize 1
-            system.single()[ChatMessages.senderId] shouldBe null
+            notifier.sent.single().userId shouldBe beto.id
+            transaction(db) { ChatMessages.selectAll().count() } shouldBe 1L
             transaction(db) { Reports.selectAll().count() } shouldBe 0L
         }
     }

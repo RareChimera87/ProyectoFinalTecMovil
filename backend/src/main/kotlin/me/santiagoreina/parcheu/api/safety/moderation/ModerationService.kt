@@ -6,6 +6,8 @@ import kotlinx.serialization.json.buildJsonObject
 import me.santiagoreina.parcheu.api.chat.ChatRepository
 import me.santiagoreina.parcheu.api.chat.ChatService
 import me.santiagoreina.parcheu.api.chat.MessageRecord
+import me.santiagoreina.parcheu.api.platform.notifier.Notification
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.platform.tasks.QueueKind
 import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.TaskRequest
@@ -13,6 +15,7 @@ import me.santiagoreina.parcheu.api.safety.HelpResources
 import me.santiagoreina.parcheu.api.safety.NewReport
 import me.santiagoreina.parcheu.api.safety.SafetyRepository
 import me.santiagoreina.parcheu.api.safety.SafetyService
+import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.ReportKind
 import me.santiagoreina.parcheu.contract.ReportReason
 import me.santiagoreina.parcheu.contract.ReportSource
@@ -26,15 +29,17 @@ import java.util.UUID
  * con `TASKS_MODE=inline`) lo revisa con el modelo lite.
  *
  * Con severidad HIGH:
- * - SELF_HARM: mensaje del sistema en el chat con las líneas de ayuda (no se oculta ni se reporta).
+ * - SELF_HARM: las líneas de ayuda llegan solo al autor, como aviso del centro de notificaciones y push
+ *   (no entran al chat compartido: revelarían a la otra persona una inferencia de salud). No se oculta ni se reporta.
  * - POSSIBLE_MINOR: reporte AUTO de prioridad alta; el mensaje sigue visible y un admin decide.
  * - el resto (acoso, sexual, odio, amenaza, spam, datos personales): el mensaje se oculta en Postgres y
  *   Firestore y se crea un reporte AUTO.
  * La severidad LOW no hace nada. Si el LLM falla (error, JSON inválido, presupuesto agotado) el mensaje
  * queda visible y se registra `moderation_failed` (fail-open); la tarea termina sin error para no reintentar.
  *
- * Idempotente: ocultar es idempotente, el reporte AUTO se crea una sola vez por mensaje y el mensaje de
- * ayuda usa un id determinista.
+ * Reintentable tras un fallo parcial: el reporte AUTO se inserta antes de ocultar (nunca queda un mensaje
+ * oculto sin reporte), se crea una sola vez por mensaje y ocultar es idempotente y repara el espejo de
+ * Firestore, así que cada reintento repite el ocultamiento. El aviso de ayuda va al final.
  */
 class ModerationService(
     private val moderator: MessageModerator,
@@ -43,6 +48,7 @@ class ModerationService(
     private val safety: SafetyRepository,
     private val tasks: TaskQueue,
     private val clock: Clock,
+    private val notifier: Notifier,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -70,7 +76,13 @@ class ModerationService(
     suspend fun moderate(messageId: UUID): ModerationOutcome {
         val message = chats.message(messageId) ?: return ModerationOutcome.SKIPPED
         val author = message.senderId ?: return ModerationOutcome.SKIPPED
-        if (message.hidden) return ModerationOutcome.SKIPPED
+        // Salir por `hidden` a secas dejaría un mensaje oculto sin reporte, o con Firestore aún visible, si un intento
+        // anterior falló a mitad. Solo se da por terminado con reporte AUTO y mensaje oculto, y aun así se repite
+        // ocultar (idempotente) para reparar el espejo.
+        if (message.hidden && safety.hasAutoReport(messageId)) {
+            chat.hideMessage(messageId)
+            return ModerationOutcome.SKIPPED
+        }
 
         val findings = try {
             moderator.review(author, message.text)
@@ -86,23 +98,26 @@ class ModerationService(
         val high = findings.filter { it.severity == ModerationSeverity.HIGH }.map { it.category }
         if (high.isEmpty()) return ModerationOutcome.CLEAN
 
-        if (ModerationCategory.SELF_HARM in high) sendHelp(message)
-
         val hide = high.any { it != ModerationCategory.SELF_HARM && it != ModerationCategory.POSSIBLE_MINOR }
         val reportable = high.filter { it != ModerationCategory.SELF_HARM }
-        if (reportable.isNotEmpty() && !safety.hasAutoReport(messageId)) {
+        if (reportable.isNotEmpty()) {
+            // Primero el reporte: si ocultar falla, el reintento lo repite sin duplicar y un admin ya puede revisarlo.
+            if (!safety.hasAutoReport(messageId)) safety.insertReport(autoReport(message, author, reportable))
             if (hide) chat.hideMessage(messageId)
-            safety.insertReport(autoReport(message, author, reportable))
         }
+        if (ModerationCategory.SELF_HARM in high) sendHelp(author)
         log.atInfo().setMessage(MODERATION_ACTED).addKeyValue("event", MODERATION_ACTED)
             .addKeyValue("messageId", messageId.toString()).addKeyValue("categories", high.joinToString(",") { it.name })
             .addKeyValue("hidden", hide).log()
         return ModerationOutcome.ACTED
     }
 
-    private suspend fun sendHelp(message: MessageRecord) {
-        val id = UUID.nameUUIDFromBytes("moderation-help-${message.id}".toByteArray())
-        chat.postSystemMessage(message.chatId, id, helpText())
+    /** Las líneas de ayuda van solo a [author] (aviso del centro + push), nunca al chat que ve la otra persona. */
+    private suspend fun sendHelp(author: UUID) {
+        notifier.notify(
+            author,
+            Notification(kind = NotificationKinds.ACCOUNT, title = HELP_TITLE, body = helpText()),
+        )
     }
 
     private suspend fun autoReport(message: MessageRecord, author: UUID, categories: List<ModerationCategory>): NewReport {
@@ -141,11 +156,11 @@ class ModerationService(
             ModerationCategory.HARASSMENT, ModerationCategory.SPAM, ModerationCategory.PERSONAL_DATA,
         )
 
-        /**
-         * Texto neutro: el mensaje lo ven los dos miembros del chat, así que no dice quién lo provocó.
-         */
+        const val HELP_TITLE = "No estás solo"
+
+        /** Texto para quien escribió el mensaje; solo lo recibe él. */
         fun helpText(): String = buildString {
-            append("Un recordatorio de ParcheU: si alguien en este chat se siente mal o piensa en hacerse daño, no está solo y hay ayuda. ")
+            append("Si te sientes mal o piensas en hacerte daño, no estás solo y hay ayuda. ")
             append(HelpResources.colombia.joinToString(" ") { "${it.name}: ${it.description}" })
         }
     }

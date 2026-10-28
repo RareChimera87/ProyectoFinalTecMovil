@@ -198,7 +198,7 @@ class AppContainer(
      * Moderación con IA (E8.6, ADR-0026). Por defecto con Fake y sin engancharse al chat: solo [fromConfig]
      * la conecta con la cola `ai-light` (salvo `MODERATION_ENABLED=false`).
      */
-    val moderation: ModerationService = moderationService(ai, chat, safety, FakeTaskQueue(), clock),
+    val moderation: ModerationService = moderationService(ai, chat, safety, FakeTaskQueue(), clock, notifier),
     /**
      * Cola en proceso y programador de jobs (`TASKS_MODE=inline`, ADR-0033); null con Cloud Tasks o Fake.
      * Main lo arranca (`start`) en modo `serve` y lo cierra al parar.
@@ -286,7 +286,7 @@ class AppContainer(
             // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
             val safety = safetyModule(database, chat, graph, matching, clock)
             // Moderación con IA (E8.6): tarea `moderate` en `ai-light` después de entregar cada mensaje (fail-open).
-            val moderation = moderationService(ai, chat, safety, tasks, clock)
+            val moderation = moderationService(ai, chat, safety, tasks, clock, notifier)
             if (moderationEnabled(vars)) moderation.attachTo(chat)
             // Administración de reportes (E8.5): sobre la misma tabla `reports`; suspende por `users.suspended_until`.
             val admin = adminModule(database, identity.repo, chat, clock)

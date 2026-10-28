@@ -28,7 +28,12 @@ import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.LlmInvalidOutput
 import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.chat.ChatMirror
 import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
+import me.santiagoreina.parcheu.api.chat.MessageDoc
+import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
+import me.santiagoreina.parcheu.api.safety.NewReport
+import me.santiagoreina.parcheu.api.safety.SafetyRepository
 import me.santiagoreina.parcheu.api.chat.InMemoryChatRepository
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.PersonRow
@@ -54,6 +59,32 @@ class ModerationServiceTest : FunSpec({
         put("findings", buildJsonArray { add(buildJsonObject { put("category", category); put("severity", severity) }) })
     }
 
+    /** Espejo que falla una vez al ocultar un mensaje si [failOnHide] está activo. */
+    class FlakyMirror(private val delegate: InMemoryChatMirror) : ChatMirror by delegate {
+        var failOnHide = false
+
+        override suspend fun upsertMessage(chatId: UUID, doc: MessageDoc) {
+            if (failOnHide && doc.hidden) {
+                failOnHide = false
+                throw IllegalStateException("Firestore caído")
+            }
+            delegate.upsertMessage(chatId, doc)
+        }
+    }
+
+    /** Repositorio de seguridad cuyo primer insertReport falla si [failInsert] está activo. */
+    class FlakySafety(private val delegate: SafetyRepository) : SafetyRepository by delegate {
+        var failInsert = false
+
+        override suspend fun insertReport(report: NewReport) {
+            if (failInsert) {
+                failInsert = false
+                throw IllegalStateException("base caída")
+            }
+            delegate.insertReport(report)
+        }
+    }
+
     class Fixture {
         val identityRepo = InMemoryIdentityRepository().apply { listOf("ana", "beto").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val ana = identityRepo.user("ana")
@@ -63,8 +94,9 @@ class ModerationServiceTest : FunSpec({
             addUser(row(beto.id, "Beto"), "beto")
         }
         val mirror = InMemoryChatMirror()
+        val flakyMirror = FlakyMirror(mirror)
         val graph = inMemoryGraphModule(FIXED_CLOCK)
-        val chat = inMemoryChatModule(FIXED_CLOCK, graph.policy, repository = chatRepo, mirror = mirror)
+        val chat = inMemoryChatModule(FIXED_CLOCK, graph.policy, repository = chatRepo, mirror = flakyMirror)
         val safetyRepo = InMemorySafetyRepository(
             people = { chatRepo.person(it) },
             messages = { id -> chatRepo.allMessages.filter { it.chatId == id }.map { me.santiagoreina.parcheu.api.safety.SnapshotMessage(it.id, it.senderId, it.text, it.createdAt, it.hidden) } },
@@ -72,7 +104,10 @@ class ModerationServiceTest : FunSpec({
         val safety = inMemorySafetyModule(FIXED_CLOCK, chat, graph, repo = safetyRepo)
         val llm = FakeLlmClient()
         val queue = FakeTaskQueue()
-        val moderation = moderationService(testGateway(llm), chat, safety, queue, FIXED_CLOCK).also { it.attachTo(chat) }
+        val flakySafety = FlakySafety(safetyRepo)
+        val notifier = FakeNotifier()
+        val moderation = ModerationService(MessageModerator(testGateway(llm)), chatRepo, chat.service, flakySafety, queue, FIXED_CLOCK, notifier)
+            .also { it.attachTo(chat) }
         val room = runBlocking { chat.service.createDirect(ana.id, beto.id, Mode.AMISTAD) }
 
         /** Beto escribe [text]; devuelve el id del mensaje guardado. */
@@ -109,7 +144,8 @@ class ModerationServiceTest : FunSpec({
         report.targetId shouldBe f.beto.id
         report.messageId shouldBe id
         report.reason shouldBe ReportReason.HARASSMENT
-        report.snapshot!!.single { it.id == id }.hidden shouldBe true
+        // El reporte se inserta antes de ocultar: el snapshot trae el texto original para que el admin lo revise.
+        report.snapshot!!.single { it.id == id }.text shouldBe "mensaje agresivo"
     }
 
     test("reintentar la tarea no duplica el reporte") {
@@ -121,18 +157,48 @@ class ModerationServiceTest : FunSpec({
         f.safetyRepo.allReports shouldHaveSize 1
     }
 
-    test("autolesión inserta el mensaje de recursos de ayuda, sin ocultar ni reportar, y es idempotente") {
+    test("autolesión avisa solo al autor con los recursos de ayuda: no entra al chat, ni oculta ni reporta") {
         val f = Fixture()
         f.llm.jsonResponder = { _, _ -> finding("SELF_HARM", "HIGH") }
         val id = f.send("ya no quiero seguir")
         runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.ACTED
-        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.ACTED
-        val system = f.chatRepo.allMessages.filter { it.senderId == null }
-        system shouldHaveSize 1
-        system.single().text.apply { shouldContain("192"); shouldContain("106"); shouldContain("123") }
+        f.notifier.sent shouldHaveSize 1
+        f.notifier.sent.single().apply {
+            userId shouldBe f.beto.id
+            notification.body.apply { shouldContain("192"); shouldContain("106"); shouldContain("123") }
+        }
+        f.chatRepo.allMessages.none { it.senderId == null } shouldBe true
+        f.mirror.messages(f.room.id).none { it.system } shouldBe true
         f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe false
-        f.mirror.messages(f.room.id).single { it.system }.hidden shouldBe false
         f.safetyRepo.allReports.shouldBeEmpty()
+    }
+
+    test("reintento tras fallar insertReport: el mensaje no queda oculto sin reporte") {
+        val f = Fixture()
+        f.llm.jsonResponder = { _, _ -> finding("THREAT", "HIGH") }
+        val id = f.send("te voy a hacer daño")
+        f.flakySafety.failInsert = true
+        runCatching { runBlocking { f.moderation.moderate(id) } }.isFailure shouldBe true
+        // El reporte va antes de ocultar: el fallo no deja el mensaje oculto sin reporte.
+        f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe false
+        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.ACTED
+        f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe true
+        f.safetyRepo.allReports shouldHaveSize 1
+    }
+
+    test("reintento tras fallar el espejo: Firestore termina oculto y el reporte no se duplica") {
+        val f = Fixture()
+        f.llm.jsonResponder = { _, _ -> finding("THREAT", "HIGH") }
+        val id = f.send("te voy a hacer daño")
+        f.flakyMirror.failOnHide = true
+        runCatching { runBlocking { f.moderation.moderate(id) } }.isFailure shouldBe true
+        // Postgres ya quedó oculto y el reporte existe, pero Firestore sigue mostrando el texto.
+        f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe true
+        f.mirror.messages(f.room.id).single { it.id == id }.hidden shouldBe false
+        f.safetyRepo.allReports shouldHaveSize 1
+        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.SKIPPED
+        f.mirror.messages(f.room.id).single { it.id == id }.apply { hidden shouldBe true; text shouldBe "" }
+        f.safetyRepo.allReports shouldHaveSize 1
     }
 
     test("posible menor crea un reporte AUTO de prioridad alta y el mensaje sigue visible") {
