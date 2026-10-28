@@ -19,3 +19,8 @@ Las simulaciones tardan decenas de segundos (unas 25 llamadas al LLM), la person
 ## Consecuencias
 - Reintentos y tasa máxima sin código propio; la tasa máxima es también un control de costo.
 - Las pruebas usan un `FakeTaskQueue` que ejecuta en línea; los handlers deben ser idempotentes (lo exigen los criterios de E4.3 y E2.3).
+
+## Actualización (E10.7, 28 oct 2026): cola y programador en proceso para dev
+- Mientras el backend de dev corra en el homeserver ([ADR-0033](0033-backend-en-homeserver.md)) no hay Cloud Tasks ni Cloud Scheduler: con `TASKS_MODE=inline` las tareas las ejecuta `InProcessTaskQueue` (hasta 5 intentos con espera creciente, concurrencia por cola, deduplicación por nombre durante 1 h en memoria) y los jobs periódicos los programa `InProcessScheduler`. `inline` se rechaza con `ENV=prod` y dentro de Cloud Run: **Cloud Tasks y Scheduler siguen siendo el destino de prod**.
+- Regla vigente para toda tarea o job nuevo: se registra en los dos caminos (Terraform para prod y `AppContainer.fromConfig` para dev) y el test de cobertura de rutas registradas lo comprueba.
+- Lo aprendido: la deduplicación en memoria se pierde al reiniciar; lo que evita el trabajo doble es que los handlers sean idempotentes (cursores y estados en Postgres) y que los barridos (`simulation-recovery`, `purge-sweep`) recuperen lo que quedó a medias. La recuperación no tiene contador de intentos, así que una simulación que mata el proceso se reencola en cada ciclo ([operacion.md](../operacion.md#incidentes-frecuentes-por-síntoma)).

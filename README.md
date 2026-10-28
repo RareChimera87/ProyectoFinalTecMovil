@@ -23,11 +23,15 @@ Algunas carpetas solo tienen un README hasta que llega su feature (ver `docs/bac
 
 - [docs/PLAN.md](docs/PLAN.md): plan, estructura y git flow
 - [docs/arquitectura.md](docs/arquitectura.md): arquitectura y contrato
+- [docs/c4.md](docs/c4.md): diagramas C4 (contexto, contenedores, componentes) en Mermaid
 - [docs/backlog.md](docs/backlog.md): fichas con criterios de aceptación
 - [docs/equipo.md](docs/equipo.md): roles y revisores
 - [docs/adr/](docs/adr/): decisiones de arquitectura
 - [docs/desarrollo-local.md](docs/desarrollo-local.md): preparar la máquina
 - [docs/revisiones.md](docs/revisiones.md): bitácora de revisiones
+- [docs/operacion.md](docs/operacion.md): runbook de alertas y operación del backend de dev en el homeserver
+- [docs/sustentacion.md](docs/sustentacion.md): guion de 10 minutos, demo de mutación de privacidad y costo de IA
+- [docs/play-console.md](docs/play-console.md) y [docs/pendientes-humanos.md](docs/pendientes-humanos.md): publicación en Play y pasos que solo hace una persona
 
 ## Git flow en breve
 
@@ -44,5 +48,7 @@ scripts/instalar-hooks.sh                 # valida tus commits localmente
 scripts/test/commit-lint.test.sh          # pruebas del validador
 cd android && ./gradlew :app:testDebugUnitTest
 ```
+
+Documentación: `scripts/check-links.sh` (enlaces internos) y `scripts/check-adr.sh` (estado y resultados de los ADR) corren en CI (`docs-ci`); sus pruebas están en `scripts/test/check-links.test.sh` y `scripts/test/check-adr.test.sh`.
 
 Más detalle en [docs/desarrollo-local.md](docs/desarrollo-local.md).

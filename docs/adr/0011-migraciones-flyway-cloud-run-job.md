@@ -18,3 +18,7 @@ Migrar al arrancar la API provoca una carrera si arrancan varias instancias a la
 ## Consecuencias
 - Despliegues un poco más largos (un job más), pero seguros.
 - Los agentes deben renombrar su migración si otra se mezcla antes con fecha posterior (el check lo indica).
+
+## Actualización (E10.7, 28 oct 2026): migraciones en el homeserver
+- El modo `migrate` se conserva tal cual. En el homeserver ([ADR-0033](0033-backend-en-homeserver.md)) lo ejecuta el servicio `parcheu-migrate` de Docker Compose antes de `parcheu-api` (`depends_on`), una vez por despliegue; sigue sin migrarse al arrancar la API.
+- Lo aprendido: Flyway no se deshace y la reversión automática de `desplegar.sh` solo vuelve a la imagen anterior, de modo que **las migraciones deben ser compatibles hacia atrás** (columnas nuevas nulas o con valor por defecto; nada de renombrar o borrar en el mismo paso). Procedimiento de reversión y restauración en [operacion.md](../operacion.md#desplegar-y-revertir).
