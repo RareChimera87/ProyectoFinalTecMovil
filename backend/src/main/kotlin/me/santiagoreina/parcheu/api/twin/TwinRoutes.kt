@@ -12,14 +12,17 @@ import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
+import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.api.platform.stubGet
 import me.santiagoreina.parcheu.api.platform.stubPost
+import me.santiagoreina.parcheu.api.twin.memories.MemoryService
 import me.santiagoreina.parcheu.contract.Answers
 import java.util.UUID
 
 /**
  * Rutas del dominio twin. E2.3 implementa preguntas, respuestas, gemelo, evolución y la tarea
- * `build-persona`; memorias y feedback siguen como stub 501 hasta E9.x, E3.x y los jobs de E9.2.
+ * `build-persona`; E9.2 las memorias (API, tarea `extract-memories` y job `memories`). El feedback y
+ * el job `twin-accuracy` siguen como stub 501 hasta E9.3.
  */
 class TwinRoutes(private val twin: TwinModule) : DomainRoutes {
     override fun Route.v1() {
@@ -28,9 +31,12 @@ class TwinRoutes(private val twin: TwinModule) : DomainRoutes {
         get("/twin") { call.respond(twin.service.twin(call.userId(twin.users))) }
         get("/twin/evolution") { call.respond(twin.service.evolution(call.userId(twin.users))) }
 
-        stubGet("/twin/memories")
-        stubPost("/twin/memories/{id}/accept")
-        stubPost("/twin/memories/{id}/reject")
+        get("/twin/memories") {
+            val q = call.request.queryParameters
+            call.respond(twin.memories.list(call.userId(twin.users), q["status"], q["cursor"], q.limit()))
+        }
+        post("/twin/memories/{id}/accept") { call.respond(twin.memories.accept(call.userId(twin.users), call.parameters["id"].orEmpty())) }
+        post("/twin/memories/{id}/reject") { call.respond(twin.memories.reject(call.userId(twin.users), call.parameters["id"].orEmpty())) }
         stubGet("/twin/feedback-prompts")
         stubPost("/twin/feedback")
     }
@@ -41,11 +47,20 @@ class TwinRoutes(private val twin: TwinModule) : DomainRoutes {
             call.respond(HttpStatusCode.NoContent)
         }
 
-        stubPost("/tasks/extract-memories")
-        stubPost("/jobs/memories")
+        post(MemoryService.TASK_PATH) {
+            twin.memories.extract(call.receive<TaskPayload>().uuid())
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post(MemoryService.JOB_PATH) {
+            twin.memories.enqueueNightly()
+            call.respond(HttpStatusCode.NoContent)
+        }
         stubPost("/jobs/twin-accuracy")
     }
 }
+
+private fun io.ktor.http.Parameters.limit(): Int? =
+    this["limit"]?.let { it.toIntOrNull() ?: throw ValidationFailed("limit debe ser un número") }
 
 private fun ApplicationCall.userId(users: TwinUserLookup): UUID {
     val user = principal<FirebaseUser>() ?: throw Unauthenticated()

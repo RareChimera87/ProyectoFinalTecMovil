@@ -5,6 +5,10 @@ import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
+import me.santiagoreina.parcheu.api.twin.memories.ExposedMemoryRepository
+import me.santiagoreina.parcheu.api.twin.memories.InMemoryMemoryRepository
+import me.santiagoreina.parcheu.api.twin.memories.MemoryExtractor
+import me.santiagoreina.parcheu.api.twin.memories.MemoryService
 import me.santiagoreina.parcheu.contract.ContractJson
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -20,6 +24,8 @@ class TwinModule(
     val service: TwinService,
     val users: TwinUserLookup,
     val repository: TwinRepository,
+    /** Extracción y decisión de memorias (E9.2). */
+    val memories: MemoryService,
 )
 
 /** Traduce el UID de Firebase del token al `users.id` (mismo contrato que el de cuotas). */
@@ -53,18 +59,32 @@ fun twinModule(env: Env, db: Database?, clock: Clock, ai: AiGateway, tasks: Task
         return inMemoryTwinModule(clock, ai)
     }
     val repo = ExposedTwinRepository(db)
-    return TwinModule(TwinService(repo, PersonaBuilder(ai), tasks, clock), ExposedTwinUserLookup(db), repo)
+    val memories = MemoryService(ExposedMemoryRepository(db), MemoryExtractor(ai), tasks, clock)
+    return TwinModule(TwinService(repo, PersonaBuilder(ai), tasks, clock), ExposedTwinUserLookup(db), repo, memories)
 }
 
-/** Todo en memoria (pruebas y `ENV=local` sin base). Con [runInline] la tarea `build-persona` corre al encolarla. */
+/**
+ * Todo en memoria (pruebas y `ENV=local` sin base). Con [runInline] las tareas `build-persona` y
+ * `extract-memories` corren al encolarlas.
+ */
 fun inMemoryTwinModule(
     clock: Clock,
     ai: AiGateway,
     repo: InMemoryTwinRepository = InMemoryTwinRepository(),
     queue: FakeTaskQueue = FakeTaskQueue(),
     runInline: Boolean = true,
+    memoryRepo: InMemoryMemoryRepository = InMemoryMemoryRepository(repo),
 ): TwinModule {
     val service = TwinService(repo, PersonaBuilder(ai), queue, clock)
-    if (runInline) queue.inline = { task -> service.buildPersona(ContractJson.decodeFromString<TaskPayload>(task.body).uuid()) }
-    return TwinModule(service, DerivedTwinUserLookup, repo)
+    val memories = MemoryService(memoryRepo, MemoryExtractor(ai), queue, clock)
+    if (runInline) {
+        queue.inline = { task ->
+            val id = ContractJson.decodeFromString<TaskPayload>(task.body).uuid()
+            when (task.path) {
+                MemoryService.TASK_PATH -> memories.extract(id)
+                else -> service.buildPersona(id)
+            }
+        }
+    }
+    return TwinModule(service, DerivedTwinUserLookup, repo, memories)
 }

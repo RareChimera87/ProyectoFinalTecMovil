@@ -7,8 +7,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import me.santiagoreina.parcheu.api.platform.BogotaZone
 import org.slf4j.LoggerFactory
+import java.time.Clock
 import java.time.Duration
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -37,5 +42,18 @@ class InProcessScheduler(context: CoroutineContext = Dispatchers.IO) : AutoClose
 
     override fun close() {
         scope.cancel()
+    }
+
+    companion object {
+        /**
+         * Retraso desde ahora hasta la próxima [at] en [zone] (hoy si aún no pasa, si no mañana). Con un
+         * periodo de 24 h el job queda anclado a esa hora local, como un cron diario de Cloud Scheduler.
+         */
+        fun delayUntil(at: LocalTime, clock: Clock, zone: ZoneId = BogotaZone): Duration {
+            val now = ZonedDateTime.ofInstant(clock.instant(), zone)
+            var next = now.with(at)
+            if (!next.isAfter(now)) next = next.plusDays(1)
+            return Duration.between(now, next)
+        }
     }
 }
