@@ -3,8 +3,14 @@ package me.santiagoreina.parcheu.feature.presentar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.santiagoreina.parcheu.feature.safety.SafetyEntryHost
+import me.santiagoreina.parcheu.feature.safety.SafetyTarget
+import me.santiagoreina.parcheu.feature.safety.toSafetyTarget
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Chat
 import me.santiagoreina.parcheu.navigation.IntroProposal
@@ -103,6 +109,7 @@ fun IntroProposalEntry(
         koinViewModel(key = "intro-proposal-$id") { parametersOf(id) }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var safetyTarget by remember { mutableStateOf<SafetyTarget?>(null) }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
@@ -121,8 +128,20 @@ fun IntroProposalEntry(
             onInterested = viewModel::onInterested,
             onDecline = viewModel::onDecline,
             onOpenChat = viewModel::onOpenChat,
-            onDismissError = viewModel::onDismissError
+            onDismissError = viewModel::onDismissError,
+            onReportOrBlock = {
+                // E8.7: la otra persona presentada, con el id que ve quien consulta (uuid o `anonId`).
+                (state as? IntroProposalUiState.Loaded)?.content?.introduction?.other?.let {
+                    safetyTarget = it.toSafetyTarget()
+                }
+            }
         ),
         modifier = modifier
+    )
+    SafetyEntryHost(
+        target = safetyTarget,
+        navigator = navigator,
+        onClear = { safetyTarget = null },
+        onBlocked = { navigator.back() }
     )
 }

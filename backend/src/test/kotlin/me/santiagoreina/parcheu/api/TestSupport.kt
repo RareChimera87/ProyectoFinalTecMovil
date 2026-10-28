@@ -90,7 +90,7 @@ fun testContainer(
     simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph, chat = chat),
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
-    safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
+    safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching, simulation = simulation),
     notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
     // Por defecto la campana de Inicio cuenta en la misma bandeja que C2 (E5.4).
     unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },

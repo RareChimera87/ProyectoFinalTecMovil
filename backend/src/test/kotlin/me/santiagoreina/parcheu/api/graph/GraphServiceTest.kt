@@ -200,6 +200,7 @@ private class LeakyRepository(
     override suspend fun blockedEitherWay(viewer: UUID) = blocked
     override suspend fun person(userId: UUID) = me.takeIf { it.id == userId }
     override suspend fun lastSimulation(a: UUID, b: UUID): SimulationRow? = null
+    override suspend fun removeConnections(a: UUID, b: UUID) = error("solo lectura")
     override suspend fun updateEdge(a: UUID, b: UUID, mode: Mode, now: Instant, change: (EdgeSnapshot?) -> EdgeChange): EdgeSnapshot? =
         error("solo lectura")
 }

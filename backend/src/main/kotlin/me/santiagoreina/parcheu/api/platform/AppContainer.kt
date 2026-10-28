@@ -72,10 +72,12 @@ import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.quota.quotaModule
+import me.santiagoreina.parcheu.api.safety.AnonymousContacts
 import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.safety.safetyModule
+import me.santiagoreina.parcheu.api.social.invites.ExposedInviteRepository
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.simulation.NotifierSimulationNotifier
 import me.santiagoreina.parcheu.api.simulation.SimulationModule
@@ -164,7 +166,7 @@ class AppContainer(
      * Reportar y bloquear (E8.1). Por defecto en memoria (propaga los bloqueos a chat, grafo y fila):
      * solo [fromConfig] cablea Postgres.
      */
-    val safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
+    val safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching, simulation = simulation),
     /**
      * Borrado y exportación de la cuenta (E8.3). Por defecto en memoria: solo [fromConfig] cablea
      * Postgres, la cola `maintenance`, Firestore y Firebase Auth.
@@ -279,7 +281,16 @@ class AppContainer(
                 MatchingFlags.fromEnv(config.env, vars),
             )
             // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
-            val safety = safetyModule(database, chat, graph, matching, clock)
+            // E8.7: el `anonId` de un reporte o bloqueo también se resuelve entre los canjes de C5, los amigos de
+            // amigos de D6 y las presentaciones de E3 del observador.
+            val safetyContacts = listOf(
+                AnonymousContacts.pendingInvites(ExposedInviteRepository(database)),
+                AnonymousContacts.friendsOfFriends(
+                    FofService(graph.fofRepository ?: InMemoryFofRepository(graph.repository), graph.repository, graph.policy, { true }, demo.enabled),
+                ),
+                AnonymousContacts.introductions(introductionStore),
+            )
+            val safety = safetyModule(database, chat, graph, matching, clock, safetyContacts)
             // Administración de reportes (E8.5): sobre la misma tabla `reports`; suspende por `users.suspended_until`.
             val admin = adminModule(database, identity.repo, chat, clock)
             // Borrado y exportación (E8.3): purga por la cola `maintenance`; Firestore y Auth reales fuera de local.
@@ -383,7 +394,7 @@ fun allDomains(
     chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
     simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
     matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
-    safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
+    safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching, simulation = simulation),
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
     unread: UnreadCounter = UnreadCounter.NONE,
     notifications: NotificationCenterModule = inMemoryNotificationCenter(systemClock(), quota, graph),

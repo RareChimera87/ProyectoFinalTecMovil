@@ -34,6 +34,7 @@ import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.compound.AvatarInitials
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
 
 /** Etiquetas de prueba de F2. */
 object MatchFoundTags {
@@ -54,14 +55,21 @@ fun MatchFoundScreen(
     onRetry: () -> Unit,
     onSearchAgain: () -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onReportOrBlock: () -> Unit = {}
 ) {
     Column(modifier = modifier.fillMaxSize().background(ParcheUTheme.colors.bg)) {
         ParcheUChildTopBar(
             title = MatchStrings.QUEUE_TITLE,
             navigationIcon = rememberCloseIcon(),
             navigationContentDescription = MatchStrings.CLOSE,
-            onNavigationClick = onClose
+            onNavigationClick = onClose,
+            action = {
+                // E8.7: reportar o bloquear a la persona del match, siempre accesible y gratis.
+                if (state is MatchFoundUiState.Loaded && !state.expired) {
+                    ReportOrBlockAction(onClick = onReportOrBlock)
+                }
+            }
         )
         when (state) {
             MatchFoundUiState.Loading ->

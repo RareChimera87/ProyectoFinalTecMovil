@@ -59,6 +59,7 @@ import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
 import me.santiagoreina.parcheu.designsystem.theme.avatarColors
+import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
 
 const val PARCHE_SHEET_TAG = "parche_sheet"
 const val PARCHE_BANNER_TAG = "parche_banner"
@@ -438,7 +439,8 @@ fun NodeDetailSheet(
     onSimulateAgain: () -> Unit,
     onChat: () -> Unit,
     onViewResult: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onReportOrBlock: () -> Unit = {}
 ) {
     val colors = ParcheUTheme.colors
     val node = sheet.node
@@ -461,13 +463,20 @@ fun NodeDetailSheet(
                 .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 30.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Box(
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .size(width = 36.dp, height = 4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(colors.ln)
-            )
+            Box(Modifier.fillMaxWidth()) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .size(width = 36.dp, height = 4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(colors.ln)
+                )
+                // E8.7: reportar o bloquear a esta persona, siempre accesible y gratis.
+                ReportOrBlockAction(
+                    onClick = onReportOrBlock,
+                    modifier = Modifier.align(Alignment.TopEnd)
+                )
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)

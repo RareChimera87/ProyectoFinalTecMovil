@@ -92,6 +92,13 @@ class InMemoryGraphRepository : GraphRepository {
             .maxByOrNull { it.createdAt }
     }
 
+    override suspend fun removeConnections(a: UUID, b: UUID) {
+        synchronized(lock) {
+            val (low, high) = ordered(a, b)
+            edges.keys.filter { it.low == low && it.high == high && edges.getValue(it).state == EdgeState.CONNECTED }.forEach { edges.remove(it) }
+        }
+    }
+
     override suspend fun updateEdge(
         a: UUID,
         b: UUID,

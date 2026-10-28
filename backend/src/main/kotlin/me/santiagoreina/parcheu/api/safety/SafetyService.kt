@@ -9,11 +9,11 @@ import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.ViewContext
 import me.santiagoreina.parcheu.api.identity.toKotlin
 import me.santiagoreina.parcheu.api.matching.MatchingRepository
+import me.santiagoreina.parcheu.api.matching.MatchingService
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.contract.BlockedDto
 import me.santiagoreina.parcheu.contract.ChatStatus
-import me.santiagoreina.parcheu.contract.MatchStatus
 import me.santiagoreina.parcheu.contract.ReportCreated
 import me.santiagoreina.parcheu.contract.ReportKind
 import me.santiagoreina.parcheu.contract.ReportReason
@@ -40,6 +40,8 @@ class SafetyService(
     private val anonIds: AnonIdSigner,
     private val matches: MatchingRepository?,
     private val clock: Clock,
+    private val matching: MatchingService? = null,
+    private val contacts: List<AnonymousContacts> = emptyList(),
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -47,7 +49,7 @@ class SafetyService(
 
     /**
      * `POST /v1/reports`. Exactamente un objetivo: `targetUserId` o `anonId` (USER), o
-     * `simulationId` + `turnIndex` (AI_CONTENT). Con `chatId` adjunta en `snapshot` los últimos
+     * `simulationId` + `turnIndex` (AI_CONTENT: `turnIndex` cuenta los turnos de todos los escenarios en orden, desde 0, y `snapshot` guarda el texto de ese turno; `turnIndex = -1` ([REPORT_TURN_INDEX]) reporta el informe de la simulación y `snapshot` guarda su texto). Con `chatId` adjunta en `snapshot` los últimos
      * [SNAPSHOT_SIZE] mensajes de ese chat (quien reporta debe ser miembro). Motivo SELF_HARM →
      * `helpResources` con las líneas de ayuda; los demás → lista vacía.
      */
@@ -66,6 +68,7 @@ class SafetyService(
         var target: UUID? = null
         var simulationId: UUID? = null
         var turnIndex: Int? = null
+        var turnSnapshot: List<SnapshotMessage>? = null
         when (request.kind) {
             ReportKind.USER -> {
                 if (request.simulationId != null || request.turnIndex != null) {
@@ -86,15 +89,21 @@ class SafetyService(
                 }
                 val sim = request.simulationId?.let { parseUuid(it) } ?: throw ValidationFailed("AI_CONTENT necesita simulationId")
                 val turn = request.turnIndex ?: throw ValidationFailed("AI_CONTENT necesita turnIndex")
-                if (turn < 0 || turn > Short.MAX_VALUE) throw ValidationFailed("turnIndex fuera de rango")
+                if (turn != REPORT_TURN_INDEX && (turn < 0 || turn > Short.MAX_VALUE)) throw ValidationFailed("turnIndex fuera de rango")
                 val participants = repo.simulationParticipants(sim)
                 if (participants == null || reporter !in participants.toList()) throw NotFound("La simulación no existe")
+                // El texto del turno se copia al reporte: la transcripción se purga y la administración
+                // (E8.5) debe poder revisar lo que se reportó sin depender de ella.
+                // `REPORT_TURN_INDEX` (-1) es el informe completo de F8: se copia el informe, no un turno.
+                val text = (if (turn == REPORT_TURN_INDEX) repo.simulationReportText(sim) else repo.simulationTurnText(sim, turn))
+                    ?: throw NotFound(if (turn == REPORT_TURN_INDEX) "El informe no existe" else "El turno no existe")
+                turnSnapshot = listOf(SnapshotMessage(UUID.randomUUID(), null, text, clock.instant(), hidden = false))
                 simulationId = sim
                 turnIndex = turn
             }
         }
 
-        val snapshot = chatId?.let { repo.recentMessages(it, SNAPSHOT_SIZE) }
+        val snapshot = turnSnapshot ?: chatId?.let { repo.recentMessages(it, SNAPSHOT_SIZE) }
         val report = NewReport(
             id = UUID.randomUUID(),
             reporterId = reporter,
@@ -139,11 +148,14 @@ class SafetyService(
         if (target == blocker) throw ValidationFailed("No puedes bloquearte a ti mismo")
         val inserted = repo.block(blocker, target, clock.instant())
 
+        // Bloquear termina la conexión: desbloquear después no la restaura (E8.7).
+        graph.removeConnections(blocker, target)
+
         // Se repite aunque el bloqueo ya existiera: repara un efecto que haya fallado a medias.
         chats.chatsOf(blocker)
             .filter { row -> row.chat.status == ChatStatus.OPEN && row.chat.member(target) != null }
             .forEach { row -> chat.close(row.chat.id) }
-        cancelPendingMatch(blocker, target)
+        matching?.cancelPendingMatchBetween(blocker, target)
 
         log.atInfo()
             .setMessage(BLOCK_CREATED)
@@ -194,7 +206,7 @@ class SafetyService(
     /**
      * Traduce el id que ve el cliente a un `users.id`. Un uuid debe existir (y no estar borrado). Un
      * `anonId` solo se puede resolver entre las personas con las que [viewer] tiene contexto: los
-     * miembros de [chatId] (o de sus chats), su ego-grafo y su match pendiente.
+     * miembros de [chatId] (o de sus chats), su ego-grafo, su match pendiente y los [contacts] (C5, D6, E3).
      */
     private suspend fun resolveTarget(viewer: UUID, raw: String, chatId: UUID?): UUID {
         parseUuid(raw)?.let { id ->
@@ -210,21 +222,11 @@ class SafetyService(
             chats.chatsOf(viewer).forEach { row -> row.chat.members.forEach { candidates += it.userId } }
             graph.egoEdges(viewer, GraphFilter()).forEach { candidates += it.other.id }
             matches?.pendingMatchOf(viewer)?.let { candidates += it.otherThan(viewer) }
+            // C5 (canjes pendientes), D6 (amigos de amigos) y E3 (presentaciones): E8.7.
+            contacts.forEach { candidates += it.of(viewer) }
         }
         candidates -= viewer
         return candidates.firstOrNull { anonIds.anonId(viewer, it) == raw } ?: throw NotFound("La persona no existe")
-    }
-
-    /** El match sin elegir entre los dos pasa a EXPIRED: no se crea ni simulación ni chat. */
-    private suspend fun cancelPendingMatch(a: UUID, b: UUID) {
-        val repo = matches ?: return
-        for (user in listOf(a, b)) {
-            val pending = repo.pendingMatchOf(user) ?: continue
-            if (!pending.involves(a) || !pending.involves(b)) continue
-            repo.updateMatch(pending.id) { current ->
-                if (current.status == MatchStatus.PENDING_CHOICE) current.copy(status = MatchStatus.EXPIRED) else null
-            }
-        }
     }
 
     private fun priorityOf(reason: ReportReason): Int = when (reason) {
@@ -236,6 +238,9 @@ class SafetyService(
 
     companion object {
         const val SNAPSHOT_SIZE = 20
+
+        /** `turnIndex` reservado: el reporte AI_CONTENT apunta al informe de la simulación (F8), no a un turno. */
+        const val REPORT_TURN_INDEX = -1
         const val MAX_DETAILS = 1000
         const val HIGH_PRIORITY = 2
         const val REPORT_CREATED = "report_created"

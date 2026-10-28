@@ -20,12 +20,20 @@ fun Report.toTarget(): SafetyTarget = SafetyTarget(
     id = userId,
     name = name ?: if (anonymous) "Alguien" else "esta persona",
     anonymous = anonymous,
-    chatId = chatId
+    chatId = chatId,
+    simulationId = simulationId,
+    turnIndex = turnIndex
 )
 
 /** Ruta para la anfitriona: abrir H2 para [target]. */
-fun SafetyTarget.toReportRoute(): Report =
-    Report(userId = id, chatId = chatId, name = name, anonymous = anonymous)
+fun SafetyTarget.toReportRoute(): Report = Report(
+    userId = id,
+    chatId = chatId,
+    name = name,
+    anonymous = anonymous,
+    simulationId = simulationId,
+    turnIndex = turnIndex
+)
 
 /**
  * H2 y la confirmación. Al terminar vuelve atrás; si además se bloqueó a la persona de un chat, sale
@@ -35,7 +43,11 @@ fun SafetyTarget.toReportRoute(): Report =
 fun ReportFlowRoute(route: Report, navigator: AppNavigator, modifier: Modifier = Modifier) {
     val target = remember(route) { route.toTarget() }
     val viewModel: ReportViewModel =
-        koinViewModel(key = "report:${route.userId}:${route.chatId}") { parametersOf(target) }
+        koinViewModel(
+            key = "report:${route.userId}:${route.chatId}:${route.simulationId}:${route.turnIndex}"
+        ) {
+            parametersOf(target)
+        }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val finish = {
