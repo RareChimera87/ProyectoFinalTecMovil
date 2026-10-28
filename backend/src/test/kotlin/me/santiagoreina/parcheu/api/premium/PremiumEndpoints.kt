@@ -14,6 +14,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -132,6 +133,16 @@ object PremiumEndpoints {
             client.get("/v1/communities") { auth("ana") }.okJson().keys intersect setOf("items")
         },
         PremiumEndpoint(
+            endpoint = "GET /v1/graph",
+            hides = setOf("[filtro community]"),
+            freeGets = "402 PLUS_REQUIRED al filtrar por comunidad",
+        ) {
+            val communityId = runBlocking { world.communities.repository.ofUser(world.id("ana")) }.first().id
+            val response = client.get("/v1/graph?community=$communityId") { auth("ana") }
+            if (response.isPlusRequired()) emptySet()
+            else if (response.okJson().getValue("nodes").jsonArray.isNotEmpty()) setOf("[filtro community]") else emptySet()
+        },
+        PremiumEndpoint(
             endpoint = "GET /v1/graph/history",
             hides = setOf("months", "moments"),
             freeGets = "402 PLUS_REQUIRED",
@@ -210,6 +221,9 @@ object PremiumEndpoints {
             freeGets = "aviso `locked = true` sin actor ni ruta y con el cuerpo genérico",
         ) {
             val item = client.get("/v1/notifications") { auth("ana") }.okJson().getValue("today").jsonArray.single().jsonObject
+            // Invariante en ambos planes (no es un campo que ParcheU+ vea distinto): el título viaja a gratis,
+            // así que un aviso de terceros no puede traer el nombre del actor sembrado (beto).
+            check(item["title"]?.jsonPrimitive?.content?.contains("beto", ignoreCase = true) != true) { "el título del aviso filtra al actor" }
             buildSet {
                 if ("actor" in item) add("actor")
                 if ("route" in item) add("route")

@@ -98,7 +98,7 @@ class SimFixture(
     val ai = testGateway(fake, aiUsage)
     val entitlements = InMemoryDevEntitlementService()
     val quota = inMemoryQuotaModule(FIXED_CLOCK, usage = usage, entitlements = entitlements)
-    val graph = inMemoryGraphModule(FIXED_CLOCK, graphRepo)
+    val graph = inMemoryGraphModule(FIXED_CLOCK, graphRepo, isPlus = { quota.service.isPlus(it) })
     val mirror = RecordingSimulationMirror()
     val notifier = RecordingSimulationNotifier()
     val queue = FakeTaskQueue()

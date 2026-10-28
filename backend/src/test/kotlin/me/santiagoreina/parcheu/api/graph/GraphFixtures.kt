@@ -24,4 +24,5 @@ fun person(
 /** Repositorio en memoria con [people] ya agregadas. */
 fun memoryRepo(vararg people: PersonRow) = InMemoryGraphRepository().also { repo -> people.forEach(repo::addPerson) }
 
-fun graphService(repo: GraphRepository) = GraphService(repo, GraphVisibilityPolicy(AnonIdSigner.forTests()))
+fun graphService(repo: GraphRepository, plus: Boolean = false) =
+    GraphService(repo, GraphVisibilityPolicy(AnonIdSigner.forTests()), { plus })
