@@ -40,7 +40,8 @@ data class PersonaInput(
     val answers: List<AnsweredQuestion>,
 )
 
-data class AccuracyPoint(val week: LocalDate, val accuracy: Int)
+/** Punto semanal de `twin_accuracy`; [ratings] y [predictions] son los conteos que lo produjeron. */
+data class AccuracyPoint(val week: LocalDate, val accuracy: Int, val ratings: Int = 0, val predictions: Int = 0)
 
 /** Resultado de guardar las respuestas. */
 data class SavedAnswers(val state: TwinState, val version: Int)

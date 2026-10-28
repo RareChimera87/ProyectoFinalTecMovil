@@ -103,7 +103,7 @@ class ExposedTwinRepository(private val db: Database) : TwinRepository {
 
     override fun accuracyPoints(userId: UUID): List<AccuracyPoint> = transaction(db) {
         TwinAccuracy.selectAll().where { TwinAccuracy.userId eq userId }.orderBy(TwinAccuracy.week)
-            .map { AccuracyPoint(it[TwinAccuracy.week], it[TwinAccuracy.accuracy].toInt()) }
+            .map { AccuracyPoint(it[TwinAccuracy.week], it[TwinAccuracy.accuracy].toInt(), it[TwinAccuracy.ratings], it[TwinAccuracy.predictions]) }
     }
 
     override fun personaInput(userId: UUID): PersonaInput? = transaction(db) {
@@ -144,6 +144,8 @@ class ExposedTwinRepository(private val db: Database) : TwinRepository {
                 it[TwinAccuracy.userId] = userId
                 it[week] = point.week
                 it[accuracy] = point.accuracy.toShort()
+                it[ratings] = point.ratings
+                it[predictions] = point.predictions
             }
         }
     }
