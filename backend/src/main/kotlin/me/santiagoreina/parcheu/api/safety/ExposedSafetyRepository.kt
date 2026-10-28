@@ -92,6 +92,14 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
             ?.let { it[Simulations.userA] to it[Simulations.userB] }
     }
 
+    override suspend fun autoReportDetails(messageId: UUID): String? = tx {
+        Reports.select(Reports.details)
+            .where { (Reports.messageId eq messageId) and (Reports.reportSource eq ReportSource.AUTO) }
+            .limit(1)
+            .singleOrNull()
+            ?.get(Reports.details)
+    }
+
     override suspend fun simulationTurnText(simulationId: UUID, turnIndex: Int): String? = tx {
         Simulations.select(Simulations.transcript)
             .where { Simulations.id eq simulationId }
@@ -124,7 +132,7 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
                 it[reason] = report.reason
                 it[details] = report.details
                 it[snapshot] = report.snapshot?.let(::snapshotJson)
-                it[reportSource] = ReportSource.USER
+                it[reportSource] = report.source
                 it[priority] = report.priority.toShort()
                 it[status] = ReportStatus.OPEN
                 it[createdAt] = report.createdAt.odt()

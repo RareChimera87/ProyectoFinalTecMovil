@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.safety
 
 import me.santiagoreina.parcheu.api.graph.PersonRow
+import me.santiagoreina.parcheu.contract.ReportSource
 import java.time.Instant
 import java.util.UUID
 
@@ -66,6 +67,9 @@ class InMemorySafetyRepository(
         messages(chatId).sortedWith(compareBy<SnapshotMessage> { it.createdAt }.thenBy { it.id }).takeLast(limit)
 
     override suspend fun simulationParticipants(simulationId: UUID): Pair<UUID, UUID>? = simulations(simulationId)
+
+    override suspend fun autoReportDetails(messageId: UUID): String? =
+        synchronized(lock) { reports.firstOrNull { it.messageId == messageId && it.source == ReportSource.AUTO }?.details }
 
     override suspend fun simulationTurnText(simulationId: UUID, turnIndex: Int): String? = turns(simulationId).getOrNull(turnIndex)
 

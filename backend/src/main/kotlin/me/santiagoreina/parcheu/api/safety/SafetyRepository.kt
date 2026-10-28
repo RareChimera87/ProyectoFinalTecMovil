@@ -40,4 +40,10 @@ interface SafetyRepository {
     suspend fun simulationReportText(simulationId: UUID): String?
 
     suspend fun insertReport(report: NewReport)
+
+    /**
+     * `details` del reporte AUTO (moderación con IA) sobre [messageId], o null si no hay. Evita duplicados al
+     * reintentar la tarea y deja saber qué se decidió (ocultar, ayuda) sin volver a llamar al LLM.
+     */
+    suspend fun autoReportDetails(messageId: UUID): String?
 }

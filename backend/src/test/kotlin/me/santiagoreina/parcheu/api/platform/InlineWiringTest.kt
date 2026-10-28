@@ -13,6 +13,7 @@ import me.santiagoreina.parcheu.api.identity.deletion.AccountDeletionService
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
 import me.santiagoreina.parcheu.api.platform.auth.GoogleOidcVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationService
 import me.santiagoreina.parcheu.api.platform.jobs.InProcessScheduler
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioService
@@ -28,7 +29,7 @@ class InlineWiringTest : FunSpec({
         "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://localhost:1/parcheu",
     )
 
-    test("ENV=dev + TASKS_MODE=inline: verificadores reales y los 4 handlers registrados, sin arrancar bucles") {
+    test("ENV=dev + TASKS_MODE=inline: verificadores reales y los 5 handlers registrados, sin arrancar bucles") {
         val vars = devVars + ("TASKS_MODE" to "inline")
         val container = AppContainer.fromConfig(AppConfig.fromEnv(vars), vars)
         try {
@@ -39,7 +40,7 @@ class InlineWiringTest : FunSpec({
             background.queue.registeredPaths shouldBe setOf(
                 TwinService.BUILD_PERSONA_PATH, SimulationService.SIMULATE_PATH, AccountDeletionService.PURGE_PATH,
                 ScenarioService.JUDGE_PATH,
-                MemoryService.TASK_PATH,
+                MemoryService.TASK_PATH, ModerationService.TASK_PATH,
             )
             // E4.8: rutas, gancho del chat y juez comparten el módulo real, que encola en la cola en proceso
             // (no en la FakeTaskQueue del valor por defecto, que ejecutaría el juez dentro de la petición HTTP).

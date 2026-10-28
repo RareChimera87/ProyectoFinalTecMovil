@@ -45,6 +45,12 @@ class ChatService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
+     * Se invoca después de guardar cada mensaje nuevo (no en reintentos por `clientId`). La moderación
+     * con IA (E8.6) se engancha aquí; su fallo nunca rompe el envío (fail-open, ADR-0026).
+     */
+    @Volatile var onMessageSaved: (suspend (MessageRecord) -> Unit)? = null
+
+    /**
      * Qué hacer cuando alguien intenta escribir en un chat SCENARIO que ya terminó (E4.8): el módulo de
      * escenario lo conecta para cerrar el chat y disparar al juez, una sola vez. Sin él (pruebas de chat
      * solo) el envío responde 409 sin más.
@@ -180,7 +186,10 @@ class ChatService(
         if (saved.message.chatId != chatId) throw Conflict("clientId ya se usó en otro chat")
         repairChatMirror(chatId)
         mirror.upsertMessage(chatId, saved.message.toDoc(sender.firebaseUid))
-        if (saved.inserted) notifyOthers(chat, sender, others, saved.message)
+        if (saved.inserted) {
+            notifyOthers(chat, sender, others, saved.message)
+            notifySaved(saved.message)
+        }
         return toOwnDto(saved.message)
     }
 
@@ -211,6 +220,17 @@ class ChatService(
     }
 
     // --- internos ----------------------------------------------------------------------------
+
+    private suspend fun notifySaved(message: MessageRecord) {
+        val hook = onMessageSaved ?: return
+        try {
+            hook(message)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn("El gancho posterior al mensaje {} falló: {}", message.id, e.message)
+        }
+    }
 
     /**
      * Repara el documento `chats/{id}` si la conexión lo dejó sin escribir (las reglas de `messages`

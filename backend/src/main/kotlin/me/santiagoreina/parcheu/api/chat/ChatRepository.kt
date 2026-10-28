@@ -32,6 +32,9 @@ interface ChatRepository {
     /** Mensaje ya enviado por [senderId] con ese `client_id` (en cualquier chat). */
     suspend fun findByClientId(senderId: UUID, clientId: String): MessageRecord?
 
+    /** Mensaje por id (cualquier chat); null si no existe. Lo usa la moderación (E8.6). */
+    suspend fun message(messageId: UUID): MessageRecord?
+
     /** Oculta el mensaje (`hidden = true`, E8.5); devuelve el mensaje ya oculto o null si no existe. */
     suspend fun hideMessage(messageId: UUID): MessageRecord?
 

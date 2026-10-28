@@ -5,7 +5,6 @@ import me.santiagoreina.parcheu.api.safety.NewReport
 import me.santiagoreina.parcheu.api.safety.snapshotJson
 import me.santiagoreina.parcheu.contract.AdminReport
 import me.santiagoreina.parcheu.contract.ReportKind
-import me.santiagoreina.parcheu.contract.ReportSource
 import me.santiagoreina.parcheu.contract.ReportStatus
 import java.time.Instant
 import java.util.UUID
@@ -45,11 +44,11 @@ class InMemoryAdminRepository(private val reports: () -> List<NewReport>) : Admi
                 id = r.id.toString(),
                 kind = r.kind,
                 status = if (done != null) ReportStatus.RESOLVED else ReportStatus.OPEN,
-                source = ReportSource.USER,
+                source = r.source,
                 reason = r.reason,
                 details = r.details,
                 priority = r.priority,
-                reporterId = r.reporterId.toString(),
+                reporterId = r.reporterId?.toString(),
                 targetId = r.targetId?.toString(),
                 chatId = r.chatId?.toString(),
                 messageId = r.messageId?.toString(),

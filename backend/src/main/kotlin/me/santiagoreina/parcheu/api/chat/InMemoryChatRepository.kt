@@ -71,6 +71,8 @@ class InMemoryChatRepository : ChatRepository {
         messages.firstOrNull { it.senderId == senderId && it.clientId == clientId }
     }
 
+    override suspend fun message(messageId: UUID): MessageRecord? = synchronized(lock) { messages.firstOrNull { it.id == messageId } }
+
     override suspend fun hideMessage(messageId: UUID): MessageRecord? = synchronized(lock) {
         val index = messages.indexOfFirst { it.id == messageId }
         if (index < 0) return null
