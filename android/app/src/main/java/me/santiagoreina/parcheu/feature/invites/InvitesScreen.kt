@@ -52,6 +52,7 @@ import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
 import me.santiagoreina.parcheu.designsystem.components.compound.QRCard
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.SoraFontFamily
+import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
 
 object InvitesTags {
     const val SCREEN = "invites"
@@ -80,7 +81,9 @@ data class InvitesActions(
     val onAdd: () -> Unit = {},
     val onScan: () -> Unit = {},
     val onAccept: (PendingInvite) -> Unit = {},
-    val onRetry: () -> Unit = {}
+    val onRetry: () -> Unit = {},
+    /** E8.7: abre H1 para quien canjeó mi código y espera que lo acepte. */
+    val onReportOrBlock: (PendingInvite) -> Unit = {}
 )
 
 /** C5 · Agregar amigos, QR y código (E6.1). La pestaña 'Escanear' no tiene mockup; sigue los tokens
@@ -226,6 +229,7 @@ private fun PendingList(state: InvitesUiState, actions: InvitesActions) {
                         color = colors.mu
                     )
                 }
+                ReportOrBlockAction(onClick = { actions.onReportOrBlock(pending) })
                 PrimaryButton(
                     text = if (state.accepting == pending.id) "Aceptando…" else "Aceptar",
                     onClick = { actions.onAccept(pending) },

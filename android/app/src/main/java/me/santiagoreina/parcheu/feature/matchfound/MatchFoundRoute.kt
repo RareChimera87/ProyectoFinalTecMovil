@@ -3,11 +3,17 @@ package me.santiagoreina.parcheu.feature.matchfound
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundEffect
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundScreen
+import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundUiState
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundViewModel
+import me.santiagoreina.parcheu.feature.safety.SafetyEntryHost
+import me.santiagoreina.parcheu.feature.safety.SafetyTarget
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Home
 import me.santiagoreina.parcheu.navigation.MatchFound
@@ -29,6 +35,7 @@ fun MatchFoundRoute(
     viewModel: MatchFoundViewModel = koinViewModel { parametersOf(route.matchId) }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var safetyTarget by remember { mutableStateOf<SafetyTarget?>(null) }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
@@ -54,6 +61,19 @@ fun MatchFoundRoute(
         onRetry = viewModel::load,
         onSearchAgain = viewModel::onSearchAgain,
         onClose = viewModel::onClose,
-        modifier = modifier
+        modifier = modifier,
+        onReportOrBlock = {
+            // F2 es anónima: el objetivo es el `anonId` con el que se ve a la persona (E8.7).
+            (state as? MatchFoundUiState.Loaded)?.match?.other?.let { other ->
+                safetyTarget = SafetyTarget(id = other.anonId, name = other.label, anonymous = true)
+            }
+        }
+    )
+    // Bloquear cancela el match en el servidor: se sale de F2.
+    SafetyEntryHost(
+        target = safetyTarget,
+        navigator = navigator,
+        onClear = { safetyTarget = null },
+        onBlocked = viewModel::onClose
     )
 }
