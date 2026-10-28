@@ -152,7 +152,7 @@ if ! salud_remota; then
   remoto "cd ~/$DIR_REMOTO && docker compose logs --tail 40 parcheu-api" >&2 || true
   if [ -n "$ANTERIOR" ]; then
     echo "La versión $NUEVA no respondió: se revierte a $ANTERIOR (las migraciones de Flyway no se deshacen)." >&2
-    remoto "cd ~/$DIR_REMOTO && grep -v '^PARCHEU_TAG=' .env > .env.nuevo; echo 'PARCHEU_TAG=$ANTERIOR' >> .env.nuevo; mv -f .env.nuevo .env && docker compose up -d parcheu-api" >&2 || true
+    remoto "cd ~/$DIR_REMOTO && umask 077 && grep -v '^PARCHEU_TAG=' .env > .env.nuevo; echo 'PARCHEU_TAG=$ANTERIOR' >> .env.nuevo; mv -f .env.nuevo .env && chmod 600 .env && docker compose up -d parcheu-api" >&2 || true
     if salud_remota; then falla "Despliegue revertido a $ANTERIOR: $NUEVA no pasó la comprobación de salud."; fi
     falla "$NUEVA falló y la reversión a $ANTERIOR tampoco respondió. Revisa los registros del servidor."
   fi

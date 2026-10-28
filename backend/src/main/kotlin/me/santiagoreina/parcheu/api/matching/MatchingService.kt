@@ -422,6 +422,8 @@ class MatchingService(
                 mode = match.mode,
                 origin = SimulationOrigin.RANDOM,
                 chargeQuota = false,
+                // La app abre F4 con el id del match (no conoce otro): la simulación nace con ese mismo id.
+                id = match.id,
             )
             repo.attachSimulation(match.id, record.id)
         } catch (e: CancellationException) {

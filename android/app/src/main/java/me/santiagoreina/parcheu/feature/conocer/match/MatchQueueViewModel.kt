@@ -67,6 +67,8 @@ class MatchQueueViewModel(
     initialMode: Mode?,
     private val repository: MatchRepository,
     activeModes: List<Mode> = Mode.entries,
+    /** Modos que el usuario tiene encendidos (`GET /v1/me`); `null` si no se pudieron leer. */
+    private val loadActiveModes: (suspend () -> List<Mode>?)? = null,
     private val pollIntervalMs: Long = POLL_INTERVAL_MS
 ) : ViewModel() {
     private val _state = MutableStateFlow(
@@ -85,6 +87,7 @@ class MatchQueueViewModel(
 
     private var searchJob: Job? = null
     private var opened = false
+    private var modesLoaded = loadActiveModes == null
 
     init {
         search(cancelPrevious = false)
@@ -131,6 +134,7 @@ class MatchQueueViewModel(
         opened = false
         _state.update { it.copy(phase = QueuePhase.Searching) }
         searchJob = viewModelScope.launch {
+            applyActiveModes()
             if (cancelPrevious) {
                 repository.cancel()
             } else if (resumeLiveTicket()) {
@@ -144,6 +148,27 @@ class MatchQueueViewModel(
                 }
                 is ApiResult.Success -> follow(result.value)
             }
+        }
+    }
+
+    /**
+     * Limita F1 a los modos que el usuario tiene encendidos: el servidor rechaza con 400 cualquier otro.
+     * Si no se pueden leer (o no hay ninguno) se deja la lista completa y decide el servidor.
+     */
+    private suspend fun applyActiveModes() {
+        if (modesLoaded) return
+        val loaded =
+            loadActiveModes?.invoke()?.filter { it in Mode.entries }?.takeIf { it.isNotEmpty() }
+                ?: return
+        modesLoaded = true
+        _state.update { current ->
+            val ordered = Mode.entries.filter { it in loaded }
+            current.copy(
+                activeModes = ordered,
+                mode = current.mode.takeIf { it in ordered }
+                    ?: repository.lastMode?.takeIf { it in ordered }
+                    ?: ordered.first()
+            )
         }
     }
 
