@@ -154,6 +154,24 @@ class ParcheViewModelTest {
     }
 
     @Test
+    fun newCommunityFromReusedEntryFiltersEvenIfAlreadyStarted() {
+        val fake = repo(ApiResult.Success(ParcheSamples.content))
+        val vm = ParcheViewModel(fake)
+        vm.start()
+        assertNull(loaded(vm).filters.communityId)
+
+        vm.start(community = "c1")
+        assertEquals(listOf<String?>(null, "c1"), fake.graphCalls)
+        assertEquals("c1", loaded(vm).filters.communityId)
+
+        // Repetir el mismo valor (rotación) no vuelve a filtrar tras quitar la comunidad.
+        vm.onClearCommunity()
+        vm.start(community = "c1")
+        assertEquals(listOf<String?>(null, "c1", null), fake.graphCalls)
+        assertNull(loaded(vm).filters.communityId)
+    }
+
+    @Test
     fun tappingNodeOpensSheetWithDetail() {
         val vm = ParcheViewModel(repo(ApiResult.Success(ParcheSamples.content)))
         vm.start()
