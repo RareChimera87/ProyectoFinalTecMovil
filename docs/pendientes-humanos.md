@@ -1060,3 +1060,12 @@ No hay secretos, Play Console ni recursos nuevos de GCP: el job `retention` ya e
 - [ ] **Opcional (observabilidad):** la métrica `retention_purged_total{regla}` sale como log INFO por regla (`event = retention_purged`, `regla`, `count`; solo cuando se purgó algo). Si se quiere verla en Cloud Monitoring, crear una métrica basada en logs con filtro `jsonPayload.message="retention_purged"` y etiqueta `regla` (extraída de `jsonPayload.regla`) en `monitoring.tf`; no se hizo aquí para no tocar Terraform fuera del alcance de la ficha.
 - [ ] **Verificar en dev (con el homeserver):** tras la primera noche, revisar en los logs del backend las líneas `retention_purged` y `Retención: N registros purgados`. Para forzarlo a mano: `POST /internal/jobs/retention` con un token OIDC del servicio.
 - [ ] **Decisiones de interpretación para revisar con el docente / I1** (documentadas en arquitectura.md §10.2): `matches` se purga solo si están `EXPIRED`; un chat SCENARIO se considera cerrado en su `ends_at`; el plazo de `transcript` son 12 meses calendario de Bogotá.
+
+## E10.4 · Tema claro y accesibilidad
+
+No requiere infraestructura, secretos ni Play Console. Queda la parte que el ADR-0022 define como revisión humana (dueño I2):
+
+- [ ] **Exportar los PNG de los mockups** I1-I4 (Sección I de Claude Design) a `docs/mockups/png/I1.png ... I4.png` (nombres en `docs/mockups/png/README.md`) y commitearlos.
+- [ ] **Generar la comparación**: `scripts/lado-a-lado.sh` (deja `docs/mockups/png/lado-a-lado/I*_lado-a-lado.png`).
+- [ ] **Revisar con la checklist** (tokens de color exactos, espaciados ±4dp, tipografía y jerarquía) y completar en el PR la tabla 'pantalla → diferencias aceptadas'. Diferencia ya conocida y aceptada: `ort` #9E480B y `mintt` #0B6B59 en lugar de los hex del mockup (ADR-0030), y la regla de texto sobre avatares.
+- [ ] **Prueba manual con TalkBack** en un dispositivo (las pruebas automáticas solo verifican que todo accionable tenga etiqueta; el orden de lectura y el texto de las descripciones se revisan a oído).
