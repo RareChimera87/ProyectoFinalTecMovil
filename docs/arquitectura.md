@@ -22,6 +22,8 @@
 
 ## 1. Vista general (C4)
 
+Los diagramas completos (contexto, contenedores de prod y de dev en el homeserver, componentes y flujo de una simulación) viven en [c4.md](c4.md); aquí quedan los de contexto y contenedores como referencia.
+
 ### 1.1 Contexto
 
 ```mermaid
