@@ -1060,3 +1060,10 @@ No hay secretos, Play Console ni recursos nuevos de GCP: el job `retention` ya e
 - [ ] **Opcional (observabilidad):** la métrica `retention_purged_total{regla}` sale como log INFO por regla (`event = retention_purged`, `regla`, `count`; solo cuando se purgó algo). Si se quiere verla en Cloud Monitoring, crear una métrica basada en logs con filtro `jsonPayload.message="retention_purged"` y etiqueta `regla` (extraída de `jsonPayload.regla`) en `monitoring.tf`; no se hizo aquí para no tocar Terraform fuera del alcance de la ficha.
 - [ ] **Verificar en dev (con el homeserver):** tras la primera noche, revisar en los logs del backend las líneas `retention_purged` y `Retención: N registros purgados`. Para forzarlo a mano: `POST /internal/jobs/retention` con un token OIDC del servicio.
 - [ ] **Decisiones de interpretación para revisar con el docente / I1** (documentadas en arquitectura.md §10.2): `matches` se purga solo si están `EXPIRED`; un chat SCENARIO se considera cerrado en su `ends_at`; el plazo de `transcript` son 12 meses calendario de Bogotá.
+
+## E9.3 · Entrena a tu gemelo
+
+No hay pasos humanos obligatorios para la variante dev en el homeserver: el job `twin-accuracy` se programa solo en el programador en proceso (`TASKS_MODE=inline`, domingos 23:00 de Bogotá) y la migración `V20261027_1200__calificacion_unica_por_turno.sql` la aplica Flyway al arrancar la API.
+
+- Cuando exista infraestructura de GCP (no ahora): el Cloud Scheduler `twin-accuracy` ya está declarado en `infra/terraform/modules/platform/scheduler.tf` y apunta a `/internal/jobs/twin-accuracy`, que ya no es un stub; requiere el `terraform apply` habitual del usuario.
+- Prueba manual sugerida con el gemelo ya creado: abrir C4 desde C3, contestar la pregunta de la semana, calificar una respuesta (necesita una simulación terminada) y ejecutar `POST /internal/jobs/twin-accuracy` con un token OIDC para ver el punto en C3.
