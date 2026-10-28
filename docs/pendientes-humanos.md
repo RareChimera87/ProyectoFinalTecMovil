@@ -1024,3 +1024,13 @@ Para correrlo a mano contra dev con tu propio `gcloud`: ver "Smoke e2e (E10.6)" 
 No hay pasos humanos: es una lectura de `connection_decisions` con la API que ya existe (sin Terraform, secretos, Play Console ni tareas asíncronas nuevas, así que tampoco toca `InProcessTaskQueue` ni `InProcessScheduler`).
 
 Para verla en la variante dev contra el homeserver: con dos cuentas de prueba, que A simule con B, que B decida "Conectar" en F7/F8 y que A (con ParcheU+ de `POST /internal/dev/grant-plus`) abra C2: la sección lista a B enmascarado; sin ParcheU+ A ve el ítem bloqueado con el conteo.
+
+## E8.7 · Reportar y bloquear desde todas partes
+
+No hay pasos humanos pendientes: la feature no agrega infraestructura, secretos ni cambios en consolas. Todo corre
+con el backend del homelab (`TASKS_MODE=inline`) y la variante dev.
+
+Para revisarla a mano con el backend en marcha: bloquear a alguien desde F2 debe dejar el match en `EXPIRED` y los
+tickets de ambos en `EXPIRED` (`matchTickets/{uid}` en Firestore), y 'Personas bloqueadas' (H3) debe listarlo con
+'Desbloquear'. Un reporte de contenido de la IA aparece en `admin.html` con el tipo `AI_CONTENT` y el texto del
+turno en el snapshot.
