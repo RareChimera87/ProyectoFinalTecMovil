@@ -41,6 +41,7 @@ class SafetyService(
     private val matches: MatchingRepository?,
     private val clock: Clock,
     private val matching: MatchingService? = null,
+    private val contacts: List<AnonymousContacts> = emptyList(),
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -203,7 +204,7 @@ class SafetyService(
     /**
      * Traduce el id que ve el cliente a un `users.id`. Un uuid debe existir (y no estar borrado). Un
      * `anonId` solo se puede resolver entre las personas con las que [viewer] tiene contexto: los
-     * miembros de [chatId] (o de sus chats), su ego-grafo y su match pendiente.
+     * miembros de [chatId] (o de sus chats), su ego-grafo, su match pendiente y los [contacts] (C5, D6, E3).
      */
     private suspend fun resolveTarget(viewer: UUID, raw: String, chatId: UUID?): UUID {
         parseUuid(raw)?.let { id ->
@@ -219,6 +220,8 @@ class SafetyService(
             chats.chatsOf(viewer).forEach { row -> row.chat.members.forEach { candidates += it.userId } }
             graph.egoEdges(viewer, GraphFilter()).forEach { candidates += it.other.id }
             matches?.pendingMatchOf(viewer)?.let { candidates += it.otherThan(viewer) }
+            // C5 (canjes pendientes), D6 (amigos de amigos) y E3 (presentaciones): E8.7.
+            contacts.forEach { candidates += it.of(viewer) }
         }
         candidates -= viewer
         return candidates.firstOrNull { anonIds.anonId(viewer, it) == raw } ?: throw NotFound("La persona no existe")

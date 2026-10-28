@@ -40,7 +40,12 @@ import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.matching.MatchFixture
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
+import me.santiagoreina.parcheu.api.safety.AnonymousContacts
 import me.santiagoreina.parcheu.api.simulation.Side
+import me.santiagoreina.parcheu.api.social.introductions.InMemoryIntroductionRepository
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionRecord
+import me.santiagoreina.parcheu.api.social.invites.InMemoryInviteRepository
+import me.santiagoreina.parcheu.contract.IntroductionStatus
 import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.api.simulation.SimulationRecord
 import me.santiagoreina.parcheu.contract.SimulationStatus
@@ -97,7 +102,12 @@ class SafetyApiTest : FunSpec({
             simulations = { id -> f.simRepo.find(id)?.let { it.userA to it.userB } },
             turns = { id -> f.simRepo.find(id)?.transcript?.scenarios?.flatMap { sc -> sc.turns.map { it.text } }.orEmpty() },
         )
-        val safety = inMemorySafetyModule(f.clock, chat, f.graph, f.module, safetyRepo)
+        val invites = InMemoryInviteRepository()
+        val introductions = InMemoryIntroductionRepository()
+        val safety = inMemorySafetyModule(
+            f.clock, chat, f.graph, f.module, safetyRepo,
+            contacts = listOf(AnonymousContacts.pendingInvites(invites), AnonymousContacts.introductions(introductions)),
+        )
 
         /** Simulación entre [a] y [b] con dos escenarios (2 + 1 turnos): el turno 2 es el único del segundo. */
         fun simulation(a: UUID = ana, b: UUID = beto): UUID = runBlocking {
@@ -374,6 +384,31 @@ class SafetyApiTest : FunSpec({
             created.bodyAsText() shouldNotContain w.caro.toString()
             w.safetyRepo.allReports.single().targetId shouldBe w.caro
         }
+    }
+
+    test("el anonId de un canje de C5 o de una presentación de E3 se resuelve solo para su observador") {
+        val w = World()
+        runBlocking {
+            // beto canjeó el código de ana (C5); ana es una de las presentadas a caro por beto (E3).
+            w.invites.addRedemption(w.ana, w.beto, Mode.AMISTAD, w.f.clock.instant())
+            w.introductions.insert(
+                IntroductionRecord(
+                    id = UUID.randomUUID(), introducerId = w.beto, mode = Mode.AMISTAD, userA = w.ana, userB = w.caro, simulationId = null,
+                    aResponse = null, bResponse = null, status = IntroductionStatus.PROPOSED, createdAt = w.f.clock.instant(),
+                ),
+            )
+        }
+        val betoAsSeenByAna = w.f.graph.anonIds.anonId(w.ana, w.beto)
+        val caroAsSeenByAna = w.f.graph.anonIds.anonId(w.ana, w.caro)
+        testApplication {
+            val client = app(w)
+            // Un observador sin ese contexto no los resuelve.
+            client.report("caro", ReportRequest(ReportKind.USER, anonId = betoAsSeenByAna, reason = ReportReason.OTHER)).status shouldBe HttpStatusCode.NotFound
+            client.report("ana", ReportRequest(ReportKind.USER, anonId = betoAsSeenByAna, reason = ReportReason.FAKE_OR_SCAM)).status shouldBe HttpStatusCode.Created
+            client.post("/v1/blocks/$caroAsSeenByAna") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
+        }
+        w.safetyRepo.allReports.single().targetId shouldBe w.beto
+        w.safetyRepo.allBlocks shouldBe setOf(w.ana to w.caro)
     }
 
     test("un reporte AI_CONTENT guarda simulationId, turnIndex y el texto del turno en snapshot") {

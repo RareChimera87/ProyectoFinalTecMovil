@@ -17,14 +17,20 @@ class SafetyModule(
     val service: SafetyService,
 )
 
-private fun assemble(repo: SafetyRepository, chat: ChatModule, graph: GraphModule, matching: MatchingModule?, clock: Clock) = SafetyModule(
+private fun assemble(repo: SafetyRepository, chat: ChatModule, graph: GraphModule, matching: MatchingModule?, clock: Clock, contacts: List<AnonymousContacts>) = SafetyModule(
     repository = repo,
-    service = SafetyService(repo, chat.service, chat.repository, graph.repository, graph.policy, graph.anonIds, matching?.repository, clock, matching?.service),
+    service = SafetyService(repo, chat.service, chat.repository, graph.repository, graph.policy, graph.anonIds, matching?.repository, clock, matching?.service, contacts),
 )
 
 /** Cableado con Postgres: todos los dominios leen la misma tabla `blocks`. */
-fun safetyModule(db: Database, chat: ChatModule, graph: GraphModule, matching: MatchingModule, clock: Clock): SafetyModule =
-    assemble(ExposedSafetyRepository(db), chat, graph, matching, clock)
+fun safetyModule(
+    db: Database,
+    chat: ChatModule,
+    graph: GraphModule,
+    matching: MatchingModule,
+    clock: Clock,
+    contacts: List<AnonymousContacts> = emptyList(),
+): SafetyModule = assemble(ExposedSafetyRepository(db), chat, graph, matching, clock, contacts)
 
 /**
  * Todo en memoria (pruebas y valor por defecto del contenedor). Como cada repositorio en memoria
@@ -38,6 +44,7 @@ fun inMemorySafetyModule(
     matching: MatchingModule? = null,
     repo: InMemorySafetyRepository? = null,
     simulation: SimulationModule? = null,
+    contacts: List<AnonymousContacts> = emptyList(),
 ): SafetyModule {
     val simulationRepo = simulation?.repository as? InMemorySimulationRepository
     val chatRepo = chat.repository as? InMemoryChatRepository
@@ -65,5 +72,5 @@ fun inMemorySafetyModule(
             matchRepo?.unblock(blocker, blocked)
         }
     }
-    return assemble(safetyRepo, chat, graph, matching, clock)
+    return assemble(safetyRepo, chat, graph, matching, clock, contacts)
 }
