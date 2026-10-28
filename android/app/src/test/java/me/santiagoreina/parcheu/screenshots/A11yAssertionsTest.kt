@@ -127,6 +127,34 @@ class A11yAssertionsTest {
     }
 
     @Test
+    fun detectsSquashedButtonInsideScroll() {
+        composeRule.setContent {
+            Column(Modifier.height(300.dp).verticalScroll(rememberScrollState())) {
+                Box(Modifier.size(width = 200.dp, height = 7.dp).clickable {})
+                Text("Relleno")
+            }
+        }
+        assertThrows(AssertionError::class.java) {
+            A11yAssertions.assertTouchTargets(composeRule, "aplastado con scroll")
+        }
+    }
+
+    @Test
+    fun detectsClipByContainerInsideScroll() {
+        composeRule.setContent {
+            Column(Modifier.height(300.dp).verticalScroll(rememberScrollState())) {
+                Box(Modifier.width(200.dp).height(8.dp).clipToBounds()) {
+                    Text("Ver ParcheU+", modifier = Modifier.wrapContentHeight(unbounded = true))
+                }
+                Text("Relleno")
+            }
+        }
+        assertThrows(AssertionError::class.java) {
+            A11yAssertions.assertNoClippedText(composeRule, "clip con scroll")
+        }
+    }
+
+    @Test
     fun detectsUnlabeledAction() {
         composeRule.setContent { Box(Modifier.size(48.dp).clickable {}) }
         assertThrows(AssertionError::class.java) {

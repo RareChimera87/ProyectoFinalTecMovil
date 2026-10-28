@@ -18,7 +18,7 @@ import org.junit.Assert.assertTrue
  */
 object A11yAssertions {
     private const val MIN_TOUCH_DP = 48f
-    private const val MIN_VISIBLE_DP = 24f
+    private const val MIN_VISIBLE_DP = 16f
 
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.fetchRoot() = fetchSemanticsNode()
 
@@ -53,29 +53,51 @@ object A11yAssertions {
             .mapNotNull { textOf(it) }
             .toSet()
 
+    private fun isScrollable(n: SemanticsNode): Boolean =
+        n.config.contains(SemanticsProperties.VerticalScrollAxisRange) ||
+            n.config.contains(SemanticsProperties.HorizontalScrollAxisRange)
+
     /** Un nodo está bajo un contenedor desplazable si algún ancestro tiene eje de scroll. */
     private fun insideScrollable(node: SemanticsNode): Boolean {
         var p = node.parent
         while (p != null) {
-            if (p.config.contains(SemanticsProperties.VerticalScrollAxisRange) ||
-                p.config.contains(SemanticsProperties.HorizontalScrollAxisRange)
-            ) {
-                return true
-            }
+            if (isScrollable(p)) return true
             p = p.parent
         }
         return false
     }
 
     /**
-     * Recorte por contenedor: el área visible (`boundsInRoot`, recortada por los ancestros) es menor que
-     * el tamaño medido del nodo. Se ignoran los nodos dentro de contenedores desplazables, donde ver
-     * solo una parte es lo normal.
+     * Recorte por contenedor. Fuera de un scroll, el área visible (`boundsInRoot`, recortada por los
+     * ancestros) es menor que el tamaño medido del nodo. Dentro de un scroll, ver solo una parte es lo
+     * normal, así que se comparan las cajas sin recortar: se recorren los ancestros hasta el contenedor
+     * desplazable más cercano (sin incluirlo) y se marca el nodo si su caja (`positionInRoot` + `size`)
+     * se sale de la de un ancestro intermedio (clip o alto fijo del padre).
      */
     private fun isClippedByAncestor(node: SemanticsNode): Boolean {
-        if (!node.layoutInfo.isPlaced || insideScrollable(node)) return false
-        val visible = node.boundsInRoot
-        return visible.width < node.size.width - 1f || visible.height < node.size.height - 1f
+        if (!node.layoutInfo.isPlaced) return false
+        if (!insideScrollable(node)) {
+            val visible = node.boundsInRoot
+            if (visible.width < node.size.width - 1f || visible.height < node.size.height - 1f) {
+                return true
+            }
+        }
+        val pos = node.positionInRoot
+        val right = pos.x + node.size.width
+        val bottom = pos.y + node.size.height
+        var p = node.parent
+        while (p != null && !isScrollable(p)) {
+            val pp = p.positionInRoot
+            if (pos.x < pp.x - 1f ||
+                pos.y < pp.y - 1f ||
+                right > pp.x + p.size.width + 1f ||
+                bottom > pp.y + p.size.height + 1f
+            ) {
+                return true
+            }
+            p = p.parent
+        }
+        return false
     }
 
     /**
@@ -122,7 +144,7 @@ object A11yAssertions {
      * Todo nodo con acción de clic debe ofrecer un área táctil de al menos 48x48dp. La ampliación
      * automática de Compose (`touchBoundsInRoot`) cubre los componentes M3 con
      * `minimumInteractiveComponentSize`, pero no basta: además el nodo debe verse completo y tener un
-     * tamaño visible mínimo (24dp, WCAG 2.2 AA 2.5.8), de modo que un botón aplastado o recortado falle.
+     * tamaño visible mínimo (16dp: las insignias de diseño miden 22dp y heredan los 48dp de área táctil; un botón aplastado mide ~7dp), de modo que un botón aplastado o recortado falle.
      */
     fun assertTouchTargets(rule: ComposeContentTestRule, screen: String) {
         val density = Density(rule.density.density, 1f)
@@ -137,8 +159,13 @@ object A11yAssertions {
                 val touch = node.touchBoundsInRoot
                 if (insideScrollable(node)) {
                     // Parcialmente fuera de pantalla por el scroll: se mide el tamaño real del nodo.
+                    // Y el nodo debe tener un tamaño visible mínimo (un botón aplastado falla aunque
+                    // la ampliación automática de Compose le dé 48dp de área táctil) y no estar recortado.
                     maxOf(touch.width, node.size.width.toFloat()) < minPx - 1f ||
-                        maxOf(touch.height, node.size.height.toFloat()) < minPx - 1f
+                        maxOf(touch.height, node.size.height.toFloat()) < minPx - 1f ||
+                        node.size.width < minVisiblePx - 1f ||
+                        node.size.height < minVisiblePx - 1f ||
+                        isClippedByAncestor(node)
                 } else {
                     val visible = node.boundsInRoot
                     touch.width < minPx - 1f ||
