@@ -9,6 +9,10 @@ import me.santiagoreina.parcheu.api.twin.memories.ExposedMemoryRepository
 import me.santiagoreina.parcheu.api.twin.memories.InMemoryMemoryRepository
 import me.santiagoreina.parcheu.api.twin.memories.MemoryExtractor
 import me.santiagoreina.parcheu.api.twin.memories.MemoryService
+import me.santiagoreina.parcheu.api.twin.feedback.ExposedFeedbackRepository
+import me.santiagoreina.parcheu.api.twin.feedback.FeedbackRepository
+import me.santiagoreina.parcheu.api.twin.feedback.FeedbackService
+import me.santiagoreina.parcheu.api.twin.feedback.InMemoryFeedbackRepository
 import me.santiagoreina.parcheu.contract.ContractJson
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -26,6 +30,8 @@ class TwinModule(
     val repository: TwinRepository,
     /** Extracción y decisión de memorias (E9.2). */
     val memories: MemoryService,
+    /** Calificaciones, pregunta de control y job `twin-accuracy` (E9.3). */
+    val feedback: FeedbackService,
 )
 
 /** Traduce el UID de Firebase del token al `users.id` (mismo contrato que el de cuotas). */
@@ -60,7 +66,9 @@ fun twinModule(env: Env, db: Database?, clock: Clock, ai: AiGateway, tasks: Task
     }
     val repo = ExposedTwinRepository(db)
     val memories = MemoryService(ExposedMemoryRepository(db), MemoryExtractor(ai), tasks, clock)
-    return TwinModule(TwinService(repo, PersonaBuilder(ai), tasks, clock), ExposedTwinUserLookup(db), repo, memories)
+    val service = TwinService(repo, PersonaBuilder(ai), tasks, clock)
+    val feedback = FeedbackService(ExposedFeedbackRepository(db), repo, service, clock)
+    return TwinModule(service, ExposedTwinUserLookup(db), repo, memories, feedback)
 }
 
 /**
@@ -74,6 +82,7 @@ fun inMemoryTwinModule(
     queue: FakeTaskQueue = FakeTaskQueue(),
     runInline: Boolean = true,
     memoryRepo: InMemoryMemoryRepository = InMemoryMemoryRepository(repo),
+    feedbackRepo: FeedbackRepository = InMemoryFeedbackRepository(),
 ): TwinModule {
     val service = TwinService(repo, PersonaBuilder(ai), queue, clock)
     val memories = MemoryService(memoryRepo, MemoryExtractor(ai), queue, clock)
@@ -86,5 +95,5 @@ fun inMemoryTwinModule(
             }
         }
     }
-    return TwinModule(service, DerivedTwinUserLookup, repo, memories)
+    return TwinModule(service, DerivedTwinUserLookup, repo, memories, FeedbackService(feedbackRepo, repo, service, clock))
 }
