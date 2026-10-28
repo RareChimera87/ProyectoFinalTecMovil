@@ -83,7 +83,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * ProfileScreenTest y ProfileScreenshotTest), G1-G4/I4 (E7.3, feature/plus:
          * PlusNavigationTest, PlusScreenTest y PlusScreenshotTest) y H3 (E8.2, feature/privacysettings:
          * PrivacySettingsViewModelTest, PrivacySettingsScreenTest, SignOutBackStackTest y
-         * PrivacySettingsScreenshotTest), D9 (E6.5) y 'Personas bloqueadas' (E8.7).
+         * PrivacySettingsScreenshotTest), D9 (E6.5), 'Personas bloqueadas' (E8.7) y C4 (E9.3,
+         * feature/traintwin: TrainTwinViewModelTest, TrainTwinScreenTest y TrainTwinScreenshotTest).
          */
         val implementedRoutes =
             setOf(
@@ -120,7 +121,8 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 ManageSubscription::class,
                 PrivacySettings::class,
                 BlockedUsers::class,
-                Evolution::class
+                Evolution::class,
+                TrainTwin::class
             )
     }
 }

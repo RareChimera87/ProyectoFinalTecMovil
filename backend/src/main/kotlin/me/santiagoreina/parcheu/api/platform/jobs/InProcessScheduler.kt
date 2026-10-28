@@ -10,10 +10,12 @@ import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.api.platform.BogotaZone
 import org.slf4j.LoggerFactory
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.time.temporal.TemporalAdjusters
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -53,6 +55,17 @@ open class InProcessScheduler(context: CoroutineContext = Dispatchers.IO) : Auto
             val now = ZonedDateTime.ofInstant(clock.instant(), zone)
             var next = now.with(at)
             if (!next.isAfter(now)) next = next.plusDays(1)
+            return Duration.between(now, next)
+        }
+
+        /**
+         * Retraso hasta el próximo [day] a las [at] en [zone]. Con un periodo de 7 días el job queda anclado
+         * a ese momento de la semana, como un cron semanal de Cloud Scheduler.
+         */
+        fun delayUntilWeekly(day: DayOfWeek, at: LocalTime, clock: Clock, zone: ZoneId = BogotaZone): Duration {
+            val now = ZonedDateTime.ofInstant(clock.instant(), zone)
+            var next = now.with(TemporalAdjusters.nextOrSame(day)).with(at)
+            if (!next.isAfter(now)) next = next.plusWeeks(1)
             return Duration.between(now, next)
         }
     }

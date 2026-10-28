@@ -182,8 +182,9 @@ internal fun LockedReport(
 ) {
     val colors = ParcheUTheme.colors
     Box(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).testTag(ResultsTags.LOCKED)) {
+        // Las tarjetas difuminadas llenan lo que mida el contenido superpuesto (que crece con la fuente).
         Column(
-            Modifier.fillMaxWidth().heightIn(min = LOCKED_MIN_HEIGHT).blur(6.dp).alpha(0.55f),
+            Modifier.matchParentSize().blur(6.dp).alpha(0.55f),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             PlaceholderCard(
@@ -194,7 +195,7 @@ internal fun LockedReport(
             PlaceholderCard("Dónde chocarían", frictionsCount.coerceAtLeast(2), Modifier.weight(1f))
         }
         Column(
-            Modifier.matchParentSize().padding(16.dp),
+            Modifier.fillMaxWidth().heightIn(min = LOCKED_MIN_HEIGHT).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
         ) {

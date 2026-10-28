@@ -24,10 +24,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Identity: ya no queda ningún stub; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
     // E2.6 (catálogo y edad) ProfileApiTest, E8.3 (DELETE /me y exportación) AccountApiTest y E8.2 (privacidad) PrivacyApiTest.
     // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest) y E9.2 las memorias
-    // (MemoryApiTest); el feedback sigue en 501 hasta E9.3.
-    "twin" to listOf(
-        HttpMethod.Get to "/v1/twin/feedback-prompts", HttpMethod.Post to "/v1/twin/feedback",
-    ),
+    // (MemoryApiTest) y E9.3 el feedback (FeedbackApiTest); ya no queda ningún stub.
     // E4.2 implementó todo el dominio matching (MatchingApiTest); ya no queda ningún stub.
     // Simulation: E4.3 (SimulationApiTest) y E4.6 (ReportApiTest) implementaron todas sus rutas /v1.
     // Scenario: E4.8 implementa la lista, la sesión y el acuerdo (ScenarioApiTest); ya no queda ningún stub.
@@ -47,12 +44,11 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
 
 // `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest),
 // `/internal/tasks/purge-user`, E8.3 (AccountApiTest) y `/internal/tasks/extract-memories` y
-// `/internal/jobs/memories`, E9.2 (MemoryApiTest); `/internal/jobs/retention`, E8.8 (RetentionApiTest).
+// `/internal/jobs/memories`, E9.2 (MemoryApiTest); `/internal/jobs/retention`, E8.8 (RetentionApiTest) y `/internal/jobs/twin-accuracy`, E9.3 (FeedbackApiTest).
 // `/internal/tasks/judge-scenario` y `/internal/jobs/scenario-sweep` los implementa E4.8 (ScenarioApiTest); `/internal/tasks/moderate`, E8.6 (ModerationServiceTest).
 private val internalRoutes = listOf(
     "/internal/tasks/name-community",
     "/internal/jobs/communities",
-    "/internal/jobs/twin-accuracy",
 )
 
 class RoutesRegistryTest : FunSpec({

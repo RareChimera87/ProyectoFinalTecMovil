@@ -519,7 +519,8 @@ private fun SuggestionCard(
             style = MaterialTheme.typography.bodySmall,
             color = colors.mu,
             minLines = 2,
-            maxLines = 2,
+            // Con fuente grande el motivo crece en vez de truncarse y perder contenido.
+            maxLines = 4,
             overflow = TextOverflow.Ellipsis
         )
         ModeChip(
@@ -562,7 +563,7 @@ private fun RandomMatchCard(usage: Usage, onRandomMatch: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = colors.mu,
             minLines = 2,
-            maxLines = 2
+            maxLines = 4
         )
         Spacer(Modifier.height(ParcheUSizes.ModeChipSmall))
         PrimaryButton(
