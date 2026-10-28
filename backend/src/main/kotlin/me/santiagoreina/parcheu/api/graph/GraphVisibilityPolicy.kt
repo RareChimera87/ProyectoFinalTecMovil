@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.api.graph
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
 import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
+import me.santiagoreina.parcheu.api.social.requests.ConnectRequestService
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
 import java.util.UUID
@@ -122,6 +123,8 @@ object ThirdPartyViews {
         IntroductionPeople::class,
         // Amigos de amigos (E6.3): candidatos a dos saltos y las aristas que los conectan.
         FofService::class,
+        // Quién quiere conectar contigo (E6.6): decisiones de personas sin conexión mutua, solo Plus.
+        ConnectRequestService::class,
     )
 
     fun names(): Set<String> = registered.mapNotNull { it.simpleName }.toSet()

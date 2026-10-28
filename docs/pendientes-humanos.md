@@ -1018,3 +1018,9 @@ Todo el código quedó hecho y probado en local: el recorrido (`backend/src/e2eT
 | 5 | **Cuentas de prueba huérfanas** (solo si una corrida murió sin limpiar, p. ej. cancelada a mano): llevan el uid `e2e-<hex>-a|b` y `users.is_test = true`. Se borran con `DELETE /v1/me` (purga completa) o desde la consola de Firebase Authentication; el barrido horario `purge-sweep` reintenta las purgas atascadas. | I3 | Si ocurre |
 
 Para correrlo a mano contra dev con tu propio `gcloud`: ver "Smoke e2e (E10.6)" en `docs/desarrollo-local.md`.
+
+## E6.6 · Quién quiere conectar contigo
+
+No hay pasos humanos: es una lectura de `connection_decisions` con la API que ya existe (sin Terraform, secretos, Play Console ni tareas asíncronas nuevas, así que tampoco toca `InProcessTaskQueue` ni `InProcessScheduler`).
+
+Para verla en la variante dev contra el homeserver: con dos cuentas de prueba, que A simule con B, que B decida "Conectar" en F7/F8 y que A (con ParcheU+ de `POST /internal/dev/grant-plus`) abra C2: la sección lista a B enmascarado; sin ParcheU+ A ve el ítem bloqueado con el conteo.

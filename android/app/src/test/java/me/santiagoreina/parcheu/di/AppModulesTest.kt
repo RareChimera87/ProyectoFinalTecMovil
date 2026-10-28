@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.core.error.ApiErrorMapper
 import me.santiagoreina.parcheu.core.network.TokenProvider
 import me.santiagoreina.parcheu.data.auth.AuthRepository
 import me.santiagoreina.parcheu.data.auth.SessionCleaner
+import me.santiagoreina.parcheu.feature.notifications.requests.ConnectRequestsRepository
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -26,10 +27,12 @@ class AppModulesTest {
         ApplicationProvider.getApplicationContext<ParcheUApplication>()
         val koin = GlobalContext.get()
 
-        assertEquals(36, featureModules.size)
+        assertEquals(37, featureModules.size)
         assertNotNull(koin.get<OkHttpClient>())
         assertNotNull(koin.get<TokenProvider>())
         assertNotNull(koin.get<ApiErrorMapper>())
+        // E6.6: la sección de C2 resuelve su repositorio y su API.
+        assertNotNull(koin.get<ConnectRequestsRepository>())
         // Cerrar sesión borra la caché del grafo y el progreso de B1: el repositorio de auth recibe sus limpiadores.
         assertNotNull(koin.get<AuthRepository>())
         assertEquals(3, koin.getAll<SessionCleaner>().size)
