@@ -58,6 +58,8 @@ class MatchingService(
     private val mirror: MatchTicketMirror,
     private val flags: MatchingFlags,
     private val clock: Clock,
+    /** Tras crear el chat SCENARIO: el contenedor lo replica en Firestore (E4.8). Un fallo no deshace el match. */
+    private val onScenarioChatCreated: suspend (UUID) -> Unit = {},
 ) {
     private val log = LoggerFactory.getLogger(MatchingService::class.java)
     private val simulationLocks = java.util.concurrent.ConcurrentHashMap<UUID, Mutex>()
@@ -315,6 +317,9 @@ class MatchingService(
         if (outcome is ScenarioChatOutcome.Unavailable) {
             log.info("El match {} ya no es posible (bloqueo, borrado o suspensión): se cierra sin chat", match.id)
             refundAndNotifyUnavailable(match, outcome.causedBy)
+        } else if (outcome is ScenarioChatOutcome.Created) {
+            // Postgres manda: si el espejo falla, el primer mensaje del chat lo repara.
+            safely("replicar el chat ${outcome.chatId} del match ${match.id}") { onScenarioChatCreated(outcome.chatId) }
         }
     }
 
@@ -414,6 +419,8 @@ class MatchingService(
 
     private suspend fun dto(viewer: UUID, match: MatchRecord): MatchDto {
         val otherId = match.otherThan(viewer)
+        // El chat se crea justo después de pasar a SCENARIO: la respuesta de `choice` trae el match anterior, se relee.
+        val chatId = if (match.status == MatchStatus.SCENARIO) (match.chatId ?: repo.match(match.id)?.chatId) else null
         return MatchDto(
             id = match.id.toString(),
             mode = match.mode,
@@ -422,6 +429,7 @@ class MatchingService(
             myChoice = match.choiceOf(viewer),
             decideBy = match.decideBy.kotlin(),
             scenarioAvailable = flags.scenarioModeEnabled,
+            chatId = chatId?.toString(),
         )
     }
 

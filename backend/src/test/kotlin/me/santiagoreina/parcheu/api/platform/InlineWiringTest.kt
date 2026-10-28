@@ -9,6 +9,7 @@ import me.santiagoreina.parcheu.api.identity.deletion.AccountDeletionService
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
 import me.santiagoreina.parcheu.api.platform.auth.GoogleOidcVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
+import me.santiagoreina.parcheu.api.scenario.ScenarioService
 import me.santiagoreina.parcheu.api.simulation.SimulationService
 import me.santiagoreina.parcheu.api.twin.TwinService
 
@@ -19,7 +20,7 @@ class InlineWiringTest : FunSpec({
         "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://localhost:1/parcheu",
     )
 
-    test("ENV=dev + TASKS_MODE=inline: verificadores reales y los 3 handlers registrados, sin arrancar bucles") {
+    test("ENV=dev + TASKS_MODE=inline: verificadores reales y los 4 handlers registrados, sin arrancar bucles") {
         val vars = devVars + ("TASKS_MODE" to "inline")
         val container = AppContainer.fromConfig(AppConfig.fromEnv(vars), vars)
         try {
@@ -29,6 +30,7 @@ class InlineWiringTest : FunSpec({
             // Cobertura: exactamente las tareas reales de /internal/tasks (el resto son stubs 501).
             background.queue.registeredPaths shouldBe setOf(
                 TwinService.BUILD_PERSONA_PATH, SimulationService.SIMULATE_PATH, AccountDeletionService.PURGE_PATH,
+                ScenarioService.JUDGE_PATH,
             )
         } finally {
             container.background?.close()

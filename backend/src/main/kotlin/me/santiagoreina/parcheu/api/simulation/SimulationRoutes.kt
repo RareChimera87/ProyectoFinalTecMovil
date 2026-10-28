@@ -13,7 +13,6 @@ import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
-import me.santiagoreina.parcheu.api.platform.stubPost
 import me.santiagoreina.parcheu.api.twin.TaskPayload
 import me.santiagoreina.parcheu.contract.Decision
 import me.santiagoreina.parcheu.contract.StartSimulation
@@ -21,7 +20,7 @@ import java.util.UUID
 
 /**
  * Rutas del dominio simulation. E4.3 implementa crear, listar, consultar, transcripción y la tarea
- * `simulate`; E4.6 el informe, su desbloqueo y la decisión; `judge-scenario` es de E4.8.
+ * `simulate`; E4.6 el informe, su desbloqueo y la decisión; `judge-scenario` es del dominio scenario (E4.8).
  *
  * [viewerId] traduce el usuario de Firebase a `users.id` (lo resuelve identity).
  */
@@ -62,7 +61,6 @@ class SimulationRoutes(
             simulation.engine.run(call.receive<TaskPayload>().uuid())
             call.respond(HttpStatusCode.NoContent)
         }
-        stubPost("/tasks/judge-scenario")
     }
 }
 

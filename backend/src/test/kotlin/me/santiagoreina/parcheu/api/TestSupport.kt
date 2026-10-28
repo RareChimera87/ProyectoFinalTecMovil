@@ -44,6 +44,8 @@ import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.allDomains
+import me.santiagoreina.parcheu.api.scenario.ScenarioModule
+import me.santiagoreina.parcheu.api.scenario.inMemoryScenarioModule
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
@@ -101,6 +103,8 @@ fun testContainer(
     billing: BillingModule = inMemoryBillingModule(clock),
     // Administración de reportes (E8.5): por defecto lee el repositorio de safety en memoria y suspende en [repo].
     admin: AdminModule = inMemoryAdminModule(repo, chat, safety, clock),
+    // Modo escenario (E4.8): ScenarioApiTest pasa uno con su propia cola y reloj.
+    scenario: ScenarioModule = inMemoryScenarioModule(clock, ai, quota, graph, chat, simulation, notifier),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
@@ -131,9 +135,10 @@ fun testContainer(
         unread = unread,
         billing = billing,
         invites = invites,
+        scenario = scenario,
         domains = allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
-            invites, billing, config.env, introductions, admin,
+            invites, billing, config.env, introductions, admin, scenario,
         ) + extra,
     )
 }

@@ -31,7 +31,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     ),
     // E4.2 implementó todo el dominio matching (MatchingApiTest); ya no queda ningún stub.
     // Simulation: E4.3 (SimulationApiTest) y E4.6 (ReportApiTest) implementaron todas sus rutas /v1.
-    "scenario" to listOf(HttpMethod.Get to "/v1/scenarios", HttpMethod.Post to "/v1/scenario-sessions/c1/agreement"),
+    // Scenario: E4.8 implementa la lista, la sesión y el acuerdo (ScenarioApiTest); ya no queda ningún stub.
     "graph" to listOf(
         // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest) y /v1/graph/fof E6.3 (FofApiTest).
         HttpMethod.Get to "/v1/graph/history", HttpMethod.Get to "/v1/communities", HttpMethod.Get to "/v1/connect-requests",
@@ -47,8 +47,8 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
 
 // `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest) y
 // `/internal/tasks/purge-user`, E8.3 (AccountApiTest).
+// `/internal/tasks/judge-scenario` y `/internal/jobs/scenario-sweep` los implementa E4.8 (ScenarioApiTest).
 private val internalRoutes = listOf(
-    "/internal/tasks/judge-scenario",
     "/internal/tasks/extract-memories", "/internal/tasks/moderate", "/internal/tasks/name-community",
     "/internal/jobs/communities", "/internal/jobs/memories",
     "/internal/jobs/twin-accuracy", "/internal/jobs/retention",

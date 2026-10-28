@@ -83,6 +83,12 @@ interface SimulationRepository {
      * antiguas primero, hasta [limit]. Las usa la recuperación tras un reinicio (`TASKS_MODE=inline`).
      */
     suspend fun unfinished(createdBefore: Instant, createdAfter: Instant, limit: Int): List<SimulationRecord>
+
+    /**
+     * Evaluaciones de modo escenario (`origin = SCENARIO`, E4.8) QUEUED o RUNNING creadas antes de [createdBefore],
+     * las más antiguas primero. [unfinished] las excluye: no se simulan con gemelos, las evalúa `judge-scenario`.
+     */
+    suspend fun unfinishedScenarios(createdBefore: Instant, limit: Int): List<SimulationRecord>
 }
 
 /** Cursor de `GET /v1/simulations`: `<epochMicros>_<uuid>` de la última fila de la página anterior. */

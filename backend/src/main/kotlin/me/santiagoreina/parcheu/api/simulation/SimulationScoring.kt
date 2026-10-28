@@ -22,10 +22,14 @@ object SimulationScoring {
     fun score(traitSimilarity: Double, judgeAverage: Double): Int =
         (TRAIT_WEIGHT * traitSimilarity + JUDGE_WEIGHT * judgeAverage).roundToInt().coerceIn(0, 100)
 
-    fun report(traitsA: List<Double>, traitsB: List<Double>, verdicts: List<JudgeVerdict>): StoredReport {
+    /**
+     * Informe de la simulación. Sin rasgos de alguna de las dos personas (solo en el modo escenario, E4.8, si un
+     * gemelo ya no existe) la similitud se iguala al promedio del juez: el puntaje es entonces el del juez.
+     */
+    fun report(traitsA: List<Double>?, traitsB: List<Double>?, verdicts: List<JudgeVerdict>): StoredReport {
         require(verdicts.isNotEmpty()) { "Sin veredictos no hay informe" }
-        val similarity = traitSimilarity(traitsA, traitsB)
         val judgeAverage = verdicts.map { it.affinity }.average()
+        val similarity = if (traitsA != null && traitsB != null) traitSimilarity(traitsA, traitsB) else judgeAverage
         return StoredReport(
             score = score(similarity, judgeAverage),
             traitSimilarity = similarity,
