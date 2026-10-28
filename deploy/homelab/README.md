@@ -35,7 +35,7 @@ Datos de demostración: `ssh user@homelab 'cd ~/parcheu && docker compose run --
 
 ### Tareas en proceso (`TASKS_MODE=inline`)
 
-Sin Cloud Tasks ni Cloud Scheduler, la API ejecuta las tareas asíncronas dentro del proceso (`InProcessTaskQueue`): `build-persona`, `simulate` y `purge-user`, con hasta 5 intentos (10/30/90/270 s con jitter), concurrencia por cola (simulaciones 2, IA ligera 4, mantenimiento 1) y deduplicación por nombre durante 1 h. Un programador interno corre los jobs `match-sweep` (cada 60 s), `purge-sweep` (cada hora) y `simulation-recovery` (cada 15 min; reencola las simulaciones QUEUED/RUNNING de entre 10 min y 24 h, p. ej. tras un reinicio). Retention, communities, memories y twin-accuracy siguen siendo stubs y no se programan. `inline` se rechaza con `ENV=prod` y dentro de Cloud Run.
+Sin Cloud Tasks ni Cloud Scheduler, la API ejecuta las tareas asíncronas dentro del proceso (`InProcessTaskQueue`): `build-persona`, `simulate`, `purge-user` y `extract-memories`, con hasta 5 intentos (10/30/90/270 s con jitter), concurrencia por cola (simulaciones 2, IA ligera 4, mantenimiento 1) y deduplicación por nombre durante 1 h. Un programador interno corre los jobs `match-sweep` (cada 60 s), `purge-sweep` (cada hora) `simulation-recovery` (cada 15 min; reencola las simulaciones QUEUED/RUNNING de entre 10 min y 24 h, p. ej. tras un reinicio) y `memories` (diario a las 02:00 de Bogotá, como en Cloud Scheduler; encola `extract-memories-<uuid>-<fecha>` por usuario con mensajes aprendibles nuevos; el nombre por día solo deduplica dentro del mismo proceso, porque la deduplicación de `InProcessTaskQueue` vive en memoria y se pierde al reiniciar: lo que evita el trabajo doble es el cursor de aprendizaje, que avanza junto con las memorias guardadas. Tras un reinicio el job no corre hasta las 02:00 siguientes; si el servidor está caído a esa hora, se recupera la noche siguiente, con un tope de 200 mensajes por usuario y ejecución). Retention, communities y twin-accuracy siguen siendo stubs y no se programan. `inline` se rechaza con `ENV=prod` y dentro de Cloud Run.
 
 Respaldo a mano: `ssh user@homelab '~/parcheu/respaldar.sh'`. Restaurar: `gunzip -c parcheu-AAAAMMDD-HHMMSS.sql.gz | docker compose exec -T parcheu-db psql -U parcheu parcheu` (con la base vacía).
 Registros: `ssh user@homelab 'cd ~/parcheu && docker compose logs -f parcheu-api'`.
@@ -111,7 +111,7 @@ INTERNAL_OIDC_AUDIENCE=https://api-parcheu.homeserverlab.site
 
 y `cd ~/parcheu && docker compose up -d parcheu-api`. Usa el mismo proyecto de Firebase que el flavor `dev` de la app (`parcheu-dev`). Las migraciones son iguales. `ENV=dev` exige proyecto de Firebase, audiencia https y una cuenta de servicio como `TASKS_SERVICE_ACCOUNT`; si falta algo, la API no arranca y el mensaje sale en los registros.
 
-Las tareas asíncronas (gemelo, simulaciones, purga de cuentas) y los jobs periódicos corren dentro de la API (`TASKS_MODE=inline`); no hace falta crear colas.
+Las tareas asíncronas (gemelo, memorias, simulaciones, purga de cuentas) y los jobs periódicos corren dentro de la API (`TASKS_MODE=inline`); no hace falta crear colas.
 
 ## HTTPS con Nginx Proxy Manager (paso del usuario)
 

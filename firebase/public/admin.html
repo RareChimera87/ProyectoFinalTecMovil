@@ -122,7 +122,7 @@ function pintarSnapshot(reporte) {
   for (const m of mensajes) {
     const p = el("p", m.hidden ? "(mensaje oculto)" : m.text, m.hidden ? "oculto" : "");
     if (m.id === reporte.messageId) p.classList.add("objetivo");
-    const quien = m.senderId === null ? "sistema" : m.senderId === reporte.targetId ? "reportado" : "otra persona";
+    const quien = reporte.kind === "AI_CONTENT" ? "IA" : m.senderId === null ? "sistema" : m.senderId === reporte.targetId ? "reportado" : "otra persona";
     p.title = `${quien} · ${fecha(m.createdAt)}`;
     if (!m.hidden) p.prepend(el("strong", quien + ": "));
     caja.append(p);
@@ -141,7 +141,7 @@ function pintarReporte(r) {
   const ids = [];
   if (r.targetId) ids.push("reportado " + r.targetId);
   if (r.messageId) ids.push("mensaje " + r.messageId);
-  if (r.simulationId) ids.push(`simulación ${r.simulationId} turno ${r.turnIndex}`);
+  if (r.simulationId) ids.push(`simulación ${r.simulationId} ` + (r.turnIndex === -1 ? "informe completo" : `turno ${r.turnIndex}`));
   if (ids.length) tarjeta.append(el("p", ids.join(" · "), "meta"));
   const snap = pintarSnapshot(r);
   if (snap) tarjeta.append(snap);

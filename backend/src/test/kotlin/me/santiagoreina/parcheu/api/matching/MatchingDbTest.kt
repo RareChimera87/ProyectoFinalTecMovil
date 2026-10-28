@@ -5,6 +5,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
@@ -368,6 +369,31 @@ class MatchingDbTest : FunSpec({
                 sim[Simulations.origin] shouldBe SimulationOrigin.RANDOM
                 Matches.selectAll().where { Matches.id eq UUID.fromString(second) }.single()[Matches.simulationId] shouldBe sim[Simulations.id]
                 UsageEvents.selectAll().count { it[UsageEvents.kind] == me.santiagoreina.parcheu.contract.QuotaKind.SIMULATION } shouldBe 0
+            }
+        }
+    }
+
+    test("Postgres: bloquear cancela el match pendiente y deja EXPIRED los tickets de ambos (E8.7)").config(enabled = TestDatabase.enabled) {
+        withDb { db ->
+            val w = World(db)
+            val ana = db.user("ana")
+            val beto = db.user("beto")
+            w.service.enqueue(ana, Mode.AMISTAD)
+            w.service.enqueue(beto, Mode.AMISTAD).matchId.shouldNotBeNull()
+
+            w.service.cancelPendingMatchBetween(beto, ana)
+            // Idempotente: sin match pendiente no hace nada.
+            w.service.cancelPendingMatchBetween(beto, ana)
+
+            transaction(db) {
+                Matches.selectAll().single()[Matches.status] shouldBe MatchStatus.EXPIRED
+                MatchQueue.selectAll().map { it[MatchQueue.status] to it[MatchQueue.matchId] }.forEach { (status, matchId) ->
+                    status shouldBe TicketStatus.EXPIRED
+                    matchId.shouldBeNull()
+                }
+            }
+            listOf("ana", "beto").forEach { name ->
+                w.mirror.last("uid-$name").shouldNotBeNull()
             }
         }
     }

@@ -18,6 +18,13 @@ interface AppNavigator {
      */
     fun navigateReplacing(route: AppRoute, replacing: KClass<out AppRoute>) = navigate(route)
 
+    /**
+     * Quita de la pila [replacing] y todo lo que haya encima (si no está, solo la pantalla actual) y abre
+     * [route] como entrada nueva, sin reutilizar ninguna (con su propio ViewModel). Para destinos cuyo
+     * argumento debe aplicarse siempre, p. ej. D8 -> D1 filtrado. Por defecto solo navega.
+     */
+    fun navigateAsNew(route: AppRoute, replacing: KClass<out AppRoute>) = navigate(route)
+
     /** Cambia de pestaña de la NavBar conservando el estado de cada raíz. */
     fun navigateToTopLevel(route: AppRoute)
 
@@ -41,6 +48,12 @@ class NavControllerNavigator(private val navController: NavHostController) : App
             popUpTo(replacing) { inclusive = true }
             launchSingleTop = true
         }
+    }
+
+    override fun navigateAsNew(route: AppRoute, replacing: KClass<out AppRoute>) {
+        // Sin launchSingleTop: una entrada reutilizada conservaría su ViewModel y el argumento nuevo se ignoraría.
+        if (!navController.popBackStack(replacing, inclusive = true)) navController.popBackStack()
+        navController.navigate(route)
     }
 
     override fun navigateToTopLevel(route: AppRoute) {

@@ -162,7 +162,10 @@ data class Report(
     val userId: String,
     val chatId: String? = null,
     val name: String? = null,
-    val anonymous: Boolean = false
+    val anonymous: Boolean = false,
+    /** Reporte de contenido de la IA (E8.7): simulación y turno; con ellos [userId] va vacío. */
+    val simulationId: String? = null,
+    val turnIndex: Int? = null
 ) : AppRoute
 
 /** H3 · Ajustes de privacidad. */

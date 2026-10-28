@@ -15,6 +15,7 @@ object Blocks : Table("blocks") {
     val blockerId = userRef("blocker_id", ReferenceOption.CASCADE)
     val blockedId = userRef("blocked_id", ReferenceOption.CASCADE)
     val createdAt = timestampWithTimeZone("created_at")
+    val wasConnected = bool("was_connected").default(false)
     override val primaryKey = PrimaryKey(blockerId, blockedId)
 }
 

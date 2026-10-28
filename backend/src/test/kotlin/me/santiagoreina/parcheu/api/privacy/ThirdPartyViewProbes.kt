@@ -17,6 +17,9 @@ import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
 import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
+import me.santiagoreina.parcheu.api.social.requests.ConnectRequestRepository
+import me.santiagoreina.parcheu.api.social.requests.ConnectRequestService
+import me.santiagoreina.parcheu.api.social.requests.PendingConnect
 import me.santiagoreina.parcheu.contract.Mode
 import java.util.UUID
 import kotlin.reflect.KClass
@@ -45,6 +48,7 @@ object ThirdPartyViewProbes {
         IntroductionPeople::class to IntroductionsProbe,
         FofService::class to FofProbe,
         CommunitiesView::class to CommunitiesProbe,
+        ConnectRequestService::class to ConnectRequestsProbe,
     )
 
     val reference: List<ThirdPartyViewProbe> = listOf(ThirdPartyNodesProbe, EgoGraphProbe)
@@ -198,5 +202,25 @@ object CommunitiesProbe : ThirdPartyViewProbe {
         val ids = communities.flatMap { community -> community.members.map { it.id } } +
             dto.items.orEmpty().flatMap { item -> item.members.map { checkNotNull(it.id ?: it.anonId) } }
         return Exposure(personIds = ids, edges = emptyList())
+    }
+}
+
+/**
+ * Quién quiere conectar contigo (E6.6) con ParcheU+ (el caso que entrega la lista). Peor caso: el
+ * repositorio devuelve una solicitud de **todas** las personas del mundo, así que solo la policy separa
+ * una fuga. Cada solicitante se expone por su id público: nunca HIDDEN, bloqueados ni borrados, y siempre
+ * con su `anonId` (aún no hay conexión mutua).
+ */
+object ConnectRequestsProbe : ThirdPartyViewProbe {
+    override val name = "quién quiere conectar contigo"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val everyone = ConnectRequestRepository { _, _ ->
+            world.people.filter { it.id != viewer }.map { PendingConnect(UUID.randomUUID(), it.id, Mode.AMISTAD, 50, java.time.Instant.EPOCH) }
+        }
+        val view = ConnectRequestService(everyone, world.toGraphRepository(), GraphVisibilityPolicy(signer), isPlus = { true })
+        val dto = view.requests(viewer)
+        return Exposure(personIds = dto.items.orEmpty().map { checkNotNull(it.other.id ?: it.other.anonId) }, edges = emptyList())
     }
 }

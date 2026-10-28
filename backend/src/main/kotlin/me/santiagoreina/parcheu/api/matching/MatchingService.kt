@@ -58,6 +58,8 @@ class MatchingService(
     private val mirror: MatchTicketMirror,
     private val flags: MatchingFlags,
     private val clock: Clock,
+    /** Tras crear el chat SCENARIO: el contenedor lo replica en Firestore (E4.8). Un fallo no deshace el match. */
+    private val onScenarioChatCreated: suspend (UUID) -> Unit = {},
 ) {
     private val log = LoggerFactory.getLogger(MatchingService::class.java)
     private val simulationLocks = java.util.concurrent.ConcurrentHashMap<UUID, Mutex>()
@@ -315,6 +317,9 @@ class MatchingService(
         if (outcome is ScenarioChatOutcome.Unavailable) {
             log.info("El match {} ya no es posible (bloqueo, borrado o suspensión): se cierra sin chat", match.id)
             refundAndNotifyUnavailable(match, outcome.causedBy)
+        } else if (outcome is ScenarioChatOutcome.Created) {
+            // Postgres manda: si el espejo falla, el primer mensaje del chat lo repara.
+            safely("replicar el chat ${outcome.chatId} del match ${match.id}") { onScenarioChatCreated(outcome.chatId) }
         }
     }
 
@@ -326,6 +331,25 @@ class MatchingService(
     private suspend fun refundAndNotifyUnavailable(match: MatchRecord, causedBy: Set<UUID>) {
         listOf(match.userA, match.userB).filterNot { it in causedBy }.forEach { safely("devolver el cupo del match ${match.id}") { quota.refund(QuotaKind.RANDOM_MATCH, "${match.id}:$it") } }
         notifyMatchExpired(match, title = UNAVAILABLE_TITLE, body = UNAVAILABLE_BODY)
+    }
+
+    /**
+     * Un bloqueo (E8.7, desde F2 o desde cualquier otra pantalla) cancela el match que esperaba la elección entre
+     * [blocker] y [blocked]: el match pasa a EXPIRED, los tickets de **ambos** quedan EXPIRED y se republican en
+     * `matchTickets/{uid}`, y se devuelve el cupo solo a quien no bloqueó (como en un cierre por bloqueo posterior).
+     * Idempotente: sin match pendiente entre los dos no hace nada.
+     */
+    suspend fun cancelPendingMatchBetween(blocker: UUID, blocked: UUID) {
+        val pending = repo.pendingMatchOf(blocker)?.takeIf { it.involves(blocked) } ?: return
+        val closed = repo.updateMatch(pending.id) { current ->
+            current.copy(status = MatchStatus.EXPIRED).takeIf { current.status == MatchStatus.PENDING_CHOICE }
+        }
+        if (closed == null || closed.before.status != MatchStatus.PENDING_CHOICE) return
+        for (ticket in repo.expireMatchTickets(pending.id)) {
+            val person = repo.person(ticket.userId) ?: continue
+            publish(person.firebaseUid, ticket.userId)
+        }
+        refundAndNotifyUnavailable(pending, causedBy = setOf(blocker))
     }
 
     /**
@@ -414,6 +438,8 @@ class MatchingService(
 
     private suspend fun dto(viewer: UUID, match: MatchRecord): MatchDto {
         val otherId = match.otherThan(viewer)
+        // El chat se crea justo después de pasar a SCENARIO: la respuesta de `choice` trae el match anterior, se relee.
+        val chatId = if (match.status == MatchStatus.SCENARIO) (match.chatId ?: repo.match(match.id)?.chatId) else null
         return MatchDto(
             id = match.id.toString(),
             mode = match.mode,
@@ -422,6 +448,7 @@ class MatchingService(
             myChoice = match.choiceOf(viewer),
             decideBy = match.decideBy.kotlin(),
             scenarioAvailable = flags.scenarioModeEnabled,
+            chatId = chatId?.toString(),
         )
     }
 

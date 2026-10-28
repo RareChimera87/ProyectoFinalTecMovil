@@ -42,6 +42,7 @@ import me.santiagoreina.parcheu.feature.traintwin.TrainTwinRoute
 import me.santiagoreina.parcheu.feature.twinquestions.TwinQuestionsRoute
 import me.santiagoreina.parcheu.feature.twinready.TwinReadyRoute
 import me.santiagoreina.parcheu.feature.underage.UnderageRoute
+import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * Grafo de navegación completo (ADR-0006). Declara todas las rutas de [AppRoute] con su `XRoute`; queda
@@ -68,7 +69,9 @@ fun AppNavHost(
         composable<Consent> { ConsentRoute(it.toRoute(), navigator) }
         composable<TwinReady> { TwinReadyRoute(it.toRoute(), navigator) }
         composable<Home> { HomeRoute(it.toRoute(), navigator) }
-        composable<Notifications> { NotificationsRoute(it.toRoute(), navigator) }
+        composable<Notifications> {
+            NotificationsRoute(it.toRoute(), navigator, requestsViewModel = koinViewModel())
+        }
         composable<Profile> { ProfileRoute(it.toRoute(), navigator) }
         composable<TrainTwin> { TrainTwinRoute(it.toRoute(), navigator) }
         composable<AddFriends> { AddFriendsRoute(it.toRoute(), navigator) }

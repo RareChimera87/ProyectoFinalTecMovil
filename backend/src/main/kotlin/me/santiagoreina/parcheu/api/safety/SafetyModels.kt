@@ -14,6 +14,8 @@ import java.util.UUID
 data class BlockRow(
     val blocked: PersonRow,
     val createdAt: Instant,
+    /** Había conexión mutua al bloquear: quien bloquea ya la conocía por nombre (E8.7). */
+    val wasConnected: Boolean = false,
 )
 
 /** Mensaje copiado a `reports.snapshot` (dato personal: lo limpian E8.3 y E8.8). */
@@ -58,4 +60,11 @@ fun snapshotJson(messages: List<SnapshotMessage>): JsonArray = buildJsonArray {
             },
         )
     }
+}
+
+/** Texto plano del informe de una simulación, lo que se copia a `reports.snapshot` en un reporte del informe (F8). */
+fun me.santiagoreina.parcheu.api.simulation.StoredReport.asReportedText(): String = buildString {
+    append(summary)
+    if (reasons.isNotEmpty()) append("\n\nRazones:\n").append(reasons.joinToString("\n") { "- $it" })
+    if (frictions.isNotEmpty()) append("\n\nFricciones:\n").append(frictions.joinToString("\n") { "- $it" })
 }

@@ -4,6 +4,7 @@ import me.santiagoreina.parcheu.api.graph.communities.CommunitiesView
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.home.HomeSuggestions
 import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
+import me.santiagoreina.parcheu.api.social.requests.ConnectRequestService
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
 import java.util.UUID
@@ -125,6 +126,8 @@ object ThirdPartyViews {
         FofService::class,
         // Comunidades (E6.4): los miembros de cada comunidad del observador.
         CommunitiesView::class,
+        // Quién quiere conectar contigo (E6.6): decisiones de personas sin conexión mutua, solo Plus.
+        ConnectRequestService::class,
     )
 
     fun names(): Set<String> = registered.mapNotNull { it.simpleName }.toSet()

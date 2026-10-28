@@ -23,19 +23,18 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Identity: ya no queda ningún stub; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
     // E2.6 (catálogo y edad) ProfileApiTest, E8.3 (DELETE /me y exportación) AccountApiTest y E8.2 (privacidad) PrivacyApiTest.
-    // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest); el resto sigue en 501.
+    // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest) y E9.2 las memorias
+    // (MemoryApiTest); el feedback sigue en 501 hasta E9.3.
     "twin" to listOf(
-        HttpMethod.Get to "/v1/twin/memories",
-        HttpMethod.Post to "/v1/twin/memories/m1/accept", HttpMethod.Post to "/v1/twin/memories/m1/reject",
         HttpMethod.Get to "/v1/twin/feedback-prompts", HttpMethod.Post to "/v1/twin/feedback",
     ),
     // E4.2 implementó todo el dominio matching (MatchingApiTest); ya no queda ningún stub.
     // Simulation: E4.3 (SimulationApiTest) y E4.6 (ReportApiTest) implementaron todas sus rutas /v1.
-    "scenario" to listOf(HttpMethod.Get to "/v1/scenarios", HttpMethod.Post to "/v1/scenario-sessions/c1/agreement"),
+    // Scenario: E4.8 implementa la lista, la sesión y el acuerdo (ScenarioApiTest); ya no queda ningún stub.
     "graph" to listOf(
-        // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest) y /v1/graph/fof E6.3 (FofApiTest).
-        // GET /v1/communities lo implementa E6.4 (CommunityApiTest).
-        HttpMethod.Get to "/v1/graph/history", HttpMethod.Get to "/v1/connect-requests",
+        // GET /v1/connect-requests lo implementa E6.6 (ConnectRequestApiTest).
+        // GET /v1/graph y /v1/graph/nodes/{id} los implementa E3.1 (GraphApiTest), /v1/graph/fof E6.3 (FofApiTest) y /v1/graph/history E6.5 (HistoryApiTest).
+        // GET /v1/communities lo implementa E6.4 (CommunityApiTest); ya no queda ningún stub en graph.
     ),
     // Social: E6.1 implementa las invitaciones (InviteApiTest) y E6.2 las presentaciones (IntroductionApiTest); ya no queda ningún stub.
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
@@ -46,14 +45,14 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Home: E4.7 implementa GET /v1/home (HomeApiTest); ya no queda ningún stub.
 )
 
-// `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest) y
-// `/internal/tasks/purge-user`, E8.3 (AccountApiTest); `/internal/tasks/name-community` y `/internal/jobs/communities`,
-// E6.4 (CommunityApiTest).
+// `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest),
+// `/internal/tasks/purge-user`, E8.3 (AccountApiTest) y `/internal/tasks/extract-memories` y
+// `/internal/jobs/memories`, E9.2 (MemoryApiTest); `/internal/jobs/retention`, E8.8 (RetentionApiTest).
+// `/internal/tasks/judge-scenario` y `/internal/jobs/scenario-sweep` los implementa E4.8 (ScenarioApiTest);
+// `/internal/tasks/name-community` y `/internal/jobs/communities`, E6.4 (CommunityApiTest).
 private val internalRoutes = listOf(
-    "/internal/tasks/judge-scenario",
-    "/internal/tasks/extract-memories", "/internal/tasks/moderate",
-    "/internal/jobs/memories",
-    "/internal/jobs/twin-accuracy", "/internal/jobs/retention",
+    "/internal/tasks/moderate",
+    "/internal/jobs/twin-accuracy",
 )
 
 class RoutesRegistryTest : FunSpec({

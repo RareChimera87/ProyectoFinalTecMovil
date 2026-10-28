@@ -20,6 +20,8 @@ import me.santiagoreina.parcheu.api.admin.AdminModule
 import me.santiagoreina.parcheu.api.admin.inMemoryAdminModule
 import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.social.invites.InviteModule
+import me.santiagoreina.parcheu.api.social.requests.ConnectRequestModule
+import me.santiagoreina.parcheu.api.social.requests.inMemoryConnectRequestModule
 import me.santiagoreina.parcheu.api.social.invites.inMemoryInviteModule
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.graph.GraphModule
@@ -46,6 +48,8 @@ import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.allDomains
+import me.santiagoreina.parcheu.api.scenario.ScenarioModule
+import me.santiagoreina.parcheu.api.scenario.inMemoryScenarioModule
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
@@ -90,7 +94,7 @@ fun testContainer(
     simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph, chat = chat),
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
-    safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
+    safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching, simulation = simulation),
     notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
     // Por defecto la campana de Inicio cuenta en la misma bandeja que C2 (E5.4).
     unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
@@ -99,12 +103,16 @@ fun testContainer(
     introductionStore: IntroductionRepository = InMemoryIntroductionRepository(),
     introductions: IntroductionModule = introductionModule(introductionStore, simulation, graph, chat, quota, notifier, clock),
     invites: InviteModule = inMemoryInviteModule(clock, graph, simulation, notifier),
+    // Solicitudes de conexión (E6.6): por defecto lee las decisiones en memoria de [simulation].
+    connectRequests: ConnectRequestModule = inMemoryConnectRequestModule(simulation, graph, quota),
     // Billing (E7.1): para que `verify` dé Plus en el cupo, pasar también `quota` con `billing.entitlements`.
     billing: BillingModule = inMemoryBillingModule(clock),
     // Administración de reportes (E8.5): por defecto lee el repositorio de safety en memoria y suspende en [repo].
     admin: AdminModule = inMemoryAdminModule(repo, chat, safety, clock),
     // Comunidades (E6.4): por defecto sobre el grafo en memoria y los rasgos del gemelo en memoria.
     communities: CommunityModule = inMemoryCommunityModule(graph, ai, quota, clock, traitsOf = { twin.repository.state(it)?.traits }),
+    // Modo escenario (E4.8): ScenarioApiTest pasa uno con su propia cola y reloj.
+    scenario: ScenarioModule = inMemoryScenarioModule(clock, ai, quota, graph, chat, simulation, notifier),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
@@ -136,9 +144,11 @@ fun testContainer(
         billing = billing,
         invites = invites,
         communities = communities,
+        connectRequests = connectRequests,
+        scenario = scenario,
         domains = allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
-            invites, billing, config.env, introductions, admin, communities,
+            invites, billing, config.env, introductions, admin, communities, scenario, connectRequests,
         ) + extra,
     )
 }

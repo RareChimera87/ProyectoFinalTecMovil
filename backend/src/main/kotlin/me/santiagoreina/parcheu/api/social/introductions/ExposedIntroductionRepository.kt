@@ -68,6 +68,14 @@ class ExposedIntroductionRepository(private val db: Database) : IntroductionRepo
             .map { it.toRecord() }
     }
 
+    override suspend fun involving(userId: UUID, limit: Int): List<IntroductionRecord> = tx {
+        Introductions.selectAll()
+            .where { (Introductions.userA eq userId) or (Introductions.userB eq userId) }
+            .orderBy(Introductions.createdAt, SortOrder.DESC)
+            .limit(limit)
+            .map { it.toRecord() }
+    }
+
     override suspend fun update(id: UUID, change: (IntroductionRecord) -> IntroductionRecord): Pair<IntroductionRecord, IntroductionRecord>? = tx {
         // FOR UPDATE: las respuestas de las dos personas presentadas se serializan (E6.2).
         val before = Introductions.selectAll().where { Introductions.id eq id }.forUpdate().singleOrNull()?.toRecord()

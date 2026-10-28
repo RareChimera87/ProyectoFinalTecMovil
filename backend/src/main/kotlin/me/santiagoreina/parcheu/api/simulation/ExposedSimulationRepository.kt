@@ -102,6 +102,8 @@ class ExposedSimulationRepository(private val db: Database) : SimulationReposito
                 title = row[Scenarios.title],
                 prompt = row[Scenarios.prompt],
                 isBasic = row[Scenarios.isBasic],
+                timerSec = row[Scenarios.timerSec],
+                budgetCop = row[Scenarios.budgetCop],
                 rubric = ContractJson.decodeFromJsonElement(ListSerializer(RubricItem.serializer()), row[Scenarios.rubric]),
             )
         }
@@ -166,7 +168,9 @@ class ExposedSimulationRepository(private val db: Database) : SimulationReposito
             .where {
                 samePair and (Simulations.mode eq mode) and (Simulations.status eq SimulationStatus.DONE) and
                     (Simulations.finishedAt greater since.odt()) and (Simulations.id neq excluding) and
-                    (Simulations.origin neq SimulationOrigin.INTRODUCTION)
+                    (Simulations.origin neq SimulationOrigin.INTRODUCTION) and
+                    // Una conversación humana (E4.8) nunca sirve de caché de una simulación entre gemelos.
+                    (Simulations.origin neq SimulationOrigin.SCENARIO)
             }
             .orderBy(Simulations.finishedAt to SortOrder.DESC)
             .limit(1)
@@ -178,8 +182,19 @@ class ExposedSimulationRepository(private val db: Database) : SimulationReposito
     override suspend fun unfinished(createdBefore: Instant, createdAfter: Instant, limit: Int): List<SimulationRecord> = tx {
         Simulations.selectAll()
             .where {
-                (Simulations.status inList UNFINISHED) and
+                (Simulations.status inList UNFINISHED) and (Simulations.origin neq SimulationOrigin.SCENARIO) and
                     (Simulations.createdAt less createdBefore.odt()) and (Simulations.createdAt greater createdAfter.odt())
+            }
+            .orderBy(Simulations.createdAt to SortOrder.ASC, Simulations.id to SortOrder.ASC)
+            .limit(limit)
+            .map { it.toRecord() }
+    }
+
+    override suspend fun unfinishedScenarios(createdBefore: Instant, limit: Int): List<SimulationRecord> = tx {
+        Simulations.selectAll()
+            .where {
+                (Simulations.status inList UNFINISHED) and (Simulations.origin eq SimulationOrigin.SCENARIO) and
+                    (Simulations.createdAt less createdBefore.odt())
             }
             .orderBy(Simulations.createdAt to SortOrder.ASC, Simulations.id to SortOrder.ASC)
             .limit(limit)

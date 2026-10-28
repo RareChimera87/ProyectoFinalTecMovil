@@ -30,6 +30,8 @@ class SimulationModule(
     val repository: SimulationRepository,
     /** Informe, desbloqueo y decisión mutua (E4.6). */
     val report: ReportService,
+    /** Decisiones de conexión (E4.6): `GET /v1/connect-requests` (E6.6) las lee sin pasar por [report]. */
+    val reportRepository: ReportRepository,
 )
 
 /**
@@ -124,5 +126,5 @@ private fun assemble(
     val engine = SimulationEngine(repo, ai, quota.service, graph.edges, mirror, notifier, clock)
     val report = ReportService(repo, reportRepo, quota.service, graph.edges, chat.service, push, people, clock, demo)
     val service = SimulationService(repo, quota.service, ai, tasks, people, mirror, clock, report, demoUsersEnabled)
-    return SimulationModule(service, engine, repo, report)
+    return SimulationModule(service, engine, repo, report, reportRepo)
 }

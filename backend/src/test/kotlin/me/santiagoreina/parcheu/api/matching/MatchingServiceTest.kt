@@ -290,6 +290,10 @@ class MatchingServiceTest : FunSpec({
         chat.mode shouldBe Mode.AMISTAD
         chat.endsAt shouldBe f.clock.now.plusSeconds(600)
         f.matchRepo.match(UUID.fromString(id))!!.chatId shouldBe chat.id
+        // E4.8: la respuesta de `choice` ya trae el id del chat (F3 lo abre con él) y el chat se replica en Firestore.
+        done.chatId shouldBe chat.id.toString()
+        f.service.match(ana, id).chatId shouldBe chat.id.toString()
+        f.mirroredChats.toList() shouldBe listOf(chat.id)
     }
 
     test("un bloqueo posterior al match impide el chat SCENARIO: el match vence, se devuelve el cupo y se avisa") {

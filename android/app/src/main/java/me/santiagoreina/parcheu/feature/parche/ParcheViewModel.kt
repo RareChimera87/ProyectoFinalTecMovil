@@ -69,23 +69,15 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
     private var filters = ParcheFilters()
     private var loadJob: Job? = null
     private var started = false
-    private var routeCommunity: String? = null
 
     /**
-     * Primera carga; [community] llega de D8 ("Ver en el grafo"). Repetirla con el mismo valor no hace nada
-     * (rotación, recomposición). Si la entrada de D1 se reutiliza (launchSingleTop) y llega otra comunidad,
-     * se aplica el filtro aunque el VM ya haya arrancado.
+     * Primera carga; [community] llega de D8 ("Ver en el grafo"), que abre D1 como entrada nueva (con su
+     * propio ViewModel), así que cada "Ver en el grafo" arranca filtrado. Repetir la llamada no hace nada
+     * (rotación, recomposición).
      */
     fun start(community: String? = null) {
-        if (started) {
-            if (community == null || community == routeCommunity) return
-            routeCommunity = community
-            filters = filters.copy(communityId = community)
-            load(useCache = false)
-            return
-        }
+        if (started) return
         started = true
-        routeCommunity = community
         filters = ParcheFilters(communityId = community)
         load(useCache = community == null)
     }

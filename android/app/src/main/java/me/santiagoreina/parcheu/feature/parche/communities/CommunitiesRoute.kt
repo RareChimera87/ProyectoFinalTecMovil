@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.santiagoreina.parcheu.navigation.AppNavigator
-import me.santiagoreina.parcheu.navigation.Communities
+import me.santiagoreina.parcheu.navigation.Parche
 import org.koin.compose.viewmodel.koinViewModel
 
 /** D8 (E6.4): comunidades. Se abre desde el filtro "Comunidad" de D1 (ParcheU+). */
@@ -29,7 +29,7 @@ fun CommunitiesScreenRoute(
             when (effect) {
                 is CommunitiesEffect.Navigate ->
                     if (effect.replaceCommunities) {
-                        navigator.navigateReplacing(effect.route, Communities::class)
+                        navigator.navigateAsNew(effect.route, Parche::class)
                     } else {
                         navigator.navigate(effect.route)
                     }

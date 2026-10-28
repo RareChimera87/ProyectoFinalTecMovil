@@ -16,6 +16,7 @@ import me.santiagoreina.parcheu.feature.parche.ParcheSamples
 import me.santiagoreina.parcheu.feature.parche.ParcheUiState
 import me.santiagoreina.parcheu.feature.parche.ParcheViewModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -24,9 +25,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Criterio de E6.4 (D8 → D1 filtrado): 'Ver en el grafo' navega con [AppNavigator.navigateReplacing]
- * (popUpTo + launchSingleTop), que reutiliza la entrada de D1 y su ViewModel. Con el navegador real sobre
- * un NavHost mínimo comprueba que D1 acaba filtrado por la comunidad.
+ * Criterio de E6.4 (D8 → D1 filtrado): 'Ver en el grafo' navega con [AppNavigator.navigateAsNew], que
+ * reemplaza D1 y D8 por una entrada nueva de D1 (con ViewModel propio). Con el navegador real sobre un
+ * NavHost mínimo comprueba que D1 queda filtrado, también al repetir "filtrar -> quitar -> filtrar" la
+ * misma comunidad.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -35,7 +37,7 @@ class CommunityToGraphNavigationTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun viewInGraphFiltersReusedD1Entry() {
+    fun viewInGraphFiltersD1EveryTimeEvenForTheSameCommunity() {
         val fake = FakeGraphRepository().apply {
             graphReturns(ApiResult.Success(ParcheSamples.content))
         }
@@ -56,35 +58,38 @@ class CommunityToGraphNavigationTest {
                 }
             }
         }
-        composeRule.runOnUiThread {
-            navController.navigate(Parche())
-        }
+        composeRule.runOnUiThread { navController.navigate(Parche()) }
         composeRule.waitForIdle()
         assertEquals(listOf<String?>(null), fake.graphCalls)
-        composeRule.runOnUiThread { navController.navigate(Communities) }
-        composeRule.waitForIdle()
-        val d1Entry = composeRule.runOnUiThread {
-            navController.currentBackStack.value.first {
-                it.destination.route?.contains("Parche") ==
-                    true
+
+        repeat(2) { round ->
+            composeRule.runOnUiThread { navController.navigate(Communities) }
+            composeRule.waitForIdle()
+            val vmBefore = parcheViewModel
+            composeRule.runOnUiThread {
+                NavControllerNavigator(
+                    navController
+                ).navigateAsNew(Parche(community = "c1"), Parche::class)
             }
-        }
+            composeRule.waitForIdle()
 
-        val vmBefore = parcheViewModel
-        composeRule.runOnUiThread {
-            NavControllerNavigator(navController)
-                .navigateReplacing(Parche(community = "c1"), Communities::class)
+            composeRule.runOnUiThread {
+                val stack = navController.currentBackStack.value.filter {
+                    it.destination.route !=
+                        null
+                }
+                assertEquals("ronda $round", 2, stack.size)
+                assertTrue(stack.last().destination.route.orEmpty().contains("Parche"))
+                val state = parcheViewModel!!.state.value as ParcheUiState.Loaded
+                assertEquals("c1", state.filters.communityId)
+            }
+            assertTrue("ronda $round: ViewModel nuevo", vmBefore !== parcheViewModel)
+            assertEquals("c1", fake.graphCalls.last())
+            // Quitar el chip vuelve al grafo completo; la ronda siguiente repite la misma comunidad.
+            composeRule.runOnUiThread { parcheViewModel!!.onClearCommunity() }
+            composeRule.waitForIdle()
+            assertNull(fake.graphCalls.last())
         }
-        composeRule.waitForIdle()
-
-        composeRule.runOnUiThread {
-            val stack = navController.currentBackStack.value.filter { it.destination.route != null }
-            assertEquals(2, stack.size)
-            assertTrue(stack.last().destination.route.orEmpty().contains("Parche"))
-            val state = parcheViewModel!!.state.value as ParcheUiState.Loaded
-            assertEquals("c1", state.filters.communityId)
-        }
-        assertTrue(vmBefore === parcheViewModel)
-        assertEquals("c1", fake.graphCalls.last())
+        assertEquals(listOf<String?>(null, "c1", null, "c1", null), fake.graphCalls)
     }
 }

@@ -105,6 +105,13 @@ class InMemoryMatchingRepository(
         }
     }
 
+    override suspend fun expireMatchTickets(matchId: UUID): List<QueueEntry> = lock.withLock {
+        tickets.values
+            .filter { it.matchId == matchId && it.status == TicketStatus.MATCHED }
+            .toList()
+            .map { put(it.copy(status = TicketStatus.EXPIRED, matchId = null)) }
+    }
+
     override suspend fun cancel(userId: UUID): Boolean = lock.withLock {
         val current = tickets[userId]
         if (current != null && current.status == TicketStatus.WAITING) {

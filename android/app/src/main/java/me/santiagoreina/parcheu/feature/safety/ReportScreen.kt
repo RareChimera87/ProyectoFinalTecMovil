@@ -63,9 +63,10 @@ fun ReportScreen(state: ReportUiState, actions: ReportActions, modifier: Modifie
 private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modifier: Modifier) {
     val colors = ParcheUTheme.colors
     val name = state.target.shortName
+    val ai = state.target.isAiContent
     Column(modifier.fillMaxSize().background(colors.bg).imePadding()) {
         ParcheUChildTopBar(
-            title = "Reportar a $name",
+            title = if (ai) REPORT_AI_CONTENT_DESCRIPTION else "Reportar a $name",
             navigationIcon = rememberVectorPainter(CloseIcon),
             navigationContentDescription = "Cerrar",
             onNavigationClick = actions.onClose
@@ -86,7 +87,7 @@ private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modif
                     .background(colors.s1, shape)
                     .padding(horizontal = 16.dp)
             ) {
-                ReportReasons.forEachIndexed { index, option ->
+                state.target.reasons().forEachIndexed { index, option ->
                     if (index > 0) HorizontalDivider(color = colors.ln)
                     ParcheURadioRow(
                         label = option.label,
@@ -115,13 +116,15 @@ private fun ReportFormScreen(state: ReportUiState, actions: ReportActions, modif
                     tag = SafetyTags.ATTACH
                 )
             }
-            CheckRow(
-                label = "Bloquear también a $name",
-                checked = state.alsoBlock,
-                onChange = actions.onAlsoBlockChange,
-                enabled = !state.submitting,
-                tag = SafetyTags.ALSO_BLOCK
-            )
+            if (!ai) {
+                CheckRow(
+                    label = "Bloquear también a $name",
+                    checked = state.alsoBlock,
+                    onChange = actions.onAlsoBlockChange,
+                    enabled = !state.submitting,
+                    tag = SafetyTags.ALSO_BLOCK
+                )
+            }
             state.error?.let { ErrorText(it) }
         }
         PrimaryButton(
@@ -188,8 +191,12 @@ private fun ReportSentScreen(
                 color = colors.tx
             )
             Text(
-                "Gracias por avisarnos. Lo revisamos lo antes posible y no le diremos quién " +
-                    "lo envió.",
+                if (target.isAiContent) {
+                    "Gracias por avisarnos. Revisamos lo que dijo la IA para mejorarla."
+                } else {
+                    "Gracias por avisarnos. Lo revisamos lo antes posible y no le diremos quién " +
+                        "lo envió."
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.mu
             )

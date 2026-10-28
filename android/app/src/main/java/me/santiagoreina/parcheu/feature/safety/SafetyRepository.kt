@@ -51,13 +51,31 @@ class SafetyRepositoryImpl(private val api: SafetyApi, private val errorMapper: 
         apiCall(errorMapper) { api.mute(chatId, Mute(muted)) }
 }
 
-/** Cuerpo de `POST /v1/reports`: un solo objetivo, el uuid o el `anonId` según cómo se ve a la persona. */
-internal fun SafetyTarget.toRequest(reason: ReportReason, details: String?, chatId: String?) =
-    ReportRequest(
+/**
+ * Cuerpo de `POST /v1/reports`: un solo objetivo. Una persona va por su uuid o su `anonId` según cómo se la
+ * ve; el contenido de la IA va con `simulationId` y `turnIndex` (`AI_CONTENT`).
+ */
+internal fun SafetyTarget.toRequest(
+    reason: ReportReason,
+    details: String?,
+    chatId: String?
+): ReportRequest {
+    val cleanDetails = details?.trim()?.takeIf { it.isNotEmpty() }
+    if (simulationId != null) {
+        return ReportRequest(
+            kind = ReportKind.AI_CONTENT,
+            simulationId = simulationId,
+            turnIndex = turnIndex,
+            reason = reason,
+            details = cleanDetails
+        )
+    }
+    return ReportRequest(
         kind = ReportKind.USER,
         targetUserId = id.takeUnless { anonymous },
         anonId = id.takeIf { anonymous },
         chatId = chatId,
         reason = reason,
-        details = details?.trim()?.takeIf { it.isNotEmpty() }
+        details = cleanDetails
     )
+}

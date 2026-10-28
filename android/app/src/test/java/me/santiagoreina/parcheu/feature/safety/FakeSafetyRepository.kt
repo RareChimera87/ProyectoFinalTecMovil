@@ -24,6 +24,8 @@ class FakeSafetyRepository : SafetyRepository {
     var reportResult: ApiResult<ReportCreated>? = null
     var blockResult: ApiResult<Unit> = ApiResult.Success(Unit)
     var muteResult: ApiResult<Unit> = ApiResult.Success(Unit)
+    var blocksResult: ApiResult<List<BlockedDto>> = ApiResult.Success(emptyList())
+    var unblockResult: ApiResult<Unit> = ApiResult.Success(Unit)
 
     override suspend fun report(
         target: SafetyTarget,
@@ -53,10 +55,10 @@ class FakeSafetyRepository : SafetyRepository {
 
     override suspend fun unblock(userId: String): ApiResult<Unit> {
         unblocks += userId
-        return ApiResult.Success(Unit)
+        return unblockResult
     }
 
-    override suspend fun blocks(): ApiResult<List<BlockedDto>> = ApiResult.Success(emptyList())
+    override suspend fun blocks(): ApiResult<List<BlockedDto>> = blocksResult
 
     override suspend fun setMuted(chatId: String, muted: Boolean): ApiResult<Unit> {
         mutes += chatId to muted

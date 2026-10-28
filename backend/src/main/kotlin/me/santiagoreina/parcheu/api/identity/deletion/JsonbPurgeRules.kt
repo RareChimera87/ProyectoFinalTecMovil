@@ -31,10 +31,12 @@ object JsonbPurgeRules {
     val rules: List<JsonbPurgeRule> = listOf(
         JsonbPurgeRule(
             Reports.snapshot,
-            "Instantánea de reportes donde la persona es quien reporta, la reportada o aparece en los mensajes: a null",
+            "Instantánea de reportes donde la persona es quien reporta, la reportada, aparece en los mensajes o " +
+                "es parte de la simulación de un reporte AI_CONTENT (el turno o informe copiado sale de sus memorias): a null",
             "update reports set snapshot = null where snapshot is not null and " +
-                "(reporter_id = ? or target_id = ? or snapshot::text like ?)",
-            listOf(PurgeParam.USER, PurgeParam.USER, PurgeParam.PATTERN),
+                "(reporter_id = ? or target_id = ? or snapshot::text like ? " +
+                "or simulation_id in (select id from simulations where user_a = ? or user_b = ?))",
+            listOf(PurgeParam.USER, PurgeParam.USER, PurgeParam.PATTERN, PurgeParam.USER, PurgeParam.USER),
         ),
         simulationRule(Simulations.transcript),
         simulationRule(Simulations.report),

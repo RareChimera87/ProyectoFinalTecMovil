@@ -54,6 +54,7 @@ import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.parche.ParcheIcon
 import me.santiagoreina.parcheu.feature.parche.parcheIconPainter
 import me.santiagoreina.parcheu.feature.parche.toGraphNode
+import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
 
 /** Etiquetas de prueba de D6/D7. */
 object FofTags {
@@ -127,7 +128,9 @@ data class FofCallbacks(
     val onBack: () -> Unit = {},
     val onUnlock: () -> Unit = {},
     val onRetry: () -> Unit = {},
-    val onRequestIntroduction: (String) -> Unit = {}
+    val onRequestIntroduction: (String) -> Unit = {},
+    /** E8.7: abre H1 para el candidato con ese `anonId` y el nombre con el que se lo muestra. */
+    val onReportOrBlock: (anonId: String, name: String) -> Unit = { _, _ -> }
 )
 
 /** D6 (ParcheU+) y D7 (gratis, borroso con candado). Pantalla hija: sin NavBar. */
@@ -278,7 +281,13 @@ private fun UnlockedContent(state: FofUiState.Unlocked, callbacks: FofCallbacks)
                             viaName = candidate.viaName(content.nodes),
                             requested = candidate.anonId in state.requested,
                             sending = state.sending == candidate.anonId,
-                            onRequest = { callbacks.onRequestIntroduction(candidate.anonId) }
+                            onRequest = { callbacks.onRequestIntroduction(candidate.anonId) },
+                            onReportOrBlock = {
+                                callbacks.onReportOrBlock(
+                                    candidate.anonId,
+                                    if (candidate.isAnonymous) ANON_LABEL else candidate.label
+                                )
+                            }
                         )
                     }
                 }
@@ -319,7 +328,8 @@ private fun FofCard(
     viaName: String?,
     requested: Boolean,
     sending: Boolean,
-    onRequest: () -> Unit
+    onRequest: () -> Unit,
+    onReportOrBlock: () -> Unit
 ) {
     val colors = ParcheUTheme.colors
     val name = if (candidate.isAnonymous) ANON_LABEL else candidate.label
@@ -381,6 +391,7 @@ private fun FofCard(
                     .wrapContentHeight()
                     .padding(horizontal = 4.dp)
             )
+            ReportOrBlockAction(onClick = onReportOrBlock)
         }
     }
 }
