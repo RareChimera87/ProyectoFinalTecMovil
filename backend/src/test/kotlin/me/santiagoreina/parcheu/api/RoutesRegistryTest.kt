@@ -47,12 +47,12 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
 
 // `/internal/tasks/simulate` lo implementa E4.3 (OIDC probado en SimulationApiTest y ApplicationTest),
 // `/internal/tasks/purge-user`, E8.3 (AccountApiTest) y `/internal/tasks/extract-memories` y
-// `/internal/jobs/memories`, E9.2 (MemoryApiTest).
+// `/internal/jobs/memories`, E9.2 (MemoryApiTest); `/internal/jobs/retention`, E8.8 (RetentionApiTest).
 private val internalRoutes = listOf(
     "/internal/tasks/judge-scenario",
     "/internal/tasks/moderate", "/internal/tasks/name-community",
     "/internal/jobs/communities",
-    "/internal/jobs/twin-accuracy", "/internal/jobs/retention",
+    "/internal/jobs/twin-accuracy",
 )
 
 class RoutesRegistryTest : FunSpec({

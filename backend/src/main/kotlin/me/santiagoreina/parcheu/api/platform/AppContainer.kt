@@ -214,6 +214,9 @@ class AppContainer(
         /** Hora de Bogotá del job `memories` en el homeserver (la misma que `scheduler.tf`: `0 2 * * *`). */
         val MEMORIES_AT: LocalTime = LocalTime.of(2, 0)
 
+        /** El job `retention` corre a diario a las 03:30 de Bogotá, como `scheduler.tf` (E8.8). */
+        val RETENTION_AT: LocalTime = LocalTime.of(3, 30)
+
         /**
          * Cableado de producción: verificadores reales (Fake solo con `ENV=local`). La
          * configuración de IA se valida aquí, así que un `AI_PROVIDER` inválido hace fallar el
@@ -312,7 +315,7 @@ class AppContainer(
          * Handlers de las cuatro tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
          * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
          * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
-         * Retention, communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
+         * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. Communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
          */
         private fun inlineBackground(
             queue: InProcessTaskQueue,
@@ -335,6 +338,9 @@ class AppContainer(
                 }
                 scheduler.every("memories", Duration.ofDays(1), InProcessScheduler.delayUntil(MEMORIES_AT, clock)) {
                     twin.memories.enqueueNightly()
+                }
+                scheduler.every("retention", Duration.ofDays(1), InProcessScheduler.delayUntil(RETENTION_AT, clock)) {
+                    account.retention.run()
                 }
             }
         }
