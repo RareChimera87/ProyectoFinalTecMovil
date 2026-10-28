@@ -14,6 +14,7 @@ import me.santiagoreina.parcheu.api.identity.deletion.AccountDeletionService
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
 import me.santiagoreina.parcheu.api.platform.auth.GoogleOidcVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationService
 import me.santiagoreina.parcheu.api.platform.jobs.InProcessScheduler
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.scenario.ScenarioService
@@ -29,7 +30,7 @@ class InlineWiringTest : FunSpec({
         "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://localhost:1/parcheu",
     )
 
-    test("ENV=dev + TASKS_MODE=inline: verificadores reales y los 4 handlers registrados, sin arrancar bucles") {
+    test("ENV=dev + TASKS_MODE=inline: verificadores reales y los handlers de todas las tareas registrados, sin arrancar bucles") {
         val vars = devVars + ("TASKS_MODE" to "inline")
         val container = AppContainer.fromConfig(AppConfig.fromEnv(vars), vars)
         try {
@@ -41,7 +42,7 @@ class InlineWiringTest : FunSpec({
                 TwinService.BUILD_PERSONA_PATH, SimulationService.SIMULATE_PATH, AccountDeletionService.PURGE_PATH,
                 CommunityService.NAME_PATH,
                 ScenarioService.JUDGE_PATH,
-                MemoryService.TASK_PATH,
+                MemoryService.TASK_PATH, ModerationService.TASK_PATH,
             )
             // E4.8: rutas, gancho del chat y juez comparten el módulo real, que encola en la cola en proceso
             // (no en la FakeTaskQueue del valor por defecto, que ejecutaría el juez dentro de la petición HTTP).
@@ -53,7 +54,7 @@ class InlineWiringTest : FunSpec({
         }
     }
 
-    test("TASKS_MODE=inline programa los jobs memories, retention y communities (lunes 03:00 por runIfDue horario) (sin lanzar bucles)") {
+    test("TASKS_MODE=inline programa los jobs memories, retention, communities y twin-accuracy (sin lanzar bucles)") {
         val vars = devVars + ("TASKS_MODE" to "inline")
         val container = AppContainer.fromConfig(AppConfig.fromEnv(vars), vars)
         try {
@@ -65,13 +66,16 @@ class InlineWiringTest : FunSpec({
             }
             container.background.shouldNotBeNull().scheduleOn(recorder)
             recorder.close()
-            initialDelays.keys.shouldContainAll("memories", "retention", "communities", "purge-sweep", "match-sweep")
+            initialDelays.keys.shouldContainAll("memories", "retention", "communities", "purge-sweep", "match-sweep", "twin-accuracy")
             // Cada job diario queda anclado a su hora: un cambio de reloj o de constante rompe este test.
             // El reloj es el del sistema: se tolera el segundo que pasa entre las dos lecturas.
             listOf("retention" to AppContainer.RETENTION_AT, "memories" to AppContainer.MEMORIES_AT).forEach { (job, at) ->
                 val expected = InProcessScheduler.delayUntil(at, container.clock)
                 (initialDelays.getValue(job) - expected).abs().seconds shouldBeLessThan 5L
             }
+            // E9.3: `twin-accuracy` queda anclado a los domingos a las 23:00 de Bogotá.
+            val weekly = InProcessScheduler.delayUntilWeekly(AppContainer.TWIN_ACCURACY_DAY, AppContainer.TWIN_ACCURACY_AT, container.clock)
+            (initialDelays.getValue("twin-accuracy") - weekly).abs().seconds shouldBeLessThan 5L
         } finally {
             container.background?.close()
         }

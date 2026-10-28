@@ -7,6 +7,7 @@ import kotlinx.serialization.json.put
 import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.contract.ReportKind
 import me.santiagoreina.parcheu.contract.ReportReason
+import me.santiagoreina.parcheu.contract.ReportSource
 import java.time.Instant
 import java.util.UUID
 
@@ -30,7 +31,8 @@ data class SnapshotMessage(
 /** Reporte ya validado por [SafetyService], listo para guardar. */
 data class NewReport(
     val id: UUID,
-    val reporterId: UUID,
+    /** Nulo si [source] es AUTO (moderación con IA, E8.6). */
+    val reporterId: UUID?,
     val targetId: UUID?,
     val kind: ReportKind,
     val chatId: UUID?,
@@ -42,6 +44,7 @@ data class NewReport(
     val snapshot: List<SnapshotMessage>?,
     val priority: Int,
     val createdAt: Instant,
+    val source: ReportSource = ReportSource.USER,
 )
 
 /**

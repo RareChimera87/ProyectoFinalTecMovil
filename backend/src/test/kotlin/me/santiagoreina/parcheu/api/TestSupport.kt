@@ -19,6 +19,9 @@ import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.admin.AdminModule
 import me.santiagoreina.parcheu.api.admin.inMemoryAdminModule
 import me.santiagoreina.parcheu.api.safety.SafetyModule
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationService
+import me.santiagoreina.parcheu.api.safety.moderation.moderationService
+import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.social.invites.InviteModule
 import me.santiagoreina.parcheu.api.social.requests.ConnectRequestModule
 import me.santiagoreina.parcheu.api.social.requests.inMemoryConnectRequestModule
@@ -111,6 +114,8 @@ fun testContainer(
     admin: AdminModule = inMemoryAdminModule(repo, chat, safety, clock),
     // Comunidades (E6.4): por defecto sobre el grafo en memoria y los rasgos del gemelo en memoria.
     communities: CommunityModule = inMemoryCommunityModule(graph, ai, quota, clock, traitsOf = { twin.repository.state(it)?.traits }),
+    // Moderación con IA (E8.6): por defecto con la misma pasarela [ai] y sin engancharse al chat.
+    moderation: ModerationService = moderationService(ai, chat, safety, FakeTaskQueue(), clock, notifier),
     // Modo escenario (E4.8): ScenarioApiTest pasa uno con su propia cola y reloj.
     scenario: ScenarioModule = inMemoryScenarioModule(clock, ai, quota, graph, chat, simulation, notifier),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
@@ -145,10 +150,11 @@ fun testContainer(
         invites = invites,
         communities = communities,
         connectRequests = connectRequests,
+        moderation = moderation,
         scenario = scenario,
         domains = allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
-            invites, billing, config.env, introductions, admin, communities, scenario, connectRequests,
+            invites, billing, config.env, introductions, admin, communities, scenario, connectRequests, moderation,
         ) + extra,
     )
 }

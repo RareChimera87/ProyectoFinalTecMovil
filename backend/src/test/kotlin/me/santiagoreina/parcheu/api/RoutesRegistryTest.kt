@@ -24,10 +24,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Identity: ya no queda ningún stub; E2.1 lo cubre IdentityApiTest, E2.5 (modos) ModesApiTest,
     // E2.6 (catálogo y edad) ProfileApiTest, E8.3 (DELETE /me y exportación) AccountApiTest y E8.2 (privacidad) PrivacyApiTest.
     // E2.3 implementó questions, answers, twin y evolution (ver TwinApiTest) y E9.2 las memorias
-    // (MemoryApiTest); el feedback sigue en 501 hasta E9.3.
-    "twin" to listOf(
-        HttpMethod.Get to "/v1/twin/feedback-prompts", HttpMethod.Post to "/v1/twin/feedback",
-    ),
+    // (MemoryApiTest) y E9.3 el feedback (FeedbackApiTest); ya no queda ningún stub.
     // E4.2 implementó todo el dominio matching (MatchingApiTest); ya no queda ningún stub.
     // Simulation: E4.3 (SimulationApiTest) y E4.6 (ReportApiTest) implementaron todas sus rutas /v1.
     // Scenario: E4.8 implementa la lista, la sesión y el acuerdo (ScenarioApiTest); ya no queda ningún stub.
@@ -40,7 +37,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
     // Notifications: E5.4 implementa la bandeja y 'Marcar leídas' (NotificationsApiTest); ya no queda ningún stub.
     // Billing: E7.1 implementa entitlement, verify y la RTDN (BillingApiTest); ya no queda ningún stub.
-    // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` sigue en 501 (E8.6).
+    // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` la implementa E8.6 (ModerationServiceTest).
     // Admin: E8.5 implementa las dos rutas (AdminApiTest); ya no queda ningún stub.
     // Home: E4.7 implementa GET /v1/home (HomeApiTest); ya no queda ningún stub.
 )
@@ -49,11 +46,10 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
 // `/internal/tasks/purge-user`, E8.3 (AccountApiTest) y `/internal/tasks/extract-memories` y
 // `/internal/jobs/memories`, E9.2 (MemoryApiTest); `/internal/jobs/retention`, E8.8 (RetentionApiTest).
 // `/internal/tasks/judge-scenario` y `/internal/jobs/scenario-sweep` los implementa E4.8 (ScenarioApiTest);
-// `/internal/tasks/name-community` y `/internal/jobs/communities`, E6.4 (CommunityApiTest).
-private val internalRoutes = listOf(
-    "/internal/tasks/moderate",
-    "/internal/jobs/twin-accuracy",
-)
+// `/internal/tasks/name-community` y `/internal/jobs/communities`, E6.4 (CommunityApiTest);
+// `/internal/tasks/moderate`, E8.6 (ModerationServiceTest) y `/internal/jobs/twin-accuracy`, E9.3 (FeedbackApiTest).
+// Ya no queda ningún stub /internal: la lista vacía se conserva por si aparece una ruta nueva.
+private val internalRoutes = emptyList<String>()
 
 class RoutesRegistryTest : FunSpec({
     fun HttpRequestBuilder.auth(token: String) = header(HttpHeaders.Authorization, "Bearer $token")

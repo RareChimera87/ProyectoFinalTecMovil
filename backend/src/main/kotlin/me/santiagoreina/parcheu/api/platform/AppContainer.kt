@@ -82,6 +82,10 @@ import me.santiagoreina.parcheu.api.safety.AnonymousContacts
 import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationService
+import me.santiagoreina.parcheu.api.safety.moderation.attachTo
+import me.santiagoreina.parcheu.api.safety.moderation.moderationEnabled
+import me.santiagoreina.parcheu.api.safety.moderation.moderationService
 import me.santiagoreina.parcheu.api.safety.safetyModule
 import me.santiagoreina.parcheu.api.scenario.ScenarioModule
 import me.santiagoreina.parcheu.api.social.invites.ExposedInviteRepository
@@ -118,6 +122,7 @@ import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.twin.twinModule
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalTime
 import me.santiagoreina.parcheu.api.platform.jobs.InProcessScheduler
@@ -211,6 +216,11 @@ class AppContainer(
      */
     val communities: CommunityModule = inMemoryCommunityModule(graph, ai, quota, clock, traitsOf = { twin.repository.state(it)?.traits }),
     /**
+     * Moderación con IA (E8.6, ADR-0026). Por defecto con Fake y sin engancharse al chat: solo [fromConfig]
+     * la conecta con la cola `ai-light` (salvo `MODERATION_ENABLED=false`).
+     */
+    val moderation: ModerationService = moderationService(ai, chat, safety, FakeTaskQueue(), clock, notifier),
+    /**
      * Cola en proceso y programador de jobs (`TASKS_MODE=inline`, ADR-0033); null con Cloud Tasks o Fake.
      * Main lo arranca (`start`) en modo `serve` y lo cierra al parar.
      */
@@ -219,7 +229,7 @@ class AppContainer(
     val domains: List<DomainRoutes> =
         allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
-            invites, billing, config.env, introductions, admin, communities, scenario, connectRequests,
+            invites, billing, config.env, introductions, admin, communities, scenario, connectRequests, moderation,
         ),
 ) {
     companion object {
@@ -235,6 +245,10 @@ class AppContainer(
 
         /** El job `retention` corre a diario a las 03:30 de Bogotá, como `scheduler.tf` (E8.8). */
         val RETENTION_AT: LocalTime = LocalTime.of(3, 30)
+
+        /** El job `twin-accuracy` corre los domingos a las 23:00 de Bogotá, como `scheduler.tf` (E9.3). */
+        val TWIN_ACCURACY_DAY: DayOfWeek = DayOfWeek.SUNDAY
+        val TWIN_ACCURACY_AT: LocalTime = LocalTime.of(23, 0)
 
         /**
          * Cableado de producción: verificadores reales (Fake solo con `ENV=local`). La
@@ -312,6 +326,9 @@ class AppContainer(
                 AnonymousContacts.introductions(introductionStore),
             )
             val safety = safetyModule(database, chat, graph, matching, clock, safetyContacts)
+            // Moderación con IA (E8.6): tarea `moderate` en `ai-light` después de entregar cada mensaje (fail-open).
+            val moderation = moderationService(ai, chat, safety, tasks, clock, notifier)
+            if (moderationEnabled(vars)) moderation.attachTo(chat)
             // Administración de reportes (E8.5): sobre la misma tabla `reports`; suspende por `users.suspended_until`.
             val admin = adminModule(database, identity.repo, chat, clock)
             // Borrado y exportación (E8.3): purga por la cola `maintenance`; Firestore y Auth reales fuera de local.
@@ -333,12 +350,14 @@ class AppContainer(
             val communities = communityModule(
                 ExposedCommunityRepository(database), graph, ai, quota, tasks, clock, matching.flags.demoUsersEnabled,
             )
-            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account, scenario, communities) }
+            val background = inlineQueue?.let { queue ->
+                inlineBackground(queue, clock, twin, simulation, matching, account, scenario, communities, moderation)
+            }
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
                 introductionStore = introductionStore, simulation = simulation,
-                matching = matching, safety = safety, admin = admin, account = account, introductions = introductions,
+                matching = matching, safety = safety, moderation = moderation, admin = admin, account = account, introductions = introductions,
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
                 billing = billing,
                 invites = invites,
@@ -351,10 +370,10 @@ class AppContainer(
         }
 
         /**
-         * Handlers de las cinco tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
+         * Handlers de las siete tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
          * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
          * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
-         * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. Solo twin-accuracy se omite: hoy es un stub (`stubPost`) sin lógica.
+         * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. `twin-accuracy` (E9.3) corre los domingos a las 23:00 de Bogotá.
          * `judge-scenario` y `scenario-sweep` (E4.8) corren con el módulo real de escenario.
          * `name-community` y el job `communities` (E6.4) corren con el módulo real de comunidades.
          */
@@ -367,6 +386,7 @@ class AppContainer(
             account: AccountModule,
             scenario: ScenarioModule,
             communities: CommunityModule,
+            moderation: ModerationService,
         ): BackgroundWork {
             fun id(body: String) = ContractJson.decodeFromString<TaskPayload>(body).uuid()
             queue.register(TwinService.BUILD_PERSONA_PATH) { twin.service.buildPersona(id(it)) }
@@ -375,6 +395,7 @@ class AppContainer(
             queue.register(CommunityService.NAME_PATH) { communities.service.nameCommunity(id(it)) }
             queue.register(ScenarioService.JUDGE_PATH) { scenario.service.judge(id(it)) }
             queue.register(MemoryService.TASK_PATH) { twin.memories.extract(id(it)) }
+            queue.register(ModerationService.TASK_PATH) { moderation.moderate(id(it)) }
             return BackgroundWork(queue, InProcessScheduler()) { scheduler ->
                 scheduler.every("match-sweep", Duration.ofSeconds(60)) { matching.service.sweep() }
                 scheduler.every("scenario-sweep", Duration.ofSeconds(60), Duration.ofSeconds(20)) { scenario.service.sweep() }
@@ -389,6 +410,13 @@ class AppContainer(
                 }
                 scheduler.every("retention", Duration.ofDays(1), InProcessScheduler.delayUntil(RETENTION_AT, clock)) {
                     account.retention.run()
+                }
+                scheduler.every(
+                    "twin-accuracy",
+                    Duration.ofDays(7),
+                    InProcessScheduler.delayUntilWeekly(TWIN_ACCURACY_DAY, TWIN_ACCURACY_AT, clock),
+                ) {
+                    twin.feedback.computeAccuracy()
                 }
             }
         }
@@ -447,6 +475,8 @@ fun allDomains(
     ),
     scenario: ScenarioModule = inMemoryScenarioModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph, chat, simulation, NoopNotifier),
     connectRequests: ConnectRequestModule = inMemoryConnectRequestModule(simulation, graph, quota),
+    moderation: ModerationService =
+        moderationService(AppContainer.localAiGateway(systemClock()), chat, safety, FakeTaskQueue(), systemClock()),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -476,7 +506,7 @@ fun allDomains(
     BillingRoutes(billing.service, quota.devPlus.takeIf { env != Env.PROD }, quota.clock) { firebase ->
         identity.requireUser(firebase).id
     },
-    SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
+    SafetyRoutes(safety.service, moderation) { firebase -> identity.requireUser(firebase).id },
     // Administración de reportes (E8.5): claim `admin`; `resolved_by` es la cuenta del admin si la tiene.
     AdminRoutes(admin.service) { firebase -> identity.repo.findByFirebaseUid(firebase.uid)?.id },
     // Inicio (E4.7): agregador de cupos, simulaciones, sugerencias del grafo y no leídas.

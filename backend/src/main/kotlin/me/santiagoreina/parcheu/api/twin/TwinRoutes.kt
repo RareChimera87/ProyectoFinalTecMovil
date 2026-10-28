@@ -13,16 +13,16 @@ import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
-import me.santiagoreina.parcheu.api.platform.stubGet
-import me.santiagoreina.parcheu.api.platform.stubPost
 import me.santiagoreina.parcheu.api.twin.memories.MemoryService
+import me.santiagoreina.parcheu.api.twin.feedback.FeedbackService
 import me.santiagoreina.parcheu.contract.Answers
+import me.santiagoreina.parcheu.contract.Feedback
 import java.util.UUID
 
 /**
  * Rutas del dominio twin. E2.3 implementa preguntas, respuestas, gemelo, evolución y la tarea
- * `build-persona`; E9.2 las memorias (API, tarea `extract-memories` y job `memories`). El feedback y
- * el job `twin-accuracy` siguen como stub 501 hasta E9.3.
+ * `build-persona`; E9.2 las memorias (API, tarea `extract-memories` y job `memories`); E9.3 el feedback
+ * (`feedback-prompts`, `feedback`) y el job `twin-accuracy`.
  */
 class TwinRoutes(private val twin: TwinModule) : DomainRoutes {
     override fun Route.v1() {
@@ -37,8 +37,8 @@ class TwinRoutes(private val twin: TwinModule) : DomainRoutes {
         }
         post("/twin/memories/{id}/accept") { call.respond(twin.memories.accept(call.userId(twin.users), call.parameters["id"].orEmpty())) }
         post("/twin/memories/{id}/reject") { call.respond(twin.memories.reject(call.userId(twin.users), call.parameters["id"].orEmpty())) }
-        stubGet("/twin/feedback-prompts")
-        stubPost("/twin/feedback")
+        get("/twin/feedback-prompts") { call.respond(twin.feedback.prompts(call.userId(twin.users))) }
+        post("/twin/feedback") { call.respond(twin.feedback.submit(call.userId(twin.users), call.receive<Feedback>())) }
     }
 
     override fun Route.internal() {
@@ -55,7 +55,10 @@ class TwinRoutes(private val twin: TwinModule) : DomainRoutes {
             twin.memories.enqueueNightly()
             call.respond(HttpStatusCode.NoContent)
         }
-        stubPost("/jobs/twin-accuracy")
+        post(FeedbackService.JOB_PATH) {
+            twin.feedback.computeAccuracy()
+            call.respond(HttpStatusCode.NoContent)
+        }
     }
 }
 
