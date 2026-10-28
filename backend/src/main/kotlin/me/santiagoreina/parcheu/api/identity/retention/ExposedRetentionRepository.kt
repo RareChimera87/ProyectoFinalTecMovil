@@ -64,6 +64,9 @@ class ExposedRetentionRepository(private val db: Database) : RetentionRepository
             val array = sql.createArrayOf("uuid", ids.toTypedArray())
             // `matches.chat_id` no tiene ON DELETE; los reportes lo sueltan solos (SET NULL) y los mensajes caen por CASCADE.
             sql.prepareStatement("update matches set chat_id = null where chat_id = any(?)").use { it.bindArray(array) }
+            // La evaluación de escenario (simulations.id = chats.id) copia los turnos del chat: sigue el plazo del chat.
+            sql.prepareStatement("update simulations set transcript = null where origin = 'SCENARIO' and id = any(?)")
+                .use { it.bindArray(array) }
             sql.prepareStatement("delete from chats where id = any(?)").use { it.bindArray(array) }
         }
     }

@@ -136,6 +136,14 @@ class RetentionDbTest : FunSpec({
                     val chatDue = chat("SCENARIO", due(c30))
                     val chatDueOpen = chat("SCENARIO", due(c30), status = "OPEN")
                     val chatDirect = chat("DIRECT", null, status = "OPEN")
+                    // La evaluación de escenario copia los turnos del chat (simulations.id = chats.id): sigue el plazo del chat.
+                    fun scenarioSim(chatId: UUID) = c.exec(
+                        "insert into simulations (id, mode, user_a, user_b, origin, status, score, transcript, report, created_at) " +
+                            "values (?, 'AMISTAD', ?, ?, 'SCENARIO', 'DONE', 70, '{\"scenarios\":[]}'::jsonb, '{\"summary\":\"x\"}'::jsonb, ?)",
+                        chatId, u1, u2, ts(now.minusSeconds(40 * day)),
+                    )
+                    scenarioSim(chatKept)
+                    scenarioSim(chatDue)
                     // Un match apunta al chat vencido: la referencia se suelta, el match se conserva.
                     val matchWithChat = match("SCENARIO", ts(now.plusSeconds(day)), chatDue)
                     c.exec("update reports set chat_id = ? where id = ?", chatDue, reportKept)
@@ -181,6 +189,10 @@ class RetentionDbTest : FunSpec({
                         c.count("select count(*) from reports where id = ? and chat_id is null", reportKept) shouldBe 1
                         mirror.deletedChats.toSet() shouldBe setOf(chatDue, chatDueOpen)
                     }
+                    withClue("transcript de escenario") {
+                        c.count("select count(*) from simulations where id = ? and transcript is null and report is not null", chatDue) shouldBe 1
+                        c.count("select count(*) from simulations where id = ? and transcript is not null", chatKept) shouldBe 1
+                    }
                     withClue("reporte") {
                         first.purged[RetentionRule.NOTIFICATIONS] shouldBe 1
                         first.purged[RetentionRule.AI_USAGE] shouldBe 1
@@ -200,7 +212,7 @@ class RetentionDbTest : FunSpec({
                     c.ids("select id from chats").toSet() shouldBe before
                     c.count("select count(*) from notifications") shouldBe 1
                     c.count("select count(*) from matches") shouldBe 3
-                    c.count("select count(*) from simulations where transcript is not null") shouldBe 1
+                    c.count("select count(*) from simulations where transcript is not null") shouldBe 2
                 }
             }
         }
