@@ -178,7 +178,7 @@ Qué buscar en los registros (JSON, un objeto por línea; `traceId`, `route` y `
 ### Desplegar y revertir
 
 ```bash
-deploy/homelab/desplegar.sh            # desde el portátil, con el árbol limpio: construye, sube, migra y verifica
+deploy/homelab/desplegar.sh            # desde el portátil (con el árbol sucio la imagen se etiqueta `-dirty`): construye, sube, migra y verifica
 deploy/homelab/desplegar.sh --sin-build
 ```
 
@@ -192,7 +192,9 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
 1. `docker compose up -d` levanta lo que falte; la base conserva el volumen `parcheu-pgdata`.
 2. La cola en proceso **pierde lo que tenía en memoria**. Se recuperan solas: las simulaciones `QUEUED` o `RUNNING` de entre
    10 min y 24 h (`simulation-recovery`, cada 15 min) y las purgas de cuentas (`purge-sweep`, cada hora). Las tareas de
-   gemelo y memorias se rehacen al siguiente uso o a las 02:00 de Bogotá (`memories`).
+   gemelo y memorias se rehacen al siguiente uso o a las 02:00 de Bogotá (`memories`). **No se recuperan** las tareas
+   `moderate` ni `moderate-help` (la ayuda ante `SELF_HARM`, E8.6): no tienen barrido. El reporte sí queda en la base; tras un corte,
+   revisa en `admin.html` los reportes de prioridad 2 recientes. Es un hueco de código conocido (un barrido de moderación sin terminar).
 3. Si ves el mismo id de simulación repetido en los registros una y otra vez, hay una simulación que mata el proceso: míralo
    antes de que gaste IA ([incidentes](#incidentes-frecuentes-por-síntoma)).
 4. La IP `192.168.0.10` del servidor debe seguir siendo estática; si cambió, la API no arranca o queda inalcanzable.
@@ -226,7 +228,12 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
   `~/parcheu/backups` a otro lugar (por ejemplo Seafile) si los datos importan.
 - **Verificar que el respaldo sirve:** `gzip -t ~/parcheu/backups/<archivo>.sql.gz` y, de vez en cuando, restaurar en una base
   desechable. Un respaldo que nunca se restauró no es un respaldo.
-- **Restaurar** (con la base vacía): `gunzip -c parcheu-AAAAMMDD-HHMMSS.sql.gz | docker compose exec -T parcheu-db psql -U parcheu parcheu`.
+- **Restaurar** (en este orden; `down -v` no sirve, porque `parcheu-migrate` correría Flyway antes y la restauración chocaría con el esquema ya creado):
+  1. `docker compose stop parcheu-api`.
+  2. Vacía la base: `docker compose exec parcheu-db psql -U parcheu -d postgres -c 'DROP DATABASE parcheu WITH (FORCE)' -c 'CREATE DATABASE parcheu OWNER parcheu'`.
+  3. Restaura: `gunzip -c parcheu-AAAAMMDD-HHMMSS.sql.gz | docker compose exec -T parcheu-db psql -v ON_ERROR_STOP=1 -U parcheu parcheu`.
+  4. Fija en `PARCHEU_TAG` (`~/parcheu/.env`) una imagen compatible con el esquema del respaldo.
+  5. `docker compose up -d`.
 - **Usuarios demo:** `docker compose run --rm parcheu-migrate seed-demo` los siembra (idempotente) y `purge-demo` los borra con
   todo lo que los nombra ([ADR-0027](adr/0027-usuarios-demo.md)); purgarlos antes de abrir la app a personas reales.
 - **Retención y borrado:** la retención diaria (`retention`) y el barrido de purgas (`purge-sweep`) corren en el programador
@@ -238,7 +245,7 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
 ## Cambios de configuración y secretos
 
 - Las variables viven en `~/parcheu/.env` (permisos 600, nunca en el repositorio). Cámbialas con edición atómica y
-  `docker compose up -d parcheu-api` para recrear el contenedor; un valor inválido hace fallar el arranque y el motivo sale en los registros.
+  `docker compose up -d parcheu-api` para recrear el contenedor. Solo llegan a la API las variables que lista `deploy/homelab/compose.yaml` (no hay `env_file`); una variable nueva hay que añadirla allí. Un valor inválido de las listadas hace fallar el arranque y el motivo sale en los registros. Tras cambiar una bandera, comprueba el efecto (por ejemplo `docker compose exec parcheu-api env | grep DEMO`).
 - **Presupuesto de IA:** `AI_DAILY_BUDGET_USD` (por defecto 3). Súbelo solo tras revisar `ai_usage_daily` y entender el gasto
   ([ADR-0010](adr/0010-control-de-costo-ia.md)).
 - **Proveedor y modelos de IA:** `AI_PROVIDER`, `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`; cambiar de modelo es una variable

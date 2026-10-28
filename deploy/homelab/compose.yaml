@@ -37,6 +37,8 @@ services:
       DB_USER: parcheu
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       JAVA_TOOL_OPTIONS: -Xmx256m
+      # seed-demo y purge-demo respetan la bandera de los demos (ADR-0027). Vacía es inocua.
+      DEMO_USERS_ENABLED: ${DEMO_USERS_ENABLED:-}
     depends_on:
       parcheu-db:
         condition: service_healthy
@@ -66,6 +68,16 @@ services:
       AI_PROVIDER: ${AI_PROVIDER:-}
       AI_VERTEX_PROJECT: ${AI_VERTEX_PROJECT:-}
       AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-}
+      AI_MODEL_CHAT: ${AI_MODEL_CHAT:-}
+      AI_MODEL_JUDGE: ${AI_MODEL_JUDGE:-}
+      AI_MODEL_LITE: ${AI_MODEL_LITE:-}
+      # Banderas y uso justo de Plus; vacías se comportan como si no existieran (valen los valores por defecto).
+      DEMO_USERS_ENABLED: ${DEMO_USERS_ENABLED:-}
+      SCENARIO_MODE_ENABLED: ${SCENARIO_MODE_ENABLED:-}
+      MODERATION_ENABLED: ${MODERATION_ENABLED:-}
+      QUOTA_PLUS_DAILY_SIMULATIONS: ${QUOTA_PLUS_DAILY_SIMULATIONS:-}
+      QUOTA_PLUS_DAILY_RANDOM_MATCHES: ${QUOTA_PLUS_DAILY_RANDOM_MATCHES:-}
+      QUOTA_PLUS_DAILY_FULL_REPORTS: ${QUOTA_PLUS_DAILY_FULL_REPORTS:-}
       # Cola de tareas y jobs dentro del proceso (sin Cloud Tasks ni Cloud Scheduler; ADR-0033).
       TASKS_MODE: ${TASKS_MODE:-inline}
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/sa.json
