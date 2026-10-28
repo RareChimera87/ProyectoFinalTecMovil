@@ -157,10 +157,24 @@ class GraphServiceTest : FunSpec({
         val ajena = UUID.randomUUID()
         repo.communities[mine] = mutableSetOf(me.id, a.id)
         repo.communities[ajena] = mutableSetOf(a.id, b.id)
-        val service = graphService(repo)
+        val service = graphService(repo, plus = true)
 
         service.graph(me.id, GraphFilter(community = mine)).nodes.map { it.id } shouldContainExactlyInAnyOrder listOf(a.id.toString())
         service.graph(me.id, GraphFilter(community = ajena)).nodes.shouldBeEmpty()
+    }
+
+    test("el filtro community es de ParcheU+: gratis recibe 402 y el grafo sin filtro sigue abierto") {
+        val a = person(1)
+        val repo = memoryRepo(me, a)
+        repo.putEdge(me.id, a.id, Mode.AMISTAD, EdgeState.CONNECTED, 90)
+        val mine = UUID.randomUUID()
+        repo.communities[mine] = mutableSetOf(me.id, a.id)
+        val free = graphService(repo, plus = false)
+
+        io.kotest.assertions.throwables.shouldThrow<me.santiagoreina.parcheu.api.platform.errors.PlusRequired> {
+            free.graph(me.id, GraphFilter(community = mine))
+        }
+        free.graph(me.id, GraphFilter()).nodes.size shouldBe 1
     }
 
     test("el detalle de nodo se pide con el id que dio el grafo y nunca con el uuid de un anónimo") {

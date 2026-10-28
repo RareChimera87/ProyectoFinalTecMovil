@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.graph
 
 import me.santiagoreina.parcheu.api.graph.fof.FofRepository
 import java.time.Clock
+import java.util.UUID
 
 /**
  * Piezas del dominio graph que comparten rutas y otras features (E4.3, E4.5, E6.x usan [edges]).
@@ -13,12 +14,16 @@ class GraphModule(
     val anonIds: AnonIdSigner,
     clock: Clock,
     val fofRepository: FofRepository? = null,
+    isPlus: suspend (UUID) -> Boolean = { false },
 ) {
     val policy = GraphVisibilityPolicy(anonIds)
-    val service = GraphService(repository, policy)
+    val service = GraphService(repository, policy, isPlus)
     val edges = EdgeService(repository, clock)
 }
 
 /** Grafo en memoria con la clave local: pruebas de rutas y `ENV=local` sin base de datos. */
-fun inMemoryGraphModule(clock: Clock, repository: GraphRepository = InMemoryGraphRepository()): GraphModule =
-    GraphModule(repository, AnonIdSigner.forTests(), clock)
+fun inMemoryGraphModule(
+    clock: Clock,
+    repository: GraphRepository = InMemoryGraphRepository(),
+    isPlus: suspend (UUID) -> Boolean = { false },
+): GraphModule = GraphModule(repository, AnonIdSigner.forTests(), clock, isPlus = isPlus)

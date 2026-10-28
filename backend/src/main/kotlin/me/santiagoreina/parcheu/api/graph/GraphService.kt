@@ -1,6 +1,8 @@
 package me.santiagoreina.parcheu.api.graph
 
+import me.santiagoreina.parcheu.api.platform.Premium
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
+import me.santiagoreina.parcheu.api.platform.errors.PlusRequired
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.contract.EdgeDto
 import me.santiagoreina.parcheu.contract.EdgeState
@@ -26,8 +28,13 @@ import kotlin.math.roundToInt
 class GraphService(
     private val repo: GraphRepository,
     private val policy: GraphVisibilityPolicy,
+    /** Plan del observador; por defecto nadie es ParcheU+ (el filtro `community` es premium). */
+    private val isPlus: suspend (UUID) -> Boolean = { false },
 ) {
+    @Premium("GET /v1/graph")
     suspend fun graph(viewer: UUID, filter: GraphFilter): GraphDto {
+        // El filtro `community` expone a los miembros de la comunidad (el `items` de D7, solo ParcheU+).
+        if (filter.community != null && !isPlus(viewer)) throw PlusRequired("El filtro por comunidad es de ParcheU+")
         val me = repo.person(viewer) ?: throw NotFound("Usuario sin perfil")
         val nodes = visibleNodes(viewer, filter)
         val edges = nodes.flatMap { node -> node.edges.map { EdgeDto(node.view.id, it.mode, it.state, it.affinity ?: 0) } }

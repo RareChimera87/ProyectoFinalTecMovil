@@ -156,7 +156,7 @@ class AppContainer(
     /** Gemelo (E2.3). Por defecto en memoria: solo [fromConfig] cablea Postgres y Cloud Tasks. */
     val twin: TwinModule = inMemoryTwinModule(clock, ai),
     /** Grafo (E3.1). Por defecto en memoria: solo [fromConfig] cablea Postgres y la clave de `anonId`. */
-    val graph: GraphModule = inMemoryGraphModule(clock),
+    val graph: GraphModule = inMemoryGraphModule(clock, isPlus = { quota.service.isPlus(it) }),
     /** Avisos (push + bandeja, E5.3). Los tests de otros dominios pasan un `FakeNotifier`. */
     val notifier: Notifier = NoopNotifier,
     /** Chat (E5.1). Por defecto en memoria (repositorio y espejo): solo [fromConfig] cablea Postgres y Firestore. */
@@ -286,6 +286,7 @@ class AppContainer(
             val twin = twinModule(config.env, database, clock, ai, tasks)
             val graph = GraphModule(
                 ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock, ExposedFofRepository(database),
+                isPlus = { quota.service.isPlus(it) },
             )
             // En local no hay credenciales de FCM: se guarda el aviso y el envío es un Fake (E5.3).
             val fcm = if (local) FakeFcmClient() else FirebaseFcmClient(requireNotNull(config.firebaseProjectId))
@@ -455,7 +456,7 @@ fun allDomains(
     profile: ProfileService,
     quota: QuotaModule,
     twin: TwinModule,
-    graph: GraphModule = inMemoryGraphModule(systemClock()),
+    graph: GraphModule = inMemoryGraphModule(systemClock(), isPlus = { quota.service.isPlus(it) }),
     chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
     simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
     matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
