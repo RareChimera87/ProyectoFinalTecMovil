@@ -33,7 +33,9 @@ import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
+import me.santiagoreina.parcheu.api.matching.MatchingFlags
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
+import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
@@ -376,6 +378,14 @@ class ScenarioApiTest : FunSpec({
             blocked.status shouldBe HttpStatusCode.Forbidden
             blocked.body<ApiError>().code shouldBe ErrorCode.BLOCKED
         }
+    }
+
+    test("SCENARIO_MODE_ENABLED: encendida por defecto en local y dev, apagada en prod, y manda la variable") {
+        MatchingFlags.fromEnv(Env.LOCAL, emptyMap()).scenarioModeEnabled shouldBe true
+        MatchingFlags.fromEnv(Env.DEV, emptyMap()).scenarioModeEnabled shouldBe true
+        MatchingFlags.fromEnv(Env.PROD, emptyMap()).scenarioModeEnabled shouldBe false
+        MatchingFlags.fromEnv(Env.PROD, mapOf("SCENARIO_MODE_ENABLED" to "true")).scenarioModeEnabled shouldBe true
+        MatchingFlags.fromEnv(Env.DEV, mapOf("SCENARIO_MODE_ENABLED" to "false")).scenarioModeEnabled shouldBe false
     }
 
     test("un mensaje sigue funcionando mientras el escenario está en curso y el chat sin escenario no cuenta") {
