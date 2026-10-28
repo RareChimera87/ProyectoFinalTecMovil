@@ -39,7 +39,8 @@ import java.util.UUID
  *
  * Reintentable tras un fallo parcial: el reporte AUTO se inserta antes de ocultar (nunca queda un mensaje
  * oculto sin reporte), se crea una sola vez por mensaje y ocultar es idempotente y repara el espejo de
- * Firestore, así que cada reintento repite el ocultamiento. El aviso de ayuda va al final.
+ * Firestore, así que cada reintento repite el ocultamiento. El aviso de ayuda va primero: un reintento puede duplicarlo,
+ * pero nunca se pierde (tras ocultar y reportar, el reintento sale temprano y ya no lo enviaría).
  */
 class ModerationService(
     private val moderator: MessageModerator,
@@ -100,12 +101,14 @@ class ModerationService(
 
         val hide = high.any { it != ModerationCategory.SELF_HARM && it != ModerationCategory.POSSIBLE_MINOR }
         val reportable = high.filter { it != ModerationCategory.SELF_HARM }
+        // La ayuda va primero: si algo falla después, el reintento la repite (un aviso duplicado es mejor que perderlo),
+        // porque la salida temprana de arriba ya no vuelve a pasar por aquí con el mensaje oculto y reportado.
+        if (ModerationCategory.SELF_HARM in high) sendHelp(author)
         if (reportable.isNotEmpty()) {
             // Primero el reporte: si ocultar falla, el reintento lo repite sin duplicar y un admin ya puede revisarlo.
             if (!safety.hasAutoReport(messageId)) safety.insertReport(autoReport(message, author, reportable))
             if (hide) chat.hideMessage(messageId)
         }
-        if (ModerationCategory.SELF_HARM in high) sendHelp(author)
         log.atInfo().setMessage(MODERATION_ACTED).addKeyValue("event", MODERATION_ACTED)
             .addKeyValue("messageId", messageId.toString()).addKeyValue("categories", high.joinToString(",") { it.name })
             .addKeyValue("hidden", hide).log()

@@ -32,6 +32,8 @@ import me.santiagoreina.parcheu.api.chat.ChatMirror
 import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
 import me.santiagoreina.parcheu.api.chat.MessageDoc
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
+import me.santiagoreina.parcheu.api.platform.notifier.Notification
+import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.safety.NewReport
 import me.santiagoreina.parcheu.api.safety.SafetyRepository
 import me.santiagoreina.parcheu.api.chat.InMemoryChatRepository
@@ -85,6 +87,19 @@ class ModerationServiceTest : FunSpec({
         }
     }
 
+    /** Notifier que falla en el primer aviso si [failOnce] está activo y después registra como FakeNotifier. */
+    class FlakyNotifier(private val delegate: FakeNotifier) : Notifier by delegate {
+        var failOnce = false
+
+        override suspend fun notify(userId: UUID, notification: Notification) {
+            if (failOnce) {
+                failOnce = false
+                throw IllegalStateException("Postgres caído")
+            }
+            delegate.notify(userId, notification)
+        }
+    }
+
     class Fixture {
         val identityRepo = InMemoryIdentityRepository().apply { listOf("ana", "beto").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val ana = identityRepo.user("ana")
@@ -106,7 +121,8 @@ class ModerationServiceTest : FunSpec({
         val queue = FakeTaskQueue()
         val flakySafety = FlakySafety(safetyRepo)
         val notifier = FakeNotifier()
-        val moderation = ModerationService(MessageModerator(testGateway(llm)), chatRepo, chat.service, flakySafety, queue, FIXED_CLOCK, notifier)
+        val flakyNotifier = FlakyNotifier(notifier)
+        val moderation = ModerationService(MessageModerator(testGateway(llm)), chatRepo, chat.service, flakySafety, queue, FIXED_CLOCK, flakyNotifier)
             .also { it.attachTo(chat) }
         val room = runBlocking { chat.service.createDirect(ana.id, beto.id, Mode.AMISTAD) }
 
@@ -171,6 +187,27 @@ class ModerationServiceTest : FunSpec({
         f.mirror.messages(f.room.id).none { it.system } shouldBe true
         f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe false
         f.safetyRepo.allReports.shouldBeEmpty()
+    }
+
+    test("amenaza y autolesión con el aviso fallando una vez: el reintento entrega la ayuda") {
+        val f = Fixture()
+        f.llm.jsonResponder = { _, _ ->
+            buildJsonObject {
+                put("findings", buildJsonArray {
+                    add(buildJsonObject { put("category", "THREAT"); put("severity", "HIGH") })
+                    add(buildJsonObject { put("category", "SELF_HARM"); put("severity", "HIGH") })
+                })
+            }
+        }
+        val id = f.send("me mato y te mato")
+        f.flakyNotifier.failOnce = true
+        runCatching { runBlocking { f.moderation.moderate(id) } }.isFailure shouldBe true
+        f.notifier.sent.shouldBeEmpty()
+        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.ACTED
+        f.notifier.sent shouldHaveSize 1
+        f.notifier.sent.single().userId shouldBe f.beto.id
+        f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe true
+        f.safetyRepo.allReports shouldHaveSize 1
     }
 
     test("reintento tras fallar insertReport: el mensaje no queda oculto sin reporte") {
