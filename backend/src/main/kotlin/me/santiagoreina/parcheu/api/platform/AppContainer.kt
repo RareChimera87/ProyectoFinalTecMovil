@@ -163,7 +163,7 @@ class AppContainer(
      * Reportar y bloquear (E8.1). Por defecto en memoria (propaga los bloqueos a chat, grafo y fila):
      * solo [fromConfig] cablea Postgres.
      */
-    val safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
+    val safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching, simulation = simulation),
     /**
      * Borrado y exportación de la cuenta (E8.3). Por defecto en memoria: solo [fromConfig] cablea
      * Postgres, la cola `maintenance`, Firestore y Firebase Auth.
@@ -376,7 +376,7 @@ fun allDomains(
     chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
     simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
     matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
-    safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
+    safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching, simulation = simulation),
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
     unread: UnreadCounter = UnreadCounter.NONE,
     notifications: NotificationCenterModule = inMemoryNotificationCenter(systemClock(), quota, graph),

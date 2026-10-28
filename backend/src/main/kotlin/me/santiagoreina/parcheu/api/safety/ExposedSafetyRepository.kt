@@ -3,12 +3,14 @@ package me.santiagoreina.parcheu.api.safety
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.santiagoreina.parcheu.api.graph.PersonRow
+import me.santiagoreina.parcheu.api.simulation.StoredTranscript
 import me.santiagoreina.parcheu.api.platform.db.tables.Blocks
 import me.santiagoreina.parcheu.api.platform.db.tables.ChatMessages
 import me.santiagoreina.parcheu.api.platform.db.tables.Reports
 import me.santiagoreina.parcheu.api.platform.db.tables.Simulations
 import me.santiagoreina.parcheu.api.platform.db.tables.Universities
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
+import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.ReportSource
 import me.santiagoreina.parcheu.contract.ReportStatus
 import org.jetbrains.exposed.v1.core.JoinType
@@ -86,6 +88,15 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
             .where { Simulations.id eq simulationId }
             .singleOrNull()
             ?.let { it[Simulations.userA] to it[Simulations.userB] }
+    }
+
+    override suspend fun simulationTurnText(simulationId: UUID, turnIndex: Int): String? = tx {
+        Simulations.select(Simulations.transcript)
+            .where { Simulations.id eq simulationId }
+            .singleOrNull()
+            ?.get(Simulations.transcript)
+            ?.let { ContractJson.decodeFromJsonElement(StoredTranscript.serializer(), it) }
+            ?.scenarios?.flatMap { it.turns }?.getOrNull(turnIndex)?.text
     }
 
     override suspend fun insertReport(report: NewReport) {

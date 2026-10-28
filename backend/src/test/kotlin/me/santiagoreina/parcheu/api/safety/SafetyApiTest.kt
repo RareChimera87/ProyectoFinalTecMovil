@@ -40,6 +40,15 @@ import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.matching.MatchFixture
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
+import me.santiagoreina.parcheu.api.simulation.Side
+import me.santiagoreina.parcheu.contract.SimulationOrigin
+import me.santiagoreina.parcheu.api.simulation.SimulationRecord
+import me.santiagoreina.parcheu.contract.SimulationStatus
+import me.santiagoreina.parcheu.api.simulation.StoredScenario
+import me.santiagoreina.parcheu.api.simulation.StoredTranscript
+import me.santiagoreina.parcheu.api.simulation.StoredTurn
+import me.santiagoreina.parcheu.api.simulation.UsageTotals
+import me.santiagoreina.parcheu.api.simulation.initialProgress
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.contract.ApiError
@@ -85,8 +94,30 @@ class SafetyApiTest : FunSpec({
             messages = { chatId ->
                 chatRepo.allMessages.filter { it.chatId == chatId }.map { SnapshotMessage(it.id, it.senderId, it.text, it.createdAt, it.hidden) }
             },
+            simulations = { id -> f.simRepo.find(id)?.let { it.userA to it.userB } },
+            turns = { id -> f.simRepo.find(id)?.transcript?.scenarios?.flatMap { sc -> sc.turns.map { it.text } }.orEmpty() },
         )
         val safety = inMemorySafetyModule(f.clock, chat, f.graph, f.module, safetyRepo)
+
+        /** Simulación entre [a] y [b] con dos escenarios (2 + 1 turnos): el turno 2 es el único del segundo. */
+        fun simulation(a: UUID = ana, b: UUID = beto): UUID = runBlocking {
+            val id = UUID.randomUUID()
+            f.simRepo.create(
+                SimulationRecord(
+                    id = id, mode = Mode.AMISTAD, userA = a, userB = b, requestedBy = a, origin = SimulationOrigin.PARCHE,
+                    status = SimulationStatus.DONE, progress = initialProgress(), score = 70, report = null,
+                    transcript = StoredTranscript(
+                        listOf(
+                            StoredScenario(1, "Cafe", listOf(StoredTurn(Side.A, "Hola, que tal"), StoredTurn(Side.B, "Todo bien"))),
+                            StoredScenario(2, "Estudio", listOf(StoredTurn(Side.B, "turno ofensivo de la IA"))),
+                        ),
+                    ),
+                    twinVersionA = 1, twinVersionB = 1, cachedFrom = null, provider = null, usage = UsageTotals(), error = null,
+                    createdAt = f.clock.instant(), finishedAt = f.clock.instant(),
+                ),
+            )
+            id
+        }
 
         fun direct(a: UUID = ana, b: UUID = beto): ChatRecord = runBlocking { chat.service.createDirect(a, b, Mode.AMISTAD) }
     }
@@ -325,6 +356,81 @@ class SafetyApiTest : FunSpec({
                 .status shouldBe HttpStatusCode.BadRequest
         }
         w.safetyRepo.allReports.shouldBeEmpty()
+    }
+
+    test("reportar por anonId crea el reporte contra la persona correcta sin exponer su id; el anonId de otro observador da 404") {
+        val w = World()
+        w.runCatching { runBlocking { chat.service.createScenario(ana, caro, Mode.AMISTAD, 1, f.clock.instant().plus(Duration.ofMinutes(10))) } }.getOrThrow()
+        testApplication {
+            val client = app(w)
+            val anonId = client.get("/v1/chats") { auth("ana") }.body<List<ChatSummary>>().single().other.anonId.shouldNotBeNull()
+
+            // El anonId que ve beto para la misma persona no es el que ve ana (la HMAC depende del observador).
+            client.report("beto", ReportRequest(ReportKind.USER, anonId = anonId, reason = ReportReason.HARASSMENT)).status shouldBe HttpStatusCode.NotFound
+            w.safetyRepo.allReports.shouldBeEmpty()
+
+            val created = client.report("ana", ReportRequest(ReportKind.USER, anonId = anonId, reason = ReportReason.HARASSMENT))
+            created.status shouldBe HttpStatusCode.Created
+            created.bodyAsText() shouldNotContain w.caro.toString()
+            w.safetyRepo.allReports.single().targetId shouldBe w.caro
+        }
+    }
+
+    test("un reporte AI_CONTENT guarda simulationId, turnIndex y el texto del turno en snapshot") {
+        val w = World()
+        val sim = w.simulation()
+        testApplication {
+            val client = app(w)
+            val created = client.report(
+                "ana",
+                ReportRequest(ReportKind.AI_CONTENT, simulationId = sim.toString(), turnIndex = 2, reason = ReportReason.AI_HARMFUL),
+            )
+            created.status shouldBe HttpStatusCode.Created
+            // Un turno que no existe, o una simulación ajena, no crea nada.
+            client.report("ana", ReportRequest(ReportKind.AI_CONTENT, simulationId = sim.toString(), turnIndex = 3, reason = ReportReason.AI_HARMFUL))
+                .status shouldBe HttpStatusCode.NotFound
+            client.report("caro", ReportRequest(ReportKind.AI_CONTENT, simulationId = sim.toString(), turnIndex = 0, reason = ReportReason.AI_HARMFUL))
+                .status shouldBe HttpStatusCode.NotFound
+        }
+        val report = w.safetyRepo.allReports.single()
+        report.kind shouldBe ReportKind.AI_CONTENT
+        report.simulationId shouldBe sim
+        report.turnIndex shouldBe 2
+        report.targetId.shouldBeNull()
+        report.snapshot.shouldNotBeNull().single().text shouldBe "turno ofensivo de la IA"
+    }
+
+    test("bloquear desde F2 cancela el match y los tickets de ambos; desbloquear no restaura nada") {
+        val w = World()
+        w.f.graphRepo.putEdge(w.ana, w.caro, Mode.AMISTAD, EdgeState.CONNECTED, 80)
+        val chat = w.direct(w.ana, w.caro)
+        testApplication {
+            val client = app(w)
+            client.enqueue("ana")
+            val matchId = client.enqueue("beto").body<TicketDto>().matchId.shouldNotBeNull()
+            client.get("/v1/match/queue") { auth("ana") }.body<TicketDto>().status shouldBe TicketStatus.MATCHED
+
+            client.post("/v1/blocks/${w.ana}") { auth("beto") }.status shouldBe HttpStatusCode.NoContent
+
+            client.get("/v1/matches/$matchId") { auth("ana") }.body<MatchDto>().status shouldBe MatchStatus.EXPIRED
+            listOf("ana", "beto").forEach { uid ->
+                client.get("/v1/match/queue") { auth(uid) }.body<TicketDto>().status shouldBe TicketStatus.EXPIRED
+                w.f.mirror.last("uid-$uid").shouldNotBeNull().status shouldBe TicketStatus.EXPIRED
+            }
+
+            // Bloquear a una persona conectada cierra el chat; desbloquear no lo reabre ni restaura la conexión.
+            client.post("/v1/blocks/${w.caro}") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
+            w.chatRepo.chat(chat.id)!!.status shouldBe ChatStatus.CLOSED
+            val listed = client.get("/v1/blocks") { auth("ana") }.body<List<BlockedDto>>().single()
+            client.delete("/v1/blocks/${listed.userId}") { auth("ana") }.status shouldBe HttpStatusCode.NoContent
+            client.get("/v1/blocks") { auth("beto") }.body<List<BlockedDto>>().single()
+            client.delete("/v1/blocks/${client.get("/v1/blocks") { auth("beto") }.body<List<BlockedDto>>().single().userId}") { auth("beto") }.status shouldBe HttpStatusCode.NoContent
+            w.safetyRepo.allBlocks.shouldBeEmpty()
+            w.chatRepo.chat(chat.id)!!.status shouldBe ChatStatus.CLOSED
+            client.get("/v1/matches/$matchId") { auth("ana") }.body<MatchDto>().status shouldBe MatchStatus.EXPIRED
+            client.get("/v1/match/queue") { auth("ana") }.body<TicketDto>().status shouldBe TicketStatus.EXPIRED
+            client.get("/v1/graph") { auth("ana") }.body<GraphDto>().nodes.shouldBeEmpty()
+        }
     }
 
     test("silenciar (H1) solo cambia muted: no bloquea") {

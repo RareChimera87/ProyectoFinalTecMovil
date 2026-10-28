@@ -30,6 +30,12 @@ interface GraphRepository {
     suspend fun lastSimulation(a: UUID, b: UUID): SimulationRow?
 
     /**
+     * Borra las aristas CONNECTED entre [a] y [b] en todos los modos (E8.7): bloquear termina la conexión y
+     * desbloquear no la restaura. Las aristas SIMULATED y PENDING no son conexiones y se conservan.
+     */
+    suspend fun removeConnections(a: UUID, b: UUID)
+
+    /**
      * Lee la arista `(a, b, mode)` bloqueándola, aplica [change] y guarda el resultado en una sola
      * transacción. No hace nada si hay un bloqueo entre los dos. Devuelve el estado final (o null
      * si no hay arista o hubo bloqueo).

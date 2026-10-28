@@ -131,6 +131,13 @@ class ExposedGraphRepository(private val db: Database) : GraphRepository {
             }
     }
 
+    override suspend fun removeConnections(a: UUID, b: UUID) {
+        tx {
+            val (low, high) = Edges.orderedPair(a, b)
+            Edges.deleteWhere { (userLow eq low) and (userHigh eq high) and (state eq EdgeState.CONNECTED) }
+        }
+    }
+
     override suspend fun updateEdge(
         a: UUID,
         b: UUID,

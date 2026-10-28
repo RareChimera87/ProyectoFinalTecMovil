@@ -30,5 +30,11 @@ interface SafetyRepository {
     /** Participantes de la simulación (`user_a`, `user_b`); null si no existe. */
     suspend fun simulationParticipants(simulationId: UUID): Pair<UUID, UUID>?
 
+    /**
+     * Texto del turno [turnIndex] de la simulación (índice plano sobre los turnos de todos los
+     * escenarios, en orden); null si la simulación no tiene ese turno.
+     */
+    suspend fun simulationTurnText(simulationId: UUID, turnIndex: Int): String?
+
     suspend fun insertReport(report: NewReport)
 }

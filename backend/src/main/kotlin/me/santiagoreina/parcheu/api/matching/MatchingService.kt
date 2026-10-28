@@ -329,6 +329,25 @@ class MatchingService(
     }
 
     /**
+     * Un bloqueo (E8.7, desde F2 o desde cualquier otra pantalla) cancela el match que esperaba la elección entre
+     * [blocker] y [blocked]: el match pasa a EXPIRED, los tickets de **ambos** quedan EXPIRED y se republican en
+     * `matchTickets/{uid}`, y se devuelve el cupo solo a quien no bloqueó (como en un cierre por bloqueo posterior).
+     * Idempotente: sin match pendiente entre los dos no hace nada.
+     */
+    suspend fun cancelPendingMatchBetween(blocker: UUID, blocked: UUID) {
+        val pending = repo.pendingMatchOf(blocker)?.takeIf { it.involves(blocked) } ?: return
+        val closed = repo.updateMatch(pending.id) { current ->
+            current.copy(status = MatchStatus.EXPIRED).takeIf { current.status == MatchStatus.PENDING_CHOICE }
+        }
+        if (closed == null || closed.before.status != MatchStatus.PENDING_CHOICE) return
+        for (ticket in repo.expireMatchTickets(pending.id)) {
+            val person = repo.person(ticket.userId) ?: continue
+            publish(person.firebaseUid, ticket.userId)
+        }
+        refundAndNotifyUnavailable(pending, causedBy = setOf(blocker))
+    }
+
+    /**
      * La purga de una cuenta (E8.3) cerró en Postgres estos matches: el PENDING_CHOICE ya está EXPIRED, el cupo
      * devuelto y el ticket de la contraparte EXPIRED. Aquí se republica `matchTickets/{uid}` de la contraparte y,
      * si el match esperaba la elección, se le avisa que ya no está disponible (como en un bloqueo).
