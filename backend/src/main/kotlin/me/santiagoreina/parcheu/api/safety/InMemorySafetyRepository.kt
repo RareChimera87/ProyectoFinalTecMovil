@@ -16,6 +16,8 @@ class InMemorySafetyRepository(
     private val people: suspend (UUID) -> PersonRow? = { null },
     private val messages: suspend (UUID) -> List<SnapshotMessage> = { emptyList() },
     private val simulations: suspend (UUID) -> Pair<UUID, UUID>? = { null },
+    private val turns: suspend (UUID) -> List<String> = { emptyList() },
+    private val reportText: suspend (UUID) -> String? = { null },
 ) : SafetyRepository {
     private val lock = Any()
     private val blocks = LinkedHashMap<Pair<UUID, UUID>, Instant>()
@@ -64,6 +66,10 @@ class InMemorySafetyRepository(
         messages(chatId).sortedWith(compareBy<SnapshotMessage> { it.createdAt }.thenBy { it.id }).takeLast(limit)
 
     override suspend fun simulationParticipants(simulationId: UUID): Pair<UUID, UUID>? = simulations(simulationId)
+
+    override suspend fun simulationTurnText(simulationId: UUID, turnIndex: Int): String? = turns(simulationId).getOrNull(turnIndex)
+
+    override suspend fun simulationReportText(simulationId: UUID): String? = reportText(simulationId)
 
     override suspend fun insertReport(report: NewReport) {
         synchronized(lock) { reports += report }

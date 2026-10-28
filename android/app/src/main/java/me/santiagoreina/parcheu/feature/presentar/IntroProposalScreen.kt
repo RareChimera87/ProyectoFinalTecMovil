@@ -42,6 +42,7 @@ import me.santiagoreina.parcheu.feature.results.ReportRow
 import me.santiagoreina.parcheu.feature.results.ResultsIcons
 import me.santiagoreina.parcheu.feature.results.affinityWord
 import me.santiagoreina.parcheu.feature.results.rememberResultsIcon
+import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
 import me.santiagoreina.parcheu.feature.simulation.forMode
 import me.santiagoreina.parcheu.feature.simulation.label
 
@@ -64,7 +65,9 @@ data class IntroProposalActions(
     val onInterested: () -> Unit = {},
     val onDecline: () -> Unit = {},
     val onOpenChat: () -> Unit = {},
-    val onDismissError: () -> Unit = {}
+    val onDismissError: () -> Unit = {},
+    /** E8.7: abre H1 para la otra persona de la propuesta. */
+    val onReportOrBlock: () -> Unit = {}
 )
 
 /** E3 · Propuesta recibida: pendiente, 'esperando' (aceptada), rechazada y conectados. */
@@ -80,7 +83,12 @@ fun IntroProposalScreen(
             title = "",
             navigationIcon = rememberPresentarIcon(PresentarIcons.Close),
             navigationContentDescription = "Cerrar",
-            onNavigationClick = actions.onClose
+            onNavigationClick = actions.onClose,
+            action = {
+                if (state is IntroProposalUiState.Loaded) {
+                    ReportOrBlockAction(onClick = actions.onReportOrBlock)
+                }
+            }
         )
         when (state) {
             IntroProposalUiState.Loading -> PresentarLoading(IntroProposalTags.LOADING)

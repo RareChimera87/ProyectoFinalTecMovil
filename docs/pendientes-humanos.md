@@ -969,6 +969,15 @@ Todo lo de código quedó hecho y no depende de un entorno vivo: C3 consume `GET
 |---|---|---|---|
 | 1 | **Revisión visual** de `android/app/src/test/screenshots/profile/*.png` (0, 1 y 16 puntos, claro y oscuro) contra el mockup 06. Diferencia aceptada: el mockup de '4 meses de historial' se reproduce solo con los 16 puntos demo de la captura; con datos reales el gráfico muestra un punto por semana con datos. 'Rasgos' y el pie de la suscripción no están en el mockup y se armaron con componentes del sistema de diseño. | I2 | Ventana de revisión de la ola 10 |
 
+## E9.2 · Extracción de memorias
+
+Lo automatizable ya quedó hecho: `POST /internal/jobs/memories` (encola una tarea `extract-memories-<uuid>-<yyyyMMdd>` por usuario con mensajes propios aprendibles nuevos, cola `ai-light`), `POST /internal/tasks/extract-memories` (mensajes **propios** con `learnable = true`, no ocultos y con consentimiento vigente del modo, desde `twin_learning_cursor`; una llamada al modelo lite por modo; hasta 5 memorias PENDING por modo, saneadas y con el modo y el chat de origen), `GET /v1/twin/memories` y `POST /v1/twin/memories/{id}/accept|reject` (aceptar sube `twins.version`). Las pruebas con Postgres (`MemoryDbTest`) corrieron en local con Testcontainers. **No hay cambios de infraestructura:** el job `memories` de Cloud Scheduler (`0 2 * * *`, Bogotá) y la cola `ai-light` ya estaban en `modules/platform/scheduler.tf` y `tasks.tf` (E0.5); en el homelab (`TASKS_MODE=inline`) el mismo job lo programa `InProcessScheduler` a las 02:00 de Bogotá y la tarea la ejecuta `InProcessTaskQueue`. Lo que falta depende del entorno vivo:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Probar el job en el homelab tras desplegar** (`TASKS_MODE=inline`, ADR-0033; sin Cloud Scheduler). Con una cuenta de prueba que haya concedido 'Aprender de mis chats' (B4 o H3) y escrito mensajes en un chat, esperar al job `memories` de las 02:00 (Bogotá) o dispararlo a mano con `POST /internal/jobs/memories` y un token OIDC de la cuenta de `TASKS_SERVICE_ACCOUNT` (como documenta `deploy/homelab/README.md`); reiniciar la API no lo dispara, porque el programador solo corre a las 02:00 siguientes; comprobar en `docker compose logs api` las líneas `Job de memorias: N tareas extract-memories encoladas` y `extract-memories de <uuid>: N mensajes, M memorias candidatas`, y en Postgres `select mode, status, left(text, 60) from twin_memories where user_id = '<uuid>'`. Revisar a ojo que ninguna memoria tenga teléfonos, correos ni direcciones y que cada una quede con el modo de su chat. Con `ENV=local` la IA es `FakeLlmClient`, así que el texto de las memorias es de prueba. | I1 | Con el despliegue del homelab |
+| 2 | **Aprobación del revisor par** (feature major, check `major-gate`): según `docs/equipo.md` el par de E9.2 es I2 (consumidor de `MemoryDto` en C4, E9.3). | I2 | Ventana de revisión de la ola 10 (12 nov) |
+
 ## E10.5 · Observabilidad
 
 El código, las métricas, las alertas, el dashboard y el runbook (`docs/operacion.md`) están en el repositorio. Falta aplicarlos y verificarlos en el entorno vivo, que solo tú puedes hacer.
@@ -1020,4 +1029,34 @@ Lo automatizable ya quedó hecho: acuerdo de los dos (`POST /v1/scenario-session
 | 2 | **`SCENARIO_MODE_ENABLED=true` en prod desde la 0.9** (en `run_env` de Terraform de prod). Hasta entonces el valor por defecto en prod es `false`. | usuario | 0.9 |
 | 3 | **Verificación en dev con dos cuentas:** ambas eligen Escenario en F2, escriben, una propone el acuerdo (la otra ve el aviso), la otra confirma y aparece F7/F8; repetir dejando vencer el tiempo. Comprobar `chats/{id}` en Firestore de `parcheu-dev` y que el chat aparece en tiempo real. | I1 + I2 | Con el despliegue |
 
-Limitación conocida: si el proceso cae entre crear la evaluación y cerrar el chat, el barrido la re-encola; si cae justo después de cerrar y antes de encolar, también (la fila ya existe en QUEUED). Si cae antes de crear la fila, el chat queda cerrado sin resultado (sesión `DONE` sin `simulationId`).
+Limitación conocida: la fila de evaluación se crea antes de cerrar el chat, así que cualquier caída del proceso (antes o después de cerrar, y antes de encolar) la deja en QUEUED y el barrido `scenario-sweep` la re-encola; no queda ningún chat cerrado sin resultado. En el homeserver la tarea `judge-scenario` corre en la cola en proceso, fuera de la petición HTTP.
+
+## E6.5 · Evolución de la red
+
+No requiere infraestructura ni secretos: el historial se calcula en cada consulta (sin tareas, jobs ni migraciones).
+
+- [ ] **Decisión de producto (I3 / diseño):** el mockup D9 dice 'Mes → 08a en esa fecha'. El historial solo devuelve conteos por mes y D1 no tiene fecha por nodo, así que tocar un mes selecciona su detalle en D9 en vez de abrir D1 con ese snapshot. Para hacerlo literal haría falta devolver las personas por mes (con la policy) o las fechas por nodo en `GET /v1/graph`. Decidir si entra antes del 30 nov.
+- [ ] Revisar con datos reales: el momento 'Tu primera comunidad' aparecerá cuando E6.4 (comunidades) cree filas en `communities`/`community_members`.
+## E6.6 · Quién quiere conectar contigo
+
+No hay pasos humanos: es una lectura de `connection_decisions` con la API que ya existe (sin Terraform, secretos, Play Console ni tareas asíncronas nuevas, así que tampoco toca `InProcessTaskQueue` ni `InProcessScheduler`).
+
+Para verla en la variante dev contra el homeserver: con dos cuentas de prueba, que A simule con B, que B decida "Conectar" en F7/F8 y que A (con ParcheU+ de `POST /internal/dev/grant-plus`) abra C2: la sección lista a B enmascarado; sin ParcheU+ A ve el ítem bloqueado con el conteo.
+
+## E8.7 · Reportar y bloquear desde todas partes
+
+No hay pasos humanos pendientes: la feature no agrega infraestructura, secretos ni cambios en consolas. Todo corre
+con el backend del homelab (`TASKS_MODE=inline`) y la variante dev.
+
+Para revisarla a mano con el backend en marcha: bloquear a alguien desde F2 debe dejar el match en `EXPIRED` y los
+tickets de ambos en `EXPIRED` (`matchTickets/{uid}` en Firestore), y 'Personas bloqueadas' (H3) debe listarlo con
+'Desbloquear'. Un reporte de contenido de la IA aparece en `admin.html` con el tipo `AI_CONTENT` y el texto del
+turno en el snapshot.
+
+## E8.8 · Retención y purga de datos
+
+No hay secretos, Play Console ni recursos nuevos de GCP: el job `retention` ya estaba declarado en `infra/terraform/modules/platform/scheduler.tf` (diario 03:30 Bogotá, `POST /internal/jobs/retention`) y las consultas de Firestore son de un solo campo, así que no piden índices. En el homeserver (`TASKS_MODE=inline`) lo programa `InProcessScheduler` a las 03:30 de Bogotá; no hay tareas nuevas, así que `InProcessTaskQueue` no cambia.
+
+- [ ] **Opcional (observabilidad):** la métrica `retention_purged_total{regla}` sale como log INFO por regla (`event = retention_purged`, `regla`, `count`; solo cuando se purgó algo). Si se quiere verla en Cloud Monitoring, crear una métrica basada en logs con filtro `jsonPayload.message="retention_purged"` y etiqueta `regla` (extraída de `jsonPayload.regla`) en `monitoring.tf`; no se hizo aquí para no tocar Terraform fuera del alcance de la ficha.
+- [ ] **Verificar en dev (con el homeserver):** tras la primera noche, revisar en los logs del backend las líneas `retention_purged` y `Retención: N registros purgados`. Para forzarlo a mano: `POST /internal/jobs/retention` con un token OIDC del servicio.
+- [ ] **Decisiones de interpretación para revisar con el docente / I1** (documentadas en arquitectura.md §10.2): `matches` se purga solo si están `EXPIRED`; un chat SCENARIO se considera cerrado en su `ends_at`; el plazo de `transcript` son 12 meses calendario de Bogotá.

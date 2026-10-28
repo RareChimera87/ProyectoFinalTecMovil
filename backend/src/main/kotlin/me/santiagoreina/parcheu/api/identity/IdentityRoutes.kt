@@ -18,10 +18,10 @@ import me.santiagoreina.parcheu.api.identity.modes.ModesService
 import me.santiagoreina.parcheu.api.identity.privacy.PrivacyService
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.identity.profile.profileRoutes
+import me.santiagoreina.parcheu.api.identity.retention.RetentionService
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
-import me.santiagoreina.parcheu.api.platform.stubPost
 import me.santiagoreina.parcheu.api.twin.TaskPayload
 import me.santiagoreina.parcheu.contract.AcceptTerms
 import me.santiagoreina.parcheu.contract.ConsentChange
@@ -34,7 +34,7 @@ import me.santiagoreina.parcheu.contract.UpdatePrivacy
  * Rutas del dominio identity. E2.1 implementa sesión, términos, `GET/PATCH /me`, consentimientos y
  * tokens FCM; E2.5 agrega `PUT /me/modes` ([ModesService]); E2.6, el catálogo y la verificación de
  * edad ([profileRoutes]); E8.3, `DELETE /me`, `GET /me/export` y la tarea `purge-user` ([AccountModule]);
- * E8.2, `GET/PATCH /me/privacy` ([PrivacyService]). El job de retención sigue como stub 501 hasta E8.8.
+ * E8.2, `GET/PATCH /me/privacy` ([PrivacyService]); E8.8, el job `POST /internal/jobs/retention` ([RetentionService]).
  */
 class IdentityRoutes(
     private val service: IdentityService,
@@ -89,7 +89,11 @@ class IdentityRoutes(
             call.respond(HttpStatusCode.NoContent)
         }
 
-        stubPost("/jobs/retention")
+        // Retención de datos (Cloud Scheduler, diario 03:30 Bogotá). Si alguna regla falla responde 500 y reintenta.
+        post(RetentionService.JOB_PATH) {
+            account.retention.run()
+            call.respond(HttpStatusCode.NoContent)
+        }
     }
 }
 

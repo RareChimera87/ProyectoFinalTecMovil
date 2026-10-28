@@ -31,6 +31,12 @@ interface MatchingRepository {
      */
     suspend fun undoPairing(matchId: UUID, requeue: QueueEntry?, dropped: UUID?)
 
+    /**
+     * Pasa a EXPIRED (sin `matchId`) los tickets MATCHED del match [matchId] y devuelve los dos como
+     * quedaron. Lo usa el bloqueo (E8.7): al cancelar el match, ninguno de los dos tickets sigue emparejado.
+     */
+    suspend fun expireMatchTickets(matchId: UUID): List<QueueEntry>
+
     /** Borra el ticket si todavía espera; false si no había ticket en espera. */
     suspend fun cancel(userId: UUID): Boolean
 

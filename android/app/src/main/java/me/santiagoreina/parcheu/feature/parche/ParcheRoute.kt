@@ -3,9 +3,13 @@ package me.santiagoreina.parcheu.feature.parche
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.santiagoreina.parcheu.feature.safety.SafetyEntryHost
+import me.santiagoreina.parcheu.feature.safety.SafetyTarget
 import me.santiagoreina.parcheu.navigation.AddFriends
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Communities
@@ -33,6 +37,7 @@ fun ParcheRoute(
     viewModel: ParcheViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var safetyTarget by remember { mutableStateOf<SafetyTarget?>(null) }
     LaunchedEffect(route.community) { viewModel.start(route.community) }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -69,8 +74,30 @@ fun ParcheRoute(
                 // Flujo 11 del inventario: el banner de D1 lleva a D7 (gratis), que ofrece G1.
                 onUnlock = { navigator.navigate(FriendsOfFriends) },
                 onFriendsOfFriends = { navigator.navigate(FriendsOfFriends) },
-                onIntroduce = { navigator.navigate(Introduce) }
+                onIntroduce = { navigator.navigate(Introduce) },
+                onReportOrBlock = {
+                    // E8.7: persona de la hoja D2, con el id con el que se la ve (uuid o `anonId`).
+                    val sheet = (viewModel.state.value as? ParcheUiState.Loaded)?.sheet
+                    if (sheet != null) {
+                        safetyTarget = SafetyTarget(
+                            id = sheet.node.id,
+                            name = if (sheet.node.anonymous) "Alguien" else sheet.node.label,
+                            anonymous = sheet.node.anonymous,
+                            chatId = sheet.detail?.chatId
+                        )
+                    }
+                }
             )
         }
     ParcheScreen(state = state, callbacks = callbacks, modifier = modifier)
+    // H1 sobre D2: al bloquear se cierra la hoja y se recarga el grafo (la persona desaparece).
+    SafetyEntryHost(
+        target = safetyTarget,
+        navigator = navigator,
+        onClear = { safetyTarget = null },
+        onBlocked = {
+            viewModel.onDismissSheet()
+            viewModel.retry()
+        }
+    )
 }

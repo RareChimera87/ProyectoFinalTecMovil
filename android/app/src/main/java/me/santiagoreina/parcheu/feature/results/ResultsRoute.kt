@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.santiagoreina.parcheu.feature.safety.reportAiContent
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Chat
 import me.santiagoreina.parcheu.navigation.Paywall
@@ -48,7 +49,8 @@ fun ResultsRoute(
             onOpenChat = viewModel::onOpenChat,
             onOpenTranscript = viewModel::onOpenTranscript,
             onCloseTranscript = viewModel::onCloseTranscript,
-            onDismissNotice = viewModel::onDismissNotice
+            onDismissNotice = viewModel::onDismissNotice,
+            onReportAi = { turnIndex -> navigator.reportAiContent(route.simulationId, turnIndex) }
         ),
         modifier = modifier
     )

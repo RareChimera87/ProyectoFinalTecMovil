@@ -203,6 +203,19 @@ class ExposedMatchingRepository(private val db: Database) : MatchingRepository {
         }
     }
 
+    override suspend fun expireMatchTickets(matchId: UUID): List<QueueEntry> = tx {
+        val ids = MatchQueue.select(MatchQueue.userId)
+            .where { (MatchQueue.matchId eq matchId) and (MatchQueue.status eq TicketStatus.MATCHED) }
+            .forUpdate()
+            .map { it[MatchQueue.userId] }
+        if (ids.isEmpty()) return@tx emptyList()
+        MatchQueue.update({ MatchQueue.userId inList ids }) {
+            it[status] = TicketStatus.EXPIRED
+            it[MatchQueue.matchId] = null
+        }
+        MatchQueue.selectAll().where { MatchQueue.userId inList ids }.map { it.toEntry() }
+    }
+
     override suspend fun cancel(userId: UUID): Boolean = tx {
         MatchQueue.deleteWhere { (MatchQueue.userId eq userId) and (MatchQueue.status eq TicketStatus.WAITING) } > 0
     }

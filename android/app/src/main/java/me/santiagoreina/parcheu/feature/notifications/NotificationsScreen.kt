@@ -72,7 +72,9 @@ fun NotificationsScreen(
     state: NotificationsUiState,
     callbacks: NotificationsCallbacks,
     now: Instant,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Sección 'Quieren conectar contigo' (E6.6): va arriba de la bandeja, también si está vacía. */
+    requestsSection: (@Composable () -> Unit)? = null
 ) {
     val loaded = state as? NotificationsUiState.Loaded
     Column(
@@ -110,6 +112,7 @@ fun NotificationsScreen(
                 )
             is NotificationsUiState.Loaded ->
                 if (state.isEmpty) {
+                    requestsSection?.invoke()
                     EmptyState(
                         title = "Todo al día",
                         message = EMPTY_MESSAGE,
@@ -122,7 +125,7 @@ fun NotificationsScreen(
                         modifier = Modifier.fillMaxSize().testTag(NotificationsTags.EMPTY)
                     )
                 } else {
-                    Inbox(state, callbacks, now)
+                    Inbox(state, callbacks, now, requestsSection)
                 }
         }
     }
@@ -132,13 +135,15 @@ fun NotificationsScreen(
 private fun Inbox(
     state: NotificationsUiState.Loaded,
     callbacks: NotificationsCallbacks,
-    now: Instant
+    now: Instant,
+    requestsSection: (@Composable () -> Unit)?
 ) {
     val colors = ParcheUTheme.colors
     LazyColumn(
         Modifier.fillMaxSize().testTag(NotificationsTags.LIST),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
+        requestsSection?.let { content -> item(key = "connectRequests") { content() } }
         state.actionError?.let { error ->
             item(key = "actionError") {
                 Text(

@@ -23,11 +23,20 @@ interface GraphRepository {
 
     suspend fun person(userId: UUID): PersonRow?
 
+    /** Primer instante en que [userId] entró a una comunidad (`communities.created_at` más antigua), o null. */
+    suspend fun firstCommunityAt(userId: UUID): Instant? = null
+
     /**
      * Simulación más reciente entre los dos usuarios, en cualquier modo y estado. No cuenta las de una
      * presentación (`INTRODUCTION`, E6.2), que no se consultan por `/v1/simulations`.
      */
     suspend fun lastSimulation(a: UUID, b: UUID): SimulationRow?
+
+    /**
+     * Borra las aristas CONNECTED entre [a] y [b] en todos los modos (E8.7): bloquear termina la conexión y
+     * desbloquear no la restaura. Las aristas SIMULATED y PENDING no son conexiones y se conservan.
+     */
+    suspend fun removeConnections(a: UUID, b: UUID)
 
     /**
      * Lee la arista `(a, b, mode)` bloqueándola, aplica [change] y guarda el resultado en una sola

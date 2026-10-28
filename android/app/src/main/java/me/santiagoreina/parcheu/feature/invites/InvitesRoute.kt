@@ -7,10 +7,15 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.santiagoreina.parcheu.feature.safety.SafetyEntryHost
+import me.santiagoreina.parcheu.feature.safety.SafetyTarget
+import me.santiagoreina.parcheu.feature.safety.toSafetyTarget
 import me.santiagoreina.parcheu.navigation.AddFriends
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import org.koin.compose.viewmodel.koinViewModel
@@ -34,6 +39,7 @@ fun InvitesRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scanner = remember(context) { GmsCodeScanner(context) }
+    var safetyTarget by remember { mutableStateOf<SafetyTarget?>(null) }
     InvitesScreen(
         state = state,
         actions = InvitesActions(
@@ -46,9 +52,17 @@ fun InvitesRoute(
             onAdd = viewModel::onAdd,
             onScan = { viewModel.onScan(scanner) },
             onAccept = viewModel::onAccept,
-            onRetry = viewModel::load
+            onRetry = viewModel::load,
+            onReportOrBlock = { pending -> safetyTarget = pending.other.toSafetyTarget() }
         ),
         modifier = modifier
+    )
+    // E8.7: H1 sobre C5 para quien canjeó mi código; al bloquear se recarga la lista de pendientes.
+    SafetyEntryHost(
+        target = safetyTarget,
+        navigator = navigator,
+        onClear = { safetyTarget = null },
+        onBlocked = viewModel::load
     )
 }
 

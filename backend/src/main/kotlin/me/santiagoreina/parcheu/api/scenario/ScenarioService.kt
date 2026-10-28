@@ -67,7 +67,8 @@ class ScenarioService(
     private val ai: AiGateway,
     private val quota: QuotaService,
     private val edges: EdgeService,
-    private val tasks: TaskQueue,
+    /** `internal` para que las pruebas de cableado comprueben que el servicio usa la cola real. */
+    internal val tasks: TaskQueue,
     private val notifier: Notifier,
     private val clock: Clock,
 ) {
