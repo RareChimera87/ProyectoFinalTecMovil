@@ -2,6 +2,9 @@ package me.santiagoreina.parcheu.screenshots
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -51,14 +54,19 @@ class FontScaleScreenshotTest(private val dark: Boolean) {
     private val theme = if (dark) "dark" else "light"
 
     private fun capture(name: String, content: @Composable () -> Unit) {
+        var fontScale by mutableFloatStateOf(1f)
         composeRule.setContent {
             ParcheUTheme(darkTheme = dark) {
                 val base = LocalDensity.current
                 CompositionLocalProvider(
-                    LocalDensity provides Density(base.density, fontScale = FONT_SCALE)
+                    LocalDensity provides Density(base.density, fontScale = fontScale)
                 ) { content() }
             }
         }
+        composeRule.waitForIdle()
+        // Línea base con escala 1,0: la elipsis que ya existe ahí es diseño; la nueva con 1,3 es pérdida.
+        val baselineEllipsis = A11yAssertions.ellipsizedTexts(composeRule)
+        fontScale = FONT_SCALE
         composeRule.waitForIdle()
         composeRule.onRoot().captureRoboImage(
             filePath = "src/test/screenshots/fontscale/${name}_$theme.png",
@@ -67,7 +75,7 @@ class FontScaleScreenshotTest(private val dark: Boolean) {
                 compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
             )
         )
-        A11yAssertions.assertNoClippedText(composeRule, name)
+        A11yAssertions.assertNoClippedText(composeRule, name, baselineEllipsis)
         A11yAssertions.assertTouchTargets(composeRule, name)
         A11yAssertions.assertActionsLabeled(composeRule, name)
     }

@@ -18,6 +18,7 @@ import org.junit.Assert.assertTrue
  */
 object A11yAssertions {
     private const val MIN_TOUCH_DP = 48f
+    private const val MIN_VISIBLE_DP = 24f
 
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.fetchRoot() = fetchSemanticsNode()
 
@@ -36,16 +37,66 @@ object A11yAssertions {
         return "id=${n.id} texto=${text ?: "-"} bounds=${n.boundsInRoot}"
     }
 
-    /** Un texto recortado es el que desborda su caja (ancho o alto) sin haber pedido elipsis. */
-    fun assertNoClippedText(rule: ComposeContentTestRule, screen: String) {
+    private fun textOf(n: SemanticsNode): String? =
+        n.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text }
+
+    private fun layoutResults(n: SemanticsNode): List<TextLayoutResult> {
+        val getter = n.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action
+            ?: return emptyList()
+        val results = mutableListOf<TextLayoutResult>()
+        return if (getter(results)) results else emptyList()
+    }
+
+    /** Textos que el layout trunca con elipsis (sirve para fijar la línea base con escala 1,0). */
+    fun ellipsizedTexts(rule: ComposeContentTestRule): Set<String> =
+        nodes(rule).filter { n -> layoutResults(n).any { it.hasEllipsis() } }
+            .mapNotNull { textOf(it) }
+            .toSet()
+
+    /** Un nodo está bajo un contenedor desplazable si algún ancestro tiene eje de scroll. */
+    private fun insideScrollable(node: SemanticsNode): Boolean {
+        var p = node.parent
+        while (p != null) {
+            if (p.config.contains(SemanticsProperties.VerticalScrollAxisRange) ||
+                p.config.contains(SemanticsProperties.HorizontalScrollAxisRange)
+            ) {
+                return true
+            }
+            p = p.parent
+        }
+        return false
+    }
+
+    /**
+     * Recorte por contenedor: el área visible (`boundsInRoot`, recortada por los ancestros) es menor que
+     * el tamaño medido del nodo. Se ignoran los nodos dentro de contenedores desplazables, donde ver
+     * solo una parte es lo normal.
+     */
+    private fun isClippedByAncestor(node: SemanticsNode): Boolean {
+        if (!node.layoutInfo.isPlaced || insideScrollable(node)) return false
+        val visible = node.boundsInRoot
+        return visible.width < node.size.width - 1f || visible.height < node.size.height - 1f
+    }
+
+    /**
+     * Texto recortado: (a) desborda su propia caja (ancho o alto), (b) se trunca con elipsis que no
+     * existía con escala 1,0 (`allowedEllipsis` son los textos ya truncados en la línea base), o (c) lo
+     * recorta un contenedor (clip o alto fijo del padre) en un nodo de texto o accionable.
+     */
+    fun assertNoClippedText(
+        rule: ComposeContentTestRule,
+        screen: String,
+        allowedEllipsis: Set<String> = emptySet()
+    ) {
         val offenders =
             nodes(rule).filter { node ->
-                val getter =
-                    node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action
-                        ?: return@filter false
-                val results = mutableListOf<TextLayoutResult>()
-                if (!getter(results)) return@filter false
-                results.any { it.isClipped() }
+                val results = layoutResults(node)
+                val own = results.any { it.isClipped() }
+                val newEllipsis =
+                    results.any { it.hasEllipsis() } && textOf(node) !in allowedEllipsis
+                val relevant =
+                    results.isNotEmpty() || node.config.getOrNull(SemanticsActions.OnClick) != null
+                own || newEllipsis || (relevant && isClippedByAncestor(node))
             }
         assertTrue(
             "$screen: texto recortado con fontScale 1,3:\n" +
@@ -59,30 +110,47 @@ object A11yAssertions {
 
     /**
      * `didOverflowWidth` marca como desborde el ancho de párrafo no usado, así que el ancho se mide con
-     * el borde derecho real de las líneas. El alto sí usa `didOverflowHeight` (texto que no cabe en su caja).
+     * el borde derecho real de las líneas. El alto usa `didOverflowHeight` (texto que no cabe en su caja).
      */
     private fun TextLayoutResult.isClipped(): Boolean {
         val widest = (0 until lineCount).maxOfOrNull { getLineRight(it) } ?: 0f
-        val widthClipped = widest > size.width + 1f
-        val heightClipped = didOverflowHeight && !hasEllipsis()
-        return widthClipped || heightClipped
+        // Con elipsis, `didOverflowHeight` solo refleja `maxLines`; la elipsis se juzga aparte.
+        return widest > size.width + 1f || (didOverflowHeight && !hasEllipsis())
     }
 
-    /** Todo nodo con acción de clic debe ofrecer un área táctil de al menos 48x48dp. */
+    /**
+     * Todo nodo con acción de clic debe ofrecer un área táctil de al menos 48x48dp. La ampliación
+     * automática de Compose (`touchBoundsInRoot`) cubre los componentes M3 con
+     * `minimumInteractiveComponentSize`, pero no basta: además el nodo debe verse completo y tener un
+     * tamaño visible mínimo (24dp, WCAG 2.2 AA 2.5.8), de modo que un botón aplastado o recortado falle.
+     */
     fun assertTouchTargets(rule: ComposeContentTestRule, screen: String) {
         val density = Density(rule.density.density, 1f)
         val minPx = with(density) { MIN_TOUCH_DP.dp.toPx() }
+        val minVisiblePx = with(density) { MIN_VISIBLE_DP.dp.toPx() }
         val offenders =
             nodes(rule).filter { node ->
                 node.config.getOrNull(SemanticsActions.OnClick) != null &&
                     node.config.getOrNull(SemanticsProperties.Disabled) == null &&
                     node.layoutInfo.isPlaced
             }.filter { node ->
-                val b = node.touchBoundsInRoot
-                b.width < minPx - 1f || b.height < minPx - 1f
+                val touch = node.touchBoundsInRoot
+                if (insideScrollable(node)) {
+                    // Parcialmente fuera de pantalla por el scroll: se mide el tamaño real del nodo.
+                    maxOf(touch.width, node.size.width.toFloat()) < minPx - 1f ||
+                        maxOf(touch.height, node.size.height.toFloat()) < minPx - 1f
+                } else {
+                    val visible = node.boundsInRoot
+                    touch.width < minPx - 1f ||
+                        touch.height < minPx - 1f ||
+                        visible.width < minVisiblePx - 1f ||
+                        visible.height < minVisiblePx - 1f ||
+                        isClippedByAncestor(node)
+                }
             }
         assertTrue(
-            "$screen: áreas táctiles < 48dp:\n" + offenders.joinToString("\n") { describe(it) },
+            "$screen: áreas táctiles < 48dp o recortadas:\n" +
+                offenders.joinToString("\n") { describe(it) },
             offenders.isEmpty()
         )
     }
