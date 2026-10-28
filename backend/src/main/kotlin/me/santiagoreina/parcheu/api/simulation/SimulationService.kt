@@ -121,8 +121,10 @@ class SimulationService(
             createdAt = clock.instant().truncatedTo(ChronoUnit.MICROS),
             finishedAt = null,
         )
+        var inserted = false
         try {
             repo.create(record)
+            inserted = true
             // El documento de Firestore existe antes de que la tarea empiece a escribir progreso.
             publishQueued(record)
             tasks.enqueue(simulateTask(id))
@@ -131,8 +133,42 @@ class SimulationService(
         } catch (e: Exception) {
             log.error("No se pudo encolar la simulación {}: se devuelve el cupo", id, e)
             if (chargeQuota) quota.refund(QuotaKind.SIMULATION, id.toString())
-            runCatching { repo.markFailed(id, "No se pudo encolar: ${e.message}", clock.instant()) }
+            // Si repo.create falló (p. ej. clave duplicada: otro proceso ganó), la fila es del ganador y no se toca.
+            if (inserted) runCatching { repo.markFailed(id, "$ENQUEUE_FAILED_PREFIX ${e.message}", clock.instant()) }
             throw e
+        }
+        return repo.find(id) ?: record
+    }
+
+    /**
+     * Reintento idempotente de [create] para una simulación con id fijo (el match, F2 → F4). Devuelve null si
+     * no existe (hay que crearla). QUEUED (la tarea pudo no encolarse) o FAILED por no haberse podido encolar
+     * (error con [ENQUEUE_FAILED_PREFIX]) se re-encolan con el mismo nombre de deduplicación; RUNNING, DONE o
+     * un FAILED del motor se devuelven tal cual. Si encolar vuelve a fallar, la simulación queda como estaba y
+     * la excepción sube para que el barrido lo reintente.
+     */
+    suspend fun resume(id: UUID): SimulationRecord? {
+        var record = repo.find(id) ?: return null
+        var revived = false
+        if (record.status == SimulationStatus.FAILED && record.error?.startsWith(ENQUEUE_FAILED_PREFIX) == true) {
+            if (repo.requeueAfterEnqueueFailure(id)) {
+                revived = true
+                record = repo.find(id) ?: return null
+                publishQueued(record)
+            }
+        }
+        if (record.status == SimulationStatus.QUEUED) {
+            try {
+                tasks.enqueue(simulateTask(id))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.error("No se pudo re-encolar la simulación {}", id, e)
+                // Solo si la revivimos nosotros vuelve a FAILED; una QUEUED/RUNNING ajena puede tener tarea viva y
+                // markFailed la cortaría. QUEUED sin tarea ya es recuperable en el siguiente barrido.
+                if (revived) runCatching { repo.markFailed(id, "$ENQUEUE_FAILED_PREFIX ${e.message}", clock.instant()) }
+                throw e
+            }
         }
         return repo.find(id) ?: record
     }
@@ -220,6 +256,9 @@ class SimulationService(
 
     companion object {
         const val SIMULATE_PATH = "/tasks/simulate"
+
+        /** Prefijo del error de una simulación que nunca llegó a la cola: es la única FAILED que [resume] recupera. */
+        const val ENQUEUE_FAILED_PREFIX = "No se pudo encolar:"
         val REQUEUE_MIN_AGE: java.time.Duration = java.time.Duration.ofMinutes(10)
         val REQUEUE_MAX_AGE: java.time.Duration = java.time.Duration.ofHours(24)
         const val REQUEUE_LIMIT = 100

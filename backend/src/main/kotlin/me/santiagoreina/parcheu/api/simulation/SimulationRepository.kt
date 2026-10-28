@@ -79,6 +79,12 @@ interface SimulationRepository {
     suspend fun markFailed(id: UUID, error: String, now: Instant): Boolean
 
     /**
+     * FAILED por no haberse podido encolar (error que empieza por [SimulationService.ENQUEUE_FAILED_PREFIX]) →
+     * QUEUED, sin error ni fin. Devuelve false si no estaba en ese estado.
+     */
+    suspend fun requeueAfterEnqueueFailure(id: UUID): Boolean
+
+    /**
      * Simulaciones QUEUED o RUNNING creadas antes de [createdBefore] y después de [createdAfter], las más
      * antiguas primero, hasta [limit]. Las usa la recuperación tras un reinicio (`TASKS_MODE=inline`).
      */

@@ -144,4 +144,11 @@ class InMemorySimulationRepository(scenarios: List<ScenarioDef> = DefaultScenari
         simulations[id] = r.copy(status = SimulationStatus.FAILED, error = error, finishedAt = now)
         true
     }
+
+    override suspend fun requeueAfterEnqueueFailure(id: UUID): Boolean = synchronized(lock) {
+        val r = simulations[id] ?: return false
+        if (r.status != SimulationStatus.FAILED || r.error?.startsWith(SimulationService.ENQUEUE_FAILED_PREFIX) != true) return false
+        simulations[id] = r.copy(status = SimulationStatus.QUEUED, error = null, finishedAt = null)
+        true
+    }
 }

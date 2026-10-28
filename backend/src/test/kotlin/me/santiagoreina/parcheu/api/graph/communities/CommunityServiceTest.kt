@@ -14,7 +14,12 @@ import me.santiagoreina.parcheu.api.graph.InMemoryGraphRepository
 import me.santiagoreina.parcheu.api.platform.BogotaZone
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.QueueKind
+import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
+import me.santiagoreina.parcheu.api.platform.tasks.TaskRequest
+import me.santiagoreina.parcheu.api.quota.MovableClock
 import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.util.UUID
@@ -152,5 +157,64 @@ class CommunityServiceTest : FunSpec({
         val queue3 = FakeTaskQueue()
         CommunityService(f.repo, queue3, CommunityNamer(testGateway(f.llm)), FIXED_CLOCK).runIfDue() shouldBe false
         queue3.tasks shouldHaveSize 0
+    }
+
+    test("runIfDue reencola un name-community pendiente como máximo una vez al día por comunidad") {
+        val clock = MovableClock(Instant.parse("2026-10-22T15:00:00Z")) // jueves de la semana del 19, que ya corrió
+        val f = Fixture(clock)
+        f.graph.group(1, 3).also { f.graph.clique(it) }
+        f.service.runWeekly()
+        val id = f.repo.all().single().id
+        // name-community falla de forma persistente (cuota o error del LLM): la comunidad sigue PENDING_NAME.
+        val enqueued = mutableListOf<String>()
+        val queue = object : TaskQueue {
+            override suspend fun enqueue(task: TaskRequest) {
+                enqueued += task.name
+            }
+        }
+        val service = CommunityService(f.repo, queue, CommunityNamer(testGateway(f.llm)), clock)
+
+        service.runIfDue() shouldBe false // primer barrido del proceso: reencola
+        enqueued shouldBe listOf(CommunityService.nameTask(id).name)
+        repeat(23) { // las horas siguientes del día no reencolan
+            clock.now = clock.now.plus(Duration.ofHours(1))
+            service.runIfDue() shouldBe false
+        }
+        enqueued shouldHaveSize 1
+        clock.now = clock.now.plus(Duration.ofHours(1)) // 24 h después vuelve a reencolar, una sola vez
+        service.runIfDue() shouldBe false
+        service.runIfDue() shouldBe false
+        enqueued shouldHaveSize 2
+    }
+
+    test("un encolado fallido de name-community no cuenta como reencolado: el siguiente barrido reintenta") {
+        val clock = MovableClock(Instant.parse("2026-10-22T15:00:00Z"))
+        val f = Fixture(clock)
+        f.graph.group(1, 3).also { f.graph.clique(it) }
+        f.service.runWeekly()
+        val id = f.repo.all().single().id
+        val queue = FakeTaskQueue()
+        val service = CommunityService(f.repo, queue, CommunityNamer(testGateway(f.llm)), clock)
+        queue.failWith = IllegalStateException("cola caída")
+        service.runIfDue() shouldBe false
+        queue.tasks shouldHaveSize 0
+        queue.failWith = null
+        service.runIfDue() shouldBe false // misma hora: reintenta porque el anterior no se encoló
+        queue.tasks.single().name shouldBe CommunityService.nameTask(id).name
+    }
+
+    test("runWeekly siembra el tope: runIfDue de la misma hora no reencola lo que acaba de encolar") {
+        val clock = MovableClock(Instant.parse("2026-10-22T15:00:00Z"))
+        val f = Fixture(clock)
+        f.graph.group(1, 3).also { f.graph.clique(it) }
+        f.service.runWeekly()
+        val enqueued = mutableListOf<String>()
+        val counting = object : TaskQueue {
+            override suspend fun enqueue(task: TaskRequest) { enqueued += task.name }
+        }
+        val service = CommunityService(f.repo, counting, CommunityNamer(testGateway(f.llm)), clock)
+        service.runWeekly()
+        service.runIfDue() shouldBe false
+        enqueued shouldHaveSize 1
     }
 })

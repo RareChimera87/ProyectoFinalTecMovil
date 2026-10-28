@@ -43,7 +43,9 @@ class MatchFixture(
     val quota = inMemoryQuotaModule(clock, limits = limits, usage = usage, entitlements = entitlements)
     val graph = inMemoryGraphModule(clock, graphRepo)
     val ai = testGateway()
-    val simulation = inMemorySimulationModule(clock, ai, quota, graph, simRepo, FakeTaskQueue(), runInline = false)
+    /** Cola de la simulación: permite ver las tareas `simulate` y provocar fallos de encolado. */
+    val tasks = FakeTaskQueue()
+    val simulation = inMemorySimulationModule(clock, ai, quota, graph, simRepo, tasks, runInline = false)
     val matchRepo = InMemoryMatchingRepository()
     val mirror = RecordingMatchTicketMirror()
     val notifier = FakeNotifier()

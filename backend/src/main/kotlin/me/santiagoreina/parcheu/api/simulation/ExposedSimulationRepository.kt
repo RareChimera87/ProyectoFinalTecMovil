@@ -25,6 +25,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -263,6 +264,17 @@ class ExposedSimulationRepository(private val db: Database) : SimulationReposito
             it[status] = SimulationStatus.FAILED
             it[Simulations.error] = error.take(500)
             it[finishedAt] = now.odt()
+        } == 1
+    }
+
+    override suspend fun requeueAfterEnqueueFailure(id: UUID): Boolean = tx {
+        Simulations.update({
+            (Simulations.id eq id) and (Simulations.status eq SimulationStatus.FAILED) and
+                (Simulations.error like "${SimulationService.ENQUEUE_FAILED_PREFIX}%")
+        }) {
+            it[status] = SimulationStatus.QUEUED
+            it[Simulations.error] = null
+            it[finishedAt] = null
         } == 1
     }
 }

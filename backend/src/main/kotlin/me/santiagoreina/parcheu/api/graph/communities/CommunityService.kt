@@ -9,11 +9,14 @@ import me.santiagoreina.parcheu.api.platform.tasks.TaskRequest
 import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.DayOfWeek
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.time.temporal.TemporalAdjusters
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -37,6 +40,7 @@ class CommunityService(
 ) {
     private val log = LoggerFactory.getLogger(CommunityService::class.java)
     private val lastRunWeek = AtomicReference<LocalDate?>(null)
+    private val lastRequeue = ConcurrentHashMap<UUID, Instant>()
 
     suspend fun runWeekly(): CommunityRunSummary {
         val week = weekStart(clock)
@@ -44,7 +48,7 @@ class CommunityService(
         val plan = CommunityDetector.plan(week, detected, repo.all())
         repo.apply(week, plan)
         lastRunWeek.set(week)
-        (plan.created + plan.kept.filter { it.name == CommunityDetector.PENDING_NAME }).forEach { enqueueName(it.id) }
+        (plan.created + plan.kept.filter { it.name == CommunityDetector.PENDING_NAME }).forEach { if (enqueueName(it.id)) lastRequeue[it.id] = clock.instant() }
         log.info(
             "Comunidades de la semana {}: {} ({} conservadas, {} nuevas, {} eliminadas)",
             week, detected.size, plan.kept.size, plan.created.size, plan.removed.size,
@@ -58,7 +62,8 @@ class CommunityService(
         val week = now.toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         if (now.toLocalDateTime().isBefore(week.atTime(RUN_AT))) return false
         // Salidas tempranas: si el proceso se reinició o name-community agotó intentos tras runWeekly, las comunidades que
-        // siguen sin nombre se reencolan (dedup de 1 h en la tarea; nameCommunity es idempotente).
+        // siguen sin nombre se reencolan, como máximo una vez al día cada una (nameCommunity es idempotente), para que un
+        // fallo persistente del LLM no genere una llamada por hora y comunidad.
         if (lastRunWeek.get() == week) {
             requeuePendingNames()
             return false
@@ -88,20 +93,33 @@ class CommunityService(
     }
 
     private suspend fun requeuePendingNames() {
-        repo.all().filter { it.name == CommunityDetector.PENDING_NAME }.forEach { enqueueName(it.id) }
-    }
-
-    private suspend fun enqueueName(id: UUID) {
-        try {
-            tasks.enqueue(nameTask(id))
-        } catch (e: Exception) {
-            log.error("No se pudo encolar name-community para la comunidad {}", id, e)
+        val now = clock.instant()
+        val pending = repo.all().filter { it.name == CommunityDetector.PENDING_NAME }.map { it.id }.toSet()
+        lastRequeue.keys.retainAll(pending)
+        pending.forEach { id ->
+            val last = lastRequeue[id]
+            if (last == null || !last.plus(REQUEUE_EVERY).isAfter(now)) {
+                // Solo cuenta como reencolado si la cola lo aceptó: si falló, el siguiente barrido reintenta.
+                if (enqueueName(id)) lastRequeue[id] = now
+            }
         }
     }
+
+    private suspend fun enqueueName(id: UUID): Boolean =
+        try {
+            tasks.enqueue(nameTask(id))
+            true
+        } catch (e: Exception) {
+            log.error("No se pudo encolar name-community para la comunidad {}", id, e)
+            false
+        }
 
     companion object {
         const val NAME_PATH = "/tasks/name-community"
         val RUN_AT: LocalTime = LocalTime.of(3, 0)
+
+        /** Separación mínima entre dos reencolados de `name-community` de la misma comunidad. */
+        val REQUEUE_EVERY: Duration = Duration.ofDays(1)
 
         /** Lunes de la semana de [clock] en Bogotá. */
         fun weekStart(clock: Clock): LocalDate =

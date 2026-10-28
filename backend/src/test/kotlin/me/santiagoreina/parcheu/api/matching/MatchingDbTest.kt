@@ -49,6 +49,7 @@ import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.contract.MatchStatus
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.SimulationOrigin
+import me.santiagoreina.parcheu.contract.SimulationStatus
 import me.santiagoreina.parcheu.contract.TicketStatus
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.vendors.ForUpdateOption
@@ -130,7 +131,8 @@ class MatchingDbTest : FunSpec({
     class World(val db: Database, val clock: MovableClock = MovableClock(start), flags: MatchingFlags = MatchingFlags(true, false)) {
         val quota = quotaModule(Env.DEV, db, clock)
         val graph = GraphModule(ExposedGraphRepository(db), AnonIdSigner.forTests(), clock)
-        val simulation = simulationModule(Env.DEV, db, clock, testGateway(), quota, graph, FakeTaskQueue(), firebaseProjectId = null, notifier = NoopSimulationNotifier,
+        val tasks = FakeTaskQueue()
+        val simulation = simulationModule(Env.DEV, db, clock, testGateway(), quota, graph, tasks, firebaseProjectId = null, notifier = NoopSimulationNotifier,
             chat = ChatModule(ExposedChatRepository(db), InMemoryChatMirror(), NoopNotifier, graph.policy, clock), push = NoopNotifier,
         )
         val repo = ExposedMatchingRepository(db)
@@ -372,6 +374,63 @@ class MatchingDbTest : FunSpec({
                 sim[Simulations.id] shouldBe UUID.fromString(second)
                 UsageEvents.selectAll().count { it[UsageEvents.kind] == me.santiagoreina.parcheu.contract.QuotaKind.SIMULATION } shouldBe 0
             }
+        }
+    }
+
+    test("Postgres: tras un encolado fallido el barrido reintenta con el mismo id (sin clave duplicada) y F2 -> F4 sigue funcionando").config(enabled = TestDatabase.enabled) {
+        withDb { db ->
+            val w = World(db)
+            val ana = db.user("ana")
+            val beto = db.user("beto")
+            w.service.enqueue(ana, Mode.AMISTAD)
+            val matchId = UUID.fromString(w.service.enqueue(beto, Mode.AMISTAD).matchId!!)
+            w.tasks.failWith = IllegalStateException("Cloud Tasks caído")
+            w.service.choose(ana, matchId.toString(), MatchChoice.SIMULATION).status shouldBe MatchStatus.SIMULATION
+            transaction(db) {
+                Matches.selectAll().single()[Matches.simulationId].shouldBeNull()
+                Simulations.selectAll().single().let {
+                    it[Simulations.id] shouldBe matchId
+                    it[Simulations.status] shouldBe SimulationStatus.FAILED
+                }
+            }
+            // Sigue caído: el barrido no explota ni duplica.
+            w.service.sweep()
+            transaction(db) { Simulations.selectAll().count() shouldBe 1L }
+
+            w.tasks.failWith = null
+            w.service.sweep()
+            transaction(db) {
+                Matches.selectAll().single()[Matches.simulationId] shouldBe matchId
+                Simulations.selectAll().single().let {
+                    it[Simulations.id] shouldBe matchId
+                    it[Simulations.status] shouldBe SimulationStatus.QUEUED
+                    it[Simulations.error].shouldBeNull()
+                }
+            }
+            w.tasks.tasks.single().name shouldBe "simulate-$matchId"
+            // Un barrido más no vuelve a tocar nada.
+            w.service.sweep()
+            w.tasks.tasks shouldHaveSize 1
+        }
+    }
+
+    test("Postgres: barridos concurrentes tras un encolado fallido recuperan una sola simulación").config(enabled = TestDatabase.enabled) {
+        withDb { db ->
+            val w = World(db)
+            val ana = db.user("ana")
+            val beto = db.user("beto")
+            w.service.enqueue(ana, Mode.AMISTAD)
+            val matchId = UUID.fromString(w.service.enqueue(beto, Mode.AMISTAD).matchId!!)
+            w.tasks.failWith = IllegalStateException("Cloud Tasks caído")
+            w.service.choose(beto, matchId.toString(), MatchChoice.SIMULATION)
+            w.tasks.failWith = null
+            runBlocking { (1..8).map { async(Dispatchers.Default) { w.service.sweep() } }.awaitAll() }
+            transaction(db) {
+                Simulations.selectAll().count() shouldBe 1L
+                Matches.selectAll().single()[Matches.simulationId] shouldBe matchId
+                Simulations.selectAll().single()[Simulations.status] shouldBe SimulationStatus.QUEUED
+            }
+            w.tasks.tasks shouldHaveSize 1
         }
     }
 

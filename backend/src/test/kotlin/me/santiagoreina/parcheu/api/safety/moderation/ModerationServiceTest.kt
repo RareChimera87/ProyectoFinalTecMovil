@@ -250,7 +250,6 @@ class ModerationServiceTest : FunSpec({
         f.llm.jsonResponder = { _, _ -> finding("SELF_HARM", "HIGH") }
         val id = f.send("ya no quiero seguir")
         f.flakyNotifier.failOnce = true
-        f.queue.tasks.size
         val before = f.queue.tasks.size
         f.queue.failWith = IllegalStateException("cola caída")
         runCatching { runBlocking { f.moderation.moderate(id) } }.isFailure shouldBe true

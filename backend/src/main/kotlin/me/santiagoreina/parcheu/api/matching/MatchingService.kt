@@ -415,7 +415,9 @@ class MatchingService(
             else -> match.userB
         }
         try {
-            val record = simulation.create(
+            // Idempotente: si un intento previo ya insertó la simulación (id = match.id) pero no llegó a adjuntarse
+            // o no se pudo encolar, se recupera en vez de chocar con la clave primaria.
+            val record = simulation.resume(match.id) ?: simulation.create(
                 requestedBy = requestedBy,
                 userA = match.userA,
                 userB = match.userB,
