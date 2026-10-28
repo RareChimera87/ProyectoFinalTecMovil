@@ -95,7 +95,11 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
 firebase apps:android:sha:create 1:388770932007:android:d6f5452d14d98bf1d43502 <SHA-1> --project parcheu-dev
 ```
 
-Pídele a I1 o I3 que ejecute el segundo comando (necesita permiso de edición en el proyecto) y luego vuelve a descargar `google-services.json`.
+Pídele a I1 o I3 que ejecute el segundo comando (necesita permiso de edición en el proyecto) y luego vuelve a descargar `google-services.json` (nunca se versiona):
+
+```bash
+firebase apps:sdkconfig ANDROID 1:388770932007:android:d6f5452d14d98bf1d43502 --project parcheu-dev > android/app/src/dev/google-services.json
+```
 
 ## Secretos
 
@@ -234,7 +238,7 @@ JAVA_HOME=/opt/android-studio/jbr PATH=/opt/android-studio/jbr/bin:$PATH \
 ## Fila de match (E4.2)
 
 - Banderas del servicio `api`: `DEMO_USERS_ENABLED` (por defecto `true` en local y dev, `false` en prod) y `SCENARIO_MODE_ENABLED` (por defecto `true` en local y dev, `false` en prod hasta la 0.9; E4.8). El espejo `matchTickets/{uid}` escribe en Firestore solo si hay `FIREBASE_PROJECT_ID` y `ENV` no es `local`.
-- Moderación con IA (E8.6): `MODERATION_ENABLED` (por defecto `true`; `false` la apaga). Cada mensaje nuevo encola `/tasks/moderate` en `ai-light`; con `TASKS_MODE=inline` la ejecuta `InProcessTaskQueue`. En `ENV=local` con el LLM Fake no encuentra nada que moderar. Las fallas del LLM dejan el mensaje visible y registran `moderation_failed` (fail-open).
+- Moderación con IA (E8.6): `MODERATION_ENABLED` (por defecto `true`; `false` la apaga). Cada mensaje nuevo encola `/tasks/moderate` en `ai-light` (si el aviso de ayuda ante autolesión falla, encola `/tasks/moderate-help`, también en `ai-light` y sin LLM, y registra `moderation_help_deferred`); con `TASKS_MODE=inline` la ejecuta `InProcessTaskQueue`. En `ENV=local` con el LLM Fake no encuentra nada que moderar. Las fallas del LLM dejan el mensaje visible y registran `moderation_failed` (fail-open).
 - `MatchingDbTest` usa Postgres real (incluye la prueba de concurrencia y la de `SKIP LOCKED`): en local, `PARCHEU_TEST_DB_URL` apuntando a un Postgres 16 desechable (ver `TestDatabase`).
 - `MatchTicketFirestoreEmulatorTest` necesita el emulador de Firestore; sin `FIRESTORE_EMULATOR_HOST` se omite. En local, con Java 21 en el `PATH`:
 

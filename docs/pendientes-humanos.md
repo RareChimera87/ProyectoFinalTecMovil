@@ -995,14 +995,14 @@ Para verla en la variante dev contra el homeserver: con dos cuentas de prueba, q
 
 ## E8.6 · Moderación con IA
 
-El código no necesita Terraform, secretos ni Play Console: usa la cola `ai-light` que ya existe (en el homeserver, `InProcessTaskQueue` con la tarea `/tasks/moderate` registrada) y el modelo lite de la pasarela de IA. Pasos que solo puede hacer una persona:
+El código no necesita Terraform, secretos ni Play Console: usa la cola `ai-light` que ya existe (en el homeserver, `InProcessTaskQueue` con las tareas `/tasks/moderate` y `/tasks/moderate-help` registradas) y el modelo lite de la pasarela de IA. Pasos que solo puede hacer una persona:
 
 | # | Paso | Dueño | Cuándo |
 |---|---|---|---|
 | 1 | **Decidir si la moderación queda encendida**: viene activa por defecto y cada mensaje nuevo cuesta una llamada lite (centavos por miles de mensajes). Si el presupuesto de IA se aprieta, define `MODERATION_ENABLED=false` en el servicio `api` (es recortable, ADR-0026); los reportes y bloqueos manuales siguen igual. | I1 | Antes de la 0.2 |
 | 2 | **Revisar los reportes AUTO** en `admin.html` (origen `AUTO`, `reporterId` nulo): los de 'posible menor' llevan prioridad 2 y el mensaje sigue visible hasta que un admin decida; los demás llevan prioridad 1 y el mensaje ya está oculto. | I1 | Cada semana de pruebas |
 | 3 | **Verificar vigencia y cobertura en Santander de las líneas 192 (opción 4), 106 y 123** que se envían en el aviso de la bandeja C2 y el push al autor (pendiente heredado de E8.1; el texto sale de `HelpResources`). | I1 | Antes de la 0.2 |
-| 4 | **Cloud Tasks (solo cuando haya Cloud Run)**: la tarea ya está en `POST /internal/tasks/moderate` y se encola en `ai-light`; no hace falta Terraform nuevo porque la cola y su `sa-tasks` son los de E0.5. | I3 | Si se despliega en GCP |
+| 4 | **Cloud Tasks (solo cuando haya Cloud Run)**: las tareas ya están en `POST /internal/tasks/moderate` y `POST /internal/tasks/moderate-help` (el aviso de ayuda ante autolesión cuando falla; se encola en `ai-light` y deja el log `moderation_help_deferred`) y se encolan en `ai-light`; no hace falta Terraform nuevo porque la cola y su `sa-tasks` son los de E0.5. | I3 | Si se despliega en GCP |
 
 Para probarla en el homeserver (dev): escribir un mensaje agresivo entre dos cuentas de prueba y ver, en segundos, que desaparece del chat de la otra persona y aparece un reporte AUTO en `admin.html`; un mensaje de autolesión envía las líneas de ayuda como aviso en la bandeja C2 y push solo al autor (no entra al chat, la otra persona no se entera).
 ## E8.7 · Reportar y bloquear desde todas partes

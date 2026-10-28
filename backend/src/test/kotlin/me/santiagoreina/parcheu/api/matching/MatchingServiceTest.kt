@@ -30,6 +30,7 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.SimulationOrigin
+import me.santiagoreina.parcheu.contract.SimulationStatus
 import me.santiagoreina.parcheu.api.platform.errors.Suspended
 import me.santiagoreina.parcheu.contract.TicketStatus
 import java.time.Duration
@@ -529,6 +530,97 @@ class MatchingServiceTest : FunSpec({
         }
         f.simRepo.all().size shouldBe 1
         f.matchRepo.match(UUID.fromString(id))!!.simulationId shouldBe f.simRepo.all().single().id
+    }
+
+    test("la simulación nace con el id del match (F2 -> F4 la encuentra por ese id)") {
+        val f = MatchFixture()
+        val (ana, _, id) = f.pair()
+        f.service.choose(ana, id, MatchChoice.SIMULATION)
+        val match = f.matchRepo.match(UUID.fromString(id))!!
+        match.simulationId shouldBe match.id
+        f.simRepo.find(UUID.fromString(id)).shouldNotBeNull().origin shouldBe SimulationOrigin.RANDOM
+    }
+
+    test("si el encolado falla la simulación queda FAILED y el barrido la recupera con el mismo id, sin chocar") {
+        val f = MatchFixture()
+        val (ana, _, id) = f.pair()
+        val matchId = UUID.fromString(id)
+        f.tasks.failWith = IllegalStateException("Cloud Tasks caído")
+        f.service.choose(ana, id, MatchChoice.SIMULATION)
+        f.matchRepo.match(matchId)!!.simulationId.shouldBeNull()
+        f.simRepo.find(matchId).shouldNotBeNull().status shouldBe SimulationStatus.FAILED
+        f.tasks.tasks.shouldBeEmpty()
+
+        // Sigue caído: el barrido reintenta, no explota con la clave duplicada y no adjunta nada.
+        f.service.sweep()
+        f.matchRepo.match(matchId)!!.simulationId.shouldBeNull()
+        f.simRepo.all() shouldHaveSize 1
+
+        f.tasks.failWith = null
+        f.service.sweep()
+        f.matchRepo.match(matchId)!!.simulationId shouldBe matchId
+        f.simRepo.find(matchId).shouldNotBeNull().status shouldBe SimulationStatus.QUEUED
+        f.simRepo.find(matchId)!!.error.shouldBeNull()
+        f.tasks.tasks.single().name shouldBe "simulate-$matchId"
+        f.simRepo.all() shouldHaveSize 1
+    }
+
+    test("una simulación QUEUED sin tarea (falló encolar y markFailed) se re-encola y se adjunta") {
+        val f = MatchFixture()
+        val (ana, _, id) = f.pair()
+        val matchId = UUID.fromString(id)
+        f.tasks.failWith = IllegalStateException("Cloud Tasks caído")
+        f.service.choose(ana, id, MatchChoice.SIMULATION)
+        // Deja la fila como si markFailed tampoco hubiera podido escribir.
+        f.simRepo.requeueAfterEnqueueFailure(matchId) shouldBe true
+        f.simRepo.find(matchId).shouldNotBeNull().status shouldBe SimulationStatus.QUEUED
+        f.tasks.failWith = null
+        f.service.sweep()
+        f.matchRepo.match(matchId)!!.simulationId shouldBe matchId
+        f.tasks.tasks.single().name shouldBe "simulate-$matchId"
+    }
+
+    test("si la simulación ya existe RUNNING solo se adjunta, sin encolar de nuevo") {
+        val f = MatchFixture()
+        val (ana, _, id) = f.pair()
+        val matchId = UUID.fromString(id)
+        f.service.choose(ana, id, MatchChoice.SIMULATION)
+        f.simRepo.markRunning(matchId) shouldBe true
+        f.matchRepo.updateMatch(matchId) { it.copy(simulationId = null) } // el adjuntar se perdió
+        val queued = f.tasks.tasks.size
+        f.service.sweep()
+        f.matchRepo.match(matchId)!!.simulationId shouldBe matchId
+        f.simRepo.find(matchId).shouldNotBeNull().status shouldBe SimulationStatus.RUNNING
+        f.tasks.tasks shouldHaveSize queued
+    }
+
+    test("una FAILED del motor (no de encolado) no se re-encola: solo se adjunta") {
+        val f = MatchFixture()
+        val (ana, _, id) = f.pair()
+        val matchId = UUID.fromString(id)
+        f.service.choose(ana, id, MatchChoice.SIMULATION)
+        f.simRepo.markFailed(matchId, "Hay un bloqueo entre las dos personas", f.clock.instant()) shouldBe true
+        f.matchRepo.updateMatch(matchId) { it.copy(simulationId = null) }
+        val queued = f.tasks.tasks.size
+        f.service.sweep()
+        f.matchRepo.match(matchId)!!.simulationId shouldBe matchId
+        f.simRepo.find(matchId).shouldNotBeNull().status shouldBe SimulationStatus.FAILED
+        f.tasks.tasks shouldHaveSize queued
+    }
+
+    test("barridos concurrentes tras un encolado fallido recuperan la simulación una sola vez") {
+        val f = MatchFixture()
+        val (ana, _, id) = f.pair()
+        val matchId = UUID.fromString(id)
+        f.tasks.failWith = IllegalStateException("Cloud Tasks caído")
+        f.service.choose(ana, id, MatchChoice.SIMULATION)
+        f.tasks.failWith = null
+        kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.Default) {
+            (1..8).map { async { f.service.sweep() } }.forEach { it.await() }
+        }
+        f.simRepo.all() shouldHaveSize 1
+        f.matchRepo.match(matchId)!!.simulationId shouldBe matchId
+        f.tasks.tasks shouldHaveSize 1
     }
 
     test("si la simulación falla sin culpable (gemelo no listo) el match se cierra y el cupo vuelve a las dos") {
