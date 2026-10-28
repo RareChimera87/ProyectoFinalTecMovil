@@ -1,5 +1,13 @@
 # Operación y runbook
 
+Cómo operar ParcheU: qué hacer cuando suena una alerta (E10.5, entornos en GCP) y el día a día del backend de dev
+en el homeserver (E10.7). Contenido: [alertas](#alertas-de-gcp) · [backend de dev en el homeserver](#backend-de-dev-en-el-homeserver) ·
+[moderación y administración](#moderación-y-administración) · [datos: respaldo, purga y borrado](#datos-respaldo-purga-y-borrado) ·
+[cambios de configuración y secretos](#cambios-de-configuración-y-secretos) · [incidentes frecuentes](#incidentes-frecuentes-por-síntoma).
+Diagramas en [c4.md](c4.md).
+
+## Alertas de GCP
+
 Qué hacer cuando suena una alerta de ParcheU (E10.5). Las alertas, métricas y el dashboard viven en
 `infra/terraform/modules/platform/monitoring.tf` y llegan por correo a los tres del equipo
 (`alert_emails`). Cada correo trae el enlace a este documento. Las alertas solo cubren entornos desplegados
@@ -144,3 +152,110 @@ llega con las claves `route` y `flavor=dev` en unos minutos.
 
 Para silenciar una alerta mientras se atiende, usa Monitoring > Alerting > Snoozes (no la borres: Terraform la
 recrearía). Para cambiar a quién llega, edita `alert_emails` (en `terraform.tfvars` local o `-var`) y aplica.
+
+## Backend de dev en el homeserver
+
+Aplica mientras el backend de dev corra en el homeserver ([ADR-0033](adr/0033-backend-en-homeserver.md)). El detalle de
+instalación, HTTPS y llaves está en [deploy/homelab/README.md](../deploy/homelab/README.md); aquí, lo que se hace al operar.
+Las alertas de GCP no cubren este entorno: la vigilancia es manual.
+
+**Piezas** (Docker Compose en `~/parcheu/` del servidor): `parcheu-db` (Postgres 16), `parcheu-migrate` (Flyway, una vez
+por despliegue) y `parcheu-api` (Ktor en el puerto 8090). Las colas y los jobs corren dentro de la API
+(`TASKS_MODE=inline`).
+
+### Comprobar que está sano
+
+```bash
+curl https://api-parcheu.homeserverlab.site/v1/health          # o http://192.168.0.10:8090/v1/health desde la LAN
+ssh user@homelab 'cd ~/parcheu && docker compose ps'           # los tres servicios; migrate termina y sale (0)
+ssh user@homelab 'cd ~/parcheu && docker compose logs --tail 100 parcheu-api'
+```
+
+Qué buscar en los registros (JSON, un objeto por línea; `traceId`, `route` y `userId` uuid, nunca correos):
+`ai_call` (costo de cada llamada), `simulation_failed` (campo `cause`), `report_created`, `moderation_failed`,
+`AiBudgetExceeded`. Para seguir una petición: `docker compose logs parcheu-api | grep <traceId>`.
+
+### Desplegar y revertir
+
+```bash
+deploy/homelab/desplegar.sh            # desde el portátil, con el árbol limpio: construye, sube, migra y verifica
+deploy/homelab/desplegar.sh --sin-build
+```
+
+El script verifica la salud después de levantar la API y, **si falla, vuelve solo a la imagen anterior** (`PARCHEU_PREV_TAG`).
+Revertir a mano: edita `PARCHEU_TAG` en `~/parcheu/.env` con el valor de `PARCHEU_PREV_TAG` y
+`docker compose up -d parcheu-api`. Las migraciones de Flyway no se deshacen: si la versión nueva migró y se revierte la imagen,
+el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaura un respaldo (siguiente sección).
+
+### Reiniciar o recuperarse de un corte
+
+1. `docker compose up -d` levanta lo que falte; la base conserva el volumen `parcheu-pgdata`.
+2. La cola en proceso **pierde lo que tenía en memoria**. Se recuperan solas: las simulaciones `QUEUED` o `RUNNING` de entre
+   10 min y 24 h (`simulation-recovery`, cada 15 min) y las purgas de cuentas (`purge-sweep`, cada hora). Las tareas de
+   gemelo y memorias se rehacen al siguiente uso o a las 02:00 de Bogotá (`memories`).
+3. Si ves el mismo id de simulación repetido en los registros una y otra vez, hay una simulación que mata el proceso: míralo
+   antes de que gaste IA ([incidentes](#incidentes-frecuentes-por-síntoma)).
+4. La IP `192.168.0.10` del servidor debe seguir siendo estática; si cambió, la API no arranca o queda inalcanzable.
+
+### Qué equivale a cada alerta de GCP
+
+| Síntoma (alerta en GCP) | Cómo se ve en el homeserver |
+|---|---|
+| 5xx altos | `docker compose logs parcheu-api` con `level":"ERROR"`; revisa si coincide con un despliegue y revierte (arriba) |
+| p95 alto | Normal tras un reinicio (JVM en frío); si persiste, `docker stats` (la API tiene tope de 640 MB) y las llamadas `ai_call` lentas |
+| `AiBudgetExceeded` | Igual que en GCP: [ai-budget-exceeded](#ai-budget-exceeded); el tope es `AI_DAILY_BUDGET_USD` del `.env` |
+| `report_created` | Igual: [report-created](#report-created); nadie te avisa por correo, revisa la tabla `reports` o `admin.html` cada día de prueba |
+| simulaciones FAILED | Igual: [simulaciones-failed](#simulaciones-failed); la cola es `InProcessTaskQueue` (reintenta hasta 5 veces con espera creciente) |
+| API caída | `docker compose ps`; ver [reiniciar](#reiniciar-o-recuperarse-de-un-corte) |
+
+## Moderación y administración
+
+- **Dar o quitar el rol de administrador** (claim `admin` de Firebase Auth): `scripts/grant-admin.sh dev <correo>`; con
+  `--revoke` lo quita y con `--dry-run` solo muestra qué haría. Necesita `gcloud` con permisos de administrador de Firebase
+  Auth en `parcheu-dev`. La persona cierra sesión y vuelve a entrar para que el servidor vea el claim.
+- **Atender reportes:** `admin.html` (Firebase Hosting, [ADR-0028](adr/0028-firebase-hosting-y-admin.md)) lista los reportes y
+  permite resolverlos con una acción (descartar, ocultar el mensaje, suspender 24 h o banear). Los de prioridad 2 (`SELF_HARM`, `UNDERAGE`) se atienden
+  el mismo día. Nunca copies textos de chats a canales de mensajería ni a issues.
+- **Token `fake-admin`:** solo existe con `LOCAL_FAKE_ADMIN=true` y `PARCHEU_ENV=local`; no lo actives en el homeserver, donde
+  viven datos de testers.
+
+## Datos: respaldo, purga y borrado
+
+- **Respaldo:** cron diario a las 03:17 (`respaldar.sh`, rotación de 7 días en `~/parcheu/backups`, `respaldo.log` rotado a 1 MiB).
+  A mano: `ssh user@homelab '~/parcheu/respaldar.sh'`. Los respaldos viven en el mismo servidor: copia
+  `~/parcheu/backups` a otro lugar (por ejemplo Seafile) si los datos importan.
+- **Verificar que el respaldo sirve:** `gzip -t ~/parcheu/backups/<archivo>.sql.gz` y, de vez en cuando, restaurar en una base
+  desechable. Un respaldo que nunca se restauró no es un respaldo.
+- **Restaurar** (con la base vacía): `gunzip -c parcheu-AAAAMMDD-HHMMSS.sql.gz | docker compose exec -T parcheu-db psql -U parcheu parcheu`.
+- **Usuarios demo:** `docker compose run --rm parcheu-migrate seed-demo` los siembra (idempotente) y `purge-demo` los borra con
+  todo lo que los nombra ([ADR-0027](adr/0027-usuarios-demo.md)); purgarlos antes de abrir la app a personas reales.
+- **Retención y borrado:** la retención diaria (`retention`) y el barrido de purgas (`purge-sweep`) corren en el programador
+  interno; las reglas están en [arquitectura.md §10.2](arquitectura.md#102-retención-de-datos-fuente-para-privacidad-data-safety-e83-y-e88)
+  y [ADR-0025](adr/0025-borrado-purga-y-retencion.md). Una cuenta borrada pasa por `purge-user`; si el proceso muere a medias, `purge-sweep` la retoma.
+- **Espacio en disco:** vigila `df -h` del servidor y `docker system df`. No uses `docker image prune` a ciegas: borraría
+  la imagen anterior que necesita la reversión.
+
+## Cambios de configuración y secretos
+
+- Las variables viven en `~/parcheu/.env` (permisos 600, nunca en el repositorio). Cámbialas con edición atómica y
+  `docker compose up -d parcheu-api` para recrear el contenedor; un valor inválido hace fallar el arranque y el motivo sale en los registros.
+- **Presupuesto de IA:** `AI_DAILY_BUDGET_USD` (por defecto 3). Súbelo solo tras revisar `ai_usage_daily` y entender el gasto
+  ([ADR-0010](adr/0010-control-de-costo-ia.md)).
+- **Proveedor y modelos de IA:** `AI_PROVIDER`, `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`; cambiar de modelo es una variable
+  y un reinicio ([ADR-0008](adr/0008-ia-vertex-proveedores-intercambiables.md)). Claude solo tras confirmar que los créditos lo cubren.
+- **Llave de la cuenta de servicio** (`~/parcheu/secrets/sa.json`): rotarla es crear una llave nueva, copiarla con permisos 600,
+  reiniciar la API y borrar la anterior en IAM. La cuenta `sa-homelab` es temporal: bórrala al terminar las pruebas.
+- **Banderas útiles:** `DEMO_USERS_ENABLED`, `SCENARIO_MODE_ENABLED`, `MODERATION_ENABLED` (ver [desarrollo-local.md](desarrollo-local.md)).
+
+## Incidentes frecuentes por síntoma
+
+| Síntoma | Causa probable | Qué hacer |
+|---|---|---|
+| La app dice "sin conexión" pero el teléfono tiene red | La API no responde o `parcheu.apiUrl.dev` apunta a otra URL | `curl` a `/v1/health`; comprobar `local.properties` ([desarrollo-local.md](desarrollo-local.md)) |
+| La app no inicia sesión (error 401 en todo) | `PARCHEU_ENV=local` (no valida tokens reales) o reloj del servidor desviado | Pasar a `dev` según el README del homelab; `timedatectl` en el servidor |
+| Una simulación se queda en curso | Reinicio durante la tarea | Espera hasta 15 min al barrido; si no, mira el registro `simulate:` con el id |
+| El mismo id de simulación se reencola sin parar | Una entrada que mata el proceso | Detén la API (`docker compose stop parcheu-api`), revisa el último error y marca la simulación como `FAILED` en la base antes de reiniciar |
+| Chats o progreso en vivo no se actualizan | Credenciales de Firestore ausentes o proyecto equivocado | Registros de arranque; `FIREBASE_PROJECT_ID` debe ser `parcheu-dev` y `sa.json` válido |
+| No llegan push | `PARCHEU_ENV=local` o falta `firebasecloudmessaging.admin` en la cuenta | Revisar rol y entorno |
+| Plus no se activa tras comprar | No hay verificación de Play en el homeserver | Usar `grant-plus` ([README del homelab](../deploy/homelab/README.md)); las renovaciones por RTDN no se sincronizan |
+| Todo responde 503 `AI_BUDGET` | Tope diario agotado | [ai-budget-exceeded](#ai-budget-exceeded); se libera a medianoche de Bogotá |
