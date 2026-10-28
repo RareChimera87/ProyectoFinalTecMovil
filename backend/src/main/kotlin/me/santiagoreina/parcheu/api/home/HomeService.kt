@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.api.home
 import me.santiagoreina.parcheu.api.quota.QuotaService
 import me.santiagoreina.parcheu.api.simulation.SimulationService
 import me.santiagoreina.parcheu.contract.HomeDto
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import java.util.UUID
 
@@ -21,7 +22,10 @@ class HomeService(
         val status = quota.status(viewer)
         // La primera página (más recientes primero) basta: la simulación en curso es reciente.
         val recent = simulations.list(viewer, cursor = null, limit = SimulationService.MAX_PAGE).items
-        val running = recent.firstOrNull { it.status == SimulationStatus.RUNNING || it.status == SimulationStatus.QUEUED }
+        // La evaluación de un escenario (origen SCENARIO) no es una conversación de gemelos: el cierre vive en F3.
+        val running = recent.firstOrNull {
+            it.origin != SimulationOrigin.SCENARIO && (it.status == SimulationStatus.RUNNING || it.status == SimulationStatus.QUEUED)
+        }
         val ready = recent.filter { it.status == SimulationStatus.DONE }.take(MAX_READY)
         // No se sugiere a quien ya está simulando con el usuario.
         val busy = setOfNotNull(running?.other?.id?.let { runCatching { UUID.fromString(it) }.getOrNull() })

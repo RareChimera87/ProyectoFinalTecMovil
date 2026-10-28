@@ -240,6 +240,25 @@ class ScenarioApiTest : FunSpec({
         f.fake.calls shouldBe 1
     }
 
+    test("con los dos acuerdos ya guardados (carrera sin finalize), el siguiente GET de sesión cierra y pasa a JUDGING") {
+        val f = Fixture()
+        val chat = f.scenarioChat()
+        testApplication {
+            val client = startApp(f.container())
+            client.say("ana", chat.id, "a-1", "Hola").status shouldBe HttpStatusCode.OK
+            client.say("beto", chat.id, "b-1", "Hola, ¿planeamos?").status shouldBe HttpStatusCode.OK
+            // Las dos transacciones confirmaron sin verse: ambos agreed_at quedan puestos y nadie llamó a finalize.
+            runBlocking {
+                f.chatRepo.agree(chat.id, f.ana, f.clock.instant())
+                f.chatRepo.agree(chat.id, f.beto, f.clock.instant())
+            }
+            f.chatRepo.chat(chat.id)!!.status shouldBe ChatStatus.OPEN
+            client.session("ana", chat.id).status shouldBe ScenarioSessionStatus.JUDGING
+            f.chatRepo.chat(chat.id)!!.status shouldBe ChatStatus.CLOSED
+            f.judgeTasks() shouldHaveSize 1
+        }
+    }
+
     test("el resultado es una simulación SCENARIO con el mismo DTO: puntaje, sesión DONE, arista y aviso a los dos") {
         val f = Fixture()
         val chat = f.scenarioChat()

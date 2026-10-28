@@ -93,7 +93,7 @@ class ScenarioService(
      */
     suspend fun session(viewer: UUID, rawChatId: String): ScenarioSessionDto {
         val chat = scenarioChat(viewer, rawChatId)
-        if (chat.status == ChatStatus.OPEN && hasEnded(chat)) finalize(chat.id)
+        if (chat.status == ChatStatus.OPEN && (hasEnded(chat) || bothAgreed(chat))) finalize(chat.id)
         return sessionOf(viewer, requireNotNull(chats.chat(chat.id)))
     }
 
