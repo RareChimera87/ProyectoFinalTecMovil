@@ -121,8 +121,10 @@ class SimulationService(
             createdAt = clock.instant().truncatedTo(ChronoUnit.MICROS),
             finishedAt = null,
         )
+        var inserted = false
         try {
             repo.create(record)
+            inserted = true
             // El documento de Firestore existe antes de que la tarea empiece a escribir progreso.
             publishQueued(record)
             tasks.enqueue(simulateTask(id))
@@ -131,7 +133,8 @@ class SimulationService(
         } catch (e: Exception) {
             log.error("No se pudo encolar la simulación {}: se devuelve el cupo", id, e)
             if (chargeQuota) quota.refund(QuotaKind.SIMULATION, id.toString())
-            runCatching { repo.markFailed(id, "$ENQUEUE_FAILED_PREFIX ${e.message}", clock.instant()) }
+            // Si repo.create falló (p. ej. clave duplicada: otro proceso ganó), la fila es del ganador y no se toca.
+            if (inserted) runCatching { repo.markFailed(id, "$ENQUEUE_FAILED_PREFIX ${e.message}", clock.instant()) }
             throw e
         }
         return repo.find(id) ?: record
@@ -146,8 +149,10 @@ class SimulationService(
      */
     suspend fun resume(id: UUID): SimulationRecord? {
         var record = repo.find(id) ?: return null
+        var revived = false
         if (record.status == SimulationStatus.FAILED && record.error?.startsWith(ENQUEUE_FAILED_PREFIX) == true) {
             if (repo.requeueAfterEnqueueFailure(id)) {
+                revived = true
                 record = repo.find(id) ?: return null
                 publishQueued(record)
             }
@@ -159,7 +164,9 @@ class SimulationService(
                 throw e
             } catch (e: Exception) {
                 log.error("No se pudo re-encolar la simulación {}", id, e)
-                runCatching { repo.markFailed(id, "$ENQUEUE_FAILED_PREFIX ${e.message}", clock.instant()) }
+                // Solo si la revivimos nosotros vuelve a FAILED; una QUEUED/RUNNING ajena puede tener tarea viva y
+                // markFailed la cortaría. QUEUED sin tarea ya es recuperable en el siguiente barrido.
+                if (revived) runCatching { repo.markFailed(id, "$ENQUEUE_FAILED_PREFIX ${e.message}", clock.instant()) }
                 throw e
             }
         }

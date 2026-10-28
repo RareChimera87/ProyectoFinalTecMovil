@@ -594,6 +594,35 @@ class MatchingServiceTest : FunSpec({
         f.tasks.tasks shouldHaveSize queued
     }
 
+    test("si falla re-encolar una simulación QUEUED ajena no se marca FAILED y su tarea original sigue en la cola") {
+        val f = MatchFixture()
+        val (ana, _, id) = f.pair()
+        val matchId = UUID.fromString(id)
+        f.service.choose(ana, id, MatchChoice.SIMULATION)
+        f.tasks.tasks shouldHaveSize 1
+        f.matchRepo.updateMatch(matchId) { it.copy(simulationId = null) }
+        f.tasks.failWith = IllegalStateException("Cloud Tasks caído")
+        f.service.sweep()
+        f.simRepo.find(matchId).shouldNotBeNull().status shouldBe SimulationStatus.QUEUED
+        f.tasks.tasks.single().name shouldBe "simulate-$matchId"
+        // Con el motor ya ejecutándola tampoco se corta.
+        f.simRepo.markRunning(matchId) shouldBe true
+        f.service.sweep()
+        f.simRepo.find(matchId).shouldNotBeNull().status shouldBe SimulationStatus.RUNNING
+    }
+
+    test("create con id duplicado (otro proceso ganó) no toca la simulación del ganador") {
+        val f = MatchFixture()
+        val (ana, beto, id) = f.pair()
+        val matchId = UUID.fromString(id)
+        f.service.choose(ana, id, MatchChoice.SIMULATION)
+        f.simRepo.markRunning(matchId) shouldBe true
+        shouldThrow<IllegalStateException> {
+            f.simulation.service.create(ana, ana, beto, Mode.AMISTAD, SimulationOrigin.RANDOM, chargeQuota = false, id = matchId)
+        }
+        f.simRepo.find(matchId).shouldNotBeNull().status shouldBe SimulationStatus.RUNNING
+    }
+
     test("una FAILED del motor (no de encolado) no se re-encola: solo se adjunta") {
         val f = MatchFixture()
         val (ana, _, id) = f.pair()

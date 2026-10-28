@@ -48,7 +48,7 @@ class CommunityService(
         val plan = CommunityDetector.plan(week, detected, repo.all())
         repo.apply(week, plan)
         lastRunWeek.set(week)
-        (plan.created + plan.kept.filter { it.name == CommunityDetector.PENDING_NAME }).forEach { enqueueName(it.id) }
+        (plan.created + plan.kept.filter { it.name == CommunityDetector.PENDING_NAME }).forEach { if (enqueueName(it.id)) lastRequeue[it.id] = clock.instant() }
         log.info(
             "Comunidades de la semana {}: {} ({} conservadas, {} nuevas, {} eliminadas)",
             week, detected.size, plan.kept.size, plan.created.size, plan.removed.size,
@@ -99,19 +99,20 @@ class CommunityService(
         pending.forEach { id ->
             val last = lastRequeue[id]
             if (last == null || !last.plus(REQUEUE_EVERY).isAfter(now)) {
-                lastRequeue[id] = now
-                enqueueName(id)
+                // Solo cuenta como reencolado si la cola lo aceptó: si falló, el siguiente barrido reintenta.
+                if (enqueueName(id)) lastRequeue[id] = now
             }
         }
     }
 
-    private suspend fun enqueueName(id: UUID) {
+    private suspend fun enqueueName(id: UUID): Boolean =
         try {
             tasks.enqueue(nameTask(id))
+            true
         } catch (e: Exception) {
             log.error("No se pudo encolar name-community para la comunidad {}", id, e)
+            false
         }
-    }
 
     companion object {
         const val NAME_PATH = "/tasks/name-community"

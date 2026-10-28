@@ -186,4 +186,35 @@ class CommunityServiceTest : FunSpec({
         service.runIfDue() shouldBe false
         enqueued shouldHaveSize 2
     }
+
+    test("un encolado fallido de name-community no cuenta como reencolado: el siguiente barrido reintenta") {
+        val clock = MovableClock(Instant.parse("2026-10-22T15:00:00Z"))
+        val f = Fixture(clock)
+        f.graph.group(1, 3).also { f.graph.clique(it) }
+        f.service.runWeekly()
+        val id = f.repo.all().single().id
+        val queue = FakeTaskQueue()
+        val service = CommunityService(f.repo, queue, CommunityNamer(testGateway(f.llm)), clock)
+        queue.failWith = IllegalStateException("cola caída")
+        service.runIfDue() shouldBe false
+        queue.tasks shouldHaveSize 0
+        queue.failWith = null
+        service.runIfDue() shouldBe false // misma hora: reintenta porque el anterior no se encoló
+        queue.tasks.single().name shouldBe CommunityService.nameTask(id).name
+    }
+
+    test("runWeekly siembra el tope: runIfDue de la misma hora no reencola lo que acaba de encolar") {
+        val clock = MovableClock(Instant.parse("2026-10-22T15:00:00Z"))
+        val f = Fixture(clock)
+        f.graph.group(1, 3).also { f.graph.clique(it) }
+        f.service.runWeekly()
+        val enqueued = mutableListOf<String>()
+        val counting = object : TaskQueue {
+            override suspend fun enqueue(task: TaskRequest) { enqueued += task.name }
+        }
+        val service = CommunityService(f.repo, counting, CommunityNamer(testGateway(f.llm)), clock)
+        service.runWeekly()
+        service.runIfDue() shouldBe false
+        enqueued shouldHaveSize 1
+    }
 })
