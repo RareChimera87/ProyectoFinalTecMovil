@@ -284,6 +284,7 @@ aplicado:** el agente preparó y validó el `plan` del bootstrap de dev (WIF, `s
 7. **Antes del primer `migrate` (E0.4), en cada entorno:** dar al usuario IAM de `sa-api` la propiedad de la
    base, como `postgres` desde Cloud SQL Studio (consola → Cloud SQL → `parcheu-<env>` → Cloud SQL Studio):
    `ALTER DATABASE parcheu OWNER TO "sa-api@parcheu-<env>.iam"; ALTER SCHEMA public OWNER TO "sa-api@parcheu-<env>.iam";`
+   ```bash
    R=RareChimera87/ProyectoFinalTecMovil
    terraform output -raw wif_provider                   | gh secret set WIF_PROVIDER -R $R
    terraform output -raw deployer_service_account       | gh secret set WIF_SERVICE_ACCOUNT_DEV -R $R
@@ -1097,3 +1098,17 @@ No hay pasos humanos obligatorios para la variante dev en el homeserver: el job 
 
 - Cuando exista infraestructura de GCP (no ahora): el Cloud Scheduler `twin-accuracy` ya está declarado en `infra/terraform/modules/platform/scheduler.tf` y apunta a `/internal/jobs/twin-accuracy`, que ya no es un stub; requiere el `terraform apply` habitual del usuario.
 - Prueba manual sugerida con el gemelo ya creado: abrir C4 desde C3, contestar la pregunta de la semana, calificar una respuesta (necesita una simulación terminada) y ejecutar `POST /internal/jobs/twin-accuracy` con un token OIDC para ver el punto en C3.
+
+## E10.7 · Documentación final
+
+El código y los documentos están en el repositorio: `docs/c4.md`, `docs/sustentacion.md`, `docs/operacion.md` completo, los ADR con su "lo aprendido", el README y los verificadores `scripts/check-adr.sh`, `scripts/check-links.sh` y `scripts/check-mermaid.sh` (job `docs-ci`). No requiere infraestructura ni secretos. Quedan estos pasos que solo hace una persona:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Comprobar que los seis diagramas de `docs/c4.md` se ven bien en GitHub** (abrir el archivo en la rama o en `dev`). El check `docs-ci` valida su forma y los renderiza con `mermaid-cli` en CI, pero no se pudo renderizar en la máquina del agente. Si algún diagrama sale con error, corrige la sintaxis en el mismo archivo. | Todos | Tras mezclar el PR |
+| 2 | **Reparto de la sustentación:** leer `docs/sustentacion.md` §1 y confirmar o cambiar quién habla en cada parte (el reparto por defecto sigue los roles de `docs/equipo.md`). | I1, I2, I3 | Antes del ensayo |
+| 3 | **Ensayar con cronómetro** el guion de 10 minutos con la app `dev` y el homeserver; guardar la salida de la demo de mutación (`scripts/demo-mutacion-privacidad.sh pareja`) como plan B. | Todos | Semana del 24 nov |
+| 4 | **Exportar los PNG de los mockups** I1-I4 y correr `scripts/lado-a-lado.sh` (ya listado en E8.2/E10.4; la sustentación §5 depende de ello). | I2 | Antes del ensayo |
+| 5 | **Declarar el estado real de Play** en la tabla de `docs/sustentacion.md` §8 (fecha de la prueba cerrada, solicitud de acceso a producción) el día antes de sustentar; hoy dice que no hay publicación por prioridad del usuario. | I3 | El día antes |
+| 6 | **Confirmar ADR-0029** (texto de ahorro del plan anual): es el único ADR en estado *Propuesta*; al decidir, cambia su estado a *Aceptada* (o *Rechazada*) con la fecha. | Usuario | Antes de la 1.0 |
+| 7 | **Actualizar `docs/sustentacion.md` §7** si cambia el precio o el tope diario de IA (los precios cambian el 1 ene 2027). | I1 | Antes de sustentar |
