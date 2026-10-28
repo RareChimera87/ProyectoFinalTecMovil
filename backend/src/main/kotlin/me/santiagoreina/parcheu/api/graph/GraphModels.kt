@@ -28,6 +28,8 @@ data class EgoEdgeRow(
     val affinity: Int?,
     val lastSimulationId: UUID?,
     val connectedAt: Instant?,
+    /** `edges.created_at`: cuándo nació la arista (E6.5 la usa para el historial). */
+    val createdAt: Instant? = null,
 )
 
 /** Filtros de `GET /v1/graph`: `mode`, `minAffinity` (0-100) y `community` (id de comunidad). */

@@ -7,6 +7,7 @@ import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.simulation.SimulationModule
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Clock
+import java.util.UUID
 
 /** Lo que el dominio de matching expone al resto del backend (E4.8 y E4.9 usan [service] y [repository]). */
 class MatchingModule(
@@ -27,9 +28,11 @@ fun matchingModule(
     notifier: Notifier,
     firebaseProjectId: String?,
     flags: MatchingFlags,
+    /** Qué hacer al crear el chat SCENARIO de un match: el contenedor escribe `chats/{id}` en Firestore (E4.8). */
+    onScenarioChatCreated: suspend (UUID) -> Unit = {},
 ): MatchingModule {
     val mirror = if (env == Env.LOCAL || firebaseProjectId == null) NoopMatchTicketMirror else FirestoreMatchTicketMirror.forProject(firebaseProjectId)
-    return assemble(ExposedMatchingRepository(db), quota, simulation, graph, notifier, mirror, flags, clock)
+    return assemble(ExposedMatchingRepository(db), quota, simulation, graph, notifier, mirror, flags, clock, onScenarioChatCreated)
 }
 
 /** Todo en memoria (pruebas y valor por defecto del contenedor). */
@@ -42,7 +45,8 @@ fun inMemoryMatchingModule(
     repo: MatchingRepository = InMemoryMatchingRepository(),
     mirror: MatchTicketMirror = NoopMatchTicketMirror,
     flags: MatchingFlags = MatchingFlags(demoUsersEnabled = true, scenarioModeEnabled = false),
-): MatchingModule = assemble(repo, quota, simulation, graph, notifier, mirror, flags, clock)
+    onScenarioChatCreated: suspend (UUID) -> Unit = {},
+): MatchingModule = assemble(repo, quota, simulation, graph, notifier, mirror, flags, clock, onScenarioChatCreated)
 
 private fun assemble(
     repo: MatchingRepository,
@@ -53,8 +57,9 @@ private fun assemble(
     mirror: MatchTicketMirror,
     flags: MatchingFlags,
     clock: Clock,
+    onScenarioChatCreated: suspend (UUID) -> Unit,
 ) = MatchingModule(
-    service = MatchingService(repo, quota.service, simulation.service, graph.anonIds, notifier, mirror, flags, clock),
+    service = MatchingService(repo, quota.service, simulation.service, graph.anonIds, notifier, mirror, flags, clock, onScenarioChatCreated),
     repository = repo,
     flags = flags,
 )

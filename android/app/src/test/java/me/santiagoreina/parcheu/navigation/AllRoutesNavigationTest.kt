@@ -83,7 +83,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
          * ProfileScreenTest y ProfileScreenshotTest), G1-G4/I4 (E7.3, feature/plus:
          * PlusNavigationTest, PlusScreenTest y PlusScreenshotTest) y H3 (E8.2, feature/privacysettings:
          * PrivacySettingsViewModelTest, PrivacySettingsScreenTest, SignOutBackStackTest y
-         * PrivacySettingsScreenshotTest).
+         * PrivacySettingsScreenshotTest), D9 (E6.5) y 'Personas bloqueadas' (E8.7).
          */
         val implementedRoutes =
             setOf(
@@ -99,6 +99,7 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 FriendsOfFriends::class,
                 MatchQueue::class,
                 MatchFound::class,
+                ScenarioChat::class,
                 Simulation::class,
                 Simulations::class,
                 Results::class,
@@ -117,7 +118,9 @@ class AllRoutesNavigationTest(private val entry: RouteEntry) {
                 Paywall::class,
                 PurchaseSuccess::class,
                 ManageSubscription::class,
-                PrivacySettings::class
+                PrivacySettings::class,
+                BlockedUsers::class,
+                Evolution::class
             )
     }
 }

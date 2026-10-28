@@ -49,6 +49,8 @@ import me.santiagoreina.parcheu.api.twin.TwinModule
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.allDomains
+import me.santiagoreina.parcheu.api.scenario.ScenarioModule
+import me.santiagoreina.parcheu.api.scenario.inMemoryScenarioModule
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
@@ -93,7 +95,7 @@ fun testContainer(
     simulation: SimulationModule = inMemorySimulationModule(clock, ai, quota, graph, chat = chat),
     notifier: Notifier = NoopNotifier,
     matching: MatchingModule = inMemoryMatchingModule(clock, quota, simulation, graph, notifier),
-    safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
+    safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching, simulation = simulation),
     notifications: NotificationCenterModule = inMemoryNotificationCenter(clock, quota, graph),
     // Por defecto la campana de Inicio cuenta en la misma bandeja que C2 (E5.4).
     unread: UnreadCounter = UnreadCounter { notifications.service.unread(it) },
@@ -110,6 +112,8 @@ fun testContainer(
     admin: AdminModule = inMemoryAdminModule(repo, chat, safety, clock),
     // Moderación con IA (E8.6): por defecto con la misma pasarela [ai] y sin engancharse al chat.
     moderation: ModerationService = moderationService(ai, chat, safety, FakeTaskQueue(), clock, notifier),
+    // Modo escenario (E4.8): ScenarioApiTest pasa uno con su propia cola y reloj.
+    scenario: ScenarioModule = inMemoryScenarioModule(clock, ai, quota, graph, chat, simulation, notifier),
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
@@ -142,9 +146,10 @@ fun testContainer(
         invites = invites,
         connectRequests = connectRequests,
         moderation = moderation,
+        scenario = scenario,
         domains = allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, accountModule, unread, notifications,
-            invites, billing, config.env, introductions, admin, connectRequests, moderation,
+            invites, billing, config.env, introductions, admin, scenario, connectRequests, moderation,
         ) + extra,
     )
 }

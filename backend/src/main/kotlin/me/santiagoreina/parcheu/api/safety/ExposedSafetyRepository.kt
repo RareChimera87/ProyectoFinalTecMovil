@@ -3,12 +3,15 @@ package me.santiagoreina.parcheu.api.safety
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.santiagoreina.parcheu.api.graph.PersonRow
+import me.santiagoreina.parcheu.api.simulation.StoredReport
+import me.santiagoreina.parcheu.api.simulation.StoredTranscript
 import me.santiagoreina.parcheu.api.platform.db.tables.Blocks
 import me.santiagoreina.parcheu.api.platform.db.tables.ChatMessages
 import me.santiagoreina.parcheu.api.platform.db.tables.Reports
 import me.santiagoreina.parcheu.api.platform.db.tables.Simulations
 import me.santiagoreina.parcheu.api.platform.db.tables.Universities
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
+import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.ReportSource
 import me.santiagoreina.parcheu.contract.ReportStatus
 import org.jetbrains.exposed.v1.core.JoinType
@@ -43,11 +46,12 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
             ?.toPerson()
     }
 
-    override suspend fun block(blocker: UUID, blocked: UUID, now: Instant): Boolean = tx {
+    override suspend fun block(blocker: UUID, blocked: UUID, now: Instant, wasConnected: Boolean): Boolean = tx {
         Blocks.insertIgnore {
             it[blockerId] = blocker
             it[blockedId] = blocked
             it[createdAt] = now.odt()
+            it[Blocks.wasConnected] = wasConnected
         }.insertedCount == 1
     }
 
@@ -61,7 +65,7 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
             .selectAll()
             .where { (Blocks.blockerId eq blocker) and Users.deletedAt.isNull() }
             .orderBy(Blocks.createdAt to SortOrder.DESC)
-            .map { BlockRow(it.toPerson(), it[Blocks.createdAt].toInstant()) }
+            .map { BlockRow(it.toPerson(), it[Blocks.createdAt].toInstant(), it[Blocks.wasConnected]) }
     }
 
     override suspend fun recentMessages(chatId: UUID, limit: Int): List<SnapshotMessage> = tx {
@@ -88,11 +92,30 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
             ?.let { it[Simulations.userA] to it[Simulations.userB] }
     }
 
-    override suspend fun hasAutoReport(messageId: UUID): Boolean = tx {
-        !Reports.select(Reports.id)
+    override suspend fun autoReportDetails(messageId: UUID): String? = tx {
+        Reports.select(Reports.details)
             .where { (Reports.messageId eq messageId) and (Reports.reportSource eq ReportSource.AUTO) }
             .limit(1)
-            .empty()
+            .singleOrNull()
+            ?.get(Reports.details)
+    }
+
+    override suspend fun simulationTurnText(simulationId: UUID, turnIndex: Int): String? = tx {
+        Simulations.select(Simulations.transcript)
+            .where { Simulations.id eq simulationId }
+            .singleOrNull()
+            ?.get(Simulations.transcript)
+            ?.let { ContractJson.decodeFromJsonElement(StoredTranscript.serializer(), it) }
+            ?.scenarios?.flatMap { it.turns }?.getOrNull(turnIndex)?.text
+    }
+
+    override suspend fun simulationReportText(simulationId: UUID): String? = tx {
+        Simulations.select(Simulations.report)
+            .where { Simulations.id eq simulationId }
+            .singleOrNull()
+            ?.get(Simulations.report)
+            ?.let { ContractJson.decodeFromJsonElement(StoredReport.serializer(), it) }
+            ?.asReportedText()
     }
 
     override suspend fun insertReport(report: NewReport) {

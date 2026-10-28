@@ -42,8 +42,8 @@ sealed interface MatchFoundUiState {
 }
 
 sealed interface MatchFoundEffect {
-    /** F3 (el id del chat de escenario lo resuelve la feature de chat a partir del match). */
-    data class OpenScenario(val matchId: String) : MatchFoundEffect
+    /** F3: el chat SCENARIO del match (`MatchDto.chatId`, E4.8). */
+    data class OpenScenario(val chatId: String) : MatchFoundEffect
 
     /** F4 (la simulación del match se resuelve por el id del match). */
     data class OpenSimulation(val matchId: String) : MatchFoundEffect
@@ -128,7 +128,7 @@ class MatchFoundViewModel(
                 _effects.send(MatchFoundEffect.OpenSimulation(match.id))
             }
             MatchStatus.SCENARIO -> {
-                _effects.send(MatchFoundEffect.OpenScenario(match.id))
+                _effects.send(MatchFoundEffect.OpenScenario(match.chatId ?: match.id))
             }
             MatchStatus.EXPIRED ->
                 _state.value = MatchFoundUiState.Loaded(match, choice, expired = true)

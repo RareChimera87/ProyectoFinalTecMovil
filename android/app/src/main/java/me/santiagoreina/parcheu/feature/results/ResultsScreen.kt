@@ -40,6 +40,8 @@ import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.feature.safety.REPORT_TURN_INDEX
+import me.santiagoreina.parcheu.feature.safety.ReportAiContentAction
 import me.santiagoreina.parcheu.feature.simulation.SimulationIcons
 import me.santiagoreina.parcheu.feature.simulation.SimulationMascot
 import me.santiagoreina.parcheu.feature.simulation.forMode
@@ -80,7 +82,9 @@ data class ResultsActions(
     val onOpenChat: () -> Unit = {},
     val onOpenTranscript: () -> Unit = {},
     val onCloseTranscript: () -> Unit = {},
-    val onDismissNotice: () -> Unit = {}
+    val onDismissNotice: () -> Unit = {},
+    /** E8.7: reporta contenido de la IA; [turnIndex] cuenta los turnos de todos los escenarios desde 0; [REPORT_TURN_INDEX] (-1) es el informe de F8. */
+    val onReportAi: (turnIndex: Int) -> Unit = {}
 )
 
 /**
@@ -101,7 +105,13 @@ fun ResultsScreen(state: ResultsUiState, actions: ResultsActions, modifier: Modi
             navigationIcon = rememberIcon(SimulationIcons.Close),
             navigationContentDescription = "Cerrar",
             onNavigationClick = actions.onClose,
-            action = { if (content?.plus == true) ParcheUPlusBadge(Modifier.padding(end = 12.dp)) }
+            action = {
+                // E8.7: F8 (informe completo) reporta lo que dijo la IA; sin informe completo no hay qué reportar.
+                if (content?.full == true) {
+                    ReportAiContentAction(onClick = { actions.onReportAi(REPORT_TURN_INDEX) })
+                }
+                if (content?.plus == true) ParcheUPlusBadge(Modifier.padding(end = 12.dp))
+            }
         )
         when (state) {
             ResultsUiState.Loading -> Box(
@@ -420,14 +430,23 @@ private fun TranscriptScreen(
                 ).padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                var turnIndex = 0
                 transcript.transcript.scenarios.forEachIndexed { index, scenario ->
                     CardOverline("Escenario ${index + 1} · ${scenario.title}")
                     scenario.turns.forEach { turn ->
                         val mine = turn.speaker == Speaker.ME
+                        val thisTurn = turnIndex++
                         Row(
                             Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start
+                            horizontalArrangement =
+                            if (mine) Arrangement.End else Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // E8.7: cada turno se puede reportar como contenido de la IA, salvo en
+                            // evaluaciones de escenario (E4.8): ahí los turnos son de personas.
+                            if (mine && !content.fromScenario) {
+                                ReportAiContentAction(onClick = { actions.onReportAi(thisTurn) })
+                            }
                             Text(
                                 turn.text,
                                 style = MaterialTheme.typography.bodyMedium,
@@ -437,6 +456,9 @@ private fun TranscriptScreen(
                                     .background(if (mine) colors.prc else colors.s1)
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
+                            if (!mine && !content.fromScenario) {
+                                ReportAiContentAction(onClick = { actions.onReportAi(thisTurn) })
+                            }
                         }
                     }
                 }

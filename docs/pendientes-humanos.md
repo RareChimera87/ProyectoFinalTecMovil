@@ -1019,6 +1019,24 @@ Todo el código quedó hecho y probado en local: el recorrido (`backend/src/e2eT
 
 Para correrlo a mano contra dev con tu propio `gcloud`: ver "Smoke e2e (E10.6)" en `docs/desarrollo-local.md`.
 
+## E4.8 · Modo escenario
+
+Lo automatizable ya quedó hecho: acuerdo de los dos (`POST /v1/scenario-sessions/{chatId}/agreement`), estado y tarjeta de F3 (`GET .../{chatId}`), cierre atómico por acuerdo o por `ends_at`, tarea `judge-scenario` registrada en `InProcessTaskQueue` (homeserver) y en `/internal/tasks/judge-scenario`, job `scenario-sweep` en `InProcessScheduler`, escritura de `chats/{id}` en Firestore al crear el chat SCENARIO (cierra el paso 4 de E4.2), `MatchDto.chatId`, pantalla F3 con temporizador, presupuesto y acuerdo, y `SCENARIO_MODE_ENABLED` encendida por defecto fuera de prod. No hay migraciones.
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Cloud Scheduler `scenario-sweep` (cada minuto)** si se despliega en Cloud Run: `POST <SERVICE_URL>/internal/jobs/scenario-sweep` con OIDC de `sa-tasks`, como `match-sweep`. No se agregó al Terraform (sin `apply` por ahora); en el homeserver lo cubre `InProcessScheduler`. Sin el job, un escenario vencido sin mensajes ni consultas se cierra en la siguiente consulta de la sesión. | I1 / usuario (prod) | Con el `apply` de dev |
+| 2 | **`SCENARIO_MODE_ENABLED=true` en prod desde la 0.9** (en `run_env` de Terraform de prod). Hasta entonces el valor por defecto en prod es `false`. | usuario | 0.9 |
+| 3 | **Verificación en dev con dos cuentas:** ambas eligen Escenario en F2, escriben, una propone el acuerdo (la otra ve el aviso), la otra confirma y aparece F7/F8; repetir dejando vencer el tiempo. Comprobar `chats/{id}` en Firestore de `parcheu-dev` y que el chat aparece en tiempo real. | I1 + I2 | Con el despliegue |
+
+Limitación conocida: la fila de evaluación se crea antes de cerrar el chat, así que cualquier caída del proceso (antes o después de cerrar, y antes de encolar) la deja en QUEUED y el barrido `scenario-sweep` la re-encola; no queda ningún chat cerrado sin resultado. En el homeserver la tarea `judge-scenario` corre en la cola en proceso, fuera de la petición HTTP.
+
+## E6.5 · Evolución de la red
+
+No requiere infraestructura ni secretos: el historial se calcula en cada consulta (sin tareas, jobs ni migraciones).
+
+- [ ] **Decisión de producto (I3 / diseño):** el mockup D9 dice 'Mes → 08a en esa fecha'. El historial solo devuelve conteos por mes y D1 no tiene fecha por nodo, así que tocar un mes selecciona su detalle en D9 en vez de abrir D1 con ese snapshot. Para hacerlo literal haría falta devolver las personas por mes (con la policy) o las fechas por nodo en `GET /v1/graph`. Decidir si entra antes del 30 nov.
+- [ ] Revisar con datos reales: el momento 'Tu primera comunidad' aparecerá cuando E6.4 (comunidades) cree filas en `communities`/`community_members`.
 ## E6.6 · Quién quiere conectar contigo
 
 No hay pasos humanos: es una lectura de `connection_decisions` con la API que ya existe (sin Terraform, secretos, Play Console ni tareas asíncronas nuevas, así que tampoco toca `InProcessTaskQueue` ni `InProcessScheduler`).
@@ -1033,7 +1051,24 @@ El código no necesita Terraform, secretos ni Play Console: usa la cola `ai-ligh
 |---|---|---|---|
 | 1 | **Decidir si la moderación queda encendida**: viene activa por defecto y cada mensaje nuevo cuesta una llamada lite (centavos por miles de mensajes). Si el presupuesto de IA se aprieta, define `MODERATION_ENABLED=false` en el servicio `api` (es recortable, ADR-0026); los reportes y bloqueos manuales siguen igual. | I1 | Antes de la 0.2 |
 | 2 | **Revisar los reportes AUTO** en `admin.html` (origen `AUTO`, `reporterId` nulo): los de 'posible menor' llevan prioridad 2 y el mensaje sigue visible hasta que un admin decida; los demás llevan prioridad 1 y el mensaje ya está oculto. | I1 | Cada semana de pruebas |
-| 3 | **Verificar vigencia y cobertura en Santander de las líneas 192 (opción 4), 106 y 123** que se envían en el mensaje del sistema (pendiente heredado de E8.1; el texto sale de `HelpResources`). | I1 | Antes de la 0.2 |
+| 3 | **Verificar vigencia y cobertura en Santander de las líneas 192 (opción 4), 106 y 123** que se envían en el aviso de la bandeja C2 y el push al autor (pendiente heredado de E8.1; el texto sale de `HelpResources`). | I1 | Antes de la 0.2 |
 | 4 | **Cloud Tasks (solo cuando haya Cloud Run)**: la tarea ya está en `POST /internal/tasks/moderate` y se encola en `ai-light`; no hace falta Terraform nuevo porque la cola y su `sa-tasks` son los de E0.5. | I3 | Si se despliega en GCP |
 
-Para probarla en el homeserver (dev): escribir un mensaje agresivo entre dos cuentas de prueba y ver, en segundos, que desaparece del chat de la otra persona y aparece un reporte AUTO en `admin.html`; un mensaje de autolesión agrega el recordatorio con las líneas de ayuda al chat (lo ven los dos miembros, por eso el texto es neutro).
+Para probarla en el homeserver (dev): escribir un mensaje agresivo entre dos cuentas de prueba y ver, en segundos, que desaparece del chat de la otra persona y aparece un reporte AUTO en `admin.html`; un mensaje de autolesión envía las líneas de ayuda como aviso en la bandeja C2 y push solo al autor (no entra al chat, la otra persona no se entera).
+## E8.7 · Reportar y bloquear desde todas partes
+
+No hay pasos humanos pendientes: la feature no agrega infraestructura, secretos ni cambios en consolas. Todo corre
+con el backend del homelab (`TASKS_MODE=inline`) y la variante dev.
+
+Para revisarla a mano con el backend en marcha: bloquear a alguien desde F2 debe dejar el match en `EXPIRED` y los
+tickets de ambos en `EXPIRED` (`matchTickets/{uid}` en Firestore), y 'Personas bloqueadas' (H3) debe listarlo con
+'Desbloquear'. Un reporte de contenido de la IA aparece en `admin.html` con el tipo `AI_CONTENT` y el texto del
+turno en el snapshot.
+
+## E8.8 · Retención y purga de datos
+
+No hay secretos, Play Console ni recursos nuevos de GCP: el job `retention` ya estaba declarado en `infra/terraform/modules/platform/scheduler.tf` (diario 03:30 Bogotá, `POST /internal/jobs/retention`) y las consultas de Firestore son de un solo campo, así que no piden índices. En el homeserver (`TASKS_MODE=inline`) lo programa `InProcessScheduler` a las 03:30 de Bogotá; no hay tareas nuevas, así que `InProcessTaskQueue` no cambia.
+
+- [ ] **Opcional (observabilidad):** la métrica `retention_purged_total{regla}` sale como log INFO por regla (`event = retention_purged`, `regla`, `count`; solo cuando se purgó algo). Si se quiere verla en Cloud Monitoring, crear una métrica basada en logs con filtro `jsonPayload.message="retention_purged"` y etiqueta `regla` (extraída de `jsonPayload.regla`) en `monitoring.tf`; no se hizo aquí para no tocar Terraform fuera del alcance de la ficha.
+- [ ] **Verificar en dev (con el homeserver):** tras la primera noche, revisar en los logs del backend las líneas `retention_purged` y `Retención: N registros purgados`. Para forzarlo a mano: `POST /internal/jobs/retention` con un token OIDC del servicio.
+- [ ] **Decisiones de interpretación para revisar con el docente / I1** (documentadas en arquitectura.md §10.2): `matches` se purga solo si están `EXPIRED`; un chat SCENARIO se considera cerrado en su `ends_at`; el plazo de `transcript` son 12 meses calendario de Bogotá.

@@ -6,6 +6,8 @@ import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.InMemoryGraphRepository
 import me.santiagoreina.parcheu.api.matching.InMemoryMatchingRepository
 import me.santiagoreina.parcheu.api.matching.MatchingModule
+import me.santiagoreina.parcheu.api.simulation.InMemorySimulationRepository
+import me.santiagoreina.parcheu.api.simulation.SimulationModule
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Clock
 
@@ -15,14 +17,20 @@ class SafetyModule(
     val service: SafetyService,
 )
 
-private fun assemble(repo: SafetyRepository, chat: ChatModule, graph: GraphModule, matching: MatchingModule?, clock: Clock) = SafetyModule(
+private fun assemble(repo: SafetyRepository, chat: ChatModule, graph: GraphModule, matching: MatchingModule?, clock: Clock, contacts: List<AnonymousContacts>) = SafetyModule(
     repository = repo,
-    service = SafetyService(repo, chat.service, chat.repository, graph.repository, graph.policy, graph.anonIds, matching?.repository, clock),
+    service = SafetyService(repo, chat.service, chat.repository, graph.repository, graph.policy, graph.anonIds, matching?.repository, clock, matching?.service, contacts),
 )
 
 /** Cableado con Postgres: todos los dominios leen la misma tabla `blocks`. */
-fun safetyModule(db: Database, chat: ChatModule, graph: GraphModule, matching: MatchingModule, clock: Clock): SafetyModule =
-    assemble(ExposedSafetyRepository(db), chat, graph, matching, clock)
+fun safetyModule(
+    db: Database,
+    chat: ChatModule,
+    graph: GraphModule,
+    matching: MatchingModule,
+    clock: Clock,
+    contacts: List<AnonymousContacts> = emptyList(),
+): SafetyModule = assemble(ExposedSafetyRepository(db), chat, graph, matching, clock, contacts)
 
 /**
  * Todo en memoria (pruebas y valor por defecto del contenedor). Como cada repositorio en memoria
@@ -35,7 +43,10 @@ fun inMemorySafetyModule(
     graph: GraphModule,
     matching: MatchingModule? = null,
     repo: InMemorySafetyRepository? = null,
+    simulation: SimulationModule? = null,
+    contacts: List<AnonymousContacts> = emptyList(),
 ): SafetyModule {
+    val simulationRepo = simulation?.repository as? InMemorySimulationRepository
     val chatRepo = chat.repository as? InMemoryChatRepository
     val graphRepo = graph.repository as? InMemoryGraphRepository
     val matchRepo = matching?.repository as? InMemoryMatchingRepository
@@ -46,6 +57,9 @@ fun inMemorySafetyModule(
                 SnapshotMessage(it.id, it.senderId, it.text, it.createdAt, it.hidden)
             }
         },
+        simulations = { id -> simulationRepo?.find(id)?.let { it.userA to it.userB } },
+        turns = { id -> simulationRepo?.find(id)?.transcript?.scenarios?.flatMap { s -> s.turns.map { it.text } }.orEmpty() },
+        reportText = { id -> simulationRepo?.find(id)?.report?.asReportedText() },
     )
     if (safetyRepo is InMemorySafetyRepository) {
         safetyRepo.onBlock { blocker, blocked ->
@@ -59,5 +73,5 @@ fun inMemorySafetyModule(
             matchRepo?.unblock(blocker, blocked)
         }
     }
-    return assemble(safetyRepo, chat, graph, matching, clock)
+    return assemble(safetyRepo, chat, graph, matching, clock, contacts)
 }

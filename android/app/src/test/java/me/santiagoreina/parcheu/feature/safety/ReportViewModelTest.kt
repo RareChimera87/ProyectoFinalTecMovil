@@ -133,4 +133,39 @@ class ReportViewModelTest {
         assertEquals("user-2", named.targetUserId)
         assertNull(named.anonId)
     }
+
+    @Test
+    fun aiContentTargetIsSentAsSimulationAndTurn() {
+        val request = aiContentTarget(
+            "sim-1",
+            3
+        ).toRequest(ReportReason.AI_HARMFUL, "grosero", "ignorado")
+        assertEquals(me.santiagoreina.parcheu.contract.ReportKind.AI_CONTENT, request.kind)
+        assertEquals("sim-1", request.simulationId)
+        assertEquals(3, request.turnIndex)
+        assertNull(request.targetUserId)
+        assertNull(request.anonId)
+        assertNull(request.chatId)
+    }
+
+    @Test
+    fun aiContentReportNeverBlocksAndOnlyOffersAiReasons() = runTest {
+        val target = aiContentTarget("sim-1", 3)
+        val vm = ReportViewModel(target, repo)
+        assertFalse(vm.state.value.alsoBlock)
+        assertEquals(
+            listOf(ReportReason.AI_HARMFUL, ReportReason.OTHER),
+            target.reasons().map {
+                it.reason
+            }
+        )
+        vm.setAlsoBlock(true)
+        assertFalse(vm.state.value.alsoBlock)
+        vm.selectReason(ReportReason.AI_HARMFUL)
+        vm.submit()
+        assertEquals(1, repo.reports.size)
+        assertEquals(target, repo.reports.single().target)
+        assertTrue(repo.blocks.isEmpty())
+        assertFalse(vm.state.value.sent!!.blocked)
+    }
 }

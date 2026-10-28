@@ -28,11 +28,16 @@ import me.santiagoreina.parcheu.api.matching.inMemoryMatchingModule
 import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.simulation.SimFixture
+import me.santiagoreina.parcheu.api.simulation.SimulationRecord
+import me.santiagoreina.parcheu.api.simulation.StoredTranscript
+import me.santiagoreina.parcheu.api.simulation.UsageTotals
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.HomeDto
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.Progress
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import me.santiagoreina.parcheu.contract.SimulationSummary
 import me.santiagoreina.parcheu.contract.StartSimulation
@@ -112,6 +117,24 @@ class HomeApiTest : FunSpec({
             beto.ready shouldBe emptyList()
             beto.quota.simulations.used shouldBe 0
             beto.unread shouldBe 0
+        }
+    }
+
+    test("la evaluación de un escenario (origen SCENARIO) en curso no sale como simulación en curso") {
+        val w = World()
+        testApplication {
+            val client = app(w)
+            w.sim.repo.create(
+                SimulationRecord(
+                    id = UUID.randomUUID(), mode = Mode.AMISTAD, userA = w.id("ana"), userB = w.id("beto"), requestedBy = null,
+                    origin = SimulationOrigin.SCENARIO, status = SimulationStatus.QUEUED,
+                    progress = Progress(scenarioIndex = 0, turn = 0, of = 1), score = null, report = null,
+                    transcript = StoredTranscript(emptyList()), twinVersionA = null, twinVersionB = null, cachedFrom = null,
+                    provider = null, usage = UsageTotals(), error = null, createdAt = FIXED_CLOCK.instant(), finishedAt = null,
+                ),
+            )
+            client.get("/v1/home") { auth("ana") }.body<HomeDto>().running shouldBe null
+            client.get("/v1/home") { auth("beto") }.body<HomeDto>().running shouldBe null
         }
     }
 

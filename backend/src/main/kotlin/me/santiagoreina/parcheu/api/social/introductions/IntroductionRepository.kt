@@ -69,6 +69,9 @@ interface IntroductionRepository {
     /** Presentaciones de [introducerId] entre [a] y [b] (en cualquier orden) en [mode], más recientes primero. */
     suspend fun byIntroducer(introducerId: UUID, a: UUID, b: UUID, mode: Mode): List<IntroductionRecord>
 
+    /** Presentaciones en las que [userId] es una de las dos personas presentadas (no quien presenta), recientes primero. */
+    suspend fun involving(userId: UUID, limit: Int): List<IntroductionRecord>
+
     /**
      * Lee la fila bloqueándola (`SELECT ... FOR UPDATE`), aplica [change] y guarda el resultado en una
      * sola transacción: dos respuestas simultáneas se serializan y la segunda ve la primera. Si
@@ -117,6 +120,10 @@ class InMemoryIntroductionRepository : IntroductionRepository {
                 .filter { it.introducerId == introducerId && it.mode == mode && setOf(it.userA, it.userB) == setOf(a, b) }
                 .sortedByDescending { it.createdAt }
         }
+
+    override suspend fun involving(userId: UUID, limit: Int): List<IntroductionRecord> = synchronized(lock) {
+        rows.values.filter { it.isIntroduced(userId) }.sortedByDescending { it.createdAt }.take(limit)
+    }
 
     override suspend fun update(id: UUID, change: (IntroductionRecord) -> IntroductionRecord): Pair<IntroductionRecord, IntroductionRecord>? =
         synchronized(lock) {

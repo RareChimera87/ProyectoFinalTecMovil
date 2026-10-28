@@ -36,6 +36,8 @@ import me.santiagoreina.parcheu.api.platform.notifier.Notification
 import me.santiagoreina.parcheu.api.platform.notifier.Notifier
 import me.santiagoreina.parcheu.api.safety.NewReport
 import me.santiagoreina.parcheu.api.safety.SafetyRepository
+import me.santiagoreina.parcheu.api.chat.ChatRepository
+import me.santiagoreina.parcheu.api.chat.MessageRecord
 import me.santiagoreina.parcheu.api.chat.InMemoryChatRepository
 import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.PersonRow
@@ -100,6 +102,19 @@ class ModerationServiceTest : FunSpec({
         }
     }
 
+    /** Repositorio de chat cuyo primer `hideMessage` falla (antes de tocar Postgres) si [failHide] está activo. */
+    class FlakyChatRepo(private val delegate: InMemoryChatRepository) : ChatRepository by delegate {
+        var failHide = false
+
+        override suspend fun hideMessage(messageId: UUID): MessageRecord? {
+            if (failHide) {
+                failHide = false
+                throw IllegalStateException("Postgres caído")
+            }
+            return delegate.hideMessage(messageId)
+        }
+    }
+
     class Fixture {
         val identityRepo = InMemoryIdentityRepository().apply { listOf("ana", "beto").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val ana = identityRepo.user("ana")
@@ -111,7 +126,8 @@ class ModerationServiceTest : FunSpec({
         val mirror = InMemoryChatMirror()
         val flakyMirror = FlakyMirror(mirror)
         val graph = inMemoryGraphModule(FIXED_CLOCK)
-        val chat = inMemoryChatModule(FIXED_CLOCK, graph.policy, repository = chatRepo, mirror = flakyMirror)
+        val flakyChatRepo = FlakyChatRepo(chatRepo)
+        val chat = inMemoryChatModule(FIXED_CLOCK, graph.policy, repository = flakyChatRepo, mirror = flakyMirror)
         val safetyRepo = InMemorySafetyRepository(
             people = { chatRepo.person(it) },
             messages = { id -> chatRepo.allMessages.filter { it.chatId == id }.map { me.santiagoreina.parcheu.api.safety.SnapshotMessage(it.id, it.senderId, it.text, it.createdAt, it.hidden) } },
@@ -203,7 +219,12 @@ class ModerationServiceTest : FunSpec({
         f.flakyNotifier.failOnce = true
         runCatching { runBlocking { f.moderation.moderate(id) } }.isFailure shouldBe true
         f.notifier.sent.shouldBeEmpty()
-        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.ACTED
+        // El fallo de la ayuda no frena el reporte ni el ocultado: el contenido dañino ya no queda visible.
+        f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe true
+        f.safetyRepo.allReports shouldHaveSize 1
+        // El reintento no llama al LLM: ve el reporte con la marca de ayuda y la entrega.
+        f.llm.jsonResponder = { _, _ -> error("no debe volver a llamar al LLM") }
+        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.SKIPPED
         f.notifier.sent shouldHaveSize 1
         f.notifier.sent.single().userId shouldBe f.beto.id
         f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe true
@@ -235,6 +256,21 @@ class ModerationServiceTest : FunSpec({
         f.safetyRepo.allReports shouldHaveSize 1
         runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.SKIPPED
         f.mirror.messages(f.room.id).single { it.id == id }.apply { hidden shouldBe true; text shouldBe "" }
+        f.safetyRepo.allReports shouldHaveSize 1
+    }
+
+    test("reintento tras fallar ocultar en Postgres: se decide sin el LLM y el mensaje termina oculto") {
+        val f = Fixture()
+        f.llm.jsonResponder = { _, _ -> finding("THREAT", "HIGH") }
+        val id = f.send("te voy a hacer daño")
+        f.flakyChatRepo.failHide = true
+        runCatching { runBlocking { f.moderation.moderate(id) } }.isFailure shouldBe true
+        f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe false
+        f.safetyRepo.allReports shouldHaveSize 1
+        // Aunque ahora el LLM falle (fail-open) o no encuentre nada, el reporte AUTO manda: el mensaje se oculta.
+        f.llm.jsonResponder = { _, _ -> finding("THREAT", "LOW") }
+        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.SKIPPED
+        f.chatRepo.allMessages.single { it.id == id }.hidden shouldBe true
         f.safetyRepo.allReports shouldHaveSize 1
     }
 

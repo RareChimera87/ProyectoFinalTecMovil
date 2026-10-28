@@ -22,6 +22,9 @@ class BackgroundWork(
         schedule(scheduler)
     }
 
+    /** Programa los jobs en [other] en vez de en [scheduler]; permite a los tests comprobar qué jobs existen sin lanzar bucles. */
+    internal fun scheduleOn(other: InProcessScheduler) = schedule(other)
+
     override fun close() {
         scheduler.close()
         queue.close()

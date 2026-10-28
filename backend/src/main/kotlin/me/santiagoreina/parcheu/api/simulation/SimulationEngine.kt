@@ -52,6 +52,11 @@ class SimulationEngine(
             log.warn("simulate: la simulación {} no existe", id)
             return
         }
+        if (record.origin == SimulationOrigin.SCENARIO) {
+            // Una conversación humana (E4.8) la evalúa `judge-scenario`; el motor de gemelos nunca la toca.
+            log.warn("simulate: {} es de modo escenario; se ignora", id)
+            return
+        }
         when (record.status) {
             SimulationStatus.DONE -> return
             SimulationStatus.FAILED -> {

@@ -17,9 +17,11 @@ class InMemorySafetyRepository(
     private val people: suspend (UUID) -> PersonRow? = { null },
     private val messages: suspend (UUID) -> List<SnapshotMessage> = { emptyList() },
     private val simulations: suspend (UUID) -> Pair<UUID, UUID>? = { null },
+    private val turns: suspend (UUID) -> List<String> = { emptyList() },
+    private val reportText: suspend (UUID) -> String? = { null },
 ) : SafetyRepository {
     private val lock = Any()
-    private val blocks = LinkedHashMap<Pair<UUID, UUID>, Instant>()
+    private val blocks = LinkedHashMap<Pair<UUID, UUID>, Pair<Instant, Boolean>>()
     private val reports = mutableListOf<NewReport>()
     private val blockListeners = mutableListOf<(UUID, UUID) -> Unit>()
     private val unblockListeners = mutableListOf<(UUID, UUID) -> Unit>()
@@ -36,10 +38,10 @@ class InMemorySafetyRepository(
 
     override suspend fun person(userId: UUID): PersonRow? = people(userId)
 
-    override suspend fun block(blocker: UUID, blocked: UUID, now: Instant): Boolean {
+    override suspend fun block(blocker: UUID, blocked: UUID, now: Instant, wasConnected: Boolean): Boolean {
         val listeners = synchronized(lock) {
             if (blocks.containsKey(blocker to blocked)) return false
-            blocks[blocker to blocked] = now
+            blocks[blocker to blocked] = now to wasConnected
             blockListeners.toList()
         }
         listeners.forEach { it(blocker, blocked) }
@@ -57,7 +59,7 @@ class InMemorySafetyRepository(
 
     override suspend fun blocksOf(blocker: UUID): List<BlockRow> {
         val own = synchronized(lock) { blocks.filterKeys { it.first == blocker }.toList() }
-        return own.mapNotNull { (pair, at) -> people(pair.second)?.takeIf { it.deletedAt == null }?.let { BlockRow(it, at) } }
+        return own.mapNotNull { (pair, meta) -> people(pair.second)?.takeIf { it.deletedAt == null }?.let { BlockRow(it, meta.first, meta.second) } }
             .sortedByDescending { it.createdAt }
     }
 
@@ -66,8 +68,12 @@ class InMemorySafetyRepository(
 
     override suspend fun simulationParticipants(simulationId: UUID): Pair<UUID, UUID>? = simulations(simulationId)
 
-    override suspend fun hasAutoReport(messageId: UUID): Boolean =
-        synchronized(lock) { reports.any { it.messageId == messageId && it.source == ReportSource.AUTO } }
+    override suspend fun autoReportDetails(messageId: UUID): String? =
+        synchronized(lock) { reports.firstOrNull { it.messageId == messageId && it.source == ReportSource.AUTO }?.details }
+
+    override suspend fun simulationTurnText(simulationId: UUID, turnIndex: Int): String? = turns(simulationId).getOrNull(turnIndex)
+
+    override suspend fun simulationReportText(simulationId: UUID): String? = reportText(simulationId)
 
     override suspend fun insertReport(report: NewReport) {
         synchronized(lock) { reports += report }

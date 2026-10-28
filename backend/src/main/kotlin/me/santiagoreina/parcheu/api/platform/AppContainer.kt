@@ -29,6 +29,7 @@ import me.santiagoreina.parcheu.api.graph.GraphRoutes
 import me.santiagoreina.parcheu.api.graph.fof.ExposedFofRepository
 import me.santiagoreina.parcheu.api.graph.fof.FofService
 import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
+import me.santiagoreina.parcheu.api.graph.history.HistoryService
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.home.HomeRoutes
 import me.santiagoreina.parcheu.api.home.HomeService
@@ -71,6 +72,7 @@ import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.quota.quotaModule
+import me.santiagoreina.parcheu.api.safety.AnonymousContacts
 import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
@@ -79,7 +81,12 @@ import me.santiagoreina.parcheu.api.safety.moderation.attachTo
 import me.santiagoreina.parcheu.api.safety.moderation.moderationEnabled
 import me.santiagoreina.parcheu.api.safety.moderation.moderationService
 import me.santiagoreina.parcheu.api.safety.safetyModule
+import me.santiagoreina.parcheu.api.scenario.ScenarioModule
+import me.santiagoreina.parcheu.api.social.invites.ExposedInviteRepository
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
+import me.santiagoreina.parcheu.api.scenario.ScenarioService
+import me.santiagoreina.parcheu.api.scenario.inMemoryScenarioModule
+import me.santiagoreina.parcheu.api.scenario.scenarioModule
 import me.santiagoreina.parcheu.api.simulation.NotifierSimulationNotifier
 import me.santiagoreina.parcheu.api.simulation.SimulationModule
 import me.santiagoreina.parcheu.api.simulation.SimulationRoutes
@@ -167,7 +174,7 @@ class AppContainer(
      * Reportar y bloquear (E8.1). Por defecto en memoria (propaga los bloqueos a chat, grafo y fila):
      * solo [fromConfig] cablea Postgres.
      */
-    val safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching),
+    val safety: SafetyModule = inMemorySafetyModule(clock, chat, graph, matching, simulation = simulation),
     /**
      * Borrado y exportación de la cuenta (E8.3). Por defecto en memoria: solo [fromConfig] cablea
      * Postgres, la cola `maintenance`, Firestore y Firebase Auth.
@@ -194,6 +201,8 @@ class AppContainer(
     val billing: BillingModule = inMemoryBillingModule(clock),
     /** Administración de reportes (E8.5). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
     val admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, clock),
+    /** Modo escenario (E4.8): acuerdo, cierre y juez sobre [chat] y [simulation]. Por defecto en memoria. */
+    val scenario: ScenarioModule = inMemoryScenarioModule(clock, ai, quota, graph, chat, simulation, notifier),
     /**
      * Moderación con IA (E8.6, ADR-0026). Por defecto con Fake y sin engancharse al chat: solo [fromConfig]
      * la conecta con la cola `ai-light` (salvo `MODERATION_ENABLED=false`).
@@ -208,7 +217,7 @@ class AppContainer(
     val domains: List<DomainRoutes> =
         allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
-            invites, billing, config.env, introductions, admin, connectRequests, moderation,
+            invites, billing, config.env, introductions, admin, scenario, connectRequests, moderation,
         ),
 ) {
     companion object {
@@ -221,6 +230,9 @@ class AppContainer(
 
         /** Hora de Bogotá del job `memories` en el homeserver (la misma que `scheduler.tf`: `0 2 * * *`). */
         val MEMORIES_AT: LocalTime = LocalTime.of(2, 0)
+
+        /** El job `retention` corre a diario a las 03:30 de Bogotá, como `scheduler.tf` (E8.8). */
+        val RETENTION_AT: LocalTime = LocalTime.of(3, 30)
 
         /**
          * Cableado de producción: verificadores reales (Fake solo con `ENV=local`). La
@@ -279,12 +291,25 @@ class AppContainer(
                 demo = DemoConnectPolicy(demo.connectProbability), demoUsersEnabled = demo.enabled,
             )
             // Fila de match (E4.2): misma base, cuotas, simulación, grafo y avisos; espejo matchTickets en Firestore fuera de local.
+            // Al crear el chat SCENARIO se escribe `chats/{id}` en Firestore (E4.8; pendientes-humanos E4.2 paso 4).
             val matching = matchingModule(
                 config.env, database, clock, quota, simulation, graph, notifier, config.firebaseProjectId,
                 MatchingFlags.fromEnv(config.env, vars),
+                onScenarioChatCreated = { chatId -> chat.service.mirrorChat(chatId) },
             )
+            // Modo escenario (E4.8): acuerdo, cierre y juez; `judge-scenario` va por la cola `simulations`.
+            val scenario = scenarioModule(clock, ai, quota, graph, chat, simulation, tasks, notifier)
             // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
-            val safety = safetyModule(database, chat, graph, matching, clock)
+            // E8.7: el `anonId` de un reporte o bloqueo también se resuelve entre los canjes de C5, los amigos de
+            // amigos de D6 y las presentaciones de E3 del observador.
+            val safetyContacts = listOf(
+                AnonymousContacts.pendingInvites(ExposedInviteRepository(database)),
+                AnonymousContacts.friendsOfFriends(
+                    FofService(graph.fofRepository ?: InMemoryFofRepository(graph.repository), graph.repository, graph.policy, { true }, demo.enabled),
+                ),
+                AnonymousContacts.introductions(introductionStore),
+            )
+            val safety = safetyModule(database, chat, graph, matching, clock, safetyContacts)
             // Moderación con IA (E8.6): tarea `moderate` en `ai-light` después de entregar cada mensaje (fail-open).
             val moderation = moderationService(ai, chat, safety, tasks, clock, notifier)
             if (moderationEnabled(vars)) moderation.attachTo(chat)
@@ -305,7 +330,7 @@ class AppContainer(
             val connectRequests = exposedConnectRequestModule(database, graph, quota, demo.enabled)
             // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.
             val billing = billingModule(config.env, database, clock, vars)
-            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account, moderation) }
+            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account, scenario, moderation) }
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
@@ -315,6 +340,8 @@ class AppContainer(
                 billing = billing,
                 invites = invites,
                 connectRequests = connectRequests,
+                // Sin esto el valor por defecto (en memoria, FakeTaskQueue inline) atendería las rutas y pisaría el gancho del chat.
+                scenario = scenario,
                 background = background,
             )
         }
@@ -323,7 +350,8 @@ class AppContainer(
          * Handlers de las cinco tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
          * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
          * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
-         * Retention, communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
+         * El job `retention` (E8.8) corre a diario a las 03:30 de Bogotá. Communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
+         * `judge-scenario` y `scenario-sweep` (E4.8) corren con el módulo real de escenario.
          */
         private fun inlineBackground(
             queue: InProcessTaskQueue,
@@ -332,22 +360,28 @@ class AppContainer(
             simulation: SimulationModule,
             matching: MatchingModule,
             account: AccountModule,
+            scenario: ScenarioModule,
             moderation: ModerationService,
         ): BackgroundWork {
             fun id(body: String) = ContractJson.decodeFromString<TaskPayload>(body).uuid()
             queue.register(TwinService.BUILD_PERSONA_PATH) { twin.service.buildPersona(id(it)) }
             queue.register(SimulationService.SIMULATE_PATH) { simulation.engine.run(id(it)) }
             queue.register(AccountDeletionService.PURGE_PATH) { account.deletion.purge(id(it)) }
+            queue.register(ScenarioService.JUDGE_PATH) { scenario.service.judge(id(it)) }
             queue.register(MemoryService.TASK_PATH) { twin.memories.extract(id(it)) }
             queue.register(ModerationService.TASK_PATH) { moderation.moderate(id(it)) }
             return BackgroundWork(queue, InProcessScheduler()) { scheduler ->
                 scheduler.every("match-sweep", Duration.ofSeconds(60)) { matching.service.sweep() }
+                scheduler.every("scenario-sweep", Duration.ofSeconds(60), Duration.ofSeconds(20)) { scenario.service.sweep() }
                 scheduler.every("purge-sweep", Duration.ofHours(1), Duration.ofMinutes(2)) { account.deletion.sweepStalled() }
                 scheduler.every("simulation-recovery", Duration.ofMinutes(15), Duration.ofSeconds(30)) {
                     simulation.service.requeueUnfinished()
                 }
                 scheduler.every("memories", Duration.ofDays(1), InProcessScheduler.delayUntil(MEMORIES_AT, clock)) {
                     twin.memories.enqueueNightly()
+                }
+                scheduler.every("retention", Duration.ofDays(1), InProcessScheduler.delayUntil(RETENTION_AT, clock)) {
+                    account.retention.run()
                 }
             }
         }
@@ -390,7 +424,7 @@ fun allDomains(
     chat: ChatModule = inMemoryChatModule(systemClock(), graph.policy),
     simulation: SimulationModule = inMemorySimulationModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph),
     matching: MatchingModule = inMemoryMatchingModule(systemClock(), quota, simulation, graph, NoopNotifier),
-    safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching),
+    safety: SafetyModule = inMemorySafetyModule(systemClock(), chat, graph, matching, simulation = simulation),
     account: AccountModule = inMemoryAccountModule(identity, graph, twin, systemClock()),
     unread: UnreadCounter = UnreadCounter.NONE,
     notifications: NotificationCenterModule = inMemoryNotificationCenter(systemClock(), quota, graph),
@@ -401,6 +435,7 @@ fun allDomains(
     introductions: IntroductionModule =
         introductionModule(InMemoryIntroductionRepository(), simulation, graph, chat, quota, NoopNotifier, systemClock()),
     admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, systemClock()),
+    scenario: ScenarioModule = inMemoryScenarioModule(systemClock(), AppContainer.localAiGateway(systemClock()), quota, graph, chat, simulation, NoopNotifier),
     connectRequests: ConnectRequestModule = inMemoryConnectRequestModule(simulation, graph, quota),
     moderation: ModerationService =
         moderationService(AppContainer.localAiGateway(systemClock()), chat, safety, FakeTaskQueue(), systemClock()),
@@ -410,8 +445,13 @@ fun allDomains(
     QuotaRoutes(quota),
     MatchingRoutes(matching) { firebase -> identity.requireUser(firebase).id },
     SimulationRoutes(simulation) { firebase -> identity.requireUser(firebase).id },
-    ScenarioRoutes(),
-    GraphRoutes(graph.service, fofService(graph, twin, quota, matching.flags.demoUsersEnabled)) { firebase ->
+    ScenarioRoutes(scenario.service) { firebase -> identity.requireUser(firebase).id },
+    GraphRoutes(
+        graph.service,
+        fofService(graph, twin, quota, matching.flags.demoUsersEnabled),
+        // Evolución de la red (E6.5): derivada de las aristas en cada consulta, sin tarea ni job.
+        HistoryService(graph.repository, graph.policy, { quota.service.isPlus(it) }, quota.clock),
+    ) { firebase ->
         identity.requireUser(firebase).id
     },
     SocialRoutes(invites.service) { firebase -> identity.requireUser(firebase).id },

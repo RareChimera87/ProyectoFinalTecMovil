@@ -38,9 +38,10 @@ import java.util.UUID
  * queda visible y se registra `moderation_failed` (fail-open); la tarea termina sin error para no reintentar.
  *
  * Reintentable tras un fallo parcial: el reporte AUTO se inserta antes de ocultar (nunca queda un mensaje
- * oculto sin reporte), se crea una sola vez por mensaje y ocultar es idempotente y repara el espejo de
- * Firestore, así que cada reintento repite el ocultamiento. El aviso de ayuda va primero: un reintento puede duplicarlo,
- * pero nunca se pierde (tras ocultar y reportar, el reintento sale temprano y ya no lo enviaría).
+ * oculto sin reporte) y se crea una sola vez por mensaje. Con el reporte ya creado, el reintento no vuelve a llamar
+ * al LLM: aplica lo que el reporte dice (`details` marca si se oculta y si falta la ayuda) y ocultar es idempotente
+ * y repara el espejo de Firestore. El aviso de ayuda va primero y, si falla, no impide reportar ni ocultar; luego se
+ * relanza el error. Un reintento puede duplicar el aviso, pero nunca se pierde.
  */
 class ModerationService(
     private val moderator: MessageModerator,
@@ -77,11 +78,13 @@ class ModerationService(
     suspend fun moderate(messageId: UUID): ModerationOutcome {
         val message = chats.message(messageId) ?: return ModerationOutcome.SKIPPED
         val author = message.senderId ?: return ModerationOutcome.SKIPPED
-        // Salir por `hidden` a secas dejaría un mensaje oculto sin reporte, o con Firestore aún visible, si un intento
-        // anterior falló a mitad. Solo se da por terminado con reporte AUTO y mensaje oculto, y aun así se repite
-        // ocultar (idempotente) para reparar el espejo.
-        if (message.hidden && safety.hasAutoReport(messageId)) {
-            chat.hideMessage(messageId)
+        // Si un intento anterior ya dejó el reporte AUTO, la decisión está tomada y se aplica sin volver a llamar al LLM
+        // (otra respuesta, o un fallo fail-open, dejaría visible un mensaje que el reporte da por oculto). Se repite lo
+        // que pudo quedar a medias, y todo es idempotente: ocultar repara el espejo de Firestore y la ayuda puede duplicarse.
+        val previous = safety.autoReportDetails(messageId)
+        if (previous != null) {
+            if (previous.contains(HIDDEN_MARK)) chat.hideMessage(messageId)
+            if (previous.contains(HELP_MARK)) sendHelp(author)
             return ModerationOutcome.SKIPPED
         }
 
@@ -101,14 +104,26 @@ class ModerationService(
 
         val hide = high.any { it != ModerationCategory.SELF_HARM && it != ModerationCategory.POSSIBLE_MINOR }
         val reportable = high.filter { it != ModerationCategory.SELF_HARM }
-        // La ayuda va primero: si algo falla después, el reintento la repite (un aviso duplicado es mejor que perderlo),
-        // porque la salida temprana de arriba ya no vuelve a pasar por aquí con el mensaje oculto y reportado.
-        if (ModerationCategory.SELF_HARM in high) sendHelp(author)
+        // La ayuda va primero, pero su fallo no frena el resto: el contenido dañino se reporta y se oculta de todas formas
+        // y después se relanza el error para que se reintente. Si algo falla más adelante, el reintento ve el reporte
+        // (con la marca de ayuda en `details`) y repite el aviso: un duplicado es mejor que perderlo.
+        val selfHarm = ModerationCategory.SELF_HARM in high
+        var helpError: Exception? = null
+        if (selfHarm) {
+            try {
+                sendHelp(author)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                helpError = e
+            }
+        }
         if (reportable.isNotEmpty()) {
             // Primero el reporte: si ocultar falla, el reintento lo repite sin duplicar y un admin ya puede revisarlo.
-            if (!safety.hasAutoReport(messageId)) safety.insertReport(autoReport(message, author, reportable))
+            safety.insertReport(autoReport(message, author, reportable, hide, selfHarm))
             if (hide) chat.hideMessage(messageId)
         }
+        helpError?.let { throw it }
         log.atInfo().setMessage(MODERATION_ACTED).addKeyValue("event", MODERATION_ACTED)
             .addKeyValue("messageId", messageId.toString()).addKeyValue("categories", high.joinToString(",") { it.name })
             .addKeyValue("hidden", hide).log()
@@ -123,7 +138,13 @@ class ModerationService(
         )
     }
 
-    private suspend fun autoReport(message: MessageRecord, author: UUID, categories: List<ModerationCategory>): NewReport {
+    private suspend fun autoReport(
+        message: MessageRecord,
+        author: UUID,
+        categories: List<ModerationCategory>,
+        hidden: Boolean,
+        help: Boolean,
+    ): NewReport {
         // La categoría más grave decide el motivo: los menores van primero porque exigen la revisión humana más rápida.
         val main = ORDER.first { it in categories }
         val minor = ModerationCategory.POSSIBLE_MINOR in categories
@@ -137,7 +158,8 @@ class ModerationService(
             simulationId = null,
             turnIndex = null,
             reason = if (minor) ReportReason.UNDERAGE else main.reason,
-            details = "Moderación automática: ${categories.joinToString(", ") { it.name }}",
+            details = "Moderación automática: ${categories.joinToString(", ") { it.name }}" +
+                (if (hidden) HIDDEN_MARK else "") + (if (help) HELP_MARK else ""),
             snapshot = safety.recentMessages(message.chatId, SafetyService.SNAPSHOT_SIZE),
             priority = if (minor) SafetyService.HIGH_PRIORITY else AUTO_PRIORITY,
             createdAt = clock.instant(),
@@ -150,6 +172,10 @@ class ModerationService(
         const val MODERATION_FAILED = "moderation_failed"
         const val MODERATION_ACTED = "moderation_acted"
         const val ENQUEUE_FAILED = "moderation_enqueue_failed"
+
+        /** Marcas en `details` del reporte AUTO: qué decidió el primer intento, para reintentar sin el LLM. */
+        const val HIDDEN_MARK = " [oculto]"
+        const val HELP_MARK = " [ayuda]"
 
         /** Prioridad de un reporte AUTO que oculta un mensaje: arriba de los de usuario normales (0), debajo de menor o autolesión. */
         const val AUTO_PRIORITY = 1

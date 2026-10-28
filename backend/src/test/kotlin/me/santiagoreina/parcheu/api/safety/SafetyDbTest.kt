@@ -13,7 +13,10 @@ import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
 import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
+import me.santiagoreina.parcheu.api.graph.EdgeChange
+import me.santiagoreina.parcheu.api.graph.EdgeSnapshot
 import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
+import me.santiagoreina.parcheu.api.graph.GraphFilter
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.UserRecord
@@ -24,6 +27,7 @@ import me.santiagoreina.parcheu.api.platform.db.tables.Reports
 import me.santiagoreina.parcheu.api.platform.errors.DomainException
 import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.contract.ChatStatus
+import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.ErrorCode
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.ReportKind
@@ -89,6 +93,28 @@ class SafetyDbTest : FunSpec({
             env.service.unblock(ana.id, anonId)
             env.service.blocks(ana.id).shouldBeEmpty()
             env.graph.repository.blockedEitherWay(beto.id).shouldBeEmpty()
+        }
+    }
+
+    test("bloquear termina la conexión CONNECTED y desbloquear no la restaura (E8.7)").config(enabled = TestDatabase.enabled) {
+        withDb { env ->
+            val ana = env.user("Ana")
+            val beto = env.user("Beto")
+            val now = FIXED_CLOCK.instant()
+            env.graph.repository.updateEdge(ana.id, beto.id, Mode.AMISTAD, now) {
+                EdgeChange.Save(EdgeSnapshot(EdgeState.CONNECTED, 80, null, now, now))
+            }
+            env.graph.repository.connectedWith(ana.id) shouldBe setOf(beto.id)
+
+            env.service.block(ana.id, beto.id.toString())
+            // Quien bloquea ya conocía a Beto por nombre: la lista lo presenta con su id y nombre (was_connected).
+            val listed = env.service.blocks(ana.id).single()
+            listed.userId shouldBe beto.id.toString()
+            env.service.unblock(ana.id, listed.userId)
+            env.service.blocks(ana.id).shouldBeEmpty()
+
+            env.graph.repository.connectedWith(ana.id).shouldBeEmpty()
+            env.graph.repository.egoEdges(ana.id, GraphFilter()).shouldBeEmpty()
         }
     }
 

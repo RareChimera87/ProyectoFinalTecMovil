@@ -13,7 +13,7 @@ import java.util.UUID
  * los usuarios, bloqueos y consentimientos se siembran con [addUser], [block] y [setLearning].
  */
 class InMemoryChatRepository : ChatRepository {
-    private data class Member(val muted: Boolean = false, val lastReadAt: Instant? = null)
+    private data class Member(val muted: Boolean = false, val lastReadAt: Instant? = null, val agreedAt: Instant? = null)
     private data class Chat(
         val id: UUID,
         val type: ChatType,
@@ -73,15 +73,6 @@ class InMemoryChatRepository : ChatRepository {
 
     override suspend fun message(messageId: UUID): MessageRecord? = synchronized(lock) { messages.firstOrNull { it.id == messageId } }
 
-    override suspend fun saveSystemMessage(id: UUID, chatId: UUID, text: String, now: Instant): SavedMessage? = synchronized(lock) {
-        val chat = chats[chatId] ?: return null
-        messages.firstOrNull { it.id == id }?.let { return SavedMessage(it, inserted = false) }
-        val record = MessageRecord(id, chatId, senderId = null, text = text, learnable = false, hidden = false, clientId = null, createdAt = now)
-        messages += record
-        chat.lastMessageAt = now
-        SavedMessage(record, inserted = true)
-    }
-
     override suspend fun hideMessage(messageId: UUID): MessageRecord? = synchronized(lock) {
         val index = messages.indexOfFirst { it.id == messageId }
         if (index < 0) return null
@@ -132,6 +123,32 @@ class InMemoryChatRepository : ChatRepository {
         }.sortedWith(compareByDescending<ChatListRow> { it.chat.lastMessageAt ?: it.chat.createdAt }.thenBy { it.chat.id })
     }
 
+    override suspend fun agree(chatId: UUID, userId: UUID, now: Instant): ChatRecord? = synchronized(lock) {
+        val chat = chats[chatId] ?: return null
+        val member = chat.members[userId] ?: return null
+        if (member.agreedAt == null) chat.members[userId] = member.copy(agreedAt = now)
+        chat.toRecord()
+    }
+
+    override suspend fun closeIfOpen(chatId: UUID): Boolean = synchronized(lock) {
+        val chat = chats[chatId] ?: return false
+        if (chat.status != ChatStatus.OPEN) return false
+        chat.status = ChatStatus.CLOSED
+        true
+    }
+
+    override suspend fun messages(chatId: UUID): List<MessageRecord> = synchronized(lock) {
+        // sortedBy es estable: los mensajes del mismo instante conservan el orden de llegada.
+        messages.filter { it.chatId == chatId && !it.hidden }.sortedBy { it.createdAt }
+    }
+
+    override suspend fun expiredOpenScenarios(now: Instant, limit: Int): List<UUID> = synchronized(lock) {
+        chats.values
+            .filter { it.type == ChatType.SCENARIO && it.status == ChatStatus.OPEN && it.endsAt?.isAfter(now) == false }
+            .sortedWith(compareBy<Chat> { it.endsAt }.thenBy { it.id })
+            .take(limit).map { it.id }
+    }
+
     override suspend fun markRead(chatId: UUID, userId: UUID, now: Instant): Boolean = updateMember(chatId, userId) { it.copy(lastReadAt = now) }
 
     override suspend fun setMuted(chatId: UUID, userId: UUID, muted: Boolean): Boolean = updateMember(chatId, userId) { it.copy(muted = muted) }
@@ -161,7 +178,7 @@ class InMemoryChatRepository : ChatRepository {
         createdAt = createdAt,
         lastMessageAt = lastMessageAt,
         members = members.map { (userId, m) ->
-            ChatMemberRecord(userId, firebaseUids[userId] ?: error("Usuario $userId sin sembrar en InMemoryChatRepository"), m.muted, m.lastReadAt)
+            ChatMemberRecord(userId, firebaseUids[userId] ?: error("Usuario $userId sin sembrar en InMemoryChatRepository"), m.muted, m.lastReadAt, m.agreedAt)
         },
     )
 }

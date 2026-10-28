@@ -50,7 +50,9 @@ data class ParcheCallbacks(
     val onUnlock: () -> Unit = {},
     /** E1 · Presentar a dos amigos (E6.2). */
     val onIntroduce: () -> Unit = {},
-    val onFriendsOfFriends: () -> Unit = {}
+    val onFriendsOfFriends: () -> Unit = {},
+    /** E8.7: abre H1 para la persona de la hoja D2. */
+    val onReportOrBlock: () -> Unit = {}
 )
 
 /** D1-D5 e I2 (según el tema). La NavBar la pone `ParcheUApp`. */
@@ -100,7 +102,8 @@ fun ParcheScreen(
                 onDismiss = callbacks.onDismissSheet,
                 onSimulateAgain = callbacks.onSimulateAgain,
                 onChat = callbacks.onChat,
-                onViewResult = callbacks.onViewResult
+                onViewResult = callbacks.onViewResult,
+                onReportOrBlock = callbacks.onReportOrBlock
             )
         }
     }

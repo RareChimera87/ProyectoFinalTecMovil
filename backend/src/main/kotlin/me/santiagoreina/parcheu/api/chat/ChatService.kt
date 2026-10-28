@@ -50,6 +50,14 @@ class ChatService(
      */
     @Volatile var onMessageSaved: (suspend (MessageRecord) -> Unit)? = null
 
+    /**
+     * Qué hacer cuando alguien intenta escribir en un chat SCENARIO que ya terminó (E4.8): el módulo de
+     * escenario lo conecta para cerrar el chat y disparar al juez, una sola vez. Sin él (pruebas de chat
+     * solo) el envío responde 409 sin más.
+     */
+    @Volatile
+    var scenarioEnded: ScenarioEndedHook = ScenarioEndedHook.NONE
+
     // --- creación (la usan otros dominios) ---------------------------------------------------
 
     /** Chat DIRECT de [a] y [b] en [mode]; si ya existe lo devuelve (idempotente y seguro ante concurrencia). */
@@ -91,6 +99,16 @@ class ChatService(
         val now = clock.instant()
         if (!endsAt.isAfter(now)) throw ValidationFailed("endsAt debe ser futuro")
         val chat = repo.create(NewChat(ChatType.SCENARIO, mode, listOf(a, b), now, scenarioId, endsAt))
+        mirror.upsertChat(chat.toDoc())
+        return chat
+    }
+
+    /**
+     * Vuelve a escribir `chats/{id}` en Firestore con el estado actual de Postgres. Lo usa el match al crear el
+     * chat SCENARIO (E4.2 no escribe el espejo; pendientes-humanos E4.2 paso 4). Idempotente; null si no existe.
+     */
+    suspend fun mirrorChat(chatId: UUID): ChatRecord? {
+        val chat = repo.chat(chatId) ?: return null
         mirror.upsertChat(chat.toDoc())
         return chat
     }
@@ -155,7 +173,11 @@ class ChatService(
         val others = chat.members.filter { it.userId != sender.id }
         if (others.any { repo.blockedBetween(sender.id, it.userId) }) throw Blocked()
         when {
-            chat.type == ChatType.SCENARIO && (chat.status == ChatStatus.CLOSED || chat.endsAt?.isAfter(now) == false) -> throw ScenarioEnded()
+            chat.type == ChatType.SCENARIO && (chat.status == ChatStatus.CLOSED || chat.endsAt?.isAfter(now) == false) -> {
+                // Se acabó el tiempo: cierra el chat y dispara al juez (una sola vez; E4.8). Nunca rompe el 409.
+                runCatching { scenarioEnded.ended(chatId) }.onFailure { log.warn("No se pudo cerrar el escenario {}", chatId, it) }
+                throw ScenarioEnded()
+            }
             chat.status == ChatStatus.CLOSED -> throw Forbidden("El chat está cerrado")
         }
 
@@ -195,19 +217,6 @@ class ChatService(
             MessageDoc(message.id, senderUid, system = message.senderId == null, text = "", createdAt = message.createdAt, hidden = true),
         )
         return true
-    }
-
-    /**
-     * Inserta un mensaje del sistema en el chat (E8.6: recursos de ayuda) y lo replica en Firestore con
-     * `system = true`. Idempotente por [id]: repetirlo no duplica el mensaje y repara el espejo. Devuelve
-     * null si el chat no existe. No avisa por push: no es un mensaje de una persona.
-     */
-    suspend fun postSystemMessage(chatId: UUID, id: UUID, text: String): MessageRecord? {
-        val saved = repo.saveSystemMessage(id, chatId, text, clock.instant()) ?: return null
-        repairChatMirror(chatId)
-        val message = saved.message
-        mirror.upsertMessage(chatId, MessageDoc(message.id, null, system = true, text = message.text, createdAt = message.createdAt, hidden = message.hidden))
-        return message
     }
 
     // --- internos ----------------------------------------------------------------------------
@@ -313,6 +322,15 @@ class ChatService(
         const val MAX_PREVIEW = 100
         const val DELETED_LABEL = "Usuario eliminado"
         const val DELETED_INITIALS = "UE"
+    }
+}
+
+/** Gancho de fin de escenario (E4.8): lo conecta el módulo `scenario`. Debe ser idempotente. */
+fun interface ScenarioEndedHook {
+    suspend fun ended(chatId: UUID)
+
+    companion object {
+        val NONE = ScenarioEndedHook { }
     }
 }
 

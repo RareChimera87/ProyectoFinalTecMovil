@@ -1,4 +1,10 @@
 {
-  "status": "DONE",
-  "simulationId": "5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697"
+  "status": "WAITING_OTHER",
+  "simulationId": "5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+  "title": "Planear el fin de semana",
+  "prompt": "Pónganse de acuerdo en un plan para el sábado.",
+  "budgetCop": 80000,
+  "endsAt": "2026-10-23T15:40:00Z",
+  "iAgreed": true,
+  "otherAgreed": false
 }

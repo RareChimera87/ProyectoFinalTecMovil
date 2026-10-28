@@ -21,6 +21,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
@@ -115,22 +116,6 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
         ChatMessages.selectAll().where { ChatMessages.id eq messageId }.singleOrNull()?.toMessage()
     }
 
-    override suspend fun saveSystemMessage(id: UUID, chatId: UUID, text: String, now: Instant): SavedMessage? = tx {
-        if (Chats.selectAll().where { Chats.id eq chatId }.empty()) return@tx null
-        val inserted = ChatMessages.insertIgnore {
-            it[ChatMessages.id] = id
-            it[ChatMessages.chatId] = chatId
-            it[senderId] = null
-            it[ChatMessages.text] = text
-            it[learnable] = false
-            it[hidden] = false
-            it[clientId] = null
-            it[createdAt] = now.odt()
-        }.insertedCount == 1
-        if (inserted) Chats.update({ Chats.id eq chatId }) { it[lastMessageAt] = now.odt() }
-        SavedMessage(ChatMessages.selectAll().where { ChatMessages.id eq id }.single().toMessage(), inserted)
-    }
-
     override suspend fun hideMessage(messageId: UUID): MessageRecord? = tx {
         ChatMessages.update({ ChatMessages.id eq messageId }) { it[hidden] = true }
         ChatMessages.selectAll().where { ChatMessages.id eq messageId }.singleOrNull()?.toMessage()
@@ -186,6 +171,36 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
             val other = chat.members.firstOrNull { it.userId != userId }?.let { people[it.userId] }
             ChatListRow(chat, other, last, unread)
         }.sortedWith(compareByDescending<ChatListRow> { it.chat.lastMessageAt ?: it.chat.createdAt }.thenBy { it.chat.id })
+    }
+
+    override suspend fun agree(chatId: UUID, userId: UUID, now: Instant): ChatRecord? = tx {
+        val member = ChatMembers.selectAll()
+            .where { (ChatMembers.chatId eq chatId) and (ChatMembers.userId eq userId) }
+            .forUpdate()
+            .singleOrNull() ?: return@tx null
+        if (member[ChatMembers.agreedAt] == null) {
+            ChatMembers.update({ (ChatMembers.chatId eq chatId) and (ChatMembers.userId eq userId) }) { it[agreedAt] = now.odt() }
+        }
+        loadChat(chatId)
+    }
+
+    override suspend fun closeIfOpen(chatId: UUID): Boolean = tx {
+        Chats.update({ (Chats.id eq chatId) and (Chats.status eq ChatStatus.OPEN) }) { it[status] = ChatStatus.CLOSED } == 1
+    }
+
+    override suspend fun messages(chatId: UUID): List<MessageRecord> = tx {
+        ChatMessages.selectAll()
+            .where { (ChatMessages.chatId eq chatId) and (ChatMessages.hidden eq false) }
+            .orderBy(ChatMessages.createdAt to SortOrder.ASC, ChatMessages.id to SortOrder.ASC)
+            .map { it.toMessage() }
+    }
+
+    override suspend fun expiredOpenScenarios(now: Instant, limit: Int): List<UUID> = tx {
+        Chats.selectAll()
+            .where { (Chats.type eq ChatType.SCENARIO) and (Chats.status eq ChatStatus.OPEN) and (Chats.endsAt lessEq now.odt()) }
+            .orderBy(Chats.endsAt to SortOrder.ASC, Chats.id to SortOrder.ASC)
+            .limit(limit)
+            .map { it[Chats.id] }
     }
 
     override suspend fun markRead(chatId: UUID, userId: UUID, now: Instant): Boolean = tx {
@@ -246,6 +261,7 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
                     firebaseUid = it[Users.firebaseUid],
                     muted = it[ChatMembers.muted],
                     lastReadAt = it[ChatMembers.lastReadAt]?.toInstant(),
+                    agreedAt = it[ChatMembers.agreedAt]?.toInstant(),
                 )
             }
         return ChatRecord(
