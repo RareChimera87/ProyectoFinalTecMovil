@@ -1030,3 +1030,11 @@ No requiere infraestructura ni secretos: el historial se calcula en cada consult
 No hay pasos humanos: es una lectura de `connection_decisions` con la API que ya existe (sin Terraform, secretos, Play Console ni tareas asíncronas nuevas, así que tampoco toca `InProcessTaskQueue` ni `InProcessScheduler`).
 
 Para verla en la variante dev contra el homeserver: con dos cuentas de prueba, que A simule con B, que B decida "Conectar" en F7/F8 y que A (con ParcheU+ de `POST /internal/dev/grant-plus`) abra C2: la sección lista a B enmascarado; sin ParcheU+ A ve el ítem bloqueado con el conteo.
+
+## E8.8 · Retención y purga de datos
+
+No hay secretos, Play Console ni recursos nuevos de GCP: el job `retention` ya estaba declarado en `infra/terraform/modules/platform/scheduler.tf` (diario 03:30 Bogotá, `POST /internal/jobs/retention`) y las consultas de Firestore son de un solo campo, así que no piden índices. En el homeserver (`TASKS_MODE=inline`) lo programa `InProcessScheduler` a las 03:30 de Bogotá; no hay tareas nuevas, así que `InProcessTaskQueue` no cambia.
+
+- [ ] **Opcional (observabilidad):** la métrica `retention_purged_total{regla}` sale como log INFO por regla (`event = retention_purged`, `regla`, `count`; solo cuando se purgó algo). Si se quiere verla en Cloud Monitoring, crear una métrica basada en logs con filtro `jsonPayload.message="retention_purged"` y etiqueta `regla` (extraída de `jsonPayload.regla`) en `monitoring.tf`; no se hizo aquí para no tocar Terraform fuera del alcance de la ficha.
+- [ ] **Verificar en dev (con el homeserver):** tras la primera noche, revisar en los logs del backend las líneas `retention_purged` y `Retención: N registros purgados`. Para forzarlo a mano: `POST /internal/jobs/retention` con un token OIDC del servicio.
+- [ ] **Decisiones de interpretación para revisar con el docente / I1** (documentadas en arquitectura.md §10.2): `matches` se purga solo si están `EXPIRED`; un chat SCENARIO se considera cerrado en su `ends_at`; el plazo de `transcript` son 12 meses calendario de Bogotá.
