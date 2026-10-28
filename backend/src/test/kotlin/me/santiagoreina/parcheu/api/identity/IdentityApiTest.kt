@@ -149,7 +149,7 @@ class IdentityApiTest : FunSpec({
         testApplication {
             val client = startApp(testContainer(repo = repo))
             client.session("lucia")
-            // /v1/twin/memories es un stub de otro dominio (E9.x): la puerta actúa antes que él.
+            // /v1/twin/memories es una ruta de otro dominio (E9.2): la puerta actúa antes que ella.
             val blocked = client.get("/v1/twin/memories") { auth("lucia") }
             blocked.status shouldBe HttpStatusCode.Forbidden
             blocked.error() shouldBe ErrorCode.TERMS_REQUIRED
@@ -159,7 +159,7 @@ class IdentityApiTest : FunSpec({
             // Exentas: sesión, GET /me, DELETE /me y el propio POST terms.
             client.get("/v1/me") { auth("lucia") }.status shouldBe HttpStatusCode.OK
             client.acceptTerms("lucia").status shouldBe HttpStatusCode.OK
-            client.get("/v1/twin/memories") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+            client.get("/v1/twin/memories") { auth("lucia") }.status shouldBe HttpStatusCode.OK
             // DELETE /me (E8.3) borra de verdad: se prueba con otra cuenta que tampoco aceptó los términos.
             client.session("nico")
             client.delete("/v1/me") { auth("nico") }.status shouldBe HttpStatusCode.Accepted
@@ -198,7 +198,7 @@ class IdentityApiTest : FunSpec({
             startApp(testContainer(repo = repo)).apply {
                 session("lucia")
                 acceptTerms("lucia")
-                get("/v1/twin/memories") { auth("lucia") }.status shouldBe HttpStatusCode.NotImplemented
+                get("/v1/twin/memories") { auth("lucia") }.status shouldBe HttpStatusCode.OK
             }
         }
         testApplication {

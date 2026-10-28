@@ -106,6 +106,7 @@ import me.santiagoreina.parcheu.api.twin.twinModule
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Clock
 import java.time.Duration
+import java.time.LocalTime
 import me.santiagoreina.parcheu.api.platform.jobs.InProcessScheduler
 import me.santiagoreina.parcheu.api.platform.tasks.InProcessTaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
@@ -113,6 +114,7 @@ import me.santiagoreina.parcheu.api.platform.tasks.TasksMode
 import me.santiagoreina.parcheu.api.simulation.SimulationService
 import me.santiagoreina.parcheu.api.twin.TaskPayload
 import me.santiagoreina.parcheu.api.twin.TwinService
+import me.santiagoreina.parcheu.api.twin.memories.MemoryService
 import me.santiagoreina.parcheu.api.identity.deletion.AccountDeletionService
 import me.santiagoreina.parcheu.contract.ContractJson
 
@@ -207,6 +209,9 @@ class AppContainer(
          * nadie puede moderar ni leer reportes con un token inventado. Nunca existe en dev ni prod.
          */
         const val LOCAL_ADMIN_UID = "admin"
+
+        /** Hora de Bogotá del job `memories` en el homeserver (la misma que `scheduler.tf`: `0 2 * * *`). */
+        val MEMORIES_AT: LocalTime = LocalTime.of(2, 0)
 
         /**
          * Cableado de producción: verificadores reales (Fake solo con `ENV=local`). La
@@ -303,8 +308,10 @@ class AppContainer(
         }
 
         /**
-         * Handlers de las tres tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
-         * Retention, communities, memories y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
+         * Handlers de las cuatro tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
+         * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
+         * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
+         * Retention, communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
          */
         private fun inlineBackground(
             queue: InProcessTaskQueue,
@@ -318,11 +325,15 @@ class AppContainer(
             queue.register(TwinService.BUILD_PERSONA_PATH) { twin.service.buildPersona(id(it)) }
             queue.register(SimulationService.SIMULATE_PATH) { simulation.engine.run(id(it)) }
             queue.register(AccountDeletionService.PURGE_PATH) { account.deletion.purge(id(it)) }
+            queue.register(MemoryService.TASK_PATH) { twin.memories.extract(id(it)) }
             return BackgroundWork(queue, InProcessScheduler()) { scheduler ->
                 scheduler.every("match-sweep", Duration.ofSeconds(60)) { matching.service.sweep() }
                 scheduler.every("purge-sweep", Duration.ofHours(1), Duration.ofMinutes(2)) { account.deletion.sweepStalled() }
                 scheduler.every("simulation-recovery", Duration.ofMinutes(15), Duration.ofSeconds(30)) {
                     simulation.service.requeueUnfinished()
+                }
+                scheduler.every("memories", Duration.ofDays(1), InProcessScheduler.delayUntil(MEMORIES_AT, clock)) {
+                    twin.memories.enqueueNightly()
                 }
             }
         }
