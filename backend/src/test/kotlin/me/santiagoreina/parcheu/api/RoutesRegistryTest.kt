@@ -40,7 +40,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
     // Chat: E5.1 implementa todas sus rutas (ChatApiTest).
     // Notifications: E5.4 implementa la bandeja y 'Marcar leídas' (NotificationsApiTest); ya no queda ningún stub.
     // Billing: E7.1 implementa entitlement, verify y la RTDN (BillingApiTest); ya no queda ningún stub.
-    // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` sigue en 501 (E8.6).
+    // Safety: E8.1 implementa reportes y bloqueos (SafetyApiTest); `/internal/tasks/moderate` la implementa E8.6 (ModerationApiTest).
     // Admin: E8.5 implementa las dos rutas (AdminApiTest); ya no queda ningún stub.
     // Home: E4.7 implementa GET /v1/home (HomeApiTest); ya no queda ningún stub.
 )
@@ -50,7 +50,7 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
 // `/internal/jobs/memories`, E9.2 (MemoryApiTest).
 private val internalRoutes = listOf(
     "/internal/tasks/judge-scenario",
-    "/internal/tasks/moderate", "/internal/tasks/name-community",
+    "/internal/tasks/name-community",
     "/internal/jobs/communities",
     "/internal/jobs/twin-accuracy", "/internal/jobs/retention",
 )

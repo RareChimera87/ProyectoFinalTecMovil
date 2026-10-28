@@ -44,6 +44,12 @@ class ChatService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Se invoca después de guardar cada mensaje nuevo (no en reintentos por `clientId`). La moderación
+     * con IA (E8.6) se engancha aquí; su fallo nunca rompe el envío (fail-open, ADR-0026).
+     */
+    @Volatile var onMessageSaved: (suspend (MessageRecord) -> Unit)? = null
+
     // --- creación (la usan otros dominios) ---------------------------------------------------
 
     /** Chat DIRECT de [a] y [b] en [mode]; si ya existe lo devuelve (idempotente y seguro ante concurrencia). */
@@ -158,7 +164,10 @@ class ChatService(
         if (saved.message.chatId != chatId) throw Conflict("clientId ya se usó en otro chat")
         repairChatMirror(chatId)
         mirror.upsertMessage(chatId, saved.message.toDoc(sender.firebaseUid))
-        if (saved.inserted) notifyOthers(chat, sender, others, saved.message)
+        if (saved.inserted) {
+            notifyOthers(chat, sender, others, saved.message)
+            notifySaved(saved.message)
+        }
         return toOwnDto(saved.message)
     }
 
@@ -188,7 +197,31 @@ class ChatService(
         return true
     }
 
+    /**
+     * Inserta un mensaje del sistema en el chat (E8.6: recursos de ayuda) y lo replica en Firestore con
+     * `system = true`. Idempotente por [id]: repetirlo no duplica el mensaje y repara el espejo. Devuelve
+     * null si el chat no existe. No avisa por push: no es un mensaje de una persona.
+     */
+    suspend fun postSystemMessage(chatId: UUID, id: UUID, text: String): MessageRecord? {
+        val saved = repo.saveSystemMessage(id, chatId, text, clock.instant()) ?: return null
+        repairChatMirror(chatId)
+        val message = saved.message
+        mirror.upsertMessage(chatId, MessageDoc(message.id, null, system = true, text = message.text, createdAt = message.createdAt, hidden = message.hidden))
+        return message
+    }
+
     // --- internos ----------------------------------------------------------------------------
+
+    private suspend fun notifySaved(message: MessageRecord) {
+        val hook = onMessageSaved ?: return
+        try {
+            hook(message)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn("El gancho posterior al mensaje {} falló: {}", message.id, e.message)
+        }
+    }
 
     /**
      * Repara el documento `chats/{id}` si la conexión lo dejó sin escribir (las reglas de `messages`

@@ -13,16 +13,18 @@ import me.santiagoreina.parcheu.api.platform.DomainRoutes
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
-import me.santiagoreina.parcheu.api.platform.stubPost
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationService
+import me.santiagoreina.parcheu.api.twin.TaskPayload
 import me.santiagoreina.parcheu.contract.ReportRequest
 import java.util.UUID
 
 /**
  * Rutas del dominio safety (E8.1, arquitectura.md §5.2). [currentUserId] traduce el usuario de
- * Firebase a `users.id`. La moderación interna (`/tasks/moderate`) sigue como stub hasta E8.6.
+ * Firebase a `users.id`. La tarea interna `/tasks/moderate` es la moderación con IA (E8.6).
  */
 class SafetyRoutes(
     private val safety: SafetyService,
+    private val moderation: ModerationService,
     private val currentUserId: suspend (FirebaseUser) -> UUID,
 ) : DomainRoutes {
     override fun Route.v1() {
@@ -44,7 +46,11 @@ class SafetyRoutes(
     }
 
     override fun Route.internal() {
-        stubPost("/tasks/moderate")
+        // Moderación con IA (E8.6): fail-open, así que responde 204 aunque el LLM falle.
+        post(ModerationService.TASK_PATH) {
+            moderation.moderate(call.receive<TaskPayload>().uuid())
+            call.respond(HttpStatusCode.NoContent)
+        }
     }
 
     private suspend fun ApplicationCall.userId(): UUID = currentUserId(principal<FirebaseUser>() ?: throw Unauthenticated())

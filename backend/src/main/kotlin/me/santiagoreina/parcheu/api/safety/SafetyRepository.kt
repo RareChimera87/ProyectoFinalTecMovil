@@ -31,4 +31,7 @@ interface SafetyRepository {
     suspend fun simulationParticipants(simulationId: UUID): Pair<UUID, UUID>?
 
     suspend fun insertReport(report: NewReport)
+
+    /** Ya existe un reporte AUTO (moderación con IA) sobre [messageId]; evita duplicados al reintentar la tarea. */
+    suspend fun hasAutoReport(messageId: UUID): Boolean
 }

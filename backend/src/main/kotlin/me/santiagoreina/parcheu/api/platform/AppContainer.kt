@@ -74,6 +74,10 @@ import me.santiagoreina.parcheu.api.quota.quotaModule
 import me.santiagoreina.parcheu.api.safety.SafetyModule
 import me.santiagoreina.parcheu.api.safety.SafetyRoutes
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationService
+import me.santiagoreina.parcheu.api.safety.moderation.attachTo
+import me.santiagoreina.parcheu.api.safety.moderation.moderationEnabled
+import me.santiagoreina.parcheu.api.safety.moderation.moderationService
 import me.santiagoreina.parcheu.api.safety.safetyModule
 import me.santiagoreina.parcheu.api.scenario.ScenarioRoutes
 import me.santiagoreina.parcheu.api.simulation.NotifierSimulationNotifier
@@ -191,6 +195,11 @@ class AppContainer(
     /** Administración de reportes (E8.5). Por defecto en memoria: solo [fromConfig] cablea Postgres. */
     val admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, clock),
     /**
+     * Moderación con IA (E8.6, ADR-0026). Por defecto con Fake y sin engancharse al chat: solo [fromConfig]
+     * la conecta con la cola `ai-light` (salvo `MODERATION_ENABLED=false`).
+     */
+    val moderation: ModerationService = moderationService(ai, chat, safety, FakeTaskQueue(), clock),
+    /**
      * Cola en proceso y programador de jobs (`TASKS_MODE=inline`, ADR-0033); null con Cloud Tasks o Fake.
      * Main lo arranca (`start`) en modo `serve` y lo cierra al parar.
      */
@@ -199,7 +208,7 @@ class AppContainer(
     val domains: List<DomainRoutes> =
         allDomains(
             identity, profile, quota, twin, graph, chat, simulation, matching, safety, account, unread, notifications,
-            invites, billing, config.env, introductions, admin, connectRequests,
+            invites, billing, config.env, introductions, admin, connectRequests, moderation,
         ),
 ) {
     companion object {
@@ -276,6 +285,9 @@ class AppContainer(
             )
             // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
             val safety = safetyModule(database, chat, graph, matching, clock)
+            // Moderación con IA (E8.6): tarea `moderate` en `ai-light` después de entregar cada mensaje (fail-open).
+            val moderation = moderationService(ai, chat, safety, tasks, clock)
+            if (moderationEnabled(vars)) moderation.attachTo(chat)
             // Administración de reportes (E8.5): sobre la misma tabla `reports`; suspende por `users.suspended_until`.
             val admin = adminModule(database, identity.repo, chat, clock)
             // Borrado y exportación (E8.3): purga por la cola `maintenance`; Firestore y Auth reales fuera de local.
@@ -293,12 +305,12 @@ class AppContainer(
             val connectRequests = exposedConnectRequestModule(database, graph, quota, demo.enabled)
             // Billing (E7.1, ADR-0013): API de Play suplantando a `sa-play` (`PLAY_SERVICE_ACCOUNT`) o con la llave de `SECRET_PLAY_SA`.
             val billing = billingModule(config.env, database, clock, vars)
-            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account) }
+            val background = inlineQueue?.let { queue -> inlineBackground(queue, clock, twin, simulation, matching, account, moderation) }
             return AppContainer(
                 config, clock, tokenVerifier, oidcVerifier, identity, profile, quota,
                 ai = ai, twin = twin, graph = graph, notifier = notifier, chat = chat,
                 introductionStore = introductionStore, simulation = simulation,
-                matching = matching, safety = safety, admin = admin, account = account, introductions = introductions,
+                matching = matching, safety = safety, moderation = moderation, admin = admin, account = account, introductions = introductions,
                 notifications = exposedNotificationCenter(database, clock, quota, graph),
                 billing = billing,
                 invites = invites,
@@ -308,7 +320,7 @@ class AppContainer(
         }
 
         /**
-         * Handlers de las cuatro tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
+         * Handlers de las cinco tareas reales (los mismos que `POST /internal/tasks/...`) y jobs del programador.
          * El job `memories` corre a diario a las 02:00 de Bogotá, como `scheduler.tf`; el nombre de la tarea
          * (`extract-memories-<uuid>-<yyyyMMdd>`) deduplica si el job se repite el mismo día.
          * Retention, communities y twin-accuracy se omiten: hoy son stubs (`stubPost`) sin lógica.
@@ -320,12 +332,14 @@ class AppContainer(
             simulation: SimulationModule,
             matching: MatchingModule,
             account: AccountModule,
+            moderation: ModerationService,
         ): BackgroundWork {
             fun id(body: String) = ContractJson.decodeFromString<TaskPayload>(body).uuid()
             queue.register(TwinService.BUILD_PERSONA_PATH) { twin.service.buildPersona(id(it)) }
             queue.register(SimulationService.SIMULATE_PATH) { simulation.engine.run(id(it)) }
             queue.register(AccountDeletionService.PURGE_PATH) { account.deletion.purge(id(it)) }
             queue.register(MemoryService.TASK_PATH) { twin.memories.extract(id(it)) }
+            queue.register(ModerationService.TASK_PATH) { moderation.moderate(id(it)) }
             return BackgroundWork(queue, InProcessScheduler()) { scheduler ->
                 scheduler.every("match-sweep", Duration.ofSeconds(60)) { matching.service.sweep() }
                 scheduler.every("purge-sweep", Duration.ofHours(1), Duration.ofMinutes(2)) { account.deletion.sweepStalled() }
@@ -388,6 +402,8 @@ fun allDomains(
         introductionModule(InMemoryIntroductionRepository(), simulation, graph, chat, quota, NoopNotifier, systemClock()),
     admin: AdminModule = inMemoryAdminModule(identity.repo, chat, safety, systemClock()),
     connectRequests: ConnectRequestModule = inMemoryConnectRequestModule(simulation, graph, quota),
+    moderation: ModerationService =
+        moderationService(AppContainer.localAiGateway(systemClock()), chat, safety, FakeTaskQueue(), systemClock()),
 ): List<DomainRoutes> = listOf(
     IdentityRoutes(identity, profile, account),
     TwinRoutes(twin),
@@ -410,7 +426,7 @@ fun allDomains(
     BillingRoutes(billing.service, quota.devPlus.takeIf { env != Env.PROD }, quota.clock) { firebase ->
         identity.requireUser(firebase).id
     },
-    SafetyRoutes(safety.service) { firebase -> identity.requireUser(firebase).id },
+    SafetyRoutes(safety.service, moderation) { firebase -> identity.requireUser(firebase).id },
     // Administración de reportes (E8.5): claim `admin`; `resolved_by` es la cuenta del admin si la tiene.
     AdminRoutes(admin.service) { firebase -> identity.repo.findByFirebaseUid(firebase.uid)?.id },
     // Inicio (E4.7): agregador de cupos, simulaciones, sugerencias del grafo y no leídas.

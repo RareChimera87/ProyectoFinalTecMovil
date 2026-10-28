@@ -88,6 +88,13 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
             ?.let { it[Simulations.userA] to it[Simulations.userB] }
     }
 
+    override suspend fun hasAutoReport(messageId: UUID): Boolean = tx {
+        !Reports.select(Reports.id)
+            .where { (Reports.messageId eq messageId) and (Reports.reportSource eq ReportSource.AUTO) }
+            .limit(1)
+            .empty()
+    }
+
     override suspend fun insertReport(report: NewReport) {
         tx {
             Reports.insert {
@@ -102,7 +109,7 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
                 it[reason] = report.reason
                 it[details] = report.details
                 it[snapshot] = report.snapshot?.let(::snapshotJson)
-                it[reportSource] = ReportSource.USER
+                it[reportSource] = report.source
                 it[priority] = report.priority.toShort()
                 it[status] = ReportStatus.OPEN
                 it[createdAt] = report.createdAt.odt()

@@ -71,6 +71,17 @@ class InMemoryChatRepository : ChatRepository {
         messages.firstOrNull { it.senderId == senderId && it.clientId == clientId }
     }
 
+    override suspend fun message(messageId: UUID): MessageRecord? = synchronized(lock) { messages.firstOrNull { it.id == messageId } }
+
+    override suspend fun saveSystemMessage(id: UUID, chatId: UUID, text: String, now: Instant): SavedMessage? = synchronized(lock) {
+        val chat = chats[chatId] ?: return null
+        messages.firstOrNull { it.id == id }?.let { return SavedMessage(it, inserted = false) }
+        val record = MessageRecord(id, chatId, senderId = null, text = text, learnable = false, hidden = false, clientId = null, createdAt = now)
+        messages += record
+        chat.lastMessageAt = now
+        SavedMessage(record, inserted = true)
+    }
+
     override suspend fun hideMessage(messageId: UUID): MessageRecord? = synchronized(lock) {
         val index = messages.indexOfFirst { it.id == messageId }
         if (index < 0) return null

@@ -1024,3 +1024,16 @@ Para correrlo a mano contra dev con tu propio `gcloud`: ver "Smoke e2e (E10.6)" 
 No hay pasos humanos: es una lectura de `connection_decisions` con la API que ya existe (sin Terraform, secretos, Play Console ni tareas asíncronas nuevas, así que tampoco toca `InProcessTaskQueue` ni `InProcessScheduler`).
 
 Para verla en la variante dev contra el homeserver: con dos cuentas de prueba, que A simule con B, que B decida "Conectar" en F7/F8 y que A (con ParcheU+ de `POST /internal/dev/grant-plus`) abra C2: la sección lista a B enmascarado; sin ParcheU+ A ve el ítem bloqueado con el conteo.
+
+## E8.6 · Moderación con IA
+
+El código no necesita Terraform, secretos ni Play Console: usa la cola `ai-light` que ya existe (en el homeserver, `InProcessTaskQueue` con la tarea `/tasks/moderate` registrada) y el modelo lite de la pasarela de IA. Pasos que solo puede hacer una persona:
+
+| # | Paso | Dueño | Cuándo |
+|---|---|---|---|
+| 1 | **Decidir si la moderación queda encendida**: viene activa por defecto y cada mensaje nuevo cuesta una llamada lite (centavos por miles de mensajes). Si el presupuesto de IA se aprieta, define `MODERATION_ENABLED=false` en el servicio `api` (es recortable, ADR-0026); los reportes y bloqueos manuales siguen igual. | I1 | Antes de la 0.2 |
+| 2 | **Revisar los reportes AUTO** en `admin.html` (origen `AUTO`, `reporterId` nulo): los de 'posible menor' llevan prioridad 2 y el mensaje sigue visible hasta que un admin decida; los demás llevan prioridad 1 y el mensaje ya está oculto. | I1 | Cada semana de pruebas |
+| 3 | **Verificar vigencia y cobertura en Santander de las líneas 192 (opción 4), 106 y 123** que se envían en el mensaje del sistema (pendiente heredado de E8.1; el texto sale de `HelpResources`). | I1 | Antes de la 0.2 |
+| 4 | **Cloud Tasks (solo cuando haya Cloud Run)**: la tarea ya está en `POST /internal/tasks/moderate` y se encola en `ai-light`; no hace falta Terraform nuevo porque la cola y su `sa-tasks` son los de E0.5. | I3 | Si se despliega en GCP |
+
+Para probarla en el homeserver (dev): escribir un mensaje agresivo entre dos cuentas de prueba y ver, en segundos, que desaparece del chat de la otra persona y aparece un reporte AUTO en `admin.html`; un mensaje de autolesión agrega el recordatorio con las líneas de ayuda al chat (lo ven los dos miembros, por eso el texto es neutro).

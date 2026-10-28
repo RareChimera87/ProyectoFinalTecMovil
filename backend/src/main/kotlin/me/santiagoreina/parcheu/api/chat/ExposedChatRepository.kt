@@ -111,6 +111,26 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
             ?.get(Consents.granted) ?: false
     }
 
+    override suspend fun message(messageId: UUID): MessageRecord? = tx {
+        ChatMessages.selectAll().where { ChatMessages.id eq messageId }.singleOrNull()?.toMessage()
+    }
+
+    override suspend fun saveSystemMessage(id: UUID, chatId: UUID, text: String, now: Instant): SavedMessage? = tx {
+        if (Chats.selectAll().where { Chats.id eq chatId }.empty()) return@tx null
+        val inserted = ChatMessages.insertIgnore {
+            it[ChatMessages.id] = id
+            it[ChatMessages.chatId] = chatId
+            it[senderId] = null
+            it[ChatMessages.text] = text
+            it[learnable] = false
+            it[hidden] = false
+            it[clientId] = null
+            it[createdAt] = now.odt()
+        }.insertedCount == 1
+        if (inserted) Chats.update({ Chats.id eq chatId }) { it[lastMessageAt] = now.odt() }
+        SavedMessage(ChatMessages.selectAll().where { ChatMessages.id eq id }.single().toMessage(), inserted)
+    }
+
     override suspend fun hideMessage(messageId: UUID): MessageRecord? = tx {
         ChatMessages.update({ ChatMessages.id eq messageId }) { it[hidden] = true }
         ChatMessages.selectAll().where { ChatMessages.id eq messageId }.singleOrNull()?.toMessage()
