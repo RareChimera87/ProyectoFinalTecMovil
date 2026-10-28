@@ -36,5 +36,8 @@ interface SafetyRepository {
      */
     suspend fun simulationTurnText(simulationId: UUID, turnIndex: Int): String?
 
+    /** Informe de la simulación (`simulations.report`) en texto plano, o null si aún no hay (reporte AI_CONTENT desde F8). */
+    suspend fun simulationReportText(simulationId: UUID): String?
+
     suspend fun insertReport(report: NewReport)
 }

@@ -40,6 +40,7 @@ import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.feature.safety.REPORT_TURN_INDEX
 import me.santiagoreina.parcheu.feature.safety.ReportAiContentAction
 import me.santiagoreina.parcheu.feature.simulation.SimulationIcons
 import me.santiagoreina.parcheu.feature.simulation.SimulationMascot
@@ -82,7 +83,7 @@ data class ResultsActions(
     val onOpenTranscript: () -> Unit = {},
     val onCloseTranscript: () -> Unit = {},
     val onDismissNotice: () -> Unit = {},
-    /** E8.7: reporta contenido de la IA; [turnIndex] cuenta los turnos de todos los escenarios desde 0. */
+    /** E8.7: reporta contenido de la IA; [turnIndex] cuenta los turnos de todos los escenarios desde 0; [REPORT_TURN_INDEX] (-1) es el informe de F8. */
     val onReportAi: (turnIndex: Int) -> Unit = {}
 )
 
@@ -107,7 +108,7 @@ fun ResultsScreen(state: ResultsUiState, actions: ResultsActions, modifier: Modi
             action = {
                 // E8.7: F8 (informe completo) reporta lo que dijo la IA; sin informe completo no hay qué reportar.
                 if (content?.full == true) {
-                    ReportAiContentAction(onClick = { actions.onReportAi(0) })
+                    ReportAiContentAction(onClick = { actions.onReportAi(REPORT_TURN_INDEX) })
                 }
                 if (content?.plus == true) ParcheUPlusBadge(Modifier.padding(end = 12.dp))
             }

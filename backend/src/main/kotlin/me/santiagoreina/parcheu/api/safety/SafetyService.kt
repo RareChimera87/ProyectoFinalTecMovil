@@ -49,7 +49,7 @@ class SafetyService(
 
     /**
      * `POST /v1/reports`. Exactamente un objetivo: `targetUserId` o `anonId` (USER), o
-     * `simulationId` + `turnIndex` (AI_CONTENT: `turnIndex` cuenta los turnos de todos los escenarios en orden, desde 0, y `snapshot` guarda el texto de ese turno). Con `chatId` adjunta en `snapshot` los últimos
+     * `simulationId` + `turnIndex` (AI_CONTENT: `turnIndex` cuenta los turnos de todos los escenarios en orden, desde 0, y `snapshot` guarda el texto de ese turno; `turnIndex = -1` ([REPORT_TURN_INDEX]) reporta el informe de la simulación y `snapshot` guarda su texto). Con `chatId` adjunta en `snapshot` los últimos
      * [SNAPSHOT_SIZE] mensajes de ese chat (quien reporta debe ser miembro). Motivo SELF_HARM →
      * `helpResources` con las líneas de ayuda; los demás → lista vacía.
      */
@@ -89,12 +89,14 @@ class SafetyService(
                 }
                 val sim = request.simulationId?.let { parseUuid(it) } ?: throw ValidationFailed("AI_CONTENT necesita simulationId")
                 val turn = request.turnIndex ?: throw ValidationFailed("AI_CONTENT necesita turnIndex")
-                if (turn < 0 || turn > Short.MAX_VALUE) throw ValidationFailed("turnIndex fuera de rango")
+                if (turn != REPORT_TURN_INDEX && (turn < 0 || turn > Short.MAX_VALUE)) throw ValidationFailed("turnIndex fuera de rango")
                 val participants = repo.simulationParticipants(sim)
                 if (participants == null || reporter !in participants.toList()) throw NotFound("La simulación no existe")
                 // El texto del turno se copia al reporte: la transcripción se purga y la administración
                 // (E8.5) debe poder revisar lo que se reportó sin depender de ella.
-                val text = repo.simulationTurnText(sim, turn) ?: throw NotFound("El turno no existe")
+                // `REPORT_TURN_INDEX` (-1) es el informe completo de F8: se copia el informe, no un turno.
+                val text = (if (turn == REPORT_TURN_INDEX) repo.simulationReportText(sim) else repo.simulationTurnText(sim, turn))
+                    ?: throw NotFound(if (turn == REPORT_TURN_INDEX) "El informe no existe" else "El turno no existe")
                 turnSnapshot = listOf(SnapshotMessage(UUID.randomUUID(), null, text, clock.instant(), hidden = false))
                 simulationId = sim
                 turnIndex = turn
@@ -236,6 +238,9 @@ class SafetyService(
 
     companion object {
         const val SNAPSHOT_SIZE = 20
+
+        /** `turnIndex` reservado: el reporte AI_CONTENT apunta al informe de la simulación (F8), no a un turno. */
+        const val REPORT_TURN_INDEX = -1
         const val MAX_DETAILS = 1000
         const val HIGH_PRIORITY = 2
         const val REPORT_CREATED = "report_created"

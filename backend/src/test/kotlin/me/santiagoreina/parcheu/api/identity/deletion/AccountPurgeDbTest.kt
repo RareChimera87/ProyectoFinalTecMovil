@@ -48,6 +48,7 @@ class AccountPurgeDbTest : FunSpec({
         val brunoMessage: UUID,
         val reportAgainstZoraida: UUID,
         val reportUnrelated: UUID,
+        val reportAiContent: UUID,
     )
 
     fun Connection.exec(sql: String, vararg params: Any?) {
@@ -176,6 +177,14 @@ class AccountPurgeDbTest : FunSpec({
                 "values (?, ?, ?, 'USER', 'OTHER', '[{\"text\":\"de Carla\"}]'::jsonb, 'OPEN', ?)",
             reportUnrelated, cId, b, now,
         )
+        // AI_CONTENT de Bruno sobre la simulación que comparte con Zoraida: sin target, reporter ajeno,
+        // pero el texto copiado sale de las memorias de ella (E8.7).
+        val reportAiContent = UUID.randomUUID()
+        c.exec(
+            "insert into reports (id, reporter_id, kind, simulation_id, turn_index, reason, snapshot, status, created_at) " +
+                "values (?, ?, 'AI_CONTENT', ?, -1, 'AI_HARMFUL', '[{\"text\":\"informe copiado\"}]'::jsonb, 'OPEN', ?)",
+            reportAiContent, b, shared, now,
+        )
 
         val token = "dev-grant:$z"
         c.exec(
@@ -212,7 +221,7 @@ class AccountPurgeDbTest : FunSpec({
         c.exec("insert into communities (id, week, name, stable_key, created_at) values (?, '2026-10-19', 'Café', 'k1', ?)", community, now)
         c.exec("insert into community_members (community_id, user_id) values (?, ?)", community, z)
 
-        return Seed(z, zUid, b, bUid, cId, shared, unrelated, chat, zMsg, bMsg, reportAgainst, reportUnrelated)
+        return Seed(z, zUid, b, bUid, cId, shared, unrelated, chat, zMsg, bMsg, reportAgainst, reportUnrelated, reportAiContent)
     }
 
     /** (tabla, columna) de todas las tablas base del esquema público, salvo el historial de Flyway. */
@@ -336,6 +345,11 @@ class AccountPurgeDbTest : FunSpec({
                     c.one("select status, snapshot::text from reports where id = ?", s.reportUnrelated) { rs ->
                         rs.getString(1) shouldBe "OPEN"
                         rs.getString(2) shouldBe """[{"text": "de Carla"}]"""
+                    }
+
+                    c.one("select status, snapshot from reports where id = ?", s.reportAiContent) { rs ->
+                        rs.getString(1) shouldBe "OPEN"
+                        rs.getString(2) shouldBe null
                     }
 
                     // Avisos de Bruno: se borran los que la citan; el que no tiene nada que ver sigue.

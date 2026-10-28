@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.api.safety
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.santiagoreina.parcheu.api.graph.PersonRow
+import me.santiagoreina.parcheu.api.simulation.StoredReport
 import me.santiagoreina.parcheu.api.simulation.StoredTranscript
 import me.santiagoreina.parcheu.api.platform.db.tables.Blocks
 import me.santiagoreina.parcheu.api.platform.db.tables.ChatMessages
@@ -97,6 +98,15 @@ class ExposedSafetyRepository(private val db: Database) : SafetyRepository {
             ?.get(Simulations.transcript)
             ?.let { ContractJson.decodeFromJsonElement(StoredTranscript.serializer(), it) }
             ?.scenarios?.flatMap { it.turns }?.getOrNull(turnIndex)?.text
+    }
+
+    override suspend fun simulationReportText(simulationId: UUID): String? = tx {
+        Simulations.select(Simulations.report)
+            .where { Simulations.id eq simulationId }
+            .singleOrNull()
+            ?.get(Simulations.report)
+            ?.let { ContractJson.decodeFromJsonElement(StoredReport.serializer(), it) }
+            ?.asReportedText()
     }
 
     override suspend fun insertReport(report: NewReport) {

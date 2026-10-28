@@ -205,7 +205,8 @@ class SafetyEntryPointsTest {
         }
         composeRule.onNodeWithContentDescription(REPORT_AI_CONTENT_DESCRIPTION).assertIsDisplayed()
             .performClick()
-        assertEquals(listOf(0), turns)
+        // El informe de F8 va con el turnIndex reservado, no con el turno 0 de la transcripción.
+        assertEquals(listOf(REPORT_TURN_INDEX), turns)
     }
 
     @Test

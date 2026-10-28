@@ -59,6 +59,7 @@ fun inMemorySafetyModule(
         },
         simulations = { id -> simulationRepo?.find(id)?.let { it.userA to it.userB } },
         turns = { id -> simulationRepo?.find(id)?.transcript?.scenarios?.flatMap { s -> s.turns.map { it.text } }.orEmpty() },
+        reportText = { id -> simulationRepo?.find(id)?.report?.asReportedText() },
     )
     if (safetyRepo is InMemorySafetyRepository) {
         safetyRepo.onBlock { blocker, blocked ->

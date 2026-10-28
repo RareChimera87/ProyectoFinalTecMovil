@@ -7,6 +7,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
@@ -50,6 +51,8 @@ import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.api.simulation.SimulationRecord
 import me.santiagoreina.parcheu.contract.SimulationStatus
 import me.santiagoreina.parcheu.api.simulation.StoredScenario
+import me.santiagoreina.parcheu.api.simulation.StoredReport
+import me.santiagoreina.parcheu.api.safety.asReportedText
 import me.santiagoreina.parcheu.api.simulation.StoredTranscript
 import me.santiagoreina.parcheu.api.simulation.StoredTurn
 import me.santiagoreina.parcheu.api.simulation.UsageTotals
@@ -101,6 +104,7 @@ class SafetyApiTest : FunSpec({
             },
             simulations = { id -> f.simRepo.find(id)?.let { it.userA to it.userB } },
             turns = { id -> f.simRepo.find(id)?.transcript?.scenarios?.flatMap { sc -> sc.turns.map { it.text } }.orEmpty() },
+            reportText = { id -> f.simRepo.find(id)?.report?.asReportedText() },
         )
         val invites = InMemoryInviteRepository()
         val introductions = InMemoryIntroductionRepository()
@@ -115,7 +119,8 @@ class SafetyApiTest : FunSpec({
             f.simRepo.create(
                 SimulationRecord(
                     id = id, mode = Mode.AMISTAD, userA = a, userB = b, requestedBy = a, origin = SimulationOrigin.PARCHE,
-                    status = SimulationStatus.DONE, progress = initialProgress(), score = 70, report = null,
+                    status = SimulationStatus.DONE, progress = initialProgress(), score = 70,
+                    report = StoredReport(score = 70, traitSimilarity = 80.0, judgeAverage = 70.0, summary = "informe ofensivo de la IA", reasons = listOf("razon uno"), frictions = listOf("friccion uno")),
                     transcript = StoredTranscript(
                         listOf(
                             StoredScenario(1, "Cafe", listOf(StoredTurn(Side.A, "Hola, que tal"), StoredTurn(Side.B, "Todo bien"))),
@@ -433,6 +438,28 @@ class SafetyApiTest : FunSpec({
         report.turnIndex shouldBe 2
         report.targetId.shouldBeNull()
         report.snapshot.shouldNotBeNull().single().text shouldBe "turno ofensivo de la IA"
+    }
+
+    test("un reporte AI_CONTENT con turnIndex -1 guarda el informe de la simulación en snapshot") {
+        val w = World()
+        val sim = w.simulation()
+        testApplication {
+            val client = app(w)
+            client.report(
+                "ana",
+                ReportRequest(ReportKind.AI_CONTENT, simulationId = sim.toString(), turnIndex = -1, reason = ReportReason.AI_HARMFUL),
+            ).status shouldBe HttpStatusCode.Created
+            // Otros negativos siguen siendo inválidos.
+            client.report("ana", ReportRequest(ReportKind.AI_CONTENT, simulationId = sim.toString(), turnIndex = -2, reason = ReportReason.AI_HARMFUL))
+                .status shouldBe HttpStatusCode.BadRequest
+            client.report("caro", ReportRequest(ReportKind.AI_CONTENT, simulationId = sim.toString(), turnIndex = -1, reason = ReportReason.AI_HARMFUL))
+                .status shouldBe HttpStatusCode.NotFound
+        }
+        val report = w.safetyRepo.allReports.single()
+        report.turnIndex shouldBe -1
+        val text = report.snapshot.shouldNotBeNull().single().text
+        text shouldContain "informe ofensivo de la IA"
+        text shouldContain "friccion uno"
     }
 
     test("bloquear desde F2 cancela el match y los tickets de ambos; desbloquear no restaura nada") {

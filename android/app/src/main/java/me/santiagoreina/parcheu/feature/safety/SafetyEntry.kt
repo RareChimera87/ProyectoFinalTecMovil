@@ -65,6 +65,12 @@ internal fun handleSafetyClosed(
     }
 }
 
+/**
+ * `turnIndex` reservado (igual que `SafetyService.REPORT_TURN_INDEX` en el backend): el reporte apunta
+ * al informe completo de F8 y el servidor copia el informe, no un turno de la transcripción.
+ */
+const val REPORT_TURN_INDEX = -1
+
 /** Objetivo del reporte de un turno de la IA: simulación [simulationId] y turno [turnIndex] (desde 0). */
 fun aiContentTarget(simulationId: String, turnIndex: Int = 0) = SafetyTarget(
     id = "",
