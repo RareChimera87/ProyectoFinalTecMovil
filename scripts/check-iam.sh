@@ -64,8 +64,10 @@ SA_ADMIN_EXPECTED_NAMES=(sa-terraform)
 EXPECTED_SA_PAIRS=(
   "sa-api>sa-play"            # ADR-0013: la API suplanta a sa-play (modules/platform/play.tf, api_impersonates_play)
   "sa-deployer>sa-deployer"   # bootstrap/main.tf, deployer_signs_own_tokens
-  "sa-api>sa-tasks"           # serviceAccountUser: identidad OIDC de Tasks (iam.tf, api_acts_as_tasks)
-  "sa-deployer>sa-api"        # serviceAccountUser: el deployer despliega la API (iam.tf, deployer_acts_as_api)
+  "sa-api>sa-tasks"           # serviceAccountUser: identidad OIDC de Tasks (bootstrap/main.tf, api_acts_as_tasks)
+  "sa-deployer>sa-api"        # serviceAccountUser: el deployer despliega la API (bootstrap/main.tf, deployer_acts_as_api)
+  "sa-terraform>sa-api"       # serviceAccountUser: el apply de dev crea Cloud Run y jobs como sa-api (bootstrap/main.tf, terraform_acts_as_api)
+  "sa-terraform>sa-tasks"     # serviceAccountUser: Scheduler y push de Pub/Sub con OIDC de sa-tasks (bootstrap/main.tf, terraform_acts_as_tasks)
 )
 # Roles de solo lectura que no generan aviso para un principal humano.
 VIEWER_ROLES=(roles/viewer roles/logging.viewer roles/monitoring.viewer)
