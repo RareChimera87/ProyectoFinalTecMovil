@@ -152,6 +152,17 @@ class GuardasDeDirectorio(unittest.TestCase):
                 self.assertIn(f"needs.cambios.outputs.{clave} == 'true'", verificar["if"])
                 self.assertIn("needs.cambios.outputs.existe == 'true'", verificar["if"])
 
+    def test_plan_no_recibe_token_con_escritura(self):
+        # C-M2: el job que ejecuta el HCL del PR no tiene pull-requests: write ni GH_TOKEN.
+        wf = cargar("infra-ci.yml")
+        plan = wf["jobs"]["plan-dev"]
+        self.assertNotIn("pull-requests", plan["permissions"])
+        self.assertNotIn("GH_TOKEN", plan.get("env", {}))
+        self.assertIn("-lockfile=readonly", str(plan["steps"]))
+        comenta = wf["jobs"]["comentario-plan-dev"]
+        self.assertEqual(comenta["permissions"]["pull-requests"], "write")
+        self.assertFalse([p for p in comenta["steps"] if "terraform" in str(p.get("uses", "")) or "checkout" in str(p.get("uses", ""))])
+
     def test_plan_dev_se_omite_sin_wif(self):
         wf = cargar("infra-ci.yml")
         self.assertIn("needs.cambios.outputs.wif == 'true'", wf["jobs"]["plan-dev"]["if"])

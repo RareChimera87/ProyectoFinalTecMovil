@@ -104,16 +104,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: [cambios, static]
     if: github.event_name == 'pull_request' && needs.cambios.outputs.wif == 'true'
+    # Este job ejecuta el HCL del PR (providers, `data "external"`): no recibe ningún token con
+    # escritura sobre el repo. El comentario en el PR lo publica el job `comentario-plan-dev`, que
+    # no hace checkout ni ejecuta Terraform (C-M2).
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
+    outputs:
+      checks: ${{ steps.checks.outcome }}
     env:
       WIF_PROVIDER: ${{ secrets.WIF_PROVIDER }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      PR: ${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false   # el GITHUB_TOKEN no queda en .git/config donde el HCL lo leería
       - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
@@ -126,7 +130,8 @@ jobs:
       - name: terraform plan (dev)
         working-directory: infra/terraform/envs/dev
         run: |
-          terraform init -input=false
+          # -lockfile=readonly: un provider que no esté en .terraform.lock.hcl hace fallar el init.
+          terraform init -input=false -lockfile=readonly
           # sa-terraform-plan solo lee el estado: sin lock (el apply de dev sí lo toma).
           terraform plan -input=false -lock=false -out=plan.tfplan
           terraform show -json plan.tfplan > plan.json
@@ -140,14 +145,42 @@ jobs:
             scripts/check-plan.sh infra/terraform/envs/dev/plan.json
             scripts/check-iam.sh infra/terraform/envs/dev/plan.json
           } 2>&1 | tee checks.txt
+      - name: Guarda el plan
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: infra-plan-dev
+          path: |
+            infra/terraform/envs/dev/plan.txt
+            infra/terraform/envs/dev/plan.json
+          retention-days: 7
+
+
+  comentario-plan-dev:
+    name: infra-comentario-plan-dev
+    runs-on: ubuntu-latest
+    needs: plan-dev
+    if: always() && needs.plan-dev.result != 'skipped' && needs.plan-dev.result != 'cancelled'
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: infra-plan-dev
+          path: plan
       - name: Comenta el plan en el PR
-        if: always() && hashFiles('infra/terraform/envs/dev/plan.txt') != ''
+        if: hashFiles('plan/plan.txt') != ''
         env:
-          CHECKS: ${{ steps.checks.outcome }}
+          CHECKS: ${{ needs.plan-dev.outputs.checks }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          plan=infra/terraform/envs/dev/plan.txt
+          plan=plan/plan.txt
           resumen="$(grep -E '^(Plan:|No changes\.)' "$plan" | tail -1 || true)"
           marca='<!-- infra-plan-dev -->'
           {
@@ -173,15 +206,6 @@ jobs:
           else
             gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file comentario.md
           fi
-      - name: Guarda el plan
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: infra-plan-dev
-          path: |
-            infra/terraform/envs/dev/plan.txt
-            infra/terraform/envs/dev/plan.json
-          retention-days: 7
 
   apply-dev:
     name: infra-apply-dev
