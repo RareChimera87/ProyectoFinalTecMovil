@@ -68,7 +68,7 @@ de la base al usuario IAM una vez (como `postgres`, desde Cloud SQL Studio o `gc
 | `sa-tasks` | bootstrap | `run.invoker` sobre `api` (platform) |
 | `sa-play` | platform (solo prod, `play_service_account_enabled`) | Ninguno de GCP: sus permisos se dan en Play Console (verificar compras para la API, E7.1; publicar para CI, E10.2). `sa-api` tiene `serviceAccountTokenCreator` sobre ella para suplantarla sin llaves. GitHub la suplanta por WIF (`play.tf`, `attribute.env_ref`): environment `play` desde `dev`, `main` o un tag `v*`; `play-alpha` desde `main` o un tag `v*` |
 | `sa-deployer` | bootstrap | `run.admin`, `artifactregistry.writer`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin`, `serviceusage.serviceUsageConsumer`; `serviceAccountUser` sobre `sa-api`; en dev, `serviceAccountTokenCreator` sobre sí misma (smoke e2e). **Quién la usa:** en dev solo jobs de la rama `dev` (`attribute.ref/refs/heads/dev`; un PR no puede); en prod solo un job del environment `production` que corra sobre un tag `v*` (`attribute.env_ref/production@tag`) |
-| `sa-terraform` | bootstrap (solo dev) | `apply` en CI, **solo desde la rama `dev`**. Cada rol con su motivo en `bootstrap/main.tf`: `serviceUsageAdmin`, `run.admin`, `artifactregistry.admin`, `cloudsql.admin`, `cloudtasks.admin`, `cloudscheduler.admin`, `pubsub.admin`, `monitoring.admin`, `logging.configWriter` y el rol personalizado `parcheuTerraformApply` (contenedores de secretos, base de Firestore y proyecto de Firebase, **sin** `secretmanager.versions.*` ni `datastore.entities.*`); `serviceAccountUser` solo sobre `sa-api` y `sa-tasks`. **Sin** `serviceAccountAdmin`, `serviceAccountUser` de proyecto, `projectIamAdmin`, `secretmanager.admin`, `datastore.owner` ni `firebase.admin`. Sin roles sobre la facturación. No existe en prod (allí aplica el usuario) |
+| `sa-terraform` | bootstrap (solo dev) | `apply` en CI, **solo desde la rama `dev`**. Cada rol con su motivo en `bootstrap/main.tf`: `serviceUsageAdmin`, `run.admin`, `artifactregistry.admin`, `cloudsql.admin`, `cloudtasks.admin`, `cloudscheduler.admin`, `pubsub.admin`, `monitoring.admin` y el rol personalizado `parcheuTerraformApply` (contenedores de secretos, base de Firestore, proyecto de Firebase y métricas basadas en logs, **sin** `secretmanager.versions.*`, `datastore.entities.*` ni `logging.sinks/buckets/links.*`); `serviceAccountUser` solo sobre `sa-api` y `sa-tasks`. **Sin** `serviceAccountAdmin`, `serviceAccountUser` de proyecto, `projectIamAdmin`, `secretmanager.admin`, `datastore.owner` `firebase.admin` ni `logging.configWriter` (con sus sinks se exportarían todos los logs). Sin roles sobre la facturación. No existe en prod (allí aplica el usuario) |
 | `sa-terraform-plan` | bootstrap | `plan` en CI, solo metadatos: `run.viewer`, `secretmanager.viewer`, `cloudtasks.viewer`, `cloudscheduler.viewer`, `pubsub.viewer`, `monitoring.viewer`, `iam.serviceAccountViewer`, `serviceusage.*` y el rol personalizado `parcheuTerraformPlan` (solo `*.get/list` de bases, repos, instancias y proyecto). **Sin** `roles/viewer`, `securityReviewer` ni `firebase.viewer`: incluyen `datastore.entities.*` y `logging.logEntries.list`. Lee el estado (`objectViewer`; el plan de CI corre con `-lock=false`). En dev cualquier PR del repo puede usarla (no hay datos reales); en prod solo jobs de la rama `dev` (ADR-0012) |
 
 **WIF.** El pool solo acepta tokens cuyo `repository_id` y `repository_owner_id` coinciden con
@@ -77,9 +77,14 @@ nombre). Además de los atributos directos (`repository`, `ref`, `environment`..
 atributo derivado `env_ref` = `<environment>@<ref>` (`tag` en lugar de la ref si empieza por `refs/tags/v`;
 `-` si el job no tiene environment), porque un `principalSet` no admite prefijos ni combinar dos atributos.
 
-**Residual conocido.** `sa-terraform` crea Cloud Run como `sa-api` (`run.admin` + actAs), así que desde la
-rama `dev` puede ejecutar código con los permisos de `sa-api`; y `secretmanager.secrets.setIamPolicy` le
-permitiría darse `secretAccessor`. Ambos exigen que el cambio entre a `dev` por un PR aprobado.
+**Residuales aceptados** (revisión de #105). Todos exigen que el cambio entre a `dev` por un PR aprobado,
+porque `sa-terraform` solo acepta la rama `dev`:
+- `run.admin` + actAs sobre `sa-api` (en `sa-terraform` y en `sa-deployer` de dev): pueden ejecutar código con
+  los permisos de `sa-api`. Es inherente a desplegar Cloud Run como esa cuenta.
+- `secretmanager.secrets.setIamPolicy` (`parcheuTerraformApply`): `sa-terraform` podría darse `secretAccessor`.
+  Las condiciones de IAM no restringen el miembro de un `setIamPolicy` de secretos, y `sa-api` ya tiene ese acceso.
+- `cloudsql.admin` incluye `instances.export` y `users.update`: lectura completa de la base de dev (no hay un
+  rol predefinido que administre la instancia sin eso).
 
 `scripts/check-iam.sh` falla si alguna cuenta de servicio recibe `roles/owner` o `roles/editor`, si a
 `sa-api`/`sa-deployer` les falta un rol esperado, si `sa-terraform-plan` recibe un rol con acceso a datos
