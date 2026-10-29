@@ -27,7 +27,7 @@ class AppModulesTest {
         ApplicationProvider.getApplicationContext<ParcheUApplication>()
         val koin = GlobalContext.get()
 
-        assertEquals(37, featureModules.size)
+        assertEquals(38, featureModules.size)
         assertNotNull(koin.get<OkHttpClient>())
         assertNotNull(koin.get<TokenProvider>())
         assertNotNull(koin.get<ApiErrorMapper>())

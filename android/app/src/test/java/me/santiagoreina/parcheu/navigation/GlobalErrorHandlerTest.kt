@@ -84,6 +84,8 @@ class GlobalErrorHandlerTest {
                         composable<Simulation> { Text("simulation") }
                         composable<Paywall> { Text("paywall") }
                         composable<DeleteAccount> { Text("delete-account") }
+                        composable<ExportData> { Text("export") }
+                        composable<Suspended> { Text("suspended") }
                         composable<Onboarding> { Text("a4:${it.toRoute<Onboarding>().page}") }
                     }
                     GlobalErrorHandler(
@@ -168,21 +170,50 @@ class GlobalErrorHandlerTest {
     }
 
     @Test
-    fun suspendedAccountAlsoSignsOutWithItsOwnMessage() {
+    fun suspendedAccountKeepsTheSessionAndOpensTheSuspendedLock() {
+        // A3 de la revisión de #109: cerrar sesión dejaba a la persona en un ciclo de login (POST /v1/session
+        // no revisa la suspensión) y sin acceso a exportar o borrar, que el backend sí le permite.
         launch(Home, Parche())
 
         bus.publish(AppError.Suspended)
         composeRule.waitForIdle()
 
-        assertEquals(listOf("signOut"), auth.calls)
+        assertEquals(emptyList<String>(), auth.calls)
+        assertTrue(auth.hasSession())
         composeRule.runOnUiThread {
             assertEquals(1, entries().size)
-            assertEquals(Onboarding(page = LOGIN_PAGE), entries().single().toRoute<Onboarding>())
+            assertEquals(true, navController.currentDestination?.hasRoute(Suspended::class))
+            assertFalse(navController.popBackStack())
         }
-        composeRule.onNodeWithText(
-            "Tu cuenta está suspendida por ahora, así que cerramos la sesión."
-        )
-            .assertExists()
+        composeRule.onNodeWithText("Tu cuenta está suspendida por ahora.").assertExists()
+    }
+
+    @Test
+    fun suspendedIsIgnoredWhileExportingTheData() {
+        launch(Suspended, ExportData)
+
+        bus.publish(AppError.Suspended)
+        composeRule.waitForIdle()
+
+        composeRule.runOnUiThread {
+            assertEquals(true, navController.currentDestination?.hasRoute(ExportData::class))
+            assertEquals(2, entries().size)
+        }
+        assertEquals(emptyList<String>(), auth.calls)
+    }
+
+    @Test
+    fun suspendedIsIgnoredWhileDeletingTheAccount() {
+        launch(Suspended, DeleteAccount)
+
+        bus.publish(AppError.Suspended)
+        composeRule.waitForIdle()
+
+        composeRule.runOnUiThread {
+            assertEquals(true, navController.currentDestination?.hasRoute(DeleteAccount::class))
+            assertEquals(2, entries().size)
+        }
+        assertEquals(emptyList<String>(), auth.calls)
     }
 
     @Test

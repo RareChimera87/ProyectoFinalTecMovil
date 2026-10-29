@@ -19,7 +19,11 @@ sealed interface GlobalError {
     /** 401 que persiste (sesión vencida o cuenta borrada en otro dispositivo): se cierra sesión. */
     data object SessionExpired : GlobalError
 
-    /** 403 SUSPENDED: la cuenta está suspendida; se cierra sesión y A4 lo explica al volver a entrar. */
+    /**
+     * 403 SUSPENDED: la cuenta está suspendida o baneada. La sesión se conserva y se abre `Suspended`, desde
+     * donde la persona puede exportar sus datos, borrar la cuenta o cerrar sesión (rutas exentas en el
+     * backend). Cerrar sesión no serviría: `POST /v1/session` no revisa la suspensión y volvería a entrar.
+     */
     data object AccountSuspended : GlobalError
 
     /** 403 TERMS_REQUIRED: la hoja de A4 pide aceptar la versión vigente (la sesión se conserva). */

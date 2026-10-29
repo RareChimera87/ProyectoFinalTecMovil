@@ -37,6 +37,7 @@ import me.santiagoreina.parcheu.feature.scenariochat.scenarioChatModule
 import me.santiagoreina.parcheu.feature.simulation.simulationModule
 import me.santiagoreina.parcheu.feature.simulations.simulationsModule
 import me.santiagoreina.parcheu.feature.splash.splashModule
+import me.santiagoreina.parcheu.feature.suspended.suspendedModule
 import me.santiagoreina.parcheu.feature.traintwin.trainTwinModule
 import me.santiagoreina.parcheu.feature.twinquestions.twinQuestionsModule
 import me.santiagoreina.parcheu.feature.twinready.twinReadyModule
@@ -56,6 +57,7 @@ val featureModules: List<Module> =
         onboardingModule,
         basicProfileModule,
         underageModule,
+        suspendedModule,
         twinQuestionsModule,
         modesModule,
         consentModule,

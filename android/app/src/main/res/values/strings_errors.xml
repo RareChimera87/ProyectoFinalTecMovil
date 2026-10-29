@@ -1,6 +1,6 @@
 <resources>
     <!-- Avisos del manejador global de errores (arquitectura.md §2.3): se muestran al volver a A4. -->
     <string name="global_error_session_expired">Tu sesión terminó. Vuelve a iniciar sesión para seguir.</string>
-    <string name="global_error_suspended">Tu cuenta está suspendida por ahora, así que cerramos la sesión.</string>
+    <string name="global_error_suspended">Tu cuenta está suspendida por ahora.</string>
     <string name="global_error_terms">Actualizamos los Términos y la Política. Acéptalos para seguir.</string>
 </resources>

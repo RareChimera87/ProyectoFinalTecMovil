@@ -109,6 +109,7 @@ Navigation Compose 2.9 con rutas `@Serializable` en `navigation/Routes.kt`; `App
 | `Onboarding` | A2-A4 | `page: Int = 0` |
 | `BasicProfile` | B0 'Tu perfil' (nueva, E2.6) | `edit: Boolean = false` |
 | `Underage` | bloqueo por edad (nueva, E2.6) | - |
+| `Suspended` | bloqueo por suspensión o ban (nueva): descargar mis datos, borrar la cuenta, cerrar sesión | - |
 | `TwinQuestions` | B1 | - |
 | `Modes` | B2 (+ diálogo B3) | `fromSettings: Boolean = false` |
 | `Consent` | B4 | - |

@@ -32,8 +32,10 @@ const val PAYWALL_SOURCE_GLOBAL = "app"
 
 /**
  * Consume el [GlobalErrorBus] dentro de `ParcheUApp` (arquitectura.md §2.3), con el NavController real:
- * - sesión vencida, cuenta borrada o suspendida: arranca el cierre de sesión de siempre ([startSignOut]:
+ * - sesión vencida o cuenta borrada: arranca el cierre de sesión de siempre ([startSignOut]:
  *   `BackgroundSignOut`, E8.2) y deja A4 como única pantalla en el acto, con un aviso breve;
+ * - cuenta suspendida o baneada: deja `Suspended` como única pantalla **sin cerrar sesión**, para que la
+ *   persona pueda descargar sus datos, borrar la cuenta o salir; en esas pantallas no hace nada;
  * - términos nuevos: A4 sin cerrar sesión, que muestra la hoja de aceptación;
  * - `PLUS_REQUIRED`: G1 con el origen de la pantalla visible; `QUOTA_EXCEEDED(kind)`: la G2 de ese cupo.
  *
@@ -61,19 +63,20 @@ fun GlobalErrorHandler(
                 scope.launch { snackbar.showSnackbar(resources.getString(message)) }
             }
             when (error) {
-                GlobalError.SessionExpired, GlobalError.AccountSuspended -> {
-                    notify(
-                        if (error == GlobalError.AccountSuspended) {
-                            R.string.global_error_suspended
-                        } else {
-                            R.string.global_error_session_expired
-                        }
-                    )
+                GlobalError.SessionExpired -> {
+                    notify(R.string.global_error_session_expired)
                     // `startSignOut` marca la sesión como cerrada antes de volver (A4 no llama a
                     // `POST /v1/session`) y el resto del cierre sigue en el scope de la app: se navega ya,
                     // sin esperar la red y sin depender de que este efecto siga vivo.
                     currentStartSignOut()
                     navigator.replaceAll(Onboarding(page = LOGIN_PAGE))
+                }
+                GlobalError.AccountSuspended -> {
+                    // La sesión se conserva: las rutas exentas de la suspensión (exportar, borrar la
+                    // cuenta, H3) son justo lo que la persona puede seguir haciendo (Ley 1581).
+                    if (destination.allowedWhileSuspended()) return@collect
+                    notify(R.string.global_error_suspended)
+                    navigator.replaceAll(Suspended)
                 }
                 GlobalError.TermsRequired -> {
                     notify(R.string.global_error_terms)
@@ -90,6 +93,12 @@ fun GlobalErrorHandler(
 
 private fun NavDestination.handlesSessionItself(): Boolean =
     hasRoute(Splash::class) || hasRoute(Onboarding::class)
+
+/** Pantallas que una cuenta suspendida sí puede usar: el bloqueo mismo y las de sus derechos. */
+private fun NavDestination.allowedWhileSuspended(): Boolean = hasRoute(Suspended::class) ||
+    hasRoute(ExportData::class) ||
+    hasRoute(DeleteAccount::class) ||
+    hasRoute(PrivacySettings::class)
 
 /** Igual que `PlusErrorRouter`: G2 del cupo si el servidor dijo cuál, si no G1 con [source]. */
 private fun paywallFor(error: GlobalError, source: String): Paywall =
