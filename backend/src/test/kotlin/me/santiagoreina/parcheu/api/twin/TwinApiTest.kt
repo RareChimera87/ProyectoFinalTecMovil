@@ -20,12 +20,12 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.testContainer
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.contract.Answers
 import me.santiagoreina.parcheu.contract.ApiError
@@ -64,7 +64,7 @@ class TwinApiTest : FunSpec({
         get(path) { header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}") }
 
     suspend fun HttpClient.buildPersonaTask(id: String) = post("/internal/tasks/build-persona") {
-        header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+        header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
         contentType(ContentType.Application.Json)
         setBody("""{"id":"$id"}""")
     }
