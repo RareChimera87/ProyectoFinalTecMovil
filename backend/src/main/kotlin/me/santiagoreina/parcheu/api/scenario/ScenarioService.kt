@@ -22,6 +22,10 @@ import me.santiagoreina.parcheu.api.platform.tasks.QueueKind
 import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.TaskRequest
 import me.santiagoreina.parcheu.api.quota.QuotaService
+import me.santiagoreina.parcheu.api.safety.moderation.MessageModerator
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationCategory
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationSeverity
+import me.santiagoreina.parcheu.api.simulation.JudgeVerdict
 import me.santiagoreina.parcheu.api.simulation.LLM_ATTEMPTS
 import me.santiagoreina.parcheu.api.simulation.ScenarioDef
 import me.santiagoreina.parcheu.api.simulation.Side
@@ -73,9 +77,12 @@ class ScenarioService(
     internal val tasks: TaskQueue,
     private val notifier: Notifier,
     private val clock: Clock,
+    /** `MODERATION_ENABLED=false` también salta la moderación del texto del veredicto. */
+    private val moderationEnabled: Boolean = true,
 ) {
     private val log = LoggerFactory.getLogger(ScenarioService::class.java)
     private val judge = SimulationJudge(ai)
+    private val moderator = MessageModerator(ai)
 
     /** Conecta el 409 `SCENARIO_ENDED` del envío de mensajes con el cierre y el juez (una sola vez). */
     val endedHook = ScenarioEndedHook { chatId -> finalize(chatId) }
@@ -251,7 +258,7 @@ class ScenarioService(
             sims.markFailed(id, e.message ?: "Falló el juez", clock.instant())
             return
         }
-        val verdict = result.verdict
+        val verdict = moderated(id, record.userA, result.verdict)
         val a = sims.twinProfile(record.userA)
         val b = sims.twinProfile(record.userB)
         val report = SimulationScoring.report(a?.traits, b?.traits, listOf(verdict))
@@ -268,6 +275,34 @@ class ScenarioService(
         runCatching { redactHidden(id) }.onFailure { log.warn("judge-scenario: no se pudo reconciliar la transcripción de {}", id, it) }
         log.atInfo().setMessage("scenario_judged").addKeyValue("event", "scenario_judged").addKeyValue("chatId", id.toString()).log()
         listOf(record.userA, record.userB).forEach { notifyDone(it, id, report.score) }
+    }
+
+    /**
+     * El texto libre del veredicto (resumen, razones, choques y notas) lo condiciona lo que escribieron las personas y
+     * la otra lo lee sin más revisión: pasa por la moderación existente (una llamada lite). Un hallazgo HIGH que no sea
+     * SELF_HARM lo sustituye por un texto genérico y conserva los puntajes; si la moderación falla se sigue con el
+     * veredicto tal cual (fail-open, ADR-0026) y se registra `moderation_failed`.
+     */
+    private suspend fun moderated(id: UUID, billedTo: UUID, verdict: JudgeVerdict): JudgeVerdict {
+        val text = (listOf(verdict.summary) + verdict.reasons + verdict.frictions + verdict.dimensions.mapNotNull { it.note })
+            .filter { it.isNotBlank() }.joinToString("\n")
+        if (!moderationEnabled || text.isEmpty()) return verdict
+        val findings = try {
+            moderator.review(billedTo, text)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.atWarn().setMessage("moderation_failed").addKeyValue("event", "moderation_failed")
+                .addKeyValue("chatId", id.toString()).addKeyValue("error", e.javaClass.simpleName).log()
+            return verdict
+        }
+        if (findings.none { it.severity == ModerationSeverity.HIGH && it.category != ModerationCategory.SELF_HARM }) return verdict
+        log.atWarn().setMessage("scenario_verdict_redacted").addKeyValue("event", "scenario_verdict_redacted")
+            .addKeyValue("chatId", id.toString()).log()
+        return verdict.copy(
+            reasons = emptyList(), frictions = emptyList(), summary = REDACTED_SUMMARY,
+            dimensions = verdict.dimensions.map { it.copy(note = null) },
+        )
     }
 
     /**
@@ -398,6 +433,7 @@ class ScenarioService(
     }
 
     companion object {
+        const val REDACTED_SUMMARY = "El juez no pudo redactar un resumen"
         const val JUDGE_PATH = "/tasks/judge-scenario"
         const val SWEEP_PATH = "/jobs/scenario-sweep"
         const val SWEEP_BATCH = 50
