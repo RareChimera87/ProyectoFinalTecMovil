@@ -12,8 +12,6 @@ import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.data.simulation.FakeSimulationRepository
 import me.santiagoreina.parcheu.data.simulation.summary
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
-import me.santiagoreina.parcheu.feature.plus.PlusSources
-import me.santiagoreina.parcheu.navigation.Paywall
 import me.santiagoreina.parcheu.navigation.Simulation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -91,44 +89,23 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun simulateWithoutQuotaOpensTheSimulationLimitSheet() = runTest {
-        // E7.3: QUOTA_EXCEEDED(SIMULATION) abre la hoja G2 (ruta Paywall con source de límite).
-        simulations.startResult =
-            ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.SIMULATION, null))
-        val vm = viewModel(ApiResult.Success(HomeSamples.noneLeft.home))
-        vm.load()
-        vm.onSimulate(HomeSamples.suggestions(plus = false).first())
-        assertEquals(
-            HomeEffect.Navigate(Paywall(PlusSources.limit(QuotaKind.SIMULATION))),
-            vm.effects.first()
-        )
-    }
-
-    @Test
-    fun simulateWithPlusRequiredOpensThePaywall() = runTest {
-        simulations.startResult = ApiResult.Failure(AppError.PlusRequired)
-        val vm = viewModel(ApiResult.Success(HomeSamples.noneLeft.home))
-        vm.load()
-        vm.onSimulate(HomeSamples.suggestions(plus = false).first())
-        assertEquals(HomeEffect.Navigate(Paywall(PAYWALL_SOURCE_HOME)), vm.effects.first())
-    }
-
-    @Test
-    fun plusAtFairUseLimitStaysOnScreenInsteadOfThePaywall() = runTest {
-        // ParcheU+ que llegó al uso justo diario (QUOTA_PLUS_DAILY_SIMULATIONS): el 429 no abre G1.
-        simulations.startResult =
-            ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.SIMULATION, null))
-        val vm = viewModel(ApiResult.Success(HomeSamples.plus.home))
-        vm.load()
-        vm.onSimulate(HomeSamples.suggestions(plus = true).first())
-        val state = vm.state.value as HomeUiState.Loaded
-        assertEquals(AppError.QuotaExceeded(QuotaKind.SIMULATION, null), state.actionError)
-        assertNull(state.startingId)
-        assertEquals(
-            "Ya usaste tus simulaciones disponibles por ahora.",
-            homeErrorMessage(state.actionError!!)
-        )
-        assertNull(withTimeoutOrNull(1_000) { vm.effects.first() })
+    fun premiumErrorsLeaveTheRoutingToTheGlobalBus() = runTest {
+        // E7.3: G1 y la G2 del cupo (también la de uso justo de ParcheU+) las abre GlobalErrorHandler;
+        // C1 solo libera el botón, sin texto de error ni navegación propia.
+        val errors =
+            listOf(AppError.QuotaExceeded(QuotaKind.SIMULATION, null), AppError.PlusRequired)
+        for (sample in listOf(HomeSamples.noneLeft, HomeSamples.plus)) {
+            for (error in errors) {
+                simulations.startResult = ApiResult.Failure(error)
+                val vm = viewModel(ApiResult.Success(sample.home))
+                vm.load()
+                vm.onSimulate(HomeSamples.suggestions(plus = sample.home.plus).first())
+                val state = vm.state.value as HomeUiState.Loaded
+                assertNull(state.actionError)
+                assertNull(state.startingId)
+                assertNull(withTimeoutOrNull(1_000) { vm.effects.first() })
+            }
+        }
     }
 
     @Test

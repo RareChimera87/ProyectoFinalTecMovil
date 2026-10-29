@@ -14,8 +14,6 @@ import me.santiagoreina.parcheu.data.results.lockedReport
 import me.santiagoreina.parcheu.data.results.octoberQuota
 import me.santiagoreina.parcheu.data.results.resultSimulation
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
-import me.santiagoreina.parcheu.feature.plus.PlusSources
-import me.santiagoreina.parcheu.navigation.Paywall
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -82,16 +80,13 @@ class ResultsViewModelTest {
     }
 
     @Test
-    fun unlockWithoutQuotaMarksReportAsUsedAndOpensG2() = runTest {
+    fun unlockWithoutQuotaMarksReportAsUsedAndLeavesG2ToTheGlobalBus() = runTest {
         repository.unlockResult =
             ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.FULL_REPORT, null))
         val viewModel = viewModel()
         viewModel.effects.test {
             viewModel.onUnlock()
-            assertEquals(
-                ResultsEffect.OpenLimit(Paywall(PlusSources.limit(QuotaKind.FULL_REPORT, null))),
-                awaitItem()
-            )
+            expectNoEvents()
         }
         val content = viewModel.content()
         assertFalse(content.full)

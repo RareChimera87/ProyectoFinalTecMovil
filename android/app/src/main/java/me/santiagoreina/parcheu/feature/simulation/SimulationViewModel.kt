@@ -24,7 +24,6 @@ import me.santiagoreina.parcheu.data.simulation.SimulationRepository
 import me.santiagoreina.parcheu.data.simulation.SimulationSnapshot
 import me.santiagoreina.parcheu.data.simulation.toSnapshot
 import me.santiagoreina.parcheu.feature.plus.PlusErrorRouter
-import me.santiagoreina.parcheu.navigation.AppRoute
 
 /** Origen del paywall cuando se abre desde F5 (analítica de G1). */
 const val SIMULATION_PAYWALL_SOURCE = "simulation"
@@ -84,9 +83,6 @@ sealed interface SimulationEffect {
 
     /** Reintento aceptado: reemplaza F4/F5 por la nueva simulación. */
     data class OpenSimulation(val simulationId: String) : SimulationEffect
-
-    /** El reintento chocó con un límite premium (402): abre G1 o la G2 del cupo sin cerrar F5. */
-    data class OpenPaywall(val route: AppRoute) : SimulationEffect
 }
 
 /**
@@ -165,13 +161,12 @@ class SimulationViewModel(
                 is ApiResult.Success ->
                     _effects.send(SimulationEffect.OpenSimulation(result.value.id))
                 is ApiResult.Failure -> {
-                    val paywall = PlusErrorRouter.route(result.error, SIMULATION_PAYWALL_SOURCE)
+                    // Sin cupo o sin Plus el bus global abre G2 o G1; F5 no lo repite como error.
                     _state.value =
                         failed.copy(
                             retrying = false,
-                            retryError = if (paywall == null) result.error else null
+                            retryError = result.error.takeUnless(PlusErrorRouter::isPremium)
                         )
-                    paywall?.let { _effects.send(SimulationEffect.OpenPaywall(it)) }
                 }
             }
         }

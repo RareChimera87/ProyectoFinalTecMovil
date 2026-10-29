@@ -103,9 +103,6 @@ class FofViewModel(private val repository: FofRepository) : ViewModel() {
                         message = result.error.introMessage()
                     )
                 }
-            if (result is ApiResult.Failure && result.error == AppError.PlusRequired) {
-                _effects.send(FofEffect.Navigate(Paywall(PAYWALL_SOURCE_FOF)))
-            }
         }
     }
 

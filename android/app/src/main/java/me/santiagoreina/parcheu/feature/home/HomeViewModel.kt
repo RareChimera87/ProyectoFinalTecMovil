@@ -104,9 +104,8 @@ class HomeViewModel(
     }
 
     /**
-     * "Simular" de una sugerencia: inicia y abre F4. Sin cupo o con función premium abre el paywall, salvo
-     * para ParcheU+: si ya es Plus y llegó al uso justo diario, el paywall le vendería lo que ya tiene, así
-     * que se muestra el aviso en C1.
+     * "Simular" de una sugerencia: inicia y abre F4. Sin cupo o con función premium el bus global abre G1
+     * o la G2 del cupo (E7.3; con ParcheU+ la G2 es la de uso justo diario), así que C1 no muestra error.
      */
     fun onSimulate(suggestion: Suggestion) {
         val loaded = _state.value as? HomeUiState.Loaded ?: return
@@ -121,15 +120,8 @@ class HomeViewModel(
                 }
                 is ApiResult.Failure -> {
                     val error = result.error
-                    val plus = (_state.value as? HomeUiState.Loaded)?.home?.plus == true
-                    val premiumRoute = PlusErrorRouter.route(error, PAYWALL_SOURCE_HOME)
-                    if (!plus && premiumRoute != null) {
-                        // PLUS_REQUIRED abre G1; QUOTA_EXCEEDED(kind) abre la hoja G2 de ese cupo (E7.3).
-                        update { it.copy(startingId = null) }
-                        _effects.send(HomeEffect.Navigate(premiumRoute))
-                    } else {
-                        update { it.copy(startingId = null, actionError = error) }
-                    }
+                    val shown = error.takeUnless(PlusErrorRouter::isPremium)
+                    update { it.copy(startingId = null, actionError = shown) }
                 }
             }
         }

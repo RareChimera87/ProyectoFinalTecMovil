@@ -106,7 +106,7 @@ class FofViewModelTest {
     }
 
     @Test
-    fun plusRequiredOnRequestOpensPaywall() = runTest {
+    fun plusRequiredOnRequestLeavesG1ToTheGlobalBus() = runTest {
         val repo = FakeFofRepository().apply {
             requestResult =
                 ApiResult.Failure(AppError.PlusRequired)
@@ -115,7 +115,12 @@ class FofViewModelTest {
         vm.start()
         vm.effects.test {
             vm.onRequestIntroduction(FofSamples.candidates.first().anonId)
-            assertEquals(FofEffect.Navigate(Paywall(PAYWALL_SOURCE_FOF)), awaitItem())
+            // G1 la abre GlobalErrorHandler (origen `fof`); D6 solo deja su mensaje.
+            expectNoEvents()
         }
+        assertEquals(
+            AppError.PlusRequired.introMessage(),
+            (vm.state.value as FofUiState.Unlocked).message
+        )
     }
 }
