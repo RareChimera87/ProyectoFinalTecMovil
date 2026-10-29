@@ -32,14 +32,15 @@ const val PAYWALL_SOURCE_GLOBAL = "app"
 
 /**
  * Consume el [GlobalErrorBus] dentro de `ParcheUApp` (arquitectura.md §2.3), con el NavController real:
- * - sesión vencida, cuenta borrada o suspendida: cierra sesión por el camino de siempre ([signOut], E8.2)
- *   y deja A4 como única pantalla, con un aviso breve;
+ * - sesión vencida, cuenta borrada o suspendida: arranca el cierre de sesión de siempre ([startSignOut]:
+ *   `BackgroundSignOut`, E8.2) y deja A4 como única pantalla en el acto, con un aviso breve;
  * - términos nuevos: A4 sin cerrar sesión, que muestra la hoja de aceptación;
  * - `PLUS_REQUIRED`: G1 con el origen de la pantalla visible; `QUOTA_EXCEEDED(kind)`: la G2 de ese cupo.
  *
  * Splash y A4 tratan la sesión ellos mismos (401, suspensión y términos son su flujo normal), así que con
- * ellos visibles no se hace nada. Los eventos se atienden de a uno: los que llegan mientras se cierra la
- * sesión encuentran A4 visible y se descartan, y un 402 con G1 o G2 ya abierta no apila otra.
+ * ellos visibles no se hace nada. Mientras se cierra la sesión (desde cualquier pantalla: H3, borrar
+ * cuenta...) el bus no publica 401, y los demás eventos encuentran A4 visible y se descartan; un 402 con G1
+ * o G2 ya abierta no apila otra.
  */
 @Composable
 fun GlobalErrorHandler(
@@ -47,10 +48,10 @@ fun GlobalErrorHandler(
     navController: NavHostController,
     navigator: AppNavigator,
     snackbar: SnackbarHostState,
-    signOut: suspend () -> Unit
+    startSignOut: () -> Unit
 ) {
     val resources = LocalContext.current.resources
-    val currentSignOut by rememberUpdatedState(signOut)
+    val currentStartSignOut by rememberUpdatedState(startSignOut)
     val scope = rememberCoroutineScope()
     LaunchedEffect(bus, navController, navigator) {
         bus.errors.collect { error ->
@@ -68,8 +69,10 @@ fun GlobalErrorHandler(
                             R.string.global_error_session_expired
                         }
                     )
-                    // Primero se cierra: A4 con la sesión aún abierta volvería a llamar a `POST /v1/session`.
-                    currentSignOut()
+                    // `startSignOut` marca la sesión como cerrada antes de volver (A4 no llama a
+                    // `POST /v1/session`) y el resto del cierre sigue en el scope de la app: se navega ya,
+                    // sin esperar la red y sin depender de que este efecto siga vivo.
+                    currentStartSignOut()
                     navigator.replaceAll(Onboarding(page = LOGIN_PAGE))
                 }
                 GlobalError.TermsRequired -> {

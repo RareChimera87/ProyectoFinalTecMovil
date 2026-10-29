@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.data.auth
 
 import android.content.Context
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
 import me.santiagoreina.parcheu.contract.MeDto
 import me.santiagoreina.parcheu.contract.OnboardingStep
 import me.santiagoreina.parcheu.contract.SessionDto
@@ -40,7 +41,14 @@ class FakeAuthRepository(var signedIn: Boolean = false) : AuthRepository {
         sessionResults.addAll(results)
     }
 
-    override fun hasSession(): Boolean = signedIn
+    /** Si no es `null`, [signOut] espera aquí con la sesión ya marcada como cerrándose (red lenta). */
+    var signOutGate: CompletableDeferred<Unit>? = null
+
+    /** `true` mientras [signOut] está en curso, como `SignOutFlow.inProgress`. */
+    var signingOut: Boolean = false
+        private set
+
+    override fun hasSession(): Boolean = signedIn && !signingOut
 
     override suspend fun signInWithGoogle(activityContext: Context): SignInResult {
         calls += "signIn"
@@ -61,6 +69,12 @@ class FakeAuthRepository(var signedIn: Boolean = false) : AuthRepository {
 
     override suspend fun signOut() {
         calls += "signOut"
-        signedIn = false
+        signingOut = true
+        try {
+            signOutGate?.await()
+            signedIn = false
+        } finally {
+            signingOut = false
+        }
     }
 }

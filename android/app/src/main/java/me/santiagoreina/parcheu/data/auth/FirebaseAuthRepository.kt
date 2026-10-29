@@ -60,7 +60,8 @@ class FirebaseAuthRepository(
     private val errorMapper: ApiErrorMapper,
     private val signOutFlow: SignOutFlow
 ) : AuthRepository {
-    override fun hasSession(): Boolean = source.authOrNull()?.currentUser != null
+    override fun hasSession(): Boolean =
+        source.authOrNull()?.currentUser != null && !signOutFlow.inProgress
 
     override suspend fun signInWithGoogle(activityContext: Context): SignInResult {
         val auth = source.authOrNull() ?: return SignInResult.Failure(NOT_CONFIGURED)

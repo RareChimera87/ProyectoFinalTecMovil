@@ -20,7 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.core.error.GlobalErrorBus
 import me.santiagoreina.parcheu.core.observability.CrashReporting
-import me.santiagoreina.parcheu.data.auth.AuthRepository
+import me.santiagoreina.parcheu.data.auth.BackgroundSignOut
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.navigation.AppNavHost
 import me.santiagoreina.parcheu.navigation.AppRoute
@@ -101,14 +101,14 @@ fun ParcheUApp(
             // Sin Koin (previews, pruebas de una pantalla) no hay bus y no se escucha nada.
             val koin = GlobalContext.getOrNull()
             val bus = remember(koin) { koin?.getOrNull<GlobalErrorBus>() }
-            val auth = remember(koin) { koin?.getOrNull<AuthRepository>() }
-            if (bus != null && auth != null) {
+            val signOut = remember(koin) { koin?.getOrNull<BackgroundSignOut>() }
+            if (bus != null && signOut != null) {
                 GlobalErrorHandler(
                     bus = bus,
                     navController = navController,
                     navigator = navigator,
                     snackbar = snackbar,
-                    signOut = auth::signOut
+                    startSignOut = signOut::start
                 )
             }
         }

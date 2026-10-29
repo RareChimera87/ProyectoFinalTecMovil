@@ -69,4 +69,30 @@ class SignOutFlowTest {
         )()
         assertEquals(listOf("second-cleaner", "firebase"), calls)
     }
+
+    @Test
+    fun marksItselfInProgressFromTheFirstStepUntilTheEnd() = runBlocking {
+        lateinit var signOut: SignOutFlow
+        val seen = mutableListOf<Boolean>()
+        signOut = SignOutFlow(
+            PushUnregistration { seen += signOut.inProgress },
+            listOf(SessionCleaner { seen += signOut.inProgress }),
+            FirestoreSessionReset { seen += signOut.inProgress }
+        ) { seen += signOut.inProgress }
+        assertEquals(false, signOut.inProgress)
+        signOut()
+        assertEquals(listOf(true, true, true, true), seen)
+        assertEquals(false, signOut.inProgress)
+    }
+
+    @Test
+    fun aFailingPlatformSignOutStillClearsTheMark() = runBlocking {
+        val signOut = SignOutFlow(
+            PushUnregistration {},
+            emptyList(),
+            FirestoreSessionReset {}
+        ) { error("Firebase falló") }
+        runCatching { signOut() }
+        assertEquals(false, signOut.inProgress)
+    }
 }

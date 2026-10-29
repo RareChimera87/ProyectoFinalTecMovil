@@ -21,7 +21,10 @@ sealed interface SignInResult {
  * → `POST /v1/session`. La UI depende solo de esta interfaz; las pruebas usan `FakeAuthRepository`.
  */
 interface AuthRepository {
-    /** `true` si hay un usuario de Firebase con sesión en el dispositivo. */
+    /**
+     * `true` si hay un usuario de Firebase con sesión en el dispositivo y no se está cerrando ([signOut] en
+     * curso cuenta como sesión cerrada desde su primer paso).
+     */
     fun hasSession(): Boolean
 
     /**

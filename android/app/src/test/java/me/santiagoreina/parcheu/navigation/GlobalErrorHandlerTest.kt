@@ -10,22 +10,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.error.GlobalErrorBus
+import me.santiagoreina.parcheu.data.auth.BackgroundSignOut
 import me.santiagoreina.parcheu.data.auth.FakeAuthRepository
 import me.santiagoreina.parcheu.data.auth.LOGIN_PAGE
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.parche.PAYWALL_SOURCE_PARCHE
 import me.santiagoreina.parcheu.feature.plus.PlusSources
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,6 +56,13 @@ class GlobalErrorHandlerTest {
 
     private val auth = FakeAuthRepository(signedIn = true)
     private val bus = GlobalErrorBus(hasSession = auth::hasSession)
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val backgroundSignOut = BackgroundSignOut(auth, appScope)
+
+    @After fun tearDown() {
+        auth.signOutGate?.complete(Unit)
+        appScope.cancel()
+    }
     private lateinit var navController: NavHostController
 
     private fun launch(start: AppRoute = Home, vararg above: AppRoute) {
@@ -62,8 +80,10 @@ class GlobalErrorHandlerTest {
                         composable<Splash> { Text("splash") }
                         composable<Home> { Text("home") }
                         composable<Parche> { Text("parche") }
+                        composable<PrivacySettings> { Text("privacy") }
                         composable<Simulation> { Text("simulation") }
                         composable<Paywall> { Text("paywall") }
+                        composable<DeleteAccount> { Text("delete-account") }
                         composable<Onboarding> { Text("a4:${it.toRoute<Onboarding>().page}") }
                     }
                     GlobalErrorHandler(
@@ -71,7 +91,7 @@ class GlobalErrorHandlerTest {
                         navController = navController,
                         navigator = navigator,
                         snackbar = snackbar,
-                        signOut = auth::signOut
+                        startSignOut = backgroundSignOut::start
                     )
                 }
             }
@@ -101,6 +121,50 @@ class GlobalErrorHandlerTest {
         }
         composeRule.onNodeWithText("Tu sesión terminó. Vuelve a iniciar sesión para seguir.")
             .assertExists()
+    }
+
+    @Test
+    fun a4OpensRightAwayWhileTheSignOutIsStillRunning() {
+        // Red lenta: `DELETE /v1/me/fcm-token` tarda. A4 no espera al cierre (M2 de la revisión de #109).
+        auth.signOutGate = CompletableDeferred()
+        launch(Home, Parche())
+
+        bus.publish(AppError.Unauthorized)
+        composeRule.waitForIdle()
+
+        assertTrue(auth.signingOut)
+        composeRule.runOnUiThread {
+            assertEquals(Onboarding(page = LOGIN_PAGE), entries().single().toRoute<Onboarding>())
+        }
+        // Un 401 de las llamadas que siguen en curso ya no se publica: la sesión cuenta como cerrada.
+        assertFalse(bus.publish(AppError.Unauthorized))
+
+        auth.signOutGate?.complete(Unit)
+        composeRule.waitForIdle()
+        assertEquals(listOf("signOut"), auth.calls)
+        assertFalse(auth.hasSession())
+    }
+
+    @Test
+    fun the401OfTheSignOutAfterDeletingTheAccountDoesNotNavigate() {
+        // E8.3: tras `DELETE /v1/me`, el cierre de sesión llama a `DELETE /v1/me/fcm-token`, que responde 401
+        // (cuenta con deletedAt). La persona debe seguir viendo la confirmación del borrado (A2 de #109).
+        auth.signOutGate = CompletableDeferred()
+        launch(Home, PrivacySettings, DeleteAccount)
+        appScope.launch(start = CoroutineStart.UNDISPATCHED) { auth.signOut() }
+
+        bus.publish(AppError.Unauthorized)
+        composeRule.waitForIdle()
+        auth.signOutGate?.complete(Unit)
+        composeRule.waitForIdle()
+
+        assertEquals(listOf("signOut"), auth.calls)
+        composeRule.runOnUiThread {
+            assertEquals(true, navController.currentDestination?.hasRoute(DeleteAccount::class))
+            assertEquals(3, entries().size)
+        }
+        composeRule.onNodeWithText("Tu sesión terminó. Vuelve a iniciar sesión para seguir.")
+            .assertDoesNotExist()
     }
 
     @Test
