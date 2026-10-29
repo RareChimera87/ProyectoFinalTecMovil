@@ -290,6 +290,30 @@ class ScenarioApiTest : FunSpec({
         }
     }
 
+    test("un mensaje ocultado después de juzgar sale de la transcripción guardada; el resto se queda (B-B7)") {
+        val f = Fixture()
+        val chat = f.scenarioChat()
+        testApplication {
+            val client = startApp(f.container())
+            client.say("ana", chat.id, "a-1", "Hola").status shouldBe HttpStatusCode.OK
+            client.say("beto", chat.id, "b-1", "mensaje que la moderación oculta luego").status shouldBe HttpStatusCode.OK
+            client.say("ana", chat.id, "a-2", "Hola, ¿planeamos?").status shouldBe HttpStatusCode.OK
+            client.agree("ana", chat.id)
+            client.agree("beto", chat.id)
+            client.judgeTask(chat.id).status shouldBe HttpStatusCode.NoContent
+            f.simRepo.find(chat.id).shouldNotBeNull().transcript.scenarios.single().turns.map { it.text } shouldBe
+                listOf("Hola", "mensaje que la moderación oculta luego", "Hola, ¿planeamos?")
+
+            val hidden = f.chatRepo.allMessages.single { it.text == "mensaje que la moderación oculta luego" }
+            f.chat.service.hideMessage(hidden.id) shouldBe true
+            f.simRepo.find(chat.id).shouldNotBeNull().transcript.scenarios.single().turns.map { it.text } shouldBe
+                listOf("Hola", "Hola, ¿planeamos?")
+            // Idempotente.
+            f.chat.service.hideMessage(hidden.id) shouldBe true
+            f.simRepo.find(chat.id).shouldNotBeNull().transcript.scenarios.single().turns shouldHaveSize 2
+        }
+    }
+
     test("un chat sin mensajes al vencer se cierra sin evaluar: sesión DONE sin simulationId") {
         val f = Fixture()
         val chat = f.scenarioChat()

@@ -6,6 +6,7 @@ import me.santiagoreina.parcheu.api.chat.ChatMemberRecord
 import me.santiagoreina.parcheu.api.chat.ChatRecord
 import me.santiagoreina.parcheu.api.chat.ChatRepository
 import me.santiagoreina.parcheu.api.chat.ChatService
+import me.santiagoreina.parcheu.api.chat.MessageHiddenHook
 import me.santiagoreina.parcheu.api.chat.ScenarioEndedHook
 import me.santiagoreina.parcheu.api.graph.EdgeEvent
 import me.santiagoreina.parcheu.api.graph.EdgeService
@@ -78,6 +79,9 @@ class ScenarioService(
 
     /** Conecta el 409 `SCENARIO_ENDED` del envío de mensajes con el cierre y el juez (una sola vez). */
     val endedHook = ScenarioEndedHook { chatId -> finalize(chatId) }
+
+    /** Retira de la transcripción ya juzgada el texto de los mensajes que se ocultan después (B-B7). */
+    val hiddenHook = MessageHiddenHook { chatId -> redactHidden(chatId) }
 
     // --- rutas -------------------------------------------------------------------------------
 
@@ -259,8 +263,35 @@ class ScenarioService(
             cachedFrom = null, provider = ai.provider.id, usage = result.usage, now = clock.instant(),
         )
         if (!done) return
+        // Un mensaje pudo ocultarse mientras el juez trabajaba, después de leer la lista: se retira ahora.
+        redactHidden(id)
         log.atInfo().setMessage("scenario_judged").addKeyValue("event", "scenario_judged").addKeyValue("chatId", id.toString()).log()
         listOf(record.userA, record.userB).forEach { notifyDone(it, id, report.score) }
+    }
+
+    /**
+     * `simulations.transcript` copia el texto de los mensajes al juzgar (solo los no ocultados de ese momento) y es lo
+     * que sirve `GET /v1/simulations/{id}/transcript`. Si la moderación oculta un mensaje después, la transcripción
+     * conservaba el texto: se reconcilia con los mensajes visibles del chat y se descartan los turnos que ya no están.
+     * No toca el veredicto ni la puntuación (ya calculados). Idempotente; no hace nada si aún no está DONE.
+     */
+    private suspend fun redactHidden(chatId: UUID) {
+        val record = sims.find(chatId) ?: return
+        if (record.origin != SimulationOrigin.SCENARIO || record.status != SimulationStatus.DONE) return
+        val visible = chats.messages(chatId)
+            .mapNotNull { m -> (if (m.senderId == record.userA) Side.A else if (m.senderId == record.userB) Side.B else null)?.let { it to m.text } }
+            .groupingBy { it }.eachCount().toMutableMap()
+        var changed = false
+        val scenarios = record.transcript.scenarios.map { sc ->
+            val kept = sc.turns.filter { turn ->
+                val key = turn.speaker to turn.text
+                val left = visible[key] ?: 0
+                if (left > 0) visible[key] = left - 1
+                (left > 0).also { if (!it) changed = true }
+            }
+            sc.copy(turns = kept)
+        }
+        if (changed) sims.replaceDoneTranscript(chatId, StoredTranscript(scenarios))
     }
 
     private class JudgeFailed(message: String) : RuntimeException(message)
