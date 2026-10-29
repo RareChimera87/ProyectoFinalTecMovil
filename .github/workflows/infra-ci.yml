@@ -33,8 +33,8 @@ jobs:
       wif: ${{ steps.wif.outputs.wif }}
       infra: ${{ github.event_name != 'pull_request' && 'true' || steps.filtro.outputs.infra }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
         id: filtro
         if: github.event_name == 'pull_request'
         with:
@@ -78,8 +78,8 @@ jobs:
     if: needs.cambios.outputs.infra == 'true' && needs.cambios.outputs.existe == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
       - name: terraform fmt
@@ -113,13 +113,13 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR: ${{ github.event.pull_request.number }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: google-github-actions/auth@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           # Identidad de solo lectura de metadatos: cualquier PR puede usarla en dev.
           service_account: ${{ secrets.TF_PLAN_SERVICE_ACCOUNT_DEV }}
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
@@ -175,7 +175,7 @@ jobs:
           fi
       - name: Guarda el plan
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: infra-plan-dev
           path: |
@@ -202,13 +202,13 @@ jobs:
         run: |
           echo "::error::Falta el secreto TF_SERVICE_ACCOUNT_DEV (salida terraform_service_account del bootstrap de dev)."
           exit 1
-      - uses: actions/checkout@v4
-      - uses: google-github-actions/auth@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           # sa-terraform solo acepta tokens de la rama dev (attribute.ref en el bootstrap).
           service_account: ${{ secrets.TF_SERVICE_ACCOUNT_DEV }}
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
