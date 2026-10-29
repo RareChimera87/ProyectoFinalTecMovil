@@ -49,7 +49,11 @@ done
 hdrs="$(mktemp)"
 trap 'rm -f "$hdrs"' EXIT
 chmod 600 "$hdrs"
-printf 'Authorization: Bearer %s\n' "$(gcloud auth print-access-token)" >"$hdrs"
+# Asignación aparte: dentro del argumento de printf el fallo de gcloud no cortaría el script (set -e).
+access_token="$(gcloud auth print-access-token)"
+[[ -n "$access_token" ]] || { echo "gcloud no devolvió un access token." >&2; exit 1; }
+printf 'Authorization: Bearer %s\n' "$access_token" >"$hdrs"
+unset access_token
 base="https://identitytoolkit.googleapis.com/v1/projects/$project"
 
 # Llama a Identity Toolkit con el proyecto de cuota correcto y falla con el cuerpo del error.
@@ -82,7 +86,7 @@ for email in "$@"; do
   current="$(jq -r '.users[0].customAttributes // "{}"' <<<"$found")"
   if $revoke; then
     claims="$(jq -c 'del(.admin)' <<<"$current")"
-    verb="QUITA admin (y revoca sesiones) a"
+    verb="QUITA admin (y revoca sesiones)"
   else
     claims="$(jq -c '.admin = true' <<<"$current")"
     verb="OTORGA admin"
