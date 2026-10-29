@@ -316,7 +316,7 @@ class AppContainer(
                 onScenarioChatCreated = { chatId -> chat.service.mirrorChat(chatId) },
             )
             // Modo escenario (E4.8): acuerdo, cierre y juez; `judge-scenario` va por la cola `simulations`.
-            val scenario = scenarioModule(clock, ai, quota, graph, chat, simulation, tasks, notifier)
+            val scenario = scenarioModule(clock, ai, quota, graph, chat, simulation, tasks, notifier, moderationEnabled(vars))
             // Reportar y bloquear (E8.1): la misma tabla `blocks` la leen chat, grafo, fila y simulación.
             // E8.7: el `anonId` de un reporte o bloqueo también se resuelve entre los canjes de C5, los amigos de
             // amigos de D6 y las presentaciones de E3 del observador.

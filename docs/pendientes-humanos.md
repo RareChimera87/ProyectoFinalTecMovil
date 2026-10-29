@@ -2,6 +2,18 @@
 
 Pasos que solo puede hacer una persona (consolas, pagos, términos, identidad). Cada feature agrega su sección.
 
+## Gobernanza de CI (C-A1/C-A2, C-M3)
+
+Pasos que solo puede hacer el dueño del repo tras mezclar el PR `fix/gobernanza-ci`:
+
+0. **Arranque de este PR (`fix/gobernanza-ci`):** no puede pasar `revision-agente` ni `major-gate`: el YAML de la base (`dev`) escucha `pull_request` y el del PR escucha `pull_request_target`, así que el check nunca se publica y, con `enforce_admins: true`, el PR queda esperando. Procedimiento: (a) crea la etiqueta `gobernanza` (`gh label create gobernanza -R RareChimera87/ProyectoFinalTecMovil --color B60205 --description "Toca gates de revisión o protección de ramas"`) y ponla al PR; (b) quita temporalmente esos dos checks de la protección: `CHECKS="pr-title,gitleaks,android-ci,backend-ci,contract-ci,infra-ci,rules-ci,migration-order" scripts/proteger-ramas.sh dev`; (c) mezcla el PR; (d) reaplica la protección completa con `scripts/proteger-ramas.sh dev`. Desde ese merge los dos gates corren desde `dev` con `pull_request_target`.
+1. **Etiqueta `gobernanza`:** la necesitan los PR que toquen cualquier workflow o acción, `CODEOWNERS`, `dependabot.yml`, `proteger-ramas.sh`, `commit-lint.sh` o `verbos-imperativo.txt`, y Dependabot.
+2. **`app_id` en los checks:** la protección de `dev` ya lo tiene aplicado (15368, GitHub Actions). Solo hay que reaplicarla con `scripts/proteger-ramas.sh dev` (paso 0.d) tras el arranque, y cada vez que cambie la lista de checks; compruébalo con `gh api repos/RareChimera87/ProyectoFinalTecMovil/branches/dev/protection --jq .required_status_checks.checks`.
+3. **C-A2, cuenta aparte para los agentes:** crear una cuenta (o GitHub App) de bot sin permisos de administrador para los agentes, hacer que abran los PR con ella y, en la protección de `dev`, exigir al menos 1 aprobación con *Dismiss stale approvals* y *Prevent self-review* (el dueño aprueba lo que abre el bot). Con eso `revisado-agente` deja de ser la única barrera y se puede activar *Require review from Code Owners*.
+3b. **Permisos por defecto del `GITHUB_TOKEN`:** ponlos en solo lectura (Settings → Actions → General → Workflow permissions → *Read repository contents and packages permissions*, o `gh api -X PUT repos/RareChimera87/ProyectoFinalTecMovil/actions/permissions/workflow -f default_workflow_permissions=read`). Así un workflow nuevo sin bloque `permissions:` no hereda escritura.
+4. **Fijado a SHA (C-M3):** Dependabot lee `.github/dependabot.yml` de la rama por defecto, así que no empieza a actuar hasta que este cambio llegue a `main` (en el siguiente release `dev` → `main`). Sus PR van a `dev` (`target-branch`), `pr-title` los exime porque Dependabot fija el título `Actualiza: Bump ...`, y llevan la etiqueta `gobernanza`. Dependabot propondrá cada semana los PR de acciones (con la etiqueta `gobernanza`). Revisa que el SHA nuevo corresponda al tag del comentario antes de mezclar.
+5. **Plan de Terraform (C-M2):** el job `infra-plan-dev` ya no recibe token de escritura, pero sigue ejecutando HCL del PR con la identidad WIF de solo lectura (`sa-terraform-plan`). Si quieres cerrarlo del todo, restringe en el bootstrap lo que esa cuenta lee y revisa a mano los PR que toquen `infra/` o `.terraform.lock.hcl`.
+
 ## E0.8 · Configuración de Firebase
 
 Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,

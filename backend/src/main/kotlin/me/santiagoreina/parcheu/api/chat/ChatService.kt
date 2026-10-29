@@ -317,7 +317,7 @@ class ChatService(
         if (text.codePointCount(0, text.length) <= MAX_PREVIEW) text else text.substring(0, text.offsetByCodePoints(0, MAX_PREVIEW)) + "…"
 
     companion object {
-        const val MAX_TEXT = 1000
+        const val MAX_TEXT = me.santiagoreina.parcheu.api.platform.TextLimits.MESSAGE_CHARS
         const val MAX_CLIENT_ID = 64
         const val MAX_PREVIEW = 100
         const val DELETED_LABEL = "Usuario eliminado"
