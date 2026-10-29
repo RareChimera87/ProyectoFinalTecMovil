@@ -261,9 +261,10 @@ jobs:
         run: |
           faltan=()
           [[ "$API_URL_PROD" == https://*/ ]] || faltan+=("PARCHEU_API_URL_PROD")
-          [[ "$HOSTING_URL_PROD" == https://* ]] || faltan+=("PARCHEU_HOSTING_URL_PROD")
+          # La de Hosting va sin barra final (Gradle arma "$HOSTING_URL/terminos").
+          [[ "$HOSTING_URL_PROD" == https://* && "$HOSTING_URL_PROD" != */ ]] || faltan+=("PARCHEU_HOSTING_URL_PROD")
           if (( ${#faltan[@]} )); then
-            echo "::error::Faltan (o no son https; la de la API debe terminar en /) en las variables del repo o del environment: ${faltan[*]} (ver docs/pendientes-humanos.md, A-M1). Sin ellas el AAB saldría con la URL de relleno."
+            echo "::error::Faltan (o no son https; la de la API debe terminar en / y la de Hosting no) en las variables del repo o del environment: ${faltan[*]} (ver docs/pendientes-humanos.md, A-M1). Sin ellas el AAB saldría con la URL de relleno."
             exit 1
           fi
 

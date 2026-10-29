@@ -326,6 +326,53 @@ class AndroidReleaseUrlsProd(unittest.TestCase):
         self.assertIn("verificarUrlsProd", gradle)
         self.assertIn('"bundleProdRelease"', gradle)
 
+    def test_hosting_sin_barra_final(self):
+        run = next(p for p in self.pasos if p.get("name", "").startswith("Validar las URLs de prod"))["run"]
+        self.assertIn('"$HOSTING_URL_PROD" != */', run)
+        gradle = (RAIZ / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+        self.assertIn("trimEnd('/')", gradle)
+        self.assertIn('hostingUrlProperty("parcheu.hostingUrl.prod"', gradle)
+        self.assertNotIn('urlProperty("parcheu.hostingUrl.prod"', gradle.replace("hostingUrlProperty", ""))
+
+    def test_validacion_de_urls_en_bash(self):
+        run = next(p for p in self.pasos if p.get("name", "").startswith("Validar las URLs de prod"))["run"]
+        casos = [
+            ("https://api.example.com/", "https://h.example.com", 0),
+            ("https://api.example.com/", "https://h.example.com/", 1),
+            ("https://api.example.com/v1", "https://h.example.com", 1),
+            ("", "https://h.example.com", 1),
+            ("https://api.example.com/", "", 1),
+        ]
+        for api, hosting, esperado in casos:
+            r = subprocess.run(["bash", "-e", "-c", run], capture_output=True, text=True,
+                               env={"API_URL_PROD": api, "HOSTING_URL_PROD": hosting, "PATH": "/usr/bin:/bin"})
+            self.assertEqual(r.returncode, esperado, (api, hosting))
+
+    def test_android_ci_y_release_coherentes_con_la_regla_de_gradle(self):
+        """verificarUrlsProd solo se exige al AAB firmado con la llave de subida: android-release pide la llave
+        (requireUploadKey=true) y pasa las URL; android-ci construye bundleProdRelease sin llave ni URL."""
+        gradle = (RAIZ / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+        self.assertIn("val exigirUrlsProd = requireUploadKey || hasUploadKey", gradle)
+        self.assertRegex(gradle, r"val exigir = exigirUrlsProd\s+onlyIf\(\"[^\"]*\"\) \{ exigir \}")
+        self.assertNotIn("allowPlaceholderUrls", gradle)
+        # android-release: todo build de prod pide la llave y lleva las dos URL.
+        self.assertIn("-Pparcheu.release.requireUploadKey=true", self.construir["run"])
+        for p in self.pasos:
+            if "bundleProdRelease" in p.get("run", "") or "assembleProdRelease" in p.get("run", ""):
+                self.assertIn("-Pparcheu.release.requireUploadKey=true", p["run"], p.get("name"))
+                self.assertIn('-Pparcheu.apiUrl.prod="$API_URL_PROD"', p["run"], p.get("name"))
+        # android-ci: el bundle de prueba no pide llave ni la recibe (si no, verificarUrlsProd lo tumbaría).
+        ci = cargar("android-ci.yml")
+        bundles = [p for p in pasos(ci) if ":app:bundleProdRelease" in p.get("run", "")]
+        self.assertTrue(bundles, "android-ci debe construir el AAB de prod (E10.5)")
+        for p in bundles:
+            self.assertNotIn("requireUploadKey", p["run"])
+            self.assertNotIn("parcheu.apiUrl.prod", p["run"])
+            self.assertFalse(any(k.startswith("UPLOAD_") for k in p.get("env", {})), p.get("name"))
+        texto_ci = (WF / "android-ci.yml").read_text(encoding="utf-8")
+        self.assertNotIn("secrets.UPLOAD_", texto_ci)
+        self.assertNotIn("UPLOAD_KEYSTORE_FILE", texto_ci)
+
 
 class PendientesHumanos(unittest.TestCase):
     def test_no_recomienda_code_owners_con_una_sola_cuenta(self):
