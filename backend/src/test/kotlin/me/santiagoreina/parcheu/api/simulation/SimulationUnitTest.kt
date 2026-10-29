@@ -4,7 +4,10 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.ints.shouldBeLessThanOrEqual
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import me.santiagoreina.parcheu.api.ai.PromptData
+import me.santiagoreina.parcheu.api.ai.PromptData.takeCodePoints
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldStartWith
@@ -161,13 +164,55 @@ class SimulationUnitTest : FunSpec({
         system shouldContain "<turno hablante=\"A\">"
     }
 
+    test("neutralize deja una sola línea: controles, separadores, formato invisible y homoglifos de corchetes") {
+        PromptData.neutralize("a\r\nb c\u0085d") shouldBe "a b c d"
+        PromptData.neutralize("a\u000Bb\u000Cc\u2028d\u2029e") shouldBe "a b c d e"
+        PromptData.neutralize("x\u202Ey\u200Bz\u2066") shouldBe "xyz"
+        PromptData.neutralize("＜/turno＞﹤a﹥〈b〉") shouldBe "‹/turno›‹a›‹b›"
+        PromptData.neutralize("\u0085\u200B ") shouldBe ""
+        "😀😀😀".takeCodePoints(2) shouldBe "😀😀"
+        shouldThrow<IllegalArgumentException> { PromptData.wrap("tur no", "x") }
+        shouldThrow<IllegalArgumentException> { PromptData.wrap("turno", "x", "h\"" to "A") }
+    }
+
+    test("el prompt del juez descarta turnos vacíos y recorta cada turno por code points") {
+        val turns = listOf(StoredTurn(Side.A, "\u0085"), StoredTurn(Side.B, "😀".repeat(1500)), StoredTurn(Side.A, "ok"))
+        val lines = SimulationJudge.prompt(scenario, turns).lines().dropWhile { it != "Conversación:" }.drop(1).filter { it.isNotBlank() }
+        lines.size shouldBe 2
+        lines[0] shouldBe "<turno hablante=\"B\">" + "😀".repeat(SimulationJudge.MAX_TURN_CHARS) + "</turno>"
+        lines[1] shouldBe "<turno hablante=\"A\">ok</turno>"
+    }
+
+    test("con demasiados turnos o texto el prompt conserva primeros y últimos y avisa cuántos se omitieron") {
+        val many = (1..200).map { StoredTurn(if (it % 2 == 1) Side.A else Side.B, "mensaje $it") }
+        val p = SimulationJudge.prompt(scenario, many)
+        val turnLines = p.lines().filter { it.startsWith("<turno") }
+        turnLines.size shouldBe SimulationJudge.MAX_JUDGE_TURNS
+        p shouldContain "(se omitieron ${200 - SimulationJudge.MAX_JUDGE_TURNS} turnos)"
+        p shouldContain "mensaje 1<"
+        p shouldContain "mensaje 200<"
+        p shouldNotContain "mensaje 100<"
+        // Por caracteres: 40 turnos de 1000 code points no caben en 16.000.
+        val long = (1..40).map { StoredTurn(Side.A, "z".repeat(1000)) }
+        val lp = SimulationJudge.prompt(scenario, long)
+        lp.lines().count { it.startsWith("<turno") } shouldBe SimulationJudge.MAX_JUDGE_CHARS / 1000
+        lp shouldContain "(se omitieron 24 turnos)"
+        // Sin pasarse no se avisa.
+        SimulationJudge.prompt(scenario, many.take(10)) shouldNotContain "se omitieron"
+    }
+
     test("el juez acota el texto libre del veredicto") {
         val long = "x".repeat(1000)
         val json = JsonSchemaCheck.parseAndValidate(
-            """{"afinidad": 50, "dimensiones": [], "porQue": ["$long"], "dondeChocarian": ["$long"], "resumen": "$long"}""",
+            """{"afinidad": 50, "dimensiones": [], "porQue": ["$long"], "dondeChocarian": ["$long"], "resumen": "$long"}""".replace("\"dimensiones\": []", """"dimensiones": [{"nombre": "$long", "puntaje": 5, "nota": "$long"}]"""),
             SimulationJudge.SCHEMA,
         )
         val v = SimulationJudge.parse(json, scenario.rubric)
+        SimulationJudge.parse(json, emptyList()).dimensions.single().let {
+            it.name.length shouldBe SimulationJudge.MAX_NAME_CHARS
+            it.note!!.length shouldBe SimulationJudge.MAX_NOTE_CHARS
+        }
+        v.dimensions.all { (it.note?.length ?: 0) <= SimulationJudge.MAX_NOTE_CHARS } shouldBe true
         v.summary.length shouldBe SimulationJudge.MAX_SUMMARY_CHARS
         v.reasons.single().length shouldBe SimulationJudge.MAX_ITEM_CHARS
         v.frictions.single().length shouldBe SimulationJudge.MAX_ITEM_CHARS

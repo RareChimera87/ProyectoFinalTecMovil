@@ -2,6 +2,13 @@ package me.santiagoreina.parcheu.api.scenario
 
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.shouldNotBe
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import me.santiagoreina.parcheu.api.simulation.JudgeVerdict
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -74,7 +81,7 @@ class ScenarioApiTest : FunSpec({
 
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")
 
-    class Fixture(judgeFails: Boolean = false) {
+    class Fixture(judgeFails: Boolean = false, moderation: (() -> JsonObject)? = null) {
         val clock = MovableClock(start)
         val identityRepo = InMemoryIdentityRepository().apply {
             listOf("ana", "beto", "carla").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) }
@@ -93,7 +100,13 @@ class ScenarioApiTest : FunSpec({
             textResponder = { requests += it; "texto" },
             jsonResponder = { r, _ ->
                 requests += r
-                if (judgeFails) error("el juez falló") else judgeJson(70)
+                if (r.system?.contains("moderador") == true && moderation != null) {
+                    moderation()
+                } else if (judgeFails) {
+                    error("el juez falló")
+                } else {
+                    judgeJson(70)
+                }
             },
         )
         val ai = testGateway(fake)
@@ -236,8 +249,8 @@ class ScenarioApiTest : FunSpec({
         listOf("ana", "beto", "carla").forEach { uid -> Regex("\\b$uid\\b", RegexOption.IGNORE_CASE).containsMatchIn(sent) shouldBe false }
         // Y el orden de la transcripción es el del chat: A escribió primero.
         request.prompt.indexOf("Propongo ir al Chicamocha") shouldBeLessThan request.prompt.indexOf("Perfecto, repartimos")
-        // Una sola llamada al LLM: el juez; ningún turno de gemelo.
-        f.fake.calls shouldBe 1
+        // Dos llamadas al LLM: el juez y la moderación de su texto; ningún turno de gemelo.
+        f.fake.calls shouldBe 2
     }
 
     test("con los dos acuerdos ya guardados (carrera sin finalize), el siguiente GET de sesión cierra y pasa a JUDGING") {
@@ -287,6 +300,48 @@ class ScenarioApiTest : FunSpec({
             f.notifier.sent.count { it.notification.kind == NotificationKinds.SIMULATION_READY } shouldBe 2
             // La sesión de una persona ajena no existe para quien pregunta.
             client.get("/v1/scenario-sessions/${chat.id}") { auth("carla") }.status shouldBe HttpStatusCode.Forbidden
+        }
+    }
+
+    fun moderationJson(category: String, severity: String) = buildJsonObject {
+        putJsonArray("findings") { addJsonObject { put("category", category); put("severity", severity) } }
+    }
+
+    suspend fun HttpClient.judgedVerdict(f: Fixture): JudgeVerdict {
+        val chat = f.scenarioChat()
+        say("ana", chat.id, "a-1", "Hola").status shouldBe HttpStatusCode.OK
+        say("beto", chat.id, "b-1", "Hola, ¿planeamos?").status shouldBe HttpStatusCode.OK
+        agree("ana", chat.id)
+        agree("beto", chat.id)
+        judgeTask(chat.id).status shouldBe HttpStatusCode.NoContent
+        return f.simRepo.find(chat.id).shouldNotBeNull().transcript.scenarios.single().verdict.shouldNotBeNull()
+    }
+
+    test("un hallazgo HIGH en el texto del veredicto lo sustituye por uno genérico y conserva los puntajes") {
+        val f = Fixture(moderation = { moderationJson("HARASSMENT", "HIGH") })
+        testApplication {
+            val v = startApp(f.container()).judgedVerdict(f)
+            v.summary shouldBe ScenarioService.REDACTED_SUMMARY
+            v.reasons.shouldBeEmpty()
+            v.frictions.shouldBeEmpty()
+            v.dimensions.all { it.note == null } shouldBe true
+            v.affinity shouldBe 70
+            v.dimensions.isNotEmpty() shouldBe true
+        }
+    }
+
+    test("SELF_HARM, hallazgos LOW o una moderación que falla dejan el veredicto intacto (fail-open)") {
+        listOf<() -> JsonObject>(
+            { moderationJson("SELF_HARM", "HIGH") },
+            { moderationJson("HARASSMENT", "LOW") },
+            { error("la moderación falló") },
+        ).forEach { moderation ->
+            val f = Fixture(moderation = moderation)
+            testApplication {
+                val v = startApp(f.container()).judgedVerdict(f)
+                v.summary shouldNotBe ScenarioService.REDACTED_SUMMARY
+                v.summary.isNotEmpty() shouldBe true
+            }
         }
     }
 
