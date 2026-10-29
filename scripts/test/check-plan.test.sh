@@ -154,7 +154,7 @@ for e in dev prod; do
 done
 
 # C-B5: las alertas siempre tienen destinatario. Se prueba el comportamiento de la validación
-# con `terraform console` sobre un directorio que solo tiene la variable (sin providers ni GCP).
+# con `terraform plan` (sin recursos; no lee stdin, que colgaba con el wrapper de CI) sobre un directorio que solo tiene la variable (sin providers ni GCP).
 PROD="$ROOT/infra/terraform/envs/prod/main.tf"
 alert_prod="$(awk '/variable "alert_emails"/{f=1} f{print} f&&/^}/{exit}' "$PROD")"
 expect ok   "extracto de alert_emails de prod no vacío" grep -q 'validation' <<<"$alert_prod"
@@ -164,7 +164,7 @@ if command -v terraform >/dev/null; then
     d="$TMP/alertas-$e"; mkdir -p "$d"
     awk '/^variable "alert_emails"/{f=1} f{print} f&&/^}/{exit}' "$ROOT/infra/terraform/envs/$e/main.tf" >"$d/v.tf"
     # Sin pipe hacia grep -q: con pipefail, el SIGPIPE de terraform falsearía el resultado.
-    valida() { local out; out="$(cd "$d" && echo 'var.alert_emails' | terraform console -var "alert_emails=$1" 2>&1)"; ! grep -q 'Invalid value for variable' <<<"$out"; }
+    valida() { local out; out="$(cd "$d" && timeout 120 terraform plan -input=false -lock=false -var "alert_emails=$1" </dev/null 2>&1)"; ! grep -q 'Invalid value for variable' <<<"$out"; }
     expect ok   "$e: alert_emails acepta un correo válido" valida '["equipo@parcheu.co"]'
     expect fail "$e: alert_emails rechaza un correo inválido" valida '["equipo@parcheu"]'
     expect fail "$e: alert_emails rechaza la lista vacía" valida '[]'
