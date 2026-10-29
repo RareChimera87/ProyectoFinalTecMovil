@@ -1,10 +1,22 @@
 # Dueños por capa (docs/equipo.md). Solo I1 tiene usuario de GitHub registrado por ahora;
 # cuando I2 e I3 se agreguen como colaboradores, reemplaza los comentarios de abajo.
+# Con una sola cuenta, CODEOWNERS no obliga nada (no se exige "Require review from Code Owners"):
+# deja el dueño explícito en las rutas sensibles y es lo que activará la revisión cuando haya
+# más de una cuenta (docs/PLAN.md §5, C-A1/C-A2).
 *                       @RareChimera87
 /backend/               @RareChimera87
 /infra/                 @RareChimera87
 /.github/               @RareChimera87
+/scripts/               @RareChimera87
+/deploy/                @RareChimera87
+/firebase/firestore.rules @RareChimera87
+# Gates de revisión y protección de ramas (cualquier cambio exige además la etiqueta `gobernanza`):
+/.github/CODEOWNERS                 @RareChimera87
+/.github/dependabot.yml             @RareChimera87
+/scripts/proteger-ramas.sh          @RareChimera87
+# Cuando I2 e I3 existan, la regla de la última coincidencia pide poner aquí a cada dueño junto
+# con @RareChimera87 para las rutas sensibles; no los quites de /.github/ ni /infra/:
 # /android/app/src/main/java/me/santiagoreina/parcheu/feature/  @usuario-I2
 # /android/designsystem/                                        @usuario-I2
-# /firebase/                                                    @usuario-I3
+# /firebase/                                                    @usuario-I3 @RareChimera87
 # /docs/play-console.md                                         @usuario-I3
