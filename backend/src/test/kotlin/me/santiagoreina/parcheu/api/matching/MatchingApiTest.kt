@@ -19,8 +19,8 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
@@ -156,7 +156,7 @@ class MatchingApiTest : FunSpec({
         testApplication {
             val client = app(World())
             client.post("/internal/jobs/match-sweep").status shouldBe HttpStatusCode.Forbidden
-            client.post("/internal/jobs/match-sweep") { header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}") }
+            client.post("/internal/jobs/match-sweep") { header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}") }
                 .status shouldBe HttpStatusCode.NoContent
         }
     }

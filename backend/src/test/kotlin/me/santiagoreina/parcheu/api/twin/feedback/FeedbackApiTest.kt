@@ -21,10 +21,10 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.startApp
@@ -201,7 +201,7 @@ class FeedbackApiTest : FunSpec({
             val client = app(f)
             listOf("ana", "beto", "carla").forEach { client.answer(it) }
             val job = suspend {
-                client.post("/internal/jobs/twin-accuracy") { header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}") }.status
+                client.post("/internal/jobs/twin-accuracy") { header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}") }.status
             }
             job() shouldBe HttpStatusCode.NoContent
             job() shouldBe HttpStatusCode.NoContent

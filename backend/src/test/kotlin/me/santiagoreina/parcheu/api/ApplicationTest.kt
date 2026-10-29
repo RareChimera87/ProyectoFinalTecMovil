@@ -24,7 +24,6 @@ import io.ktor.server.routing.post
 import kotlinx.serialization.Serializable
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
 import me.santiagoreina.parcheu.api.platform.errors.Conflict
@@ -228,13 +227,15 @@ class ApplicationTest : FunSpec({
         testApplication {
             val client = startApp()
             client.post("/internal/tasks/judge-scenario").status shouldBe HttpStatusCode.Forbidden
-            client.post("/internal/tasks/judge-scenario", bearer(FakeOidcVerifier.VALID_TOKEN)).status shouldNotBe HttpStatusCode.Forbidden
+            client.post("/internal/tasks/judge-scenario", bearer(TEST_OIDC_TOKEN)).status shouldNotBe HttpStatusCode.Forbidden
+            // El token fijo de antes (B-A2) ya no abre /internal.
+            client.post("/internal/tasks/judge-scenario", bearer("oidc-tasks-fake")).status shouldBe HttpStatusCode.Forbidden
         }
     }
 
     test("El token OIDC no sirve en /v1") {
         testApplication {
-            startApp().get("/v1/me", bearer(FakeOidcVerifier.VALID_TOKEN)).status shouldBe HttpStatusCode.Unauthorized
+            startApp().get("/v1/me", bearer(TEST_OIDC_TOKEN)).status shouldBe HttpStatusCode.Unauthorized
         }
     }
 })
