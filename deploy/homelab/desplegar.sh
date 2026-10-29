@@ -105,14 +105,19 @@ else
 fi
 chmod 600 .env
 # Falla antes de tocar los contenedores si el modo no puede arrancar (el backend también lo rechaza).
-# El backend acepta ENV con espacios y en cualquier caja: se normaliza igual (comillas, espacios, \r, minúsculas) para
-# abortar en los mismos casos y que una reversión a una imagen anterior a B-A2 nunca arranque en local sin la bandera.
-MODO="$(sed -n 's/^PARCHEU_ENV=//p' .env | tail -1 | tr -d "\"' \t\r" | tr '[:upper:]' '[:lower:]')"
-MODO="${MODO:-dev}"
-# La bandera, en cambio, solo vale `true` exacto (compose quita las comillas que la rodean, nada más).
-BANDERA="$(sed -n 's/^ALLOW_FAKE_AUTH=//p' .env | tail -1)"
-BANDERA="${BANDERA#\"}"; BANDERA="${BANDERA%\"}"; BANDERA="${BANDERA#\'}"; BANDERA="${BANDERA%\'}"
-if [ "$MODO" = "local" ] && [ "$BANDERA" != "true" ]; then
+# Se leen los valores efectivos que recibe cada contenedor (compose ya resolvió comillas, comentarios de fin de línea y
+# valores por defecto), no el .env a mano. ENV se normaliza como el backend (espacios, \r y caja); la bandera solo vale
+# `true` exacto. Así el script aborta en los mismos casos que el backend y una reversión a una imagen anterior a B-A2
+# nunca arranca en local sin la bandera.
+CONFIG="$(docker compose -f compose.yaml --env-file .env config --format json)" || {
+  echo "docker compose config falló con ~/$DIR/.env; revísalo." >&2
+  exit 1
+}
+valores() { printf '%s\n' "$CONFIG" | sed -n "s/^ *\"$1\": \"\(.*\)\",\{0,1\}\$/\1/p" | sed 's/\\[rt]//g'; }
+MODOS="$(valores ENV | tr -d ' \t\r' | tr '[:upper:]' '[:lower:]' | sort -u)"
+MODO="$(printf '%s\n' "$MODOS" | sed -n 1p)"
+# Sin `grep -q`: con pipefail, su salida temprana daría SIGPIPE a printf y la condición fallaría en silencio.
+if printf '%s\n' "$MODOS" | grep -x local >/dev/null && valores ALLOW_FAKE_AUTH | grep -vx true >/dev/null; then
   echo "PARCHEU_ENV=local abre la autenticación Fake y exige ALLOW_FAKE_AUTH=true en ~/$DIR/.env; usa dev (README)." >&2
   exit 1
 fi
@@ -187,7 +192,9 @@ done
 REMOTO
 
 # El 8090 solo escucha en 127.0.0.1 del servidor (C-M5): desde este equipo se entra por NPM (HTTPS), no por la LAN.
-MODO="$(remoto "sed -n 's/^PARCHEU_ENV=//p' ~/$DIR_REMOTO/.env | tail -1" | tr -d "\"' \t\r" | tr '[:upper:]' '[:lower:]')"
+# El modo efectivo de parcheu-api, como lo resolvió compose (mismo criterio que la comprobación previa).
+MODO="$(remoto "cd ~/$DIR_REMOTO && docker compose -f compose.yaml --env-file .env config --format json parcheu-api" \
+  | sed -n 's/^ *"ENV": "\(.*\)",\{0,1\}$/\1/p' | sed 's/\\[rt]//g' | tr -d ' \t\r' | tr '[:upper:]' '[:lower:]' | sed -n 1p)" || MODO=""
 if curl -fsS --max-time 8 "https://api-parcheu.homeserverlab.site/v1/health" >/dev/null 2>&1; then
   echo "HTTPS OK: https://api-parcheu.homeserverlab.site/v1/health"
   if [ "$MODO" = "local" ]; then
