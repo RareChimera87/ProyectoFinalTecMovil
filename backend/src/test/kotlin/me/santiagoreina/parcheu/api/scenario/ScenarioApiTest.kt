@@ -228,8 +228,8 @@ class ScenarioApiTest : FunSpec({
         request.prompt shouldContain "Presupuesto: 80000 COP"
         request.prompt shouldContain "Propongo ir al Chicamocha el domingo"
         request.prompt shouldContain "Perfecto, repartimos los gastos"
-        request.prompt shouldContain "Persona A: "
-        request.prompt shouldContain "Persona B: "
+        request.prompt shouldContain "<turno hablante=\"A\">"
+        request.prompt shouldContain "<turno hablante=\"B\">"
         request.system.shouldNotBeNullForTest() shouldContain "conversación real"
         listOf("Persona secreta", "Memoria privada", "Nombre Secreto").forEach { secret -> sent shouldNotContain secret }
         // Los nombres de usuario (uid) tampoco viajan como palabra suelta.
