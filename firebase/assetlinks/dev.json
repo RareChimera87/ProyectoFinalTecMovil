@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "me.santiagoreina.parcheu.dev",
+      "sha256_cert_fingerprints": [
+        "A3:5E:13:90:B5:65:FC:11:00:74:A1:37:B3:8E:E7:C4:0F:62:56:57:FC:F7:03:39:36:85:84:46:3A:85:7B:DB"
+      ]
+    }
+  }
+]

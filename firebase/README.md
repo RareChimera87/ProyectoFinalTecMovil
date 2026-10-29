@@ -48,16 +48,20 @@ SHA-256 `A3:5E:13:90:B5:65:FC:11:00:74:A1:37:B3:8E:E7:C4:0F:62:56:57:FC:F7:03:39
 
 ## App Links de invitaciones (E6.1)
 
-`public/.well-known/assetlinks.json` autoriza a la app a abrir `https://<hosting>/i/{codigo}` sin preguntar. Se
-publica el mismo archivo en los dos sitios con los dos paquetes:
+`public/.well-known/assetlinks.json` autoriza a la app a abrir `https://<hosting>/i/{codigo}` sin preguntar. Hay un
+archivo por entorno (C-B9): las fuentes están en `assetlinks/dev.json` y `assetlinks/prod.json` y
+`node render-assetlinks.mjs <dev|prod>` escribe el que se publica. Lo versionado en `public/` es el de **dev**.
 
-| Paquete | Huellas SHA-256 |
-|---|---|
-| `me.santiagoreina.parcheu.dev` | debug de la máquina de I3 (cada desarrollador que quiera probar el App Link en su teléfono agrega la suya) |
-| `me.santiagoreina.parcheu` | llave de subida (`docs/play-console.md` §2); falta la de **Play App Signing** (ver `docs/pendientes-humanos.md`, E6.1) |
+| Entorno | Paquete | Huellas SHA-256 |
+|---|---|---|
+| dev (`parcheu-dev`) | `me.santiagoreina.parcheu.dev` | debug de la máquina de I3 (cada desarrollador que quiera probar el App Link en su teléfono agrega la suya) |
+| prod (`parcheu-prod`) | `me.santiagoreina.parcheu` | llave de subida (`docs/play-console.md` §2) y la de **Play App Signing**, que se inyecta desde la variable `PLAY_APP_SIGNING_SHA256` (el render falla si falta) |
+
+El deploy de prod debe correr, antes de `firebase deploy`, `PLAY_APP_SIGNING_SHA256=<huella> node render-assetlinks.mjs prod`
+(pendiente en `firebase-deploy.yml`, ver `docs/pendientes-humanos.md`). Mientras tanto no se despliega prod.
 
 Para agregar una huella: `keytool -list -v -keystore <keystore>` (o Play Console > Integridad de la app) y
-agregarla en mayúsculas con `:` al arreglo del paquete. `scripts/test/legal-pages.sh` valida el formato. En el
+agregarla en mayúsculas con `:` al arreglo del paquete en `assetlinks/<entorno>.json` y volver a generar con el render. `scripts/test/legal-pages.sh` valida el formato. En el
 teléfono se comprueba con `adb shell pm get-app-links me.santiagoreina.parcheu.dev` (debe decir `verified`).
 
 ## google-services.json

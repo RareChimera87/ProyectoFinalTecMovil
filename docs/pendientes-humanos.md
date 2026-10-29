@@ -25,6 +25,16 @@ variables de GitHub, falla antes de compilar si faltan o no son `https://`, y Gr
 | 1 | Crear las variables (Settings > Secrets and variables > Actions > Variables, a nivel de repo o en los environments `play` y `play-alpha`): `PARCHEU_API_URL_PROD` (URL https del servicio `api` de `parcheu-prod`, con el número de proyecto, o el hostname público que se use) y `PARCHEU_HOSTING_URL_PROD` (p. ej. `https://parcheu-prod.web.app`). `gh variable set PARCHEU_API_URL_PROD -R RareChimera87/ProyectoFinalTecMovil --body <url>` | El usuario | Antes del primer release de prod |
 | 2 | Para probar R8 en local con `assembleProdRelease` sin esas URLs: `-Pparcheu.allowPlaceholderUrls=true` (el workflow nunca lo pasa). | Cada desarrollador | Si hace falta |
 
+## Auditoría 28 oct: assetlinks de prod (C-B9)
+
+El `assetlinks.json` versionado ahora es solo el de dev (paquete `.dev` con la huella de debug). El de prod
+(`firebase/assetlinks/prod.json`, solo `me.santiagoreina.parcheu`) se genera con `firebase/render-assetlinks.mjs prod`.
+
+| # | Qué | Quién | Cuándo |
+|---|---|---|---|
+| 1 | Copiar la huella SHA-256 de **Play App Signing** (Play Console > Configuración > Integridad de la app > Firma de apps) y guardarla como variable `PLAY_APP_SIGNING_SHA256` en el environment `production` de GitHub. | I3 | Tras la primera subida a Play |
+| 2 | Editar `.github/workflows/firebase-deploy.yml` (job `deploy-prod`, solo lo puede hacer un PR con la etiqueta `gobernanza`): antes de "Despliega reglas, índices y Hosting a prod" agregar un paso `env: PLAY_APP_SIGNING_SHA256: ${{ vars.PLAY_APP_SIGNING_SHA256 }}` con `run: node render-assetlinks.mjs prod`. Sin ese paso un deploy de prod publicaría el archivo de dev (con el paquete `.dev`). Tampoco hay que desplegar prod antes. | El usuario | Antes del primer tag `v*` |
+
 ## E0.8 · Configuración de Firebase
 
 Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,
