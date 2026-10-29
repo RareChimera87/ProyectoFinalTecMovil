@@ -10,6 +10,7 @@ Reglas, índices y Hosting de Firebase. Decisiones: [ADR-0004](../docs/adr/0004-
 | `firestore.rules` | Todo denegado; lectura solo de miembros, participantes o dueño; ninguna escritura de clientes |
 | `firestore.indexes.json` | Índices compuestos (vacío: la 1.0 aún no tiene consultas compuestas; las agregan E5.2 y E4.x si las necesitan) |
 | `public/` | Hosting: `/privacidad`, `/terminos`, `/borrar-cuenta` (E8.4), `/.well-known/assetlinks.json` y el respaldo web de `/i/{codigo}` (E6.1, rewrite `/i/**` en `firebase.json`) |
+| `public/admin.html`, `admin.css`, `admin.js` | Panel de moderación (E8.5). Sin código en línea: la CSP de `/admin*` (`firebase.json`) no admite `unsafe-inline`. Llama a `/v1/admin/*` en el mismo origen (rewrite `/v1/**` → servicio Cloud Run `api`, `us-central1`); no hay campo de URL porque el backend no instala CORS y el token de admin no debe salir a otro origen. En `parcheu-dev` sirve solo si existe el servicio `api` en Cloud Run (el homeserver no lo es). SDK `firebase-*-compat` 11.0.2 de gstatic con SRI (`integrity` sha384): los archivos por versión son inmutables (`max-age=31536000`); al subir de versión hay que recalcular el hash con `curl -s <url> \| openssl dgst -sha384 -binary \| openssl base64 -A` |
 | `test/` | Pruebas de las reglas con `@firebase/rules-unit-testing` en el emulador |
 
 ## Documentos de Firestore (arquitectura.md §8.2)
