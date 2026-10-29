@@ -30,8 +30,10 @@ enum class AiPurpose(val id: String, val tier: ModelTier, val chargesUserBudget:
     MEMORY_EXTRACTION("memory_extraction", ModelTier.LITE),
     /**
      * Moderación de contenido (E8.6). Fuera del techo personal: si contara, quien gasta su techo con simulaciones
-     * escribiría sin moderación (ni ayuda ante autolesión) hasta medianoche. Su costo lo limitan el tope de mensajes
-     * moderados y el sub-techo `AI_USER_DAILY_MODERATION_USD`, que pasan al muestreo (ADR-0026).
+     * escribiría sin moderación (ni ayuda ante autolesión) hasta medianoche. Su costo por persona lo acotan el tope de
+     * mensajes moderados (`MODERATION_DAILY_PER_USER`) y el sub-techo `AI_USER_DAILY_MODERATION_USD`, que pasan al
+     * muestreo, y el corte duro de la cola muestreada (`MODERATION_SAMPLED_DAILY_PER_USER`), después del cual no se
+     * modera más ese día (ADR-0026). El sub-techo es suave: mira el gasto registrado, no las tareas en vuelo.
      */
     MODERATION("moderation", ModelTier.LITE, chargesUserBudget = false),
     /** Nombres de comunidades (E6.4). */
@@ -121,8 +123,9 @@ class AiGateway(
     }
 
     /**
-     * ¿Le queda a [userId] sub-techo diario de moderación (`AI_USER_DAILY_MODERATION_USD`)? Consulta sin reservar:
-     * al pasarlo la moderación de esa persona pasa al muestreo en vez de apagarse (ADR-0026).
+     * ¿Le queda a [userId] sub-techo diario de moderación (`AI_USER_DAILY_MODERATION_USD`)? Consulta sin reservar, así
+     * que es un tope suave: una ráfaga de mensajes simultáneos lo puede pasar por lo que haya en vuelo (acotado por el
+     * límite por minuto). Al pasarlo la moderación de esa persona pasa al muestreo en vez de apagarse (ADR-0026).
      */
     suspend fun moderationBudgetLeft(userId: UUID): Boolean =
         usage.userSpentMicros(guard.today(), userId, AiPurpose.MODERATION) < config.userDailyModerationUsd.movePointRight(6).toLong()

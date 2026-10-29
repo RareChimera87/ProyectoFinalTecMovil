@@ -13,7 +13,8 @@ import me.santiagoreina.parcheu.contract.QuotaKind
  *   `QUOTA_PLUS_DAILY_FULL_REPORTS` (20).
  * - **Topes internos** ([DailyLimiter], B-M1): reenvíos de las 12 respuestas del gemelo por día
  *   (`QUOTA_FREE_DAILY_TWIN_ANSWERS` 10, `QUOTA_PLUS_DAILY_TWIN_ANSWERS` 30) y mensajes moderados con IA
- *   por persona y día (`MODERATION_DAILY_PER_USER` 200; después se muestrea, ADR-0026).
+ *   por persona y día (`MODERATION_DAILY_PER_USER` 200; después se muestrea, ADR-0026), con un corte duro de
+ *   moderaciones muestreadas (`MODERATION_SAMPLED_DAILY_PER_USER` 100) a partir del cual ya no se encola ninguna.
  */
 data class QuotaLimits(
     val freeWeeklySimulations: Int = 5,
@@ -25,12 +26,13 @@ data class QuotaLimits(
     val freeDailyTwinAnswers: Int = 10,
     val plusDailyTwinAnswers: Int = 30,
     val dailyModerations: Int = 200,
+    val dailySampledModerations: Int = 100,
 ) {
     init {
         listOf(
             freeWeeklySimulations, freeDailyRandomMatches, freeMonthlyFullReports,
             plusDailySimulations, plusDailyRandomMatches, plusDailyFullReports,
-            freeDailyTwinAnswers, plusDailyTwinAnswers, dailyModerations,
+            freeDailyTwinAnswers, plusDailyTwinAnswers, dailyModerations, dailySampledModerations,
         ).forEach { require(it >= 0) { "Los límites de cupo no pueden ser negativos" } }
     }
 
@@ -67,6 +69,7 @@ data class QuotaLimits(
                 freeDailyTwinAnswers = int("QUOTA_FREE_DAILY_TWIN_ANSWERS", defaults.freeDailyTwinAnswers),
                 plusDailyTwinAnswers = int("QUOTA_PLUS_DAILY_TWIN_ANSWERS", defaults.plusDailyTwinAnswers),
                 dailyModerations = int("MODERATION_DAILY_PER_USER", defaults.dailyModerations),
+                dailySampledModerations = int("MODERATION_SAMPLED_DAILY_PER_USER", defaults.dailySampledModerations),
             )
         }
     }

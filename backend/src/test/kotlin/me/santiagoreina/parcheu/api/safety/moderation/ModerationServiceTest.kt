@@ -1,5 +1,8 @@
 package me.santiagoreina.parcheu.api.safety.moderation
 
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.Json
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
@@ -127,6 +130,7 @@ class ModerationServiceTest : FunSpec({
         withinDailyCap: (UUID) -> Boolean = { true },
         sampleEvery: Int = ModerationService.DEFAULT_SAMPLE_EVERY,
         withinSpend: suspend (UUID) -> Boolean = { true },
+        withinSampledCap: (UUID) -> Boolean = { true },
     ) {
         val identityRepo = InMemoryIdentityRepository().apply { listOf("ana", "beto").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val ana = identityRepo.user("ana")
@@ -153,7 +157,7 @@ class ModerationServiceTest : FunSpec({
         val flakyNotifier = FlakyNotifier(notifier)
         val moderation = ModerationService(
             MessageModerator(testGateway(llm, aiUsage)), chatRepo, chat.service, flakySafety, queue, FIXED_CLOCK, flakyNotifier,
-            withinDailyCap, sampleEvery, withinSpend,
+            withinDailyCap, sampleEvery, withinSpend, withinSampledCap,
         ).also { it.attachTo(chat) }
         val room = runBlocking { chat.service.createDirect(ana.id, beto.id, Mode.AMISTAD) }
 
@@ -224,6 +228,53 @@ class ModerationServiceTest : FunSpec({
         f.queue.tasks shouldHaveSize 1
         f.queue.tasks.single().body shouldContain sampled.toString()
         counted shouldBe 0
+    }
+
+    test("B-M1: pasado el sub-techo, N mensajes no generan más llamadas al LLM que el corte duro de la cola muestreada") {
+        val limiter = DailyLimiter(
+            InMemoryDailyCounterRepository(), InMemoryDevEntitlementService(),
+            QuotaLimits(dailyModerations = 1_000, dailySampledModerations = 5), FIXED_CLOCK,
+        )
+        // Peor caso: muestreo 1 de 1 (todo mensaje cae en la muestra) y el sub-techo en USD ya gastado.
+        val f = Fixture(
+            withinDailyCap = { limiter.tryConsume(it, DailyKind.MODERATION) },
+            sampleEvery = 1,
+            withinSpend = { false },
+            withinSampledCap = { limiter.tryConsume(it, DailyKind.MODERATION_SAMPLED) },
+        )
+        repeat(50) { f.send("mensaje $it") }
+        f.queue.tasks shouldHaveSize 5
+        runBlocking {
+            f.queue.tasks.forEach { task ->
+                val id = UUID.fromString(Json.parseToJsonElement(task.body).jsonObject["id"]!!.jsonPrimitive.content)
+                f.moderation.moderate(id)
+            }
+        }
+        f.llm.calls shouldBe 5
+        // El corte es por autor: Ana sigue teniendo su cola muestreada.
+        runBlocking {
+            f.moderation.enqueue(MessageRecord(UUID.randomUUID(), f.room.id, f.ana.id, "hola", false, false, null, FIXED_CLOCK.instant()))
+        }
+        f.queue.tasks shouldHaveSize 6
+    }
+
+    test("B-M1: el corte duro solo se cuenta para mensajes que cayeron en la muestra y falla abierto") {
+        var counted = 0
+        val f = Fixture(sampleEvery = 4, withinSpend = { false }, withinSampledCap = { counted++; false })
+        fun ids() = generateSequence { UUID.randomUUID() }
+        val sampled = ids().first { Math.floorMod(it.hashCode(), 4) == 0 }
+        val skipped = ids().first { Math.floorMod(it.hashCode(), 4) != 0 }
+        fun record(id: UUID) = MessageRecord(id, f.room.id, f.beto.id, "mensaje", false, false, null, FIXED_CLOCK.instant())
+        runBlocking {
+            f.moderation.enqueue(record(skipped))
+            f.moderation.enqueue(record(sampled))
+        }
+        f.queue.tasks shouldHaveSize 0
+        counted shouldBe 1
+
+        val failing = Fixture(sampleEvery = 1, withinSpend = { false }, withinSampledCap = { error("base caída") })
+        failing.send("hola")
+        failing.queue.tasks shouldHaveSize 1
     }
 
     test("B-M1: si el contador del tope falla, el mensaje se modera igual (fail-open de la moderación)") {

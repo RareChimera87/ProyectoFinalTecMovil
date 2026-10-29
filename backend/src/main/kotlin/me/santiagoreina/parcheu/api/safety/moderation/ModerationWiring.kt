@@ -15,7 +15,8 @@ import java.util.UUID
  * Servicio de moderación sobre los repositorios de [chat] y [safety]; [tasks] es la cola `ai-light` y [notifier] entrega
  * la ayuda a quien escribió. Con [daily] aplica el tope diario por persona (`MODERATION_DAILY_PER_USER`) y, pasado el
  * tope o el sub-techo de gasto de moderación del autor (`AI_USER_DAILY_MODERATION_USD`, que se mira siempre), modera
- * 1 de cada [sampleEvery] mensajes (B-M1, ADR-0026); sin [daily] solo aplica el sub-techo.
+ * 1 de cada [sampleEvery] mensajes (B-M1, ADR-0026) hasta el corte duro de la cola muestreada
+ * (`MODERATION_SAMPLED_DAILY_PER_USER`); sin [daily] solo aplica el sub-techo.
  */
 fun moderationService(
     ai: AiGateway,
@@ -31,6 +32,7 @@ fun moderationService(
     withinDailyCap = daily?.let { limiter -> { author: UUID -> limiter.tryConsume(author, DailyKind.MODERATION) } } ?: { true },
     sampleEvery = sampleEvery,
     withinSpend = { author -> ai.moderationBudgetLeft(author) },
+    withinSampledCap = daily?.let { limiter -> { author: UUID -> limiter.tryConsume(author, DailyKind.MODERATION_SAMPLED) } } ?: { true },
 )
 
 /**

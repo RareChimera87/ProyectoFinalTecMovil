@@ -48,6 +48,10 @@ import java.util.UUID
  * (`MODERATION_DAILY_PER_USER`) y [withinSpend] mira su sub-techo de gasto de moderación (`AI_USER_DAILY_MODERATION_USD`);
  * pasado cualquiera de los dos solo se modera 1 de cada [sampleEvery] mensajes (muestreo determinista por id), así un
  * bucle de mensajes no dispara una llamada al LLM por cada uno y el abuso sigue teniendo una probabilidad de revisión.
+ * La cola muestreada tiene su propio corte duro, [withinSampledCap] (`MODERATION_SAMPLED_DAILY_PER_USER`): agotado, no
+ * se encola nada más ese día y se registra `moderation_sampled_out` con `reason=sampled_cap`. Así el gasto de moderación
+ * de una persona queda acotado a una fracción conocida del presupuesto total (como mucho el sub-techo, más lo que haya
+ * en vuelo, más el corte duro por el costo de una moderación). El sub-techo en USD es suave (mira el gasto registrado).
  * La moderación no cuenta para el techo personal general de IA (`AiPurpose.MODERATION`), así que gastarlo en
  * simulaciones no la apaga. Si una comprobación falla se modera igual (la moderación nunca se apaga por un error propio).
  */
@@ -65,6 +69,8 @@ class ModerationService(
     private val sampleEvery: Int = DEFAULT_SAMPLE_EVERY,
     /** ¿Le queda al autor sub-techo de gasto de moderación hoy? (`AiGateway.moderationBudgetLeft`). */
     private val withinSpend: suspend (UUID) -> Boolean = { true },
+    /** Cuenta una moderación muestreada del autor; false si ya agotó el corte duro del día (`DailyKind.MODERATION_SAMPLED`). */
+    private val withinSampledCap: (UUID) -> Boolean = { true },
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -75,10 +81,17 @@ class ModerationService(
     /** Encola la moderación de [message]; nunca propaga errores (el envío ya ocurrió). */
     suspend fun enqueue(message: MessageRecord) {
         val author = message.senderId ?: return
-        if (!underCap(author) && !sampled(message.id)) {
-            log.atInfo().setMessage(SAMPLED_OUT).addKeyValue("event", SAMPLED_OUT)
-                .addKeyValue("messageId", message.id.toString()).log()
-            return
+        if (!underCap(author)) {
+            val reason = when {
+                !sampled(message.id) -> "sampling"
+                !underSampledCap(author) -> "sampled_cap"
+                else -> null
+            }
+            if (reason != null) {
+                log.atInfo().setMessage(SAMPLED_OUT).addKeyValue("event", SAMPLED_OUT)
+                    .addKeyValue("messageId", message.id.toString()).addKeyValue("reason", reason).log()
+                return
+            }
         }
         try {
             tasks.enqueue(
@@ -103,6 +116,19 @@ class ModerationService(
      */
     private suspend fun underCap(author: UUID): Boolean = try {
         withinSpend(author) && withinDailyCap(author)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.atWarn().setMessage(CAP_FAILED).addKeyValue("event", CAP_FAILED).addKeyValue("error", e.javaClass.simpleName).log()
+        true
+    }
+
+    /**
+     * ¿Le queda al autor cola muestreada hoy? Solo se consulta (y se cuenta) para un mensaje que cayó en el muestreo.
+     * Un fallo del contador cuenta como sí: la moderación no se apaga por un error propio.
+     */
+    private fun underSampledCap(author: UUID): Boolean = try {
+        withinSampledCap(author)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

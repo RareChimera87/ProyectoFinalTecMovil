@@ -21,6 +21,12 @@ enum class DailyKind {
 
     /** Mensajes de chat moderados con IA (E8.6); pasado el tope se muestrea (ADR-0026). */
     MODERATION,
+
+    /**
+     * Moderaciones muestreadas (1 de cada `MODERATION_SAMPLE_EVERY`) después del tope o del sub-techo: corte duro de
+     * la cola muestreada, sin él el muestreo de una sola cuenta no tendría límite por persona (ADR-0026).
+     */
+    MODERATION_SAMPLED,
 }
 
 /** Contadores de `daily_counters`, uno por persona, día de Bogotá y [DailyKind]. */
@@ -91,6 +97,7 @@ class DailyLimiter(
                 if (entitlements.isPlus(userId, now)) limits.plusDailyTwinAnswers else limits.freeDailyTwinAnswers
             // Igual para ambos planes: no hace falta consultar `entitlements` en cada mensaje.
             DailyKind.MODERATION -> limits.dailyModerations
+            DailyKind.MODERATION_SAMPLED -> limits.dailySampledModerations
         }
         return counters.increment(userId, kind, now.atZone(BogotaZone).toLocalDate(), limit)
     }

@@ -17,11 +17,12 @@ create table ai_budget_user (
 create index ai_usage_user_day_idx on ai_usage (user_id, day);
 
 -- Topes diarios internos por persona (no son cupos del contrato ni salen en GET /v1/quota): reenvíos de las
--- respuestas del gemelo y moderaciones con IA. Se incrementan con un solo INSERT ... ON CONFLICT condicional.
+-- respuestas del gemelo, moderaciones con IA y moderaciones muestreadas (corte duro de la cola muestreada).
+-- Se incrementan con un solo INSERT ... ON CONFLICT condicional.
 create table daily_counters (
     user_id uuid not null references users (id) on delete cascade,
     day     date not null, -- día en America/Bogota
-    kind    text not null check (kind in ('TWIN_ANSWERS', 'MODERATION')),
+    kind    text not null check (kind in ('TWIN_ANSWERS', 'MODERATION', 'MODERATION_SAMPLED')),
     count   int not null default 0,
     primary key (user_id, day, kind)
 );

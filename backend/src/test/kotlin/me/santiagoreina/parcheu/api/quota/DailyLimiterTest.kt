@@ -72,6 +72,17 @@ class DailyLimiterTest : FunSpec({
         daily.tryConsume(ana, DailyKind.TWIN_ANSWERS) shouldBe true
     }
 
+    test("moderación muestreada: corte duro propio, separado del tope de moderación") {
+        val (daily, _) = setup("2026-10-28T15:00-05:00", QuotaLimits(dailyModerations = 1, dailySampledModerations = 2))
+        daily.tryConsume(ana, DailyKind.MODERATION) shouldBe true
+        daily.tryConsume(ana, DailyKind.MODERATION) shouldBe false
+        repeat(2) { daily.tryConsume(ana, DailyKind.MODERATION_SAMPLED) shouldBe true }
+        daily.tryConsume(ana, DailyKind.MODERATION_SAMPLED) shouldBe false
+        QuotaLimits().dailySampledModerations shouldBe 100
+        QuotaLimits.fromEnv(mapOf("MODERATION_SAMPLED_DAILY_PER_USER" to "7")).dailySampledModerations shouldBe 7
+        shouldThrow<IllegalStateException> { QuotaLimits.fromEnv(mapOf("MODERATION_SAMPLED_DAILY_PER_USER" to "x")) }
+    }
+
     test("un tope en 0 lo bloquea todo; las variables de entorno se leen y validan") {
         val (daily, _) = setup("2026-10-28T15:00-05:00", QuotaLimits(freeDailyTwinAnswers = 0))
         daily.tryConsume(ana, DailyKind.TWIN_ANSWERS) shouldBe false
@@ -114,6 +125,8 @@ class DailyLimiterTest : FunSpec({
                 transaction(db) {
                     DailyCounters.selectAll().map { it[DailyCounters.count] }.sorted() shouldBe listOf(1, 10)
                 }
+                // Todos los DailyKind caben en el CHECK de `daily_counters`.
+                DailyKind.entries.forEach { daily.tryConsume(user, it) shouldBe true }
             }
         }
 })
