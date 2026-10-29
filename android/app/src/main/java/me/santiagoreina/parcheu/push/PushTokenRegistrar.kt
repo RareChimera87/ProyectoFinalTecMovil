@@ -8,6 +8,7 @@ import me.santiagoreina.parcheu.contract.FcmToken
 import me.santiagoreina.parcheu.core.error.ApiErrorMapper
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.core.network.apiCall
+import me.santiagoreina.parcheu.data.auth.SessionCleaner
 
 /** Dónde se guarda el último token que FCM entregó y el que el backend ya conoce. */
 interface PushTokenStore {
@@ -16,7 +17,16 @@ interface PushTokenStore {
 
     /** Cuenta para la que se registró [registeredToken]; si la cuenta cambia, hay que registrar de nuevo. */
     var registeredUser: String?
+
+    /** Olvida todo (cierre de sesión): ni el token ni la cuenta para la que se registró quedan en disco. */
+    fun clear()
 }
+
+/**
+ * [SessionCleaner] del push (A-B3): `SignOutFlow` ya llamó a [PushTokenRegistrar.unregister] (que necesita
+ * `lastToken` y por eso corre antes de los limpiadores); después no debe quedar el token ni la cuenta.
+ */
+fun pushTokenCleaner(store: PushTokenStore) = SessionCleaner { store.clear() }
 
 class SharedPrefsPushTokenStore(context: Context) : PushTokenStore {
     private val prefs = context.applicationContext.getSharedPreferences(
@@ -35,6 +45,10 @@ class SharedPrefsPushTokenStore(context: Context) : PushTokenStore {
     override var registeredUser: String?
         get() = prefs.getString("registered_user", null)
         set(value) = prefs.edit().putString("registered_user", value).apply()
+
+    override fun clear() {
+        prefs.edit().clear().apply()
+    }
 }
 
 /**
