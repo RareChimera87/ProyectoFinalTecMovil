@@ -18,3 +18,9 @@ Tres personas moderan una app con chat entre desconocidos. Play exige mecanismos
 
 ## Consecuencias
 - El chat nunca se bloquea por la IA; puede haber una ventana corta con contenido dañino visible, cubierta por reportes y bloqueo inmediato.
+
+## Enmienda (auditoría del 28 oct 2026, B-M1): tope diario por autor con muestreo
+- Cada mensaje era una llamada al LLM sin límite por persona: un bucle de mensajes gastaba el presupuesto de IA de todos.
+- Cada autor tiene `MODERATION_DAILY_PER_USER` (200) mensajes moderados al día; pasado el tope se modera 1 de cada `MODERATION_SAMPLE_EVERY` (10) de sus mensajes, elegido por el id del mensaje (determinista: un reintento cae del mismo lado). Los demás quedan visibles sin revisión automática y se registra `moderation_sampled_out`. Se eligió el muestreo sobre la deduplicación o el batching por chat porque no cambia la tarea `moderate` ni su idempotencia.
+- Sigue siendo fail-open: si el contador falla se modera igual, y reportar y bloquear no cambian. Las moderaciones también cuentan para el techo de gasto de su autor ([ADR-0010](0010-control-de-costo-ia.md)); al pasarlo, la moderación falla abierta como con el presupuesto total.
+
