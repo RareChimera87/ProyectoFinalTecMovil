@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.feature.chat
 
+import com.google.firebase.Timestamp
 import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +31,19 @@ class FakeChatRepository(
         observeCalls++
         val failure = liveFailure
         return if (failure != null) flow { throw failure } else messages
+    }
+
+    /** Historial completo en memoria (más viejo primero); [loadOlder] sirve páginas de [CHAT_PAGE_SIZE] a partir de él. */
+    var history: List<RemoteMessage> = emptyList()
+    val loadOlderCalls = mutableListOf<Timestamp>()
+    var loadOlderFailure: Throwable? = null
+
+    override suspend fun loadOlder(chatId: String, before: Timestamp): List<RemoteMessage> {
+        loadOlderCalls += before
+        loadOlderFailure?.let { throw it }
+        return history
+            .filter { (it.createdAt?.epochSeconds ?: Long.MAX_VALUE) < before.seconds }
+            .takeLast(CHAT_PAGE_SIZE)
     }
 
     override suspend fun chats() = chats

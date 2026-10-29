@@ -249,4 +249,81 @@ class ChatViewModelTest {
         assertTrue(target.anonymous)
         assertEquals("chat-1", target.chatId)
     }
+
+    private fun history(count: Int) = (1..count).map { remote("h$it", "uid-2", "mensaje $it", sec = it.toLong()) }
+
+    @Test
+    fun shortLiveWindowHasNothingOlderToLoad() = runTest {
+        val repo = repo()
+        val vm = viewModel(repo)
+        repo.messages.value = history(CHAT_PAGE_SIZE - 1)
+
+        assertFalse(vm.state.value.canLoadOlder)
+        vm.loadOlder()
+        assertTrue(repo.loadOlderCalls.isEmpty())
+    }
+
+    @Test
+    fun loadOlderPrependsThePreviousPageStartingAtTheOldestKnownMessage() = runTest {
+        val repo = repo()
+        val all = history(CHAT_PAGE_SIZE * 2 + 10)
+        repo.history = all
+        val vm = viewModel(repo)
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+        assertTrue(vm.state.value.canLoadOlder)
+
+        vm.loadOlder()
+
+        assertEquals(listOf(61L), repo.loadOlderCalls.map { it.seconds })
+        val keys = vm.state.value.messages.map { it.key }
+        assertEquals(CHAT_PAGE_SIZE * 2, keys.size)
+        assertEquals("h11", keys.first())
+        assertEquals("h110", keys.last())
+        assertTrue(vm.state.value.canLoadOlder)
+        assertFalse(vm.state.value.loadingOlder)
+
+        vm.loadOlder()
+
+        assertEquals(listOf(61L, 11L), repo.loadOlderCalls.map { it.seconds })
+        // La última página trae solo 10 mensajes: el historial se da por agotado.
+        assertEquals(CHAT_PAGE_SIZE * 2 + 10, vm.state.value.messages.size)
+        assertFalse(vm.state.value.canLoadOlder)
+        vm.loadOlder()
+        assertEquals(2, repo.loadOlderCalls.size)
+    }
+
+    @Test
+    fun loadOlderFailureKeepsMessagesAndAllowsRetry() = runTest {
+        val repo = repo()
+        val all = history(CHAT_PAGE_SIZE + 5)
+        repo.history = all
+        val vm = viewModel(repo)
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+        repo.loadOlderFailure = ChatLiveException(AppError.Network)
+
+        vm.loadOlder()
+
+        assertEquals(CHAT_PAGE_SIZE, vm.state.value.messages.size)
+        assertFalse(vm.state.value.loadingOlder)
+        assertTrue(vm.state.value.canLoadOlder)
+
+        repo.loadOlderFailure = null
+        vm.loadOlder()
+        assertEquals(CHAT_PAGE_SIZE + 5, vm.state.value.messages.size)
+    }
+
+    @Test
+    fun messagesPushedOutOfTheLiveWindowStayInTheList() = runTest {
+        val repo = repo()
+        val all = history(CHAT_PAGE_SIZE + 1)
+        val vm = viewModel(repo)
+        repo.messages.value = all.take(CHAT_PAGE_SIZE)
+
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+
+        val keys = vm.state.value.messages.map { it.key }
+        assertEquals(CHAT_PAGE_SIZE + 1, keys.size)
+        assertEquals("h1", keys.first())
+        assertEquals("h${CHAT_PAGE_SIZE + 1}", keys.last())
+    }
 }
