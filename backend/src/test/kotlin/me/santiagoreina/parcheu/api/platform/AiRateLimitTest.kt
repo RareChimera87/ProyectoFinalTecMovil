@@ -18,8 +18,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
@@ -66,7 +66,7 @@ class AiRateLimitTest : FunSpec({
             // /internal (Cloud Tasks, Scheduler) no pasa por el límite.
             repeat(DEFAULT_AI_RATE_LIMIT_PER_MINUTE + 5) {
                 client.post("/internal/tasks/build-persona") {
-                    header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+                    header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"id":"${UUID.randomUUID()}"}""")
                 }.status shouldNotBe HttpStatusCode.TooManyRequests
