@@ -96,7 +96,7 @@ Se descartó el multimódulo grande (ADR-0005/0006): el aislamiento entre agente
 - **ViewModel:** expone `StateFlow<XUiState>`; acciones como funciones públicas; efectos de una sola vez (navegación, snackbars) por `Channel<XEffect>` recibido con `LaunchedEffect`.
 - **Estado:** `sealed interface XUiState { Loading; Loaded(...); Empty; Error(AppError) }` cuando aplica.
 - **Datos:** `XRepository` (interfaz) + `XRepositoryImpl` (Retrofit, Firestore, DataStore) + `FakeXRepository` (en `src/test` y `src/debug` para previews y flavor sin backend).
-- **Errores:** `ApiError` del contrato → `AppError` (`Network`, `Unauthorized`, `PlusRequired`, `QuotaExceeded(kind, resetsAt)`, `AgeRequired`, `Underage`, `Blocked`, `Suspended`, `ScenarioEnded`, `AiBudget`, `Validation(msg)`, `NotFound`, `Unknown`). Un `ErrorRouter` global abre G1 ante `PlusRequired` y la G2 correspondiente ante `QuotaExceeded`.
+- **Errores:** `ApiError` del contrato → `AppError` (`Network`, `Unauthorized`, `PlusRequired`, `QuotaExceeded(kind, resetsAt)`, `AgeRequired`, `Underage`, `Blocked`, `Suspended`, `ScenarioEnded`, `AiBudget`, `Validation(msg)`, `NotFound`, `Unknown`). `apiCall` (`core/network/ApiResult.kt`), por el que pasan todas las llamadas, devuelve el `AppError` a quien llamó y además lo publica en `GlobalErrorBus` (`core/error`, Koin single conectado al `ApiErrorMapper` compartido): `SessionExpired` (`Unauthorized`: sesión vencida o cuenta borrada; solo si hay sesión iniciada), `AccountSuspended`, `TermsRequired`, `PlusRequired` y `QuotaExceeded(kind, resetsAt)`; el mismo error repetido en 3 s se publica una vez. Lo consume `GlobalErrorHandler` (`navigation/`) en `ParcheUApp`, junto al `NavHost`: sesión vencida o suspendida → `AuthRepository.signOut()` (E8.2) y A4 sin historial con un snackbar que explica por qué; términos → A4 sin cerrar sesión (la hoja de aceptación); `PlusRequired` → G1 con el `source` de la pantalla visible; `QuotaExceeded` → la G2 de ese cupo. Con Splash o A4 visibles no hace nada (tratan la sesión ellos mismos) y con G1/G2 abierta no apila otra. Las pantallas no navegan por un 402: solo ajustan su estado; D9 muestra su propio bloqueo y su llamada usa `apiCall(routesPremium = false)`, y F1 además sale de la pila al agotar el match diario.
 - **DI:** Koin 4.1 (`koin-androidx-compose`). Un `XModule.kt` por feature; `AppModules.kt` los lista todos desde E0.7.
 
 ### 2.4 Navegación
@@ -142,7 +142,7 @@ Navigation Compose 2.9 con rutas `@Serializable` en `navigation/Routes.kt`; `App
 | `ExportData` | descargar mis datos (nueva, E8.3) | - |
 | `BlockedUsers` | personas bloqueadas (nueva, E8.7) | - |
 
-G2 (límite) es un bottom sheet global controlado por el `ErrorRouter`. Deep links: `parcheu://` para notificaciones y App Links `https://<hosting>/i/{codigo}` → `AddFriends(code)`.
+G2 (límite) es una hoja (`LimitSheet`) en la ruta `Paywall(source = "limit:<KIND>:<resetsAt>")`; la abre `GlobalErrorHandler` (§2.3). Deep links: `parcheu://` para notificaciones y App Links `https://<hosting>/i/{codigo}` → `AddFriends(code)`.
 
 ### 2.5 Red, sesión y persistencia
 
