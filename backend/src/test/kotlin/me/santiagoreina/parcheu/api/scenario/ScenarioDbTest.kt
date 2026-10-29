@@ -111,7 +111,7 @@ class ScenarioDbTest : FunSpec({
         runBlocking { block(World(connectExposed(ds), Movable(start))) }
     }
 
-    test("acuerdo de los dos, cierre atómico y juez sobre Postgres: simulación SCENARIO DONE, arista y una sola llamada").config(enabled = TestDatabase.enabled) {
+    test("acuerdo de los dos, cierre atómico y juez sobre Postgres: simulación SCENARIO DONE, arista y un solo juez").config(enabled = TestDatabase.enabled) {
         withWorld { w ->
             val ana = w.user("Ana")
             val beto = w.user("Beto")
@@ -134,7 +134,9 @@ class ScenarioDbTest : FunSpec({
 
             w.scenario.service.judge(chat.id)
             w.scenario.service.judge(chat.id)
-            w.requests shouldHaveSize 1
+            // El juez (una llamada) y la moderación lite de su texto.
+            w.requests.filter { it.system?.contains("juez imparcial") == true } shouldHaveSize 1
+            w.requests shouldHaveSize 2
             val sim = w.simulation.repository.find(chat.id).shouldNotBeNull()
             sim.origin shouldBe SimulationOrigin.SCENARIO
             sim.status shouldBe SimulationStatus.DONE

@@ -86,11 +86,18 @@ porque `sa-terraform` solo acepta la rama `dev`:
 - `cloudsql.admin` incluye `instances.export` y `users.update`: lectura completa de la base de dev (no hay un
   rol predefinido que administre la instancia sin eso).
 
-`scripts/check-iam.sh` falla si alguna cuenta de servicio recibe `roles/owner` o `roles/editor`, si a
-`sa-api`/`sa-deployer` les falta un rol esperado, si `sa-terraform-plan` recibe un rol con acceso a datos
-(o su rol personalizado incluye `datastore.entities.*`, `logging.logEntries.*`...), si alguna cuenta
-recibe roles sobre la facturación o si `projectIamAdmin` se asigna sin condición. Desde que `sa-api` nace en
-el bootstrap, sus roles mínimos se verifican sobre el plan del **bootstrap** (paso 2 de abajo).
+`scripts/check-iam.sh plan.json` lee el JSON de `terraform show -json plan` (no consulta GCP) y sale con 1
+ante cualquier **ERROR**: `roles/owner` o `roles/editor` para cualquier principal; `allUsers` o
+`allAuthenticatedUsers` con cualquier rol, salvo `roles/run.invoker` para `allUsers` (lista blanca
+`PUBLIC_ALLOWED_ROLES`); `serviceAccountKeyAdmin` o `securityAdmin`; `serviceAccountTokenCreator` y
+`serviceAccountUser` a nivel de proyecto fuera de las cuentas esperadas (`EXPECTED_SA_NAMES`:
+`sa-terraform`, `sa-deployer`); `serviceAccountAdmin` fuera de `SA_ADMIN_EXPECTED_NAMES` (`sa-terraform`);
+`projectIamAdmin` sin condición; y los chequeos de bootstrap (`sa-api`/`sa-deployer` sin sus roles,
+`sa-terraform-plan` con roles de datos o de facturación). Las listas blancas están al inicio del script.
+Los **AVISO** de `user:` con roles distintos de `viewer`, `logging.viewer` y `monitoring.viewer` no cambian
+el código de salida (0). Solo revisa lo que está en el plan, no la política real del proyecto.
+Desde que `sa-api` nace en el bootstrap, sus roles mínimos se verifican sobre el plan del **bootstrap**
+(paso 2 de abajo).
 
 El **presupuesto de facturación** (50 % y 90 %) se crea en `bootstrap/` con el ADC del usuario, no en la
 plataforma: la cuenta de facturación se comparte con otros proyectos y ninguna identidad de CI tiene roles
