@@ -115,13 +115,19 @@ Las tareas asíncronas (gemelo, memorias, simulaciones, purga de cuentas) y los 
 
 ## HTTPS con Nginx Proxy Manager (paso del usuario)
 
-El servidor ya tiene NPM con el certificado comodín `*.homeserverlab.site` (Let's Encrypt, vence en ene 2027) y AdGuard reescribe `*.homeserverlab.site` a `192.168.0.10` en la LAN. La API ya no escucha en `192.168.0.10:8090` (C-M5, 28 oct 2026): NPM la alcanza por Docker. Una sola vez, conecta el contenedor de NPM a la red de la API (`desplegar.sh` la crea):
+El servidor ya tiene NPM con el certificado comodín `*.homeserverlab.site` (Let's Encrypt, vence en ene 2027) y AdGuard reescribe `*.homeserverlab.site` a `192.168.0.10` en la LAN. La API ya no escucha en `192.168.0.10:8090` (C-M5, 28 oct 2026): NPM la alcanza por Docker. Sigue este orden para que el HTTPS no se caiga entre medias (el destino viejo `192.168.0.10:8090` funciona hasta el redespliegue y el nuevo, desde él):
 
-```bash
-ssh user@homelab 'docker network connect parcheu-proxy <contenedor-de-npm>'   # nombre en `docker ps`
-```
+1. **Docker ≥ 28 en el servidor:** `ssh user@homelab 'docker version --format {{.Server.Version}}'`. Antes de la 28, un equipo de la LAN que enrute hacia la red bridge puede llegar al contenedor (`172.x:8080`) aunque el puerto esté publicado solo en `127.0.0.1`; si no puedes actualizar, bloquéalo con reglas `raw` de iptables o sin `ip_forward`.
+2. **Red y NPM, antes de desplegar:** mira el modo de red de NPM (`docker inspect <contenedor-de-npm> --format '{{.HostConfig.NetworkMode}}'`, nombre en `docker ps`). Si no es `host`, crea la red y conecta NPM (`desplegar.sh` también la crea si falta, de forma idempotente):
 
-Si NPM se recrea con su propio compose, la conexión se pierde: agrega `parcheu-proxy` como red externa (`external: true`) en ese compose. Luego, en NPM crea (o edita) el *Proxy Host*: dominio `api-parcheu.homeserverlab.site`, esquema `http`, destino `parcheu-api` puerto `8080`, pestaña SSL con el certificado existente `npm-1` y *Force SSL*. Si NPM corre con `network_mode: host` (`docker inspect <contenedor-de-npm> --format '{{.HostConfig.NetworkMode}}'` dice `host`), no hace falta la red: el destino es `127.0.0.1` puerto `8090`. Nada de esto lo hace `desplegar.sh`. **Si usas `PARCHEU_ENV=local`** agrega una *Access List* en NPM (pestaña Details del Proxy Host) que permita solo `192.168.0.0/24` y `100.64.0.0/10` y deniegue el resto. Después, `curl https://api-parcheu.homeserverlab.site/v1/health` debe responder. Funciona en el emulador y en teléfonos de la LAN (o por Tailscale usando el DNS de AdGuard).
+   ```bash
+   ssh user@homelab 'docker network create parcheu-proxy; docker network connect parcheu-proxy <contenedor-de-npm>'
+   ```
+
+   Si NPM se recrea con su propio compose, la conexión se pierde: agrega `parcheu-proxy` como red externa (`external: true`) en ese compose.
+3. **Desplegar:** `deploy/homelab/desplegar.sh`.
+4. **Proxy Host:** en NPM crea (o edita) el *Proxy Host*: dominio `api-parcheu.homeserverlab.site`, esquema `http`, destino `parcheu-api` puerto `8080` (o `127.0.0.1` puerto `8090` si NPM corre con `network_mode: host`), pestaña SSL con el certificado existente `npm-1` y *Force SSL*. Nada de esto lo hace `desplegar.sh`. **Si usas `PARCHEU_ENV=local`** agrega una *Access List* en NPM (pestaña Details del Proxy Host) que permita solo `192.168.0.0/24` y `100.64.0.0/10` y deniegue el resto.
+5. **Verificar:** Después, `curl https://api-parcheu.homeserverlab.site/v1/health` debe responder. Funciona en el emulador y en teléfonos de la LAN (o por Tailscale usando el DNS de AdGuard).
 
 ## Exponerlo a testers de Play (túnel de Cloudflare existente)
 
