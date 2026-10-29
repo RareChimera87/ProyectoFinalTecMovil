@@ -131,6 +131,10 @@ ParcheU/                                  (git: github.com/RareChimera87/Proyect
 - `fix/<kebab>`: correcciones. `release/<versión>`: estabilización antes de `main`.
 - El repositorio remoto tiene historial viejo; reemplazarlo (force push) **solo con la aprobación explícita del usuario** en E0.1.
 
+### Límites del check `revision-agente` y pasos humanos (auditoría del 28 oct, C-A1/C-A2)
+- `revision-agente` y `major-gate` solo comprueban una **etiqueta**; con una sola cuenta de GitHub, quien abre el PR puede ponérsela. Mitigaciones en código: ambos corren con `pull_request_target` (el YAML sale de `dev`, un PR no puede reescribirlo para aprobarse; no hacen checkout), los checks requeridos de `dev` se fijan al `app_id` de GitHub Actions (`scripts/proteger-ramas.sh`) y un PR que toque los gates, `auto-merge.yml`, `CODEOWNERS` o `proteger-ramas.sh` falla sin la etiqueta `gobernanza`, que revisa una persona.
+- **Pendiente humano (C-A2, no es código):** usar una cuenta o GitHub App aparte para los agentes (que no sea administradora) y, cuando exista, activar en la protección de `dev` *Require approvals* con *Prevent self-review* (hoy `required_approving_review_count: 0` por la cuenta única). Pasos en [pendientes-humanos.md](pendientes-humanos.md#gobernanza-de-ci-c-a1c-a2-c-m3).
+
 ### Commits y PR
 - Commits en **español e imperativo**: "Agrega motor de simulación", "Corrige cálculo de cuota semanal". `pr-title`/`commit-lint` valida el formato y que el verbo inicial esté en una lista blanca de imperativos (`scripts/verbos-imperativo.txt`); no pretende analizar el español en general, así que el revisor par también lo mira.
 - Un PR por feature, con la plantilla: qué hace, criterios de aceptación marcados, capturas Roborazzi si hay UI, cómo probar.
