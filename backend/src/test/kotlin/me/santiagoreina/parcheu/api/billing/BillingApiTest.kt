@@ -15,8 +15,8 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
@@ -35,7 +35,7 @@ import java.util.UUID
 private fun bearer(token: String) = "Bearer $token"
 private val ANA = bearer(FakeTokenVerifier.tokenFor("ana"))
 private val BETO = bearer(FakeTokenVerifier.tokenFor("beto"))
-private val OIDC = bearer(FakeOidcVerifier.VALID_TOKEN)
+private val OIDC = bearer(TEST_OIDC_TOKEN)
 
 private suspend fun HttpClient.userId(auth: String): UUID =
     UUID.fromString(get("/v1/me") { header(HttpHeaders.Authorization, auth) }.body<MeDto>().id)

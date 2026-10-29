@@ -12,6 +12,7 @@ import me.santiagoreina.parcheu.api.platform.auth.AuthProviders
 import me.santiagoreina.parcheu.api.platform.auth.installAuth
 import me.santiagoreina.parcheu.api.platform.errors.installErrorHandling
 import me.santiagoreina.parcheu.api.platform.healthRoutes
+import me.santiagoreina.parcheu.api.platform.installBodyLimit
 import me.santiagoreina.parcheu.api.platform.logging.installCallLogging
 import me.santiagoreina.parcheu.contract.ContractJson
 
@@ -23,6 +24,7 @@ fun Application.module(container: AppContainer) {
     installCallLogging()
     install(ContentNegotiation) { json(ContractJson) }
     installErrorHandling()
+    installBodyLimit()
     installAuth(container.tokenVerifier, container.oidcVerifier)
 
     routing {

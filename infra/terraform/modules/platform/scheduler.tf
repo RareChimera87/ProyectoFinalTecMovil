@@ -28,7 +28,7 @@ resource "google_cloud_scheduler_job" "this" {
     uri         = "${google_cloud_run_v2_service.api.uri}/internal/jobs/${each.key}"
 
     oidc_token {
-      service_account_email = google_service_account.tasks.email
+      service_account_email = data.google_service_account.tasks.email
       audience              = local.internal_audience
     }
   }

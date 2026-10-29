@@ -6,6 +6,7 @@ import me.santiagoreina.parcheu.api.chat.ChatMemberRecord
 import me.santiagoreina.parcheu.api.chat.ChatRecord
 import me.santiagoreina.parcheu.api.chat.ChatRepository
 import me.santiagoreina.parcheu.api.chat.ChatService
+import me.santiagoreina.parcheu.api.chat.MessageHiddenHook
 import me.santiagoreina.parcheu.api.chat.ScenarioEndedHook
 import me.santiagoreina.parcheu.api.graph.EdgeEvent
 import me.santiagoreina.parcheu.api.graph.EdgeService
@@ -21,6 +22,10 @@ import me.santiagoreina.parcheu.api.platform.tasks.QueueKind
 import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.TaskRequest
 import me.santiagoreina.parcheu.api.quota.QuotaService
+import me.santiagoreina.parcheu.api.safety.moderation.MessageModerator
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationCategory
+import me.santiagoreina.parcheu.api.safety.moderation.ModerationSeverity
+import me.santiagoreina.parcheu.api.simulation.JudgeVerdict
 import me.santiagoreina.parcheu.api.simulation.LLM_ATTEMPTS
 import me.santiagoreina.parcheu.api.simulation.ScenarioDef
 import me.santiagoreina.parcheu.api.simulation.Side
@@ -72,12 +77,18 @@ class ScenarioService(
     internal val tasks: TaskQueue,
     private val notifier: Notifier,
     private val clock: Clock,
+    /** `MODERATION_ENABLED=false` también salta la moderación del texto del veredicto. */
+    private val moderationEnabled: Boolean = true,
 ) {
     private val log = LoggerFactory.getLogger(ScenarioService::class.java)
     private val judge = SimulationJudge(ai)
+    private val moderator = MessageModerator(ai)
 
     /** Conecta el 409 `SCENARIO_ENDED` del envío de mensajes con el cierre y el juez (una sola vez). */
     val endedHook = ScenarioEndedHook { chatId -> finalize(chatId) }
+
+    /** Retira de la transcripción ya juzgada el texto de los mensajes que se ocultan después (B-B7). */
+    val hiddenHook = MessageHiddenHook { chatId -> redactHidden(chatId) }
 
     // --- rutas -------------------------------------------------------------------------------
 
@@ -247,7 +258,7 @@ class ScenarioService(
             sims.markFailed(id, e.message ?: "Falló el juez", clock.instant())
             return
         }
-        val verdict = result.verdict
+        val verdict = moderated(id, record.userA, result.verdict)
         val a = sims.twinProfile(record.userA)
         val b = sims.twinProfile(record.userB)
         val report = SimulationScoring.report(a?.traits, b?.traits, listOf(verdict))
@@ -259,8 +270,68 @@ class ScenarioService(
             cachedFrom = null, provider = ai.provider.id, usage = result.usage, now = clock.instant(),
         )
         if (!done) return
+        // Un mensaje pudo ocultarse mientras el juez trabajaba, después de leer la lista: se retira ahora.
+        // Fail-open: la evaluación ya está DONE y el aviso a las dos personas no debe depender de esto.
+        runCatching { redactHidden(id) }.onFailure { log.warn("judge-scenario: no se pudo reconciliar la transcripción de {}", id, it) }
         log.atInfo().setMessage("scenario_judged").addKeyValue("event", "scenario_judged").addKeyValue("chatId", id.toString()).log()
         listOf(record.userA, record.userB).forEach { notifyDone(it, id, report.score) }
+    }
+
+    /**
+     * El texto libre del veredicto (resumen, razones, choques y notas) lo condiciona lo que escribieron las personas y
+     * la otra lo lee sin más revisión: pasa por la moderación existente (una llamada lite). Un hallazgo HIGH que no sea
+     * SELF_HARM lo sustituye por un texto genérico y conserva los puntajes; si la moderación falla se sigue con el
+     * veredicto tal cual (fail-open, ADR-0026) y se registra `moderation_failed`.
+     */
+    private suspend fun moderated(id: UUID, billedTo: UUID, verdict: JudgeVerdict): JudgeVerdict {
+        val text = (listOf(verdict.summary) + verdict.reasons + verdict.frictions + verdict.dimensions.mapNotNull { it.note })
+            .filter { it.isNotBlank() }.joinToString("\n")
+        if (!moderationEnabled || text.isEmpty()) return verdict
+        val findings = try {
+            moderator.review(billedTo, text)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.atWarn().setMessage("moderation_failed").addKeyValue("event", "moderation_failed")
+                .addKeyValue("chatId", id.toString()).addKeyValue("error", e.javaClass.simpleName).log()
+            return verdict
+        }
+        if (findings.none { it.severity == ModerationSeverity.HIGH && it.category != ModerationCategory.SELF_HARM }) return verdict
+        log.atWarn().setMessage("scenario_verdict_redacted").addKeyValue("event", "scenario_verdict_redacted")
+            .addKeyValue("chatId", id.toString()).log()
+        return verdict.copy(
+            reasons = emptyList(), frictions = emptyList(), summary = REDACTED_SUMMARY,
+            dimensions = verdict.dimensions.map { it.copy(note = null) },
+        )
+    }
+
+    /**
+     * `simulations.transcript` copia el texto de los mensajes al juzgar (solo los no ocultados de ese momento) y es lo
+     * que sirve `GET /v1/simulations/{id}/transcript`. Si la moderación oculta un mensaje después, la transcripción
+     * conservaba el texto: se reconcilia con los mensajes visibles del chat y se descartan los turnos que ya no están.
+     * No toca el veredicto ni la puntuación (ya calculados). Idempotente; no hace nada si aún no está DONE.
+     */
+    private suspend fun redactHidden(chatId: UUID) {
+        // Compare-and-set con reintento: si otro ocultado escribió entre la lectura y la escritura, se relee.
+        repeat(REDACT_ATTEMPTS) {
+            val record = sims.find(chatId) ?: return
+            if (record.origin != SimulationOrigin.SCENARIO || record.status != SimulationStatus.DONE) return
+            val visible = chats.messages(chatId)
+                .mapNotNull { m -> (if (m.senderId == record.userA) Side.A else if (m.senderId == record.userB) Side.B else null)?.let { it to m.text } }
+                .groupingBy { it }.eachCount().toMutableMap()
+            var changed = false
+            val scenarios = record.transcript.scenarios.map { sc ->
+                val kept = sc.turns.filter { turn ->
+                    val key = turn.speaker to turn.text
+                    val left = visible[key] ?: 0
+                    if (left > 0) visible[key] = left - 1
+                    (left > 0).also { if (!it) changed = true }
+                }
+                sc.copy(turns = kept)
+            }
+            if (!changed || sims.replaceDoneTranscript(chatId, record.transcript, StoredTranscript(scenarios))) return
+        }
+        log.warn("judge-scenario: la transcripción de {} cambió en cada intento de reconciliarla", chatId)
     }
 
     private class JudgeFailed(message: String) : RuntimeException(message)
@@ -362,9 +433,11 @@ class ScenarioService(
     }
 
     companion object {
+        const val REDACTED_SUMMARY = "El juez no pudo redactar un resumen"
         const val JUDGE_PATH = "/tasks/judge-scenario"
         const val SWEEP_PATH = "/jobs/scenario-sweep"
         const val SWEEP_BATCH = 50
+        private const val REDACT_ATTEMPTS = 3
         val REQUEUE_MIN_AGE: Duration = Duration.ofMinutes(2)
     }
 }

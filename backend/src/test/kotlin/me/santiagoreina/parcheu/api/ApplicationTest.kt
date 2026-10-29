@@ -24,7 +24,6 @@ import io.ktor.server.routing.post
 import kotlinx.serialization.Serializable
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
 import me.santiagoreina.parcheu.api.platform.errors.Conflict
@@ -165,6 +164,42 @@ class ApplicationTest : FunSpec({
         }
     }
 
+    test("un cuerpo de más de 64 KB en /v1 responde 413 VALIDATION; uno normal pasa (B-B4)") {
+        testApplication {
+            val client = startApp(testContainer(listOf(ThrowingRoutes())))
+            val grande = client.post("/v1/_test/eco") {
+                bearer(fakeToken)()
+                contentType(ContentType.Application.Json)
+                setBody("""{"texto":"${"x".repeat(70 * 1024)}"}""")
+            }
+            grande.status shouldBe HttpStatusCode.PayloadTooLarge
+            grande.body<ApiError>().code shouldBe ErrorCode.VALIDATION
+            val normal = client.post("/v1/_test/eco") {
+                bearer(fakeToken)()
+                contentType(ContentType.Application.Json)
+                setBody("""{"texto":"${"x".repeat(10 * 1024)}"}""")
+            }
+            normal.status shouldBe HttpStatusCode.OK
+        }
+    }
+
+    test("un JSON que no deserializa responde 400 con mensaje genérico, sin clases ni campos internos (B-B6)") {
+        testApplication {
+            val client = startApp(testContainer(listOf(ThrowingRoutes())))
+            listOf("""{"texto": 5, "otro": }""", """{"campo": "x"}""", "[1, 2]").forEach { cuerpo ->
+                val response = client.post("/v1/_test/eco") {
+                    bearer(fakeToken)()
+                    contentType(ContentType.Application.Json)
+                    setBody(cuerpo)
+                }
+                response.status shouldBe HttpStatusCode.BadRequest
+                val error = response.body<ApiError>()
+                error.code shouldBe ErrorCode.VALIDATION
+                error.message shouldBe "Cuerpo de la petición inválido"
+            }
+        }
+    }
+
     test("NotFoundException de Ktor responde 404 NOT_FOUND con su mensaje") {
         testApplication {
             val response = startApp(testContainer(listOf(ThrowingRoutes()))).get("/v1/_test/ktor-not-found", bearer(fakeToken))
@@ -228,13 +263,15 @@ class ApplicationTest : FunSpec({
         testApplication {
             val client = startApp()
             client.post("/internal/tasks/judge-scenario").status shouldBe HttpStatusCode.Forbidden
-            client.post("/internal/tasks/judge-scenario", bearer(FakeOidcVerifier.VALID_TOKEN)).status shouldNotBe HttpStatusCode.Forbidden
+            client.post("/internal/tasks/judge-scenario", bearer(TEST_OIDC_TOKEN)).status shouldNotBe HttpStatusCode.Forbidden
+            // El token fijo de antes (B-A2) ya no abre /internal.
+            client.post("/internal/tasks/judge-scenario", bearer("oidc-tasks-fake")).status shouldBe HttpStatusCode.Forbidden
         }
     }
 
     test("El token OIDC no sirve en /v1") {
         testApplication {
-            startApp().get("/v1/me", bearer(FakeOidcVerifier.VALID_TOKEN)).status shouldBe HttpStatusCode.Unauthorized
+            startApp().get("/v1/me", bearer(TEST_OIDC_TOKEN)).status shouldBe HttpStatusCode.Unauthorized
         }
     }
 })

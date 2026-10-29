@@ -58,6 +58,13 @@ class ChatService(
     @Volatile
     var scenarioEnded: ScenarioEndedHook = ScenarioEndedHook.NONE
 
+    /**
+     * Se invoca después de ocultar un mensaje (admin o moderación con IA). El módulo de escenario lo conecta para
+     * retirar ese texto de la transcripción ya juzgada (B-B7). Su fallo nunca rompe la moderación.
+     */
+    @Volatile
+    var messageHidden: MessageHiddenHook = MessageHiddenHook.NONE
+
     // --- creación (la usan otros dominios) ---------------------------------------------------
 
     /** Chat DIRECT de [a] y [b] en [mode]; si ya existe lo devuelve (idempotente y seguro ante concurrencia). */
@@ -216,6 +223,7 @@ class ChatService(
             message.chatId,
             MessageDoc(message.id, senderUid, system = message.senderId == null, text = "", createdAt = message.createdAt, hidden = true),
         )
+        runCatching { messageHidden.hidden(message.chatId) }.onFailure { log.warn("No se pudo propagar el ocultado del mensaje {}", message.id, it) }
         return true
     }
 
@@ -317,7 +325,7 @@ class ChatService(
         if (text.codePointCount(0, text.length) <= MAX_PREVIEW) text else text.substring(0, text.offsetByCodePoints(0, MAX_PREVIEW)) + "…"
 
     companion object {
-        const val MAX_TEXT = 1000
+        const val MAX_TEXT = me.santiagoreina.parcheu.api.platform.TextLimits.MESSAGE_CHARS
         const val MAX_CLIENT_ID = 64
         const val MAX_PREVIEW = 100
         const val DELETED_LABEL = "Usuario eliminado"
@@ -339,4 +347,13 @@ internal fun learningKind(mode: Mode): ConsentKind = when (mode) {
     Mode.AMISTAD -> ConsentKind.CHAT_LEARNING_AMISTAD
     Mode.PAREJA -> ConsentKind.CHAT_LEARNING_PAREJA
     Mode.ESTUDIO -> ConsentKind.CHAT_LEARNING_ESTUDIO
+}
+
+/** Gancho de mensaje ocultado (B-B7): lo conecta el módulo `scenario`. Debe ser idempotente. */
+fun interface MessageHiddenHook {
+    suspend fun hidden(chatId: UUID)
+
+    companion object {
+        val NONE = MessageHiddenHook { }
+    }
 }

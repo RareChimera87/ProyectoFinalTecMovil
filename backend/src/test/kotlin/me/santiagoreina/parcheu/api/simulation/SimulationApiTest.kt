@@ -19,8 +19,8 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
@@ -69,7 +69,7 @@ class SimulationApiTest : FunSpec({
     }
 
     suspend fun HttpClient.simulateTask(id: String, oidc: Boolean = true) = post("/internal/tasks/simulate") {
-        if (oidc) header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+        if (oidc) header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
         contentType(ContentType.Application.Json)
         setBody("""{"id":"$id"}""")
     }

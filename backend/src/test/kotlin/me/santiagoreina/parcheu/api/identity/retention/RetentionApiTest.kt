@@ -8,9 +8,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.deletion.inMemoryAccountModule
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
@@ -54,7 +54,7 @@ class RetentionApiTest : FunSpec({
         testApplication {
             val client = startApp(container(repo))
             val status = client.post("/internal/jobs/retention") {
-                header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+                header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
             }.status
             // `deleteExpiredMatchesBefore` falla: 500, pero la regla de notificaciones ya se aplicó.
             status shouldBe HttpStatusCode.InternalServerError
@@ -66,7 +66,7 @@ class RetentionApiTest : FunSpec({
         testApplication {
             val client = startApp(container(NoopRetentionRepository))
             client.post("/internal/jobs/retention") {
-                header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+                header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
             }.status shouldBe HttpStatusCode.NoContent
         }
     }

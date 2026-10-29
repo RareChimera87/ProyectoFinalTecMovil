@@ -288,6 +288,29 @@ class SafetyApiTest : FunSpec({
         report.chatId shouldBe chat.id
     }
 
+    test("messageId: debe ser del chat y de la persona reportada (B-B1)") {
+        val w = World()
+        val chat = w.direct()
+        val otro = w.direct(w.ana, w.caro)
+        testApplication {
+            val client = app(w)
+            client.send("beto", chat.id, "b-1", "hola Ana").status shouldBe HttpStatusCode.OK
+            client.send("ana", chat.id, "a-1", "hola Beto").status shouldBe HttpStatusCode.OK
+            client.send("caro", otro.id, "c-1", "hola otro chat").status shouldBe HttpStatusCode.OK
+            fun idOf(text: String) = w.chatRepo.allMessages.single { it.text == text }.id.toString()
+            fun req(msg: String) = ReportRequest(
+                ReportKind.USER, targetUserId = w.beto.toString(), chatId = chat.id.toString(), messageId = msg, reason = ReportReason.HARASSMENT,
+            )
+            // De otro chat: 404. De otra persona del mismo chat: 400. Inexistente: 404.
+            client.report("ana", req(idOf("hola otro chat"))).status shouldBe HttpStatusCode.NotFound
+            client.report("ana", req(idOf("hola Beto"))).status shouldBe HttpStatusCode.BadRequest
+            client.report("ana", req(UUID.randomUUID().toString())).status shouldBe HttpStatusCode.NotFound
+            w.safetyRepo.allReports.shouldBeEmpty()
+            client.report("ana", req(idOf("hola Ana"))).status shouldBe HttpStatusCode.Created
+        }
+        w.safetyRepo.allReports.single().messageId.toString() shouldBe w.chatRepo.allMessages.single { it.text == "hola Ana" }.id.toString()
+    }
+
     test("con menos de 20 mensajes guarda todos; sin chat no hay snapshot") {
         val w = World()
         val chat = w.direct()

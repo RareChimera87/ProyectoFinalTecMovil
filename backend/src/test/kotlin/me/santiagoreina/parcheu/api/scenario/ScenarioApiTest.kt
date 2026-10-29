@@ -2,6 +2,13 @@ package me.santiagoreina.parcheu.api.scenario
 
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.shouldNotBe
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import me.santiagoreina.parcheu.api.simulation.JudgeVerdict
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -24,6 +31,7 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.LlmRequest
 import me.santiagoreina.parcheu.api.ai.testGateway
@@ -34,7 +42,6 @@ import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.matching.MatchingFlags
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
@@ -74,7 +81,10 @@ class ScenarioApiTest : FunSpec({
 
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")
 
-    class Fixture(judgeFails: Boolean = false) {
+    class Fixture(judgeFails: Boolean = false, moderation: (() -> JsonObject)? = null, moderationEnabled: Boolean = true) {
+        /** Se ejecuta dentro de la llamada al juez (para ocultar un mensaje "mientras juzga"). */
+        var duringJudge: () -> Unit = {}
+
         val clock = MovableClock(start)
         val identityRepo = InMemoryIdentityRepository().apply {
             listOf("ana", "beto", "carla").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) }
@@ -93,7 +103,14 @@ class ScenarioApiTest : FunSpec({
             textResponder = { requests += it; "texto" },
             jsonResponder = { r, _ ->
                 requests += r
-                if (judgeFails) error("el juez falló") else judgeJson(70)
+                duringJudge()
+                if (r.system?.contains("moderador") == true && moderation != null) {
+                    moderation()
+                } else if (judgeFails) {
+                    error("el juez falló")
+                } else {
+                    judgeJson(70)
+                }
             },
         )
         val ai = testGateway(fake)
@@ -102,7 +119,7 @@ class ScenarioApiTest : FunSpec({
         val simQueue = FakeTaskQueue()
         val simulation = inMemorySimulationModule(clock, ai, quota, graph, simRepo, simQueue, chat = chat, runInline = false)
         val queue = FakeTaskQueue()
-        val scenario = inMemoryScenarioModule(clock, ai, quota, graph, chat, simulation, notifier, queue, runInline = false)
+        val scenario = scenarioModule(clock, ai, quota, graph, chat, simulation, queue, notifier, moderationEnabled)
 
         init {
             listOf(ana to "ana", beto to "beto", carla to "carla").forEach { (id, name) ->
@@ -141,7 +158,7 @@ class ScenarioApiTest : FunSpec({
         get("/v1/scenario-sessions/$chatId") { auth(uid) }.body()
 
     suspend fun HttpClient.judgeTask(id: Any): HttpResponse = post("/internal/tasks/judge-scenario") {
-        header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+        header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
         contentType(ContentType.Application.Json)
         setBody("""{"id":"$id"}""")
     }
@@ -228,16 +245,16 @@ class ScenarioApiTest : FunSpec({
         request.prompt shouldContain "Presupuesto: 80000 COP"
         request.prompt shouldContain "Propongo ir al Chicamocha el domingo"
         request.prompt shouldContain "Perfecto, repartimos los gastos"
-        request.prompt shouldContain "Persona A: "
-        request.prompt shouldContain "Persona B: "
+        request.prompt shouldContain "<turno hablante=\"A\">"
+        request.prompt shouldContain "<turno hablante=\"B\">"
         request.system.shouldNotBeNullForTest() shouldContain "conversación real"
         listOf("Persona secreta", "Memoria privada", "Nombre Secreto").forEach { secret -> sent shouldNotContain secret }
         // Los nombres de usuario (uid) tampoco viajan como palabra suelta.
         listOf("ana", "beto", "carla").forEach { uid -> Regex("\\b$uid\\b", RegexOption.IGNORE_CASE).containsMatchIn(sent) shouldBe false }
         // Y el orden de la transcripción es el del chat: A escribió primero.
         request.prompt.indexOf("Propongo ir al Chicamocha") shouldBeLessThan request.prompt.indexOf("Perfecto, repartimos")
-        // Una sola llamada al LLM: el juez; ningún turno de gemelo.
-        f.fake.calls shouldBe 1
+        // Dos llamadas al LLM: el juez y la moderación de su texto; ningún turno de gemelo.
+        f.fake.calls shouldBe 2
     }
 
     test("con los dos acuerdos ya guardados (carrera sin finalize), el siguiente GET de sesión cierra y pasa a JUDGING") {
@@ -290,6 +307,102 @@ class ScenarioApiTest : FunSpec({
         }
     }
 
+    fun moderationJson(category: String, severity: String) = buildJsonObject {
+        putJsonArray("findings") { addJsonObject { put("category", category); put("severity", severity) } }
+    }
+
+    suspend fun HttpClient.judgedVerdict(f: Fixture): JudgeVerdict {
+        val chat = f.scenarioChat()
+        say("ana", chat.id, "a-1", "Hola").status shouldBe HttpStatusCode.OK
+        say("beto", chat.id, "b-1", "Hola, ¿planeamos?").status shouldBe HttpStatusCode.OK
+        agree("ana", chat.id)
+        agree("beto", chat.id)
+        judgeTask(chat.id).status shouldBe HttpStatusCode.NoContent
+        return f.simRepo.find(chat.id).shouldNotBeNull().transcript.scenarios.single().verdict.shouldNotBeNull()
+    }
+
+    test("un hallazgo HIGH en el texto del veredicto lo sustituye por uno genérico y conserva los puntajes") {
+        val f = Fixture(moderation = { moderationJson("HARASSMENT", "HIGH") })
+        testApplication {
+            val v = startApp(f.container()).judgedVerdict(f)
+            v.summary shouldBe ScenarioService.REDACTED_SUMMARY
+            v.reasons.shouldBeEmpty()
+            v.frictions.shouldBeEmpty()
+            v.dimensions.all { it.note == null } shouldBe true
+            v.affinity shouldBe 70
+            v.dimensions.isNotEmpty() shouldBe true
+        }
+    }
+
+    test("con la moderación desactivada el veredicto no se modera ni se llama al moderador") {
+        val f = Fixture(moderation = { moderationJson("HARASSMENT", "HIGH") }, moderationEnabled = false)
+        testApplication {
+            val v = startApp(f.container()).judgedVerdict(f)
+            v.summary shouldNotBe ScenarioService.REDACTED_SUMMARY
+            f.fake.calls shouldBe 1
+        }
+    }
+
+    test("SELF_HARM, hallazgos LOW o una moderación que falla dejan el veredicto intacto (fail-open)") {
+        listOf<() -> JsonObject>(
+            { moderationJson("SELF_HARM", "HIGH") },
+            { moderationJson("HARASSMENT", "LOW") },
+            { error("la moderación falló") },
+        ).forEach { moderation ->
+            val f = Fixture(moderation = moderation)
+            testApplication {
+                val v = startApp(f.container()).judgedVerdict(f)
+                v.summary shouldNotBe ScenarioService.REDACTED_SUMMARY
+                v.summary.isNotEmpty() shouldBe true
+            }
+        }
+    }
+
+    test("un mensaje ocultado después de juzgar sale de la transcripción guardada; el resto se queda (B-B7)") {
+        val f = Fixture()
+        val chat = f.scenarioChat()
+        testApplication {
+            val client = startApp(f.container())
+            client.say("ana", chat.id, "a-1", "Hola").status shouldBe HttpStatusCode.OK
+            client.say("beto", chat.id, "b-1", "mensaje que la moderación oculta luego").status shouldBe HttpStatusCode.OK
+            client.say("ana", chat.id, "a-2", "Hola, ¿planeamos?").status shouldBe HttpStatusCode.OK
+            client.agree("ana", chat.id)
+            client.agree("beto", chat.id)
+            client.judgeTask(chat.id).status shouldBe HttpStatusCode.NoContent
+            f.simRepo.find(chat.id).shouldNotBeNull().transcript.scenarios.single().turns.map { it.text } shouldBe
+                listOf("Hola", "mensaje que la moderación oculta luego", "Hola, ¿planeamos?")
+
+            val hidden = f.chatRepo.allMessages.single { it.text == "mensaje que la moderación oculta luego" }
+            f.chat.service.hideMessage(hidden.id) shouldBe true
+            f.simRepo.find(chat.id).shouldNotBeNull().transcript.scenarios.single().turns.map { it.text } shouldBe
+                listOf("Hola", "Hola, ¿planeamos?")
+            // Idempotente.
+            f.chat.service.hideMessage(hidden.id) shouldBe true
+            f.simRepo.find(chat.id).shouldNotBeNull().transcript.scenarios.single().turns shouldHaveSize 2
+        }
+    }
+
+    test("un mensaje ocultado mientras el juez trabaja tampoco queda en la transcripción (B-B7)") {
+        val f = Fixture()
+        val chat = f.scenarioChat()
+        testApplication {
+            val client = startApp(f.container())
+            client.say("ana", chat.id, "a-1", "Hola").status shouldBe HttpStatusCode.OK
+            client.say("beto", chat.id, "b-1", "oculto durante el juicio").status shouldBe HttpStatusCode.OK
+            client.agree("ana", chat.id)
+            client.agree("beto", chat.id)
+            f.duringJudge = {
+                val m = f.chatRepo.allMessages.single { it.text == "oculto durante el juicio" }
+                runBlocking { f.chat.service.hideMessage(m.id) }
+            }
+            client.judgeTask(chat.id).status shouldBe HttpStatusCode.NoContent
+            val stored = f.simRepo.find(chat.id).shouldNotBeNull()
+            stored.status shouldBe SimulationStatus.DONE
+            stored.transcript.scenarios.single().turns.map { it.text } shouldBe listOf("Hola")
+            f.notifier.sent.count { it.notification.kind == NotificationKinds.SIMULATION_READY } shouldBe 2
+        }
+    }
+
     test("un chat sin mensajes al vencer se cierra sin evaluar: sesión DONE sin simulationId") {
         val f = Fixture()
         val chat = f.scenarioChat()
@@ -326,7 +439,7 @@ class ScenarioApiTest : FunSpec({
             runBlocking { f.scenario.service.sweep() }.requeued shouldBe 1
             f.judgeTasks() shouldHaveSize 1
             client.post("/internal/jobs/scenario-sweep") {
-                header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+                header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
             }.status shouldBe HttpStatusCode.NoContent
         }
     }
