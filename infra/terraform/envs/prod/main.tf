@@ -58,10 +58,16 @@ variable "simulations_max_concurrent_dispatches" {
   default     = 10
 }
 
+# Obligatoria: sin correo, las políticas de alerta de prod se crean sin canal y nadie se entera.
+# Se pasa con -var o un .tfvars local (el `apply` de prod lo hace solo el usuario).
 variable "alert_emails" {
-  description = "Correos que reciben las alertas de monitoring.tf (E10.5). Se pasa con -var o un .tfvars local, nunca en el repo."
+  description = "Correos que reciben las alertas de monitoring.tf (E10.5). Al menos uno; sin valor por defecto."
   type        = list(string)
-  default     = []
+
+  validation {
+    condition     = length(var.alert_emails) > 0 && alltrue([for e in var.alert_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", e))])
+    error_message = "alert_emails necesita al menos un correo válido: sin canal, las alertas no avisan a nadie."
+  }
 }
 
 module "platform" {

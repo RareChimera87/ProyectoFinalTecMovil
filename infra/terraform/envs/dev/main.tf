@@ -51,10 +51,18 @@ variable "simulations_max_concurrent_dispatches" {
   default     = 10
 }
 
+# Sin correo, las políticas de alerta se crean sin canal y nadie se entera. En dev el valor por
+# defecto es el correo de contacto público del proyecto (el de firebase/public/*.html), para que
+# el `apply` de CI (que no pasa -var) siempre tenga destinatario; los demás se agregan con -var.
 variable "alert_emails" {
-  description = "Correos que reciben las alertas de monitoring.tf (E10.5). Se pasa con -var o un .tfvars local, nunca en el repo."
+  description = "Correos que reciben las alertas de monitoring.tf (E10.5). Al menos uno."
   type        = list(string)
-  default     = []
+  default     = ["sanctireinadiaz@gmail.com"]
+
+  validation {
+    condition     = length(var.alert_emails) > 0 && alltrue([for e in var.alert_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", e))])
+    error_message = "alert_emails necesita al menos un correo válido: sin canal, las alertas no avisan a nadie."
+  }
 }
 
 module "platform" {
