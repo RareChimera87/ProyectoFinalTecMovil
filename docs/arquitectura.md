@@ -719,8 +719,7 @@ La tabla vive en `android/.../push/DeepLinks.kt` (con su test de casos) y la usa
 | Simulaciones: documento Firestore `simulations/{id}` | - | 30 días después de terminar | Se borra |
 | Fila y matches | - | Vencidos: 7 días | Se borran |
 | Notificaciones | - | 90 días | Se borran |
-| `ai_usage.user_id` | - | 90 días (agregados sin usuario se conservan) | `null` |
-| Contadores diarios por persona (`ai_budget_user`, `daily_counters`) | Solo sirven el día en curso | 90 días (regla `ai_usage`) | Se borran (`ON DELETE CASCADE`) |
+| `ai_usage.user_id` y contadores diarios por persona (`ai_budget_user`, `daily_counters`, que solo sirven el día en curso) | - | 90 días (agregados sin usuario se conservan; los contadores caen con la misma regla `ai_usage`) | `ai_usage.user_id` a `null`; los contadores se borran (`ON DELETE CASCADE`) |
 | Reportes (`reports.snapshot`) | - | 180 días después de resolverse | El reporte se conserva sin `snapshot` si está resuelto; si está abierto, se resuelve primero |
 | Compras (`entitlements`, `purchase_events`) | Se conserva | - | `entitlements` se desvincula del usuario (lápida) y conserva el token para que nadie más lo use ni se pierda un reembolso; los eventos se conservan por obligación contable (verificar plazo) **redactados**: solo tipo y fecha, sin `purchase_token` ni `user_id` |
 | Tokens FCM | Mientras sean válidos | Al cerrar sesión o al fallar | Se borran |
