@@ -73,11 +73,10 @@ variable "alert_emails" {
 module "platform" {
   source = "../../modules/platform"
 
-  project_id                     = local.project_id
-  environment                    = "prod"
-  region                         = local.region
-  deployer_service_account_email = "sa-deployer@${local.project_id}.iam.gserviceaccount.com"
-  alert_emails                   = var.alert_emails
+  project_id   = local.project_id
+  environment  = "prod"
+  region       = local.region
+  alert_emails = var.alert_emails
 
   api_min_instances   = 1
   api_max_instances   = 5
@@ -118,4 +117,43 @@ output "sql_connection_name" {
 
 output "internal_oidc_audience" {
   value = module.platform.internal_oidc_audience
+}
+
+# fix/wif-deployer-dev: sa-api, sa-tasks, los roles de proyecto de sa-api y los enlaces
+# entre cuentas pasaron a bootstrap/. Si este estado ya los tenía, se olvidan sin
+# destruirlos (el bootstrap los importa; ver docs/pendientes-humanos.md). Sin ellos en el
+# estado, estos bloques no hacen nada.
+removed {
+  from = module.platform.google_service_account.api
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_service_account.tasks
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_project_iam_member.api
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_service_account_iam_member.api_acts_as_tasks
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_service_account_iam_member.deployer_acts_as_api
+  lifecycle {
+    destroy = false
+  }
 }

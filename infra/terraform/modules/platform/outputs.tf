@@ -3,11 +3,11 @@ output "api_url" {
 }
 
 output "api_service_account" {
-  value = google_service_account.api.email
+  value = data.google_service_account.api.email
 }
 
 output "tasks_service_account" {
-  value = google_service_account.tasks.email
+  value = data.google_service_account.tasks.email
 }
 
 output "artifact_registry" {

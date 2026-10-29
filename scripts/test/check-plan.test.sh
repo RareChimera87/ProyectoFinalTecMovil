@@ -103,6 +103,34 @@ expect ok   "sa-terraform (apply) solo desde la rama dev" grep -q 'local.dev_bra
 expect fail "sa-terraform no acepta el principal de todo el repo" grep -q 'local.repo_principal' <(block terraform_wif)
 expect ok   "el principal dev apunta a refs/heads/dev" grep -q 'dev_branch_principal = .*attribute.ref/refs/heads/dev' "$TF"
 expect ok   "sa-terraform-plan en prod solo desde la rama dev" grep -q 'plan_principal = local.is_prod ? local.dev_branch_principal : local.repo_principal' "$TF"
+# C-A3 / C-M7: sa-deployer de dev solo desde la rama dev; el de prod exige environment y tag.
+expect ok   "sa-deployer de dev solo desde la rama dev" grep -qE 'deployer_principal = local.is_prod \? .* : local.dev_branch_principal$' "$TF"
+expect fail "sa-deployer no acepta el principal de todo el repo" grep -qE 'deployer_principal = .*local.repo_principal' "$TF"
+expect ok   "sa-deployer de prod exige production y tag v*" grep -q 'attribute.env_ref/production@tag' "$TF"
+expect ok   "env_ref distingue los tags v*" grep -q "assertion.ref.startsWith('refs/tags/v') ? 'tag'" "$TF"
+# C-B10: la condición del pool usa IDs, no el nombre del repo.
+expect ok   "el pool exige repository_id y repository_owner_id" grep -q "attribute_condition = \"assertion.repository_id == .* && assertion.repository_owner_id == " "$TF"
+expect fail "el pool no confía en el nombre del repo" grep -q "attribute_condition = \"assertion.repository ==" "$TF"
+# C-M1: sa-terraform no administra cuentas de servicio ni el IAM del proyecto.
+roles_tf="$(awk '/terraform_roles_dev = \[/{f=1} f{print} f&&/\]/{exit}' "$TF")"
+for r in iam.serviceAccountAdmin iam.serviceAccountUser secretmanager.admin datastore.owner firebase.admin; do
+  expect fail "sa-terraform sin roles/$r de proyecto" grep -q "roles/$r" <<<"$roles_tf"
+done
+expect fail "sa-terraform sin projectIamAdmin" grep -q 'roles/resourcemanager.projectIamAdmin' "$TF"
+expect fail "parcheuTerraformApply no lee valores de secretos ni documentos" grep -qE '"(secretmanager\.versions|datastore\.entities)\.' <(awk '/"google_project_iam_custom_role" "terraform_apply"/{f=1} f{print} f&&/^}/{exit}' "$TF")
+expect ok   "sa-terraform tiene actAs solo sobre sa-api y sa-tasks" grep -q '{ api = google_service_account.api.name, tasks = google_service_account.tasks.name }' <(block terraform_acts_as)
+
+# C-M7: sa-play (prod) por WIF, con environment y ref.
+PLAY="$ROOT/infra/terraform/modules/platform/play.tf"
+expect ok   "sa-play acepta play solo desde dev, main o tag" grep -q '"play@refs/heads/dev",' "$PLAY"
+expect fail "sa-play no acepta solo el environment" grep -q 'attribute.environment/play' "$PLAY"
+
+# C-B5: las alertas siempre tienen destinatario.
+PROD="$ROOT/infra/terraform/envs/prod/main.tf"
+alert_prod="$(awk '/variable "alert_emails"/{f=1} f{print} f&&/^}/{exit}' "$PROD")"
+expect fail "alert_emails de prod sin valor por defecto" grep -q 'default' <<<"$alert_prod"
+expect ok   "alert_emails de prod exige al menos un correo" grep -q 'length(var.alert_emails) > 0' <<<"$alert_prod"
+expect ok   "alert_emails de dev exige al menos un correo" grep -q 'length(var.alert_emails) > 0' "$ROOT/infra/terraform/envs/dev/main.tf"
 
 echo "$pass pasaron, $failed fallaron"
 [ "$failed" -eq 0 ]
