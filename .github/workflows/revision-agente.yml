@@ -49,7 +49,7 @@ jobs:
         run: |
           # Cualquier workflow o acción compuesta puede publicar un check con el nombre del gate y el
           # mismo app_id de Actions, así que se vigila todo .github/workflows y .github/actions.
-          sensibles='^(\.github/(workflows|actions)/|\.github/(CODEOWNERS|dependabot\.yml)$|scripts/(proteger-ramas\.sh|commit-lint\.sh|verbos-imperativo\.txt)$)'
+          sensibles='^(\.github/(workflows|actions)/|\.github/(CODEOWNERS|dependabot\.ya?ml)$|scripts/(proteger-ramas\.sh|commit-lint\.sh|verbos-imperativo\.txt)$)'
           # Se guarda la lista antes de filtrar: si gh falla, el paso falla (fallar cerrado).
           # `F` = ruta actual, `P` = ruta anterior de un renombrado (equivale a borrar la vieja).
           lista="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \

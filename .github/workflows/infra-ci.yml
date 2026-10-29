@@ -198,7 +198,7 @@ jobs:
             head -c 55000 "$plan" > plan-corto.txt
             # El plan sale del HCL del PR y puede traer ```: la valla es más larga que cualquier
             # secuencia de comillas invertidas del texto, para que no cierre el bloque.
-            maxima="$(grep -o '`\+' plan-corto.txt | awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }')"
+            maxima="$({ grep -o '`\+' plan-corto.txt || true; } | awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }')"
             (( maxima < 3 )) && maxima=3
             valla="$(printf '`%.0s' $(seq 1 $((maxima + 1))))"
             echo "$valla"

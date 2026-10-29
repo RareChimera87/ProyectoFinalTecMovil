@@ -201,6 +201,22 @@ class GuardasDeDirectorio(unittest.TestCase):
         self.assertIn("valla", texto)
         self.assertFalse([p for p in comenta["steps"] if "terraform" in str(p.get("uses", "")) or "checkout" in str(p.get("uses", ""))])
 
+    def test_valla_del_comentario_con_pipefail(self):
+        # grep -o sale con 1 si el plan no tiene comillas invertidas: con pipefail no debe abortar.
+        import tempfile
+        run = next(s for s in cargar("infra-ci.yml")["jobs"]["comentario-plan-dev"]["steps"]
+                   if s.get("name") == "Comenta el plan en el PR")["run"]
+        lineas = run.splitlines()
+        ini = next(i for i, l in enumerate(lineas) if l.lstrip().startswith("maxima="))
+        fin = next(i for i, l in enumerate(lineas) if l.lstrip().startswith("valla="))
+        bloque = "\n".join(lineas[ini:fin + 1]) + '\necho -n "$valla"\n'
+        for contenido, minimo in (("Plan: 1 to add\n", 4), ("a ```` b\n```\n", 5)):
+            with self.subTest(contenido), tempfile.TemporaryDirectory() as d:
+                (Path(d) / "plan-corto.txt").write_text(contenido, encoding="utf-8")
+                r = subprocess.run(["bash", "-euo", "pipefail", "-c", bloque], cwd=d, capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertRegex(r.stdout, "^`{%d,}$" % minimo)
+
     def test_plan_dev_se_omite_sin_wif(self):
         wf = cargar("infra-ci.yml")
         self.assertIn("needs.cambios.outputs.wif == 'true'", wf["jobs"]["plan-dev"]["if"])
