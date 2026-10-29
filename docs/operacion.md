@@ -254,7 +254,7 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
 - **Presupuesto de IA:** `AI_DAILY_BUDGET_USD` (por defecto 3). Súbelo solo tras revisar `ai_usage_daily` y entender el gasto
   ([ADR-0010](adr/0010-control-de-costo-ia.md)).
 - **Topes por persona (B-M1, [arquitectura.md §7.3](arquitectura.md#73-presupuesto-y-modelos)):** `AI_USER_DAILY_BUDGET_USD`
-  (0,75; techo diario de gasto de IA de cada cuenta), `QUOTA_FREE_DAILY_TWIN_ANSWERS` (10) y `QUOTA_PLUS_DAILY_TWIN_ANSWERS` (30)
+  (0,75; techo diario de gasto de IA de cada cuenta, sin la moderación), `AI_USER_DAILY_MODERATION_USD` (0,25; sub-techo de moderación por autor, al pasarlo se muestrea), `QUOTA_FREE_DAILY_TWIN_ANSWERS` (10) y `QUOTA_PLUS_DAILY_TWIN_ANSWERS` (30)
   (reenvíos de las respuestas del gemelo al día), `MODERATION_DAILY_PER_USER` (200) y `MODERATION_SAMPLE_EVERY` (10) (moderaciones
   por autor y muestreo después del tope), `AI_RATE_LIMIT_PER_MINUTE` (30; peticiones por minuto y persona en las rutas con IA, 429
   al pasarlo). Vacías usan esos valores; uno inválido hace fallar el arranque.
