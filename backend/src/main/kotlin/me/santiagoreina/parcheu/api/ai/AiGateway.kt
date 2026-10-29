@@ -1,5 +1,7 @@
 package me.santiagoreina.parcheu.api.ai
 
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import me.santiagoreina.parcheu.api.platform.BogotaZone
 import org.slf4j.LoggerFactory
@@ -46,19 +48,23 @@ data class AiCall(
 /**
  * Único punto de entrada a la IA para las features (ADR-0008, ADR-0010):
  * 1. elige el modelo del nivel del propósito;
- * 2. consulta [DailyBudgetGuard] (puede degradar a lite o lanzar `AiBudgetExceeded` sin llamar);
+ * 2. reserva en [DailyBudgetGuard] el costo estimado de la llamada en el gasto del día y en el de
+ *    [AiCall.userId] (puede degradar a lite o lanzar `AiBudgetExceeded`/`UserAiBudgetExceeded` sin llamar);
  * 3. llama al [LlmClient] del proveedor configurado;
- * 4. registra la llamada en `ai_usage` y `ai_usage_daily` con el costo de la tabla de precios.
+ * 4. registra la llamada en `ai_usage` y `ai_usage_daily` con el costo de la tabla de precios y cambia la
+ *    reserva por ese costo real.
  *
  * Si el modelo devuelve JSON inválido se registra igual el uso (se cobró) y se relanza
- * [LlmInvalidOutput] para que la feature reintente.
+ * [LlmInvalidOutput] para que la feature reintente. Cualquier otro fallo (timeout, 5xx, cancelación) se
+ * registra con un costo estimado (los tokens de entrada, sin salida), porque el proveedor pudo cobrarlo
+ * sin devolver el uso (B-M1).
  */
 class AiGateway(
     private val client: LlmClient,
     private val config: AiConfig,
     private val usage: AiUsageStore,
     private val clock: Clock,
-    val guard: DailyBudgetGuard = DailyBudgetGuard(usage, config.dailyBudgetUsd, clock),
+    val guard: DailyBudgetGuard = DailyBudgetGuard(usage, config.dailyBudgetUsd, clock, config.userDailyBudgetUsd),
 ) {
     private val log = LoggerFactory.getLogger(AiGateway::class.java)
 
@@ -81,35 +87,36 @@ class AiGateway(
         guard.check(config.models.chat, config.models.lite)
     }
 
-    suspend fun text(call: AiCall): LlmTextResult {
-        val decision = guard.check(modelFor(call.purpose.tier), config.models.lite)
-        val result = recordingFailures(call, decision) { client.generateText(call.toRequest(decision.model)) }
-        record(call, decision, result.usage)
-        return result
-    }
+    suspend fun text(call: AiCall): LlmTextResult = metered(call, { it.usage }) { model -> client.generateText(call.toRequest(model)) }
 
-    suspend fun json(call: AiCall, schema: JsonObject): LlmJsonResult {
-        val decision = guard.check(modelFor(call.purpose.tier), config.models.lite)
-        val result = recordingFailures(call, decision) { client.generateJson(call.toRequest(decision.model), schema) }
-        record(call, decision, result.usage)
-        return result
-    }
+    suspend fun json(call: AiCall, schema: JsonObject): LlmJsonResult =
+        metered(call, { it.usage }) { model -> client.generateJson(call.toRequest(model), schema) }
 
-    private suspend fun <T> recordingFailures(call: AiCall, decision: DailyBudgetGuard.Decision, block: suspend () -> T): T =
-        try {
-            block()
-        } catch (e: LlmInvalidOutput) {
-            e.usage?.let { record(call, decision, it) }
+    private suspend fun <T> metered(call: AiCall, usageOf: (T) -> LlmUsage, block: suspend (model: String) -> T): T {
+        val reservation = guard.reserve(modelFor(call.purpose.tier), config.models.lite, call.userId) { model, day ->
+            config.prices.costMicros(model, day, call.ceilingUsage())
+        }
+        val result = try {
+            block(reservation.decision.model)
+        } catch (e: Throwable) {
+            val reported = (e as? LlmInvalidOutput)?.usage
+            // Se cierra la reserva aunque la corrutina esté cancelada: si no, el gasto quedaría inflado hasta medianoche.
+            withContext(NonCancellable) { settle(call, reservation, reported ?: call.failedUsage(), estimated = reported == null) }
             throw e
         }
+        settle(call, reservation, usageOf(result), estimated = false)
+        return result
+    }
 
-    private suspend fun record(call: AiCall, decision: DailyBudgetGuard.Decision, tokens: LlmUsage) {
+    private suspend fun settle(call: AiCall, reservation: DailyBudgetGuard.Reservation, tokens: LlmUsage, estimated: Boolean) {
+        val decision = reservation.decision
         val cost = config.prices.costMicros(decision.model, decision.day, tokens)
         // Evento para la métrica de costo de IA por día (E10.5): solo propósito, modelo y costo.
         log.atInfo().setMessage("ai_call").addKeyValue("event", "ai_call")
             .addKeyValue("purpose", call.purpose.toString()).addKeyValue("model", decision.model)
-            .addKeyValue("costMicros", cost).log()
-        usage.record(
+            .addKeyValue("costMicros", cost).addKeyValue("estimated", estimated).log()
+        usage.settle(
+            reservation.hold,
             AiUsageEntry(
                 day = decision.day,
                 purpose = call.purpose,
@@ -132,3 +139,16 @@ class AiGateway(
         temperature = temperature,
     )
 }
+
+/**
+ * Tokens de entrada estimados de [AiCall] sin preguntar al proveedor: un token por cada 3 caracteres, por
+ * encima de los ~4 por token del español, para que la reserva no se quede corta.
+ */
+internal fun AiCall.estimatedTokensIn(): Int = ((system?.length ?: 0) + prompt.length + 2) / 3
+
+/** Uso máximo que puede cobrar la llamada (reserva previa): entrada estimada y todo el techo de salida. */
+internal fun AiCall.ceilingUsage(): LlmUsage = LlmUsage(estimatedTokensIn(), maxOutputTokens)
+
+/** Uso que se registra cuando la llamada falla sin que el proveedor diga cuánto cobró: solo la entrada estimada. */
+internal fun AiCall.failedUsage(): LlmUsage = LlmUsage(estimatedTokensIn(), 0)
+

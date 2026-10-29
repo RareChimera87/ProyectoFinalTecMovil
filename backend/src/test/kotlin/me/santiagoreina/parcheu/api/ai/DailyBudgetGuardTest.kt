@@ -60,8 +60,9 @@ class DailyBudgetGuardTest : FunSpec({
     test("el gasto acumulado por las propias llamadas cuenta para el guard") {
         val fake = FakeLlmClient(textResponder = { "x".repeat(4_000) })
         val usage = InMemoryAiUsageStore()
-        // Presupuesto mínimo: una llamada lo agota.
-        val gateway = AiGateway(fake, testAiConfig(mapOf("AI_DAILY_BUDGET_USD" to "0.000001")), usage, AI_CLOCK)
+        // 4.000 micros: cabe la reserva de la primera llamada (≈ 2.800 con lite y 1.024 tokens de salida), pero
+        // con su costo real (≈ 2.750) ya no cabe la segunda.
+        val gateway = AiGateway(fake, testAiConfig(mapOf("AI_DAILY_BUDGET_USD" to "0.004")), usage, AI_CLOCK)
         gateway.text(AiCall(AiPurpose.PERSONA, "hola"))
         shouldThrow<AiBudgetExceeded> { gateway.text(AiCall(AiPurpose.PERSONA, "otra")) }
         fake.calls shouldBe 1
