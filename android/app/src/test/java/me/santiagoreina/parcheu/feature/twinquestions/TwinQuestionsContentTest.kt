@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.feature.twinquestions
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -12,10 +13,13 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.test.core.app.ApplicationProvider
+import kotlin.time.Instant
 import me.santiagoreina.parcheu.R
 import me.santiagoreina.parcheu.contract.TwinAnswer
+import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -102,6 +106,28 @@ class TwinQuestionsContentTest {
         show(answering.copy(phase = TwinQuestionsPhase.Error), mutableListOf(), retries)
         rule.onNodeWithTag("twinQuestions:retry").performClick()
         assertEquals(1, retries[0])
+    }
+
+    private fun errorMessage(error: AppError): String {
+        show(answering.copy(phase = TwinQuestionsPhase.Error, error = error), mutableListOf())
+        return rule.onNodeWithTag("twinQuestions:errorMessage").fetchSemanticsNode()
+            .config[SemanticsProperties.Text].joinToString { it.text }
+    }
+
+    @Test
+    fun quotaWithoutKindTellsToComeBackTomorrowWithTheResetDate() {
+        val text = errorMessage(AppError.QuotaExceeded(null, Instant.parse("2026-10-30T05:00:00Z")))
+        assertTrue(text, "vuelve mañana" in text && "viernes 30 de octubre" in text)
+    }
+
+    @Test
+    fun quotaWithoutKindNorResetStillSaysTomorrow() {
+        assertTrue("vuelve mañana" in errorMessage(AppError.QuotaExceeded(null, null)))
+    }
+
+    @Test
+    fun rateLimitedAsksToWaitAMoment() {
+        assertTrue("Espera un momento" in errorMessage(AppError.RateLimited))
     }
 
     private fun showWithClose(showClose: Boolean, closes: IntArray) {
