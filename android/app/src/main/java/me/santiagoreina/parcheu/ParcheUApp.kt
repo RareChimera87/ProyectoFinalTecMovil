@@ -3,6 +3,8 @@ package me.santiagoreina.parcheu
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -16,10 +18,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
+import me.santiagoreina.parcheu.core.error.GlobalErrorBus
 import me.santiagoreina.parcheu.core.observability.CrashReporting
+import me.santiagoreina.parcheu.data.auth.AuthRepository
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.navigation.AppNavHost
 import me.santiagoreina.parcheu.navigation.AppRoute
+import me.santiagoreina.parcheu.navigation.GlobalErrorHandler
 import me.santiagoreina.parcheu.navigation.Home
 import me.santiagoreina.parcheu.navigation.NavControllerNavigator
 import me.santiagoreina.parcheu.navigation.ParcheUNavBar
@@ -30,7 +35,10 @@ import me.santiagoreina.parcheu.push.PushTokenRegistrar
 import me.santiagoreina.parcheu.push.RequestNotificationPermissionOnce
 import org.koin.core.context.GlobalContext
 
-/** Raíz de la UI: tema, NavBar en las raíces y el grafo de navegación completo. */
+/**
+ * Raíz de la UI: tema, NavBar en las raíces, el grafo de navegación completo y el manejador global de
+ * errores (sesión, términos, Plus y cupos; arquitectura.md §2.3).
+ */
 @Composable
 fun ParcheUApp(
     modifier: Modifier = Modifier,
@@ -70,9 +78,11 @@ fun ParcheUApp(
             if (registrar != null) scope.launch { registrar.sync() }
         }
     )
+    val snackbar = remember { SnackbarHostState() }
     ParcheUTheme {
         Scaffold(
             modifier = modifier.fillMaxSize(),
+            snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
                 if (topLevel) {
                     ParcheUNavBar(
@@ -88,6 +98,19 @@ fun ParcheUApp(
                 startDestination = startDestination,
                 modifier = Modifier.padding(padding)
             )
+            // Sin Koin (previews, pruebas de una pantalla) no hay bus y no se escucha nada.
+            val koin = GlobalContext.getOrNull()
+            val bus = remember(koin) { koin?.getOrNull<GlobalErrorBus>() }
+            val auth = remember(koin) { koin?.getOrNull<AuthRepository>() }
+            if (bus != null && auth != null) {
+                GlobalErrorHandler(
+                    bus = bus,
+                    navController = navController,
+                    navigator = navigator,
+                    snackbar = snackbar,
+                    signOut = auth::signOut
+                )
+            }
         }
     }
 }
