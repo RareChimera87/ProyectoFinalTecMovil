@@ -1,10 +1,12 @@
 package me.santiagoreina.parcheu.navigation
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.navigation.NavBackStackEntry
@@ -51,8 +53,12 @@ class GlobalErrorHandlerTest {
             val navigator = remember { NavControllerNavigator(navController) }
             val snackbar = remember { SnackbarHostState() }
             ParcheUTheme {
-                Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { _ ->
-                    NavHost(navController, startDestination = start) {
+                Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+                    NavHost(
+                        navController,
+                        startDestination = start,
+                        modifier = Modifier.padding(padding)
+                    ) {
                         composable<Splash> { Text("splash") }
                         composable<Home> { Text("home") }
                         composable<Parche> { Text("parche") }
