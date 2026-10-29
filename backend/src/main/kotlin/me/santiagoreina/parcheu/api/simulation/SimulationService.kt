@@ -66,7 +66,13 @@ class SimulationService(
         // Un bloqueo o una cuenta borrada tampoco cuentan como conexión (el ego-grafo los excluye y bloquear
         // borra las aristas CONNECTED): salen como este mismo 404, no como BLOCKED.
         if (other != requester && !connections.connected(requester, other, body.mode)) throw NotFound("Usuario no encontrado")
-        val record = create(requester, requester, other, body.mode, SimulationOrigin.PARCHE, chargeQuota = true)
+        // Si el bloqueo llega entre la comprobación y create (carrera), también es el 404 genérico: BLOCKED no
+        // sale de este endpoint (§5.2). create lanza antes de cobrar o insertar, así que no queda nada a medias.
+        val record = try {
+            create(requester, requester, other, body.mode, SimulationOrigin.PARCHE, chargeQuota = true)
+        } catch (_: Blocked) {
+            throw NotFound("Usuario no encontrado")
+        }
         return summaryOf(requester, record)
     }
 

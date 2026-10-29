@@ -200,14 +200,14 @@ class SimulationApiTest : FunSpec({
         }
     }
 
-    test("validaciones: id inválido, consigo mismo, modo inactivo, bloqueo y edad en Pareja") {
+    test("validaciones: id inválido, consigo mismo, modo inactivo, bloqueo en carrera (404) y edad en Pareja") {
         val w = World(parejaAge = false)
         w.sim.person("caro", modes = setOf(Mode.ESTUDIO), id = w.id("caro"))
         // La arista de Amistad sigue aunque caro haya apagado el modo (HomeSuggestions lo cuenta igual).
         w.connect("ana", "caro")
         w.connect("ana", "beto", Mode.PAREJA)
-        // Bloqueo que solo ve la lectura de simulación (la arista sigue): create responde BLOCKED. En producción
-        // las dos lecturas son la misma tabla y el bloqueo borra la arista, así que el POST da 404 (prueba de arriba).
+        // Carrera: la comprobación de conexión aún ve la arista, pero el bloqueo ya está cuando create lo mira
+        // (aquí, porque solo lo ve la lectura de simulación). También es el 404 genérico, nunca BLOCKED.
         w.connect("ana", "dani")
         w.sim.repo.block(w.id("dani"), w.id("ana"))
         testApplication {
@@ -217,8 +217,9 @@ class SimulationApiTest : FunSpec({
             client.start("ana", UUID.randomUUID().toString()).status shouldBe HttpStatusCode.NotFound
             client.start("ana", w.id("caro").toString(), Mode.AMISTAD).error().code shouldBe ErrorCode.VALIDATION
             val blocked = client.start("ana", w.id("dani").toString())
-            blocked.status shouldBe HttpStatusCode.Forbidden
-            blocked.error().code shouldBe ErrorCode.BLOCKED
+            blocked.status shouldBe HttpStatusCode.NotFound
+            blocked.error().code shouldBe ErrorCode.NOT_FOUND
+            blocked.error().message shouldBe client.start("ana", UUID.randomUUID().toString()).error().message
             client.start("ana", w.id("beto").toString(), Mode.PAREJA).error().code shouldBe ErrorCode.AGE_REQUIRED
             w.sim.usage.charges shouldBe emptyList()
             w.sim.repo.all() shouldBe emptyList()
