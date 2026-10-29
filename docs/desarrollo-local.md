@@ -43,10 +43,10 @@ Para probar la app contra el backend de pruebas del homeserver (`deploy/homelab/
 
 ```properties
 parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/
-# respaldo sin HTTPS (solo LAN): parcheu.apiUrl.dev=http://192.168.0.10:8090/
+# emulador de Android contra un backend en tu máquina (único HTTP permitido): parcheu.apiUrl.dev=http://10.0.2.2:8090/
 ```
 
-`urlProperty` lee primero `-P`/`gradle.properties` y luego `local.properties`. La URL HTTPS necesita el Proxy Host de Nginx Proxy Manager (paso humano en `deploy/homelab/README.md`); AdGuard resuelve `*.homeserverlab.site` a `192.168.0.10` en la LAN (por Tailscale, con el DNS de AdGuard). Solo el `devDebug` trae `network_security_config` con HTTP permitido, como respaldo, hacia `192.168.0.10` y `10.0.2.2` (`app/src/devDebug/`); el release y el flavor `prod` exigen HTTPS. Sin la llave de Google el backend corre con autenticación Fake y la app no inicia sesión (ver el README del despliegue).
+`urlProperty` lee primero `-P`/`gradle.properties` y luego `local.properties`. La URL HTTPS necesita el Proxy Host de Nginx Proxy Manager (paso humano en `deploy/homelab/README.md`); AdGuard resuelve `*.homeserverlab.site` a `192.168.0.10` en la LAN (por Tailscale, con el DNS de AdGuard). Solo el `devDebug` trae `network_security_config` con HTTP permitido, y únicamente hacia `10.0.2.2` (el emulador; el homeserver ya no escucha en `192.168.0.10:8090`, así que desde el teléfono se usa siempre la URL HTTPS); además `AuthInterceptor` no adjunta el ID token a ninguna petición HTTP salvo a `10.0.2.2` (A-B1). El release y el flavor `prod` exigen HTTPS. Sin la llave de Google el backend corre con autenticación Fake y la app no inicia sesión (ver el README del despliegue).
 
 **Advertencia:** `urlProperty` lee `local.properties` también al construir el flavor `prod`; si dejas ahí `parcheu.apiUrl.prod` (o cualquier URL de producción) un build local la usará. Revisa `android/local.properties` antes de generar un AAB y no dejes URLs de prod en él.
 

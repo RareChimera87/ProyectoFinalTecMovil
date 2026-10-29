@@ -43,7 +43,7 @@ class OkHttpTimeoutsTest {
         try {
             val slow = slowClientOf(createOkHttpClient(object : TokenProvider by NoSessionTokenProvider {
                 override suspend fun currentToken() = "tok"
-            }, server.hostName))
+            }, server.hostName, cleartextHosts = setOf(server.hostName)))
             server.enqueue(MockResponse(code = 200))
 
             slow.newCall(Request.Builder().url(server.url("/v1/me/export")).build()).execute().close()

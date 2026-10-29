@@ -33,19 +33,21 @@ const val SLOW_CALL_TIMEOUT_SECONDS = 180L
 
 /**
  * Cliente HTTP con sesión: token y refresco ante 401 solo para [apiHost]. Los timeouts son los de arriba
- * (los de OkHttp por defecto no limitan la llamada completa). Un endpoint lento usa [slowClientOf].
+ * (los de OkHttp por defecto no limitan la llamada completa). Un endpoint lento usa [slowClientOf]. El token solo viaja por HTTPS ([canCarryToken]); [cleartextHosts] es la excepción del emulador.
  */
 fun createOkHttpClient(
     tokenProvider: TokenProvider,
     apiHost: String,
-    debugLogging: Boolean = false): OkHttpClient = OkHttpClient
+    debugLogging: Boolean = false,
+    cleartextHosts: Set<String> = AuthInterceptor.EMULATOR_HOSTS
+): OkHttpClient = OkHttpClient
     .Builder()
     .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-    .addInterceptor(AuthInterceptor(tokenProvider, apiHost))
-    .authenticator(TokenAuthenticator(tokenProvider, apiHost))
+    .addInterceptor(AuthInterceptor(tokenProvider, apiHost, cleartextHosts))
+    .authenticator(TokenAuthenticator(tokenProvider, apiHost, cleartextHosts))
     .apply {
         if (debugLogging) {
             addInterceptor(

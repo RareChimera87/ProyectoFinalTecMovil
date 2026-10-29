@@ -36,7 +36,7 @@ class TokenAuthenticatorTest {
     @Before
     fun setUp() {
         server.start()
-        client = createOkHttpClient(tokens, server.hostName)
+        client = createOkHttpClient(tokens, server.hostName, cleartextHosts = setOf(server.hostName))
     }
 
     @After
@@ -82,7 +82,7 @@ class TokenAuthenticatorTest {
 
     @Test
     fun withoutSessionNoAuthorizationHeaderIsSent() {
-        val anonymous = createOkHttpClient(NoSessionTokenProvider, server.hostName)
+        val anonymous = createOkHttpClient(NoSessionTokenProvider, server.hostName, cleartextHosts = setOf(server.hostName))
         server.enqueue(MockResponse(code = 200))
 
         anonymous.newCall(Request.Builder().url(server.url("/v1/health")).build()).execute().close()
@@ -130,5 +130,18 @@ class TokenAuthenticatorTest {
         } finally {
             pool.shutdownNow()
         }
+    }
+
+    @Test
+    fun cleartextToARealHostSendsNoTokenAndDoesNotRefresh() {
+        // Sin el host en la lista de excepciones (como en una build normal), HTTP no lleva sesión.
+        val strict = createOkHttpClient(tokens, server.hostName)
+        server.enqueue(MockResponse(code = 401))
+
+        val response = strict.newCall(Request.Builder().url(server.url("/v1/me")).build()).execute()
+
+        assertEquals(401, response.code)
+        assertEquals(0, tokens.refreshes)
+        assertNull(server.takeRequest(1, TimeUnit.SECONDS)?.headers?.get("Authorization"))
     }
 }

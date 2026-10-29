@@ -31,7 +31,7 @@ class TokenNetworkFailureTest {
         server.enqueue(MockResponse.Builder().code(200).build())
         server.start()
         val client = OkHttpClient.Builder()
-            .addInterceptor(AuthInterceptor(FailingProvider(), server.hostName))
+            .addInterceptor(AuthInterceptor(FailingProvider(), server.hostName, setOf(server.hostName)))
             .build()
         try {
             client.newCall(Request.Builder().url(server.url("/v1/session")).build()).execute()

@@ -10,10 +10,17 @@ import okhttp3.Route
  * Ante un 401 pide un token nuevo **una sola vez** y reintenta la petición. Si el reintento vuelve a dar
  * 401 (o no hay token, o el host no es el de la API), se rinde y el 401 llega a la llamada, que lo traduce a `AppError.Unauthorized`.
  */
-class TokenAuthenticator(private val tokenProvider: TokenProvider, private val apiHost: String) :
-    Authenticator {
+class TokenAuthenticator(
+    private val tokenProvider: TokenProvider,
+    private val apiHost: String,
+    private val cleartextHosts: Set<String> = AuthInterceptor.EMULATOR_HOSTS
+) : Authenticator {
     override fun authenticate(route: Route?, response: Response): Request? {
-        if (response.request.url.host != apiHost || response.priorResponse != null) return null
+        if (!canCarryToken(response.request.url, apiHost, cleartextHosts) ||
+            response.priorResponse != null
+        ) {
+            return null
+        }
         val sent = response.request.header(AUTHORIZATION)
         val token =
             synchronized(this) {
