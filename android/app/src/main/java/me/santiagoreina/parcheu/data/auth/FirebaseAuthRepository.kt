@@ -64,6 +64,9 @@ class FirebaseAuthRepository(
         source.authOrNull()?.currentUser != null && !signOutFlow.inProgress
 
     override suspend fun signInWithGoogle(activityContext: Context): SignInResult {
+        // Un cierre de sesión en segundo plano (401 → A4) puede seguir corriendo: su último paso cerraría la
+        // sesión nueva. Se espera antes de abrir el selector; A4 muestra Loading mientras tanto.
+        signOutFlow.awaitIdle()
         val auth = source.authOrNull() ?: return SignInResult.Failure(NOT_CONFIGURED)
         val webClientId = source.webClientId() ?: return SignInResult.Failure(NOT_CONFIGURED)
         val idToken =

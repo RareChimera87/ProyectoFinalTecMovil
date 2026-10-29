@@ -3,6 +3,8 @@ package me.santiagoreina.parcheu.data.auth
 import android.content.Context
 import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import me.santiagoreina.parcheu.contract.MeDto
 import me.santiagoreina.parcheu.contract.OnboardingStep
 import me.santiagoreina.parcheu.contract.SessionDto
@@ -44,13 +46,16 @@ class FakeAuthRepository(var signedIn: Boolean = false) : AuthRepository {
     /** Si no es `null`, [signOut] espera aquí con la sesión ya marcada como cerrándose (red lenta). */
     var signOutGate: CompletableDeferred<Unit>? = null
 
+    private val signingOutState = MutableStateFlow(false)
+
     /** `true` mientras [signOut] está en curso, como `SignOutFlow.inProgress`. */
-    var signingOut: Boolean = false
-        private set
+    val signingOut: Boolean get() = signingOutState.value
 
     override fun hasSession(): Boolean = signedIn && !signingOut
 
+    /** Como `FirebaseAuthRepository`: espera a que termine un [signOut] en curso antes de "abrir el selector". */
     override suspend fun signInWithGoogle(activityContext: Context): SignInResult {
+        signingOutState.first { !it }
         calls += "signIn"
         val result = signInResult
         if (result is SignInResult.Success) signedIn = true
@@ -69,12 +74,12 @@ class FakeAuthRepository(var signedIn: Boolean = false) : AuthRepository {
 
     override suspend fun signOut() {
         calls += "signOut"
-        signingOut = true
+        signingOutState.value = true
         try {
             signOutGate?.await()
             signedIn = false
         } finally {
-            signingOut = false
+            signingOutState.value = false
         }
     }
 }

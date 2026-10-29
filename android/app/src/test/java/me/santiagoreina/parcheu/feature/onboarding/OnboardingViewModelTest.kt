@@ -3,6 +3,9 @@ package me.santiagoreina.parcheu.feature.onboarding
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import me.santiagoreina.parcheu.contract.OnboardingStep
 import me.santiagoreina.parcheu.core.error.AppError
@@ -55,6 +58,29 @@ class OnboardingViewModelTest {
             }
             assertEquals(LoginState.Idle, viewModel.state.value.login)
         }
+    }
+
+    @Test
+    fun continueWaitsWithLoadingForTheSignOutStillRunning() = runTest {
+        // M1 de la ronda 2 de #109: tras un 401, A4 se abre con el cierre de sesión aún en curso. "Continuar"
+        // no abre el selector hasta que el cierre termina; si no, su último paso cerraría la sesión nueva.
+        val repository = loggedInWith(OnboardingStep.DONE).apply {
+            signedIn = true
+            signOutGate = CompletableDeferred()
+        }
+        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) { repository.signOut() }
+        val viewModel = OnboardingViewModel(repository)
+
+        viewModel.effects.test {
+            viewModel.onContinueWithGoogle(context)
+            assertEquals(LoginState.Loading, viewModel.state.value.login)
+            assertEquals(listOf("signOut"), repository.calls)
+            expectNoEvents()
+
+            repository.signOutGate?.complete(Unit)
+            assertEquals(OnboardingEffect.Navigate(Home), awaitItem())
+        }
+        assertEquals(listOf("signOut", "signIn"), repository.calls)
     }
 
     @Test

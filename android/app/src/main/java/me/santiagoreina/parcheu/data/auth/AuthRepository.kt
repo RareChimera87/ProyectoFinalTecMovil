@@ -29,7 +29,8 @@ interface AuthRepository {
 
     /**
      * Abre el selector de cuentas de Google sobre [activityContext] (debe ser una Activity: Credential
-     * Manager muestra su hoja encima de ella) y completa el login con Firebase y la API.
+     * Manager muestra su hoja encima de ella) y completa el login con Firebase y la API. Si hay un [signOut]
+     * en curso, espera a que termine antes de abrir el selector.
      */
     suspend fun signInWithGoogle(activityContext: Context): SignInResult
 

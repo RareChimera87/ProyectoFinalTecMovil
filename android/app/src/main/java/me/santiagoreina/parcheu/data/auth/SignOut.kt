@@ -6,11 +6,13 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.exceptions.ClearCredentialException
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -44,6 +46,10 @@ fun interface PlatformSignOut {
  * [inProgress] queda en `true` desde antes del paso 1 hasta el final: mientras tanto la sesión ya se da por
  * cerrada (`AuthRepository.hasSession()` es `false`), así que el 401 de `DELETE /v1/me/fcm-token` tras
  * borrar la cuenta no llega al bus global y A4 no vuelve a llamar a `POST /v1/session`.
+ *
+ * Como A4 se abre sin esperar al cierre ([BackgroundSignOut]), quien inicie una sesión nueva debe llamar
+ * antes a [awaitIdle]: si no, el paso 4 del cierre viejo cerraría la sesión recién abierta y los pasos 2 y 3
+ * borrarían sus datos (M1 de la ronda 2 de #109).
  */
 class SignOutFlow(
     private val push: PushUnregistration,
@@ -51,13 +57,18 @@ class SignOutFlow(
     private val firestore: FirestoreSessionReset,
     private val platform: PlatformSignOut
 ) {
-    private val running = AtomicInteger(0)
+    private val running = MutableStateFlow(0)
 
     /** `true` mientras algún cierre de sesión está en curso (se marca antes de suspender por primera vez). */
-    val inProgress: Boolean get() = running.get() > 0
+    val inProgress: Boolean get() = running.value > 0
+
+    /** Vuelve en cuanto no queda ningún cierre de sesión en curso (enseguida si no hay ninguno). */
+    suspend fun awaitIdle() {
+        running.first { it == 0 }
+    }
 
     suspend operator fun invoke() {
-        running.incrementAndGet()
+        running.update { it + 1 }
         try {
             withContext(NonCancellable) {
                 quietly { push.unregister() }
@@ -66,7 +77,7 @@ class SignOutFlow(
                 platform.signOut()
             }
         } finally {
-            running.decrementAndGet()
+            running.update { it - 1 }
         }
     }
 
