@@ -36,6 +36,7 @@ class SmokeScenarioLocalTest : FunSpec({
                 env = Env.LOCAL, port = 0, version = "e2e-local", oidcAudience = "http://localhost",
                 tasksServiceAccount = "sa-tasks@parcheu-local.iam.gserviceaccount.com", firebaseProjectId = null,
                 db = DbConfig("test", ds.username, ds.password, null, ds.jdbcUrl),
+                fakeAuthAllowed = true,
             )
             val container = AppContainer.fromConfig(config, mapOf("ENV" to "local", "FAKE_OIDC_TOKEN" to TEST_OIDC_TOKEN))
             val server: EmbeddedServer<*, *> = embeddedServer(Netty, port = 0) { module(container) }.start(wait = false)

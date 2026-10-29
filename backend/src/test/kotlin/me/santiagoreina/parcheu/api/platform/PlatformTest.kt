@@ -11,6 +11,7 @@ import me.santiagoreina.parcheu.api.Mode
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
+import me.santiagoreina.parcheu.api.platform.config.DbConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.logging.parseTraceId
 
@@ -135,10 +136,46 @@ class PlatformTest : FunSpec({
             "jdbc:postgresql://db.example.com/parcheu",
             "jdbc:postgresql://localhost,db.example.com/parcheu",
             "jdbc:postgresql://user@db.example.com:5432/parcheu",
+            // Revisión del PR #103 (M1): pgjdbc redirige la conexión por parámetros de la URL.
+            "jdbc:postgresql://localhost/parcheu?host=10.0.0.5",
+            "jdbc:postgresql://localhost?PGHOST=db.example.com",
+            "jdbc:postgresql://parcheu-db:5432/parcheu?socketFactory=com.google.cloud.sql.postgres.SocketFactory&cloudSqlInstance=p:r:i",
+            "jdbc:postgresql://localhost/parcheu?service=prod",
+            "jdbc:mysql://localhost/x",
+            // M2: sin heurística de una sola etiqueta; solo la lista exacta.
+            "jdbc:postgresql://homelab:5432/parcheu",
+            "jdbc:postgresql://db/parcheu",
+            "jdbc:postgresql://0x0a000005/parcheu",
+            "jdbc:postgresql://localhost:abc/parcheu",
+            "jdbc:postgresql://localhost.evil.com/parcheu",
+            "jdbc:postgresql:///parcheu?host=/cloudsql/p:r:i",
         ).forEach { url ->
             shouldThrow<IllegalArgumentException> { AppConfig.fromEnv(local + ("DB_URL" to url)) }.message shouldContain "local"
         }
         shouldThrow<IllegalArgumentException> { AppConfig.fromEnv(local + ("CLOUD_SQL_INSTANCE" to "p:r:i")) }
+        // Otro nombre solo con la lista explícita LOCAL_DB_HOSTS.
+        val otro = local + ("DB_URL" to "jdbc:postgresql://mi-postgres:5432/parcheu")
+        shouldThrow<IllegalArgumentException> { AppConfig.fromEnv(otro) }
+        AppConfig.fromEnv(otro + ("LOCAL_DB_HOSTS" to "otro, Mi-Postgres")).db?.jdbcUrl shouldBe "jdbc:postgresql://mi-postgres:5432/parcheu"
+    }
+
+    test("ALLOW_FAKE_AUTH solo vale con el texto exacto true (B1)") {
+        listOf("TRUE", "True", " true", "true ", "\"true\"", "yes").forEach { v ->
+            shouldThrow<IllegalArgumentException> { AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to v)) }
+        }
+    }
+
+    test("fromConfig no cablea los Fakes sin el consentimiento aunque AppConfig no venga de fromEnv (B2)") {
+        val sinConsentimiento = AppConfig(
+            env = Env.LOCAL, port = 0, version = "t", oidcAudience = "http://localhost",
+            tasksServiceAccount = "sa@p.iam.gserviceaccount.com", firebaseProjectId = null,
+            db = DbConfig("parcheu", "postgres", null, null, "jdbc:postgresql://localhost:1/parcheu"),
+        )
+        shouldThrow<IllegalStateException> { AppContainer.fromConfig(sinConsentimiento, mapOf("ENV" to "local")) }
+            .message shouldContain "ALLOW_FAKE_AUTH=true"
+        AppConfig.fromEnv(
+            mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://localhost:1/parcheu"),
+        ).fakeAuthAllowed shouldBe true
     }
 
     test("dev y prod ignoran ALLOW_FAKE_AUTH: nunca cablean Fakes y admiten una base remota") {

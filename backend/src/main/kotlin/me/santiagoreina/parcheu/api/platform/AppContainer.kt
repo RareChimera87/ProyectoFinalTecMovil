@@ -258,6 +258,10 @@ class AppContainer(
          */
         fun fromConfig(config: AppConfig, vars: Map<String, String> = System.getenv()): AppContainer {
             val local = config.env == Env.LOCAL
+            // Defensa en profundidad (B-A2): los Fakes solo se cablean con el consentimiento de AppConfig.fromEnv.
+            check(!local || config.fakeAuthAllowed) {
+                "ENV=local abre la autenticación falsa; exige ALLOW_FAKE_AUTH=true y una base de datos local"
+            }
             val tokenVerifier = if (local) {
                 FakeTokenVerifier(adminUids = if (vars["LOCAL_FAKE_ADMIN"] == "true") setOf(LOCAL_ADMIN_UID) else emptySet())
             } else {
