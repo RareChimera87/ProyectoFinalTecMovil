@@ -374,6 +374,44 @@ class AndroidReleaseUrlsProd(unittest.TestCase):
         self.assertNotIn("UPLOAD_KEYSTORE_FILE", texto_ci)
 
 
+class FirebaseDeployProd(unittest.TestCase):
+    """C-B9/C-M4: prod despliega con firebase.prod.json y falla cerrado sin la huella de Play App Signing."""
+
+    def setUp(self):
+        self.wf = cargar("firebase-deploy.yml")
+
+    def _deploy(self, job):
+        pasos_job = self.wf["jobs"][job]["steps"]
+        return pasos_job, next(p for p in pasos_job if "firebase deploy" in p.get("run", ""))
+
+    def test_prod_usa_firebase_prod_json_con_la_huella_desde_vars(self):
+        pasos_job, deploy = self._deploy("deploy-prod")
+        self.assertIn("--config firebase.prod.json", deploy["run"])
+        self.assertEqual(deploy["env"]["PLAY_APP_SIGNING_SHA256"], "${{ vars.PLAY_APP_SIGNING_SHA256 }}")
+        i_deploy = pasos_job.index(deploy)
+        exige = [i for i, p in enumerate(pasos_job)
+                 if "PLAY_APP_SIGNING_SHA256" in p.get("env", {}) and "exit 1" in p.get("run", "")]
+        self.assertTrue(exige and exige[0] < i_deploy, "debe fallar cerrado antes del deploy")
+        run = pasos_job[exige[0]]["run"]
+        self.assertIn('-z "$PLAY_APP_SIGNING_SHA256"', run)
+        prod = (RAIZ / "firebase" / "firebase.prod.json").read_text(encoding="utf-8")
+        self.assertIn("render-assetlinks.mjs prod", prod)
+
+    def test_dev_sigue_con_firebase_json(self):
+        _, deploy = self._deploy("deploy-dev")
+        self.assertNotIn("firebase.prod.json", deploy["run"])
+        self.assertNotIn("PLAY_APP_SIGNING_SHA256", deploy.get("env", {}))
+
+    def test_la_falta_de_huella_falla_en_bash(self):
+        pasos_job = self.wf["jobs"]["deploy-prod"]["steps"]
+        run = next(p for p in pasos_job if "exit 1" in p.get("run", "")
+                   and "PLAY_APP_SIGNING_SHA256" in p.get("env", {}))["run"]
+        for valor, esperado in (("", 1), ("AB:CD", 0)):
+            r = subprocess.run(["bash", "-e", "-c", run], capture_output=True, text=True,
+                               env={"PLAY_APP_SIGNING_SHA256": valor, "PATH": "/usr/bin:/bin"})
+            self.assertEqual(r.returncode, esperado, valor)
+
+
 class PendientesHumanos(unittest.TestCase):
     def test_no_recomienda_code_owners_con_una_sola_cuenta(self):
         doc = (RAIZ / "docs" / "pendientes-humanos.md").read_text(encoding="utf-8")

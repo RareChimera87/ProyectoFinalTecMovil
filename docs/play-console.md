@@ -269,7 +269,10 @@ la subida. Aprobación estimada: 30-31 oct.
 5. **PR `release/0.1.0` → `main`** con el título `Release 0.1.0`. **Lo aprueba el usuario** (nadie más mezcla a `main`).
 6. **Tag** tras el merge: `git tag -a v0.1.0 -m "ParcheU 0.1.0" origin/main && git push origin v0.1.0`.
 7. **`deploy-prod`** (environment `production`, aprobación del usuario): en la 0.1 solo corre `firebase-deploy` prod
-   (reglas, índices y Hosting; la 0.1 no usa backend). Verifica que las páginas legales respondan:
+   (reglas, índices y Hosting; la 0.1 no usa backend). Usa `firebase/firebase.prod.json`, así que antes del tag hacen
+   falta la variable `PLAY_APP_SIGNING_SHA256` en el environment `production` (el job falla cerrado sin ella) y el
+   servicio Cloud Run `api` en `parcheu-prod` (destino del rewrite `/v1/**`; ver `docs/pendientes-humanos.md`, C-B9).
+   Verifica que las páginas legales respondan:
 
    ```bash
    for p in privacidad terminos borrar-cuenta; do

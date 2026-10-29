@@ -59,7 +59,9 @@ archivo por entorno (C-B9): las fuentes están en `assetlinks/dev.json` y `asset
 | prod (`parcheu-prod`) | `me.santiagoreina.parcheu` | llave de subida (`docs/play-console.md` §2) y la de **Play App Signing**, que se inyecta desde la variable `PLAY_APP_SIGNING_SHA256` (el render falla si falta) |
 
 El deploy de prod (`--config firebase.prod.json`) corre ese render solo en su `predeploy` (falla cerrado sin la huella); equivale a correr, antes de `firebase deploy`, `PLAY_APP_SIGNING_SHA256=<huella> node render-assetlinks.mjs prod`
-(pendiente en `firebase-deploy.yml`, ver `docs/pendientes-humanos.md`). Mientras tanto no se despliega prod.
+(el job `deploy-prod` de `firebase-deploy.yml` pasa `--config firebase.prod.json` y la variable `PLAY_APP_SIGNING_SHA256`
+desde `vars`, y falla antes de desplegar si no existe; ver `docs/pendientes-humanos.md`). Como `firebase.prod.json`
+lleva el rewrite `/v1/**`, el deploy de prod también necesita que exista el servicio Cloud Run `api` en `parcheu-prod`.
 
 Para agregar una huella: `keytool -list -v -keystore <keystore>` (o Play Console > Integridad de la app) y
 agregarla en mayúsculas con `:` al arreglo del paquete en `assetlinks/<entorno>.json` y volver a generar con el render. `scripts/test/legal-pages.sh` valida el formato. En el
