@@ -147,6 +147,7 @@ G2 (límite) es un bottom sheet global controlado por el `ErrorRouter`. Deep lin
 ### 2.5 Red, sesión y persistencia
 
 - Retrofit 3 + OkHttp 5 + converter de kotlinx.serialization (`ignoreUnknownKeys = true`, `explicitNulls = false`).
+- **Timeouts** (A-M4, `createOkHttpClient`): conexión 10 s, lectura 30 s, escritura 30 s y llamada completa 60 s. El único endpoint síncrono lento es `GET /v1/me/export` (el servidor lo arma completo); `AccountApi` usa `slowClientOf` (mismo pool, interceptores y autenticador) con lectura/escritura 120 s y llamada 180 s. Los de simulación y escenario no lo necesitan: `POST /v1/simulations` responde 202 y el resto lee estado.
 - `AuthInterceptor` agrega `Authorization: Bearer <ID token>` (`FirebaseAuth.currentUser.getIdToken(false)`); `TokenAuthenticator` fuerza refresco ante 401 una vez.
 - Login: Credential Manager (`androidx.credentials`) + `googleid` (`GetGoogleIdOption` con el client id web de Firebase) → `GoogleAuthProvider.getCredential` → `signInWithCredential` → `POST /v1/session`.
 - DataStore (Preferences): sesión, último grafo serializado (pintado instantáneo de D1), progreso de B1, preferencias de tema.
