@@ -105,9 +105,14 @@ else
 fi
 chmod 600 .env
 # Falla antes de tocar los contenedores si el modo no puede arrancar (el backend también lo rechaza).
-MODO="$(sed -n 's/^PARCHEU_ENV=//p' .env | tail -1)"
+# El backend acepta ENV con espacios y en cualquier caja: se normaliza igual (comillas, espacios, \r, minúsculas) para
+# abortar en los mismos casos y que una reversión a una imagen anterior a B-A2 nunca arranque en local sin la bandera.
+MODO="$(sed -n 's/^PARCHEU_ENV=//p' .env | tail -1 | tr -d "\"' \t\r" | tr '[:upper:]' '[:lower:]')"
 MODO="${MODO:-dev}"
-if [ "$MODO" = "local" ] && [ "$(sed -n 's/^ALLOW_FAKE_AUTH=//p' .env | tail -1)" != "true" ]; then
+# La bandera, en cambio, solo vale `true` exacto (compose quita las comillas que la rodean, nada más).
+BANDERA="$(sed -n 's/^ALLOW_FAKE_AUTH=//p' .env | tail -1)"
+BANDERA="${BANDERA#\"}"; BANDERA="${BANDERA%\"}"; BANDERA="${BANDERA#\'}"; BANDERA="${BANDERA%\'}"
+if [ "$MODO" = "local" ] && [ "$BANDERA" != "true" ]; then
   echo "PARCHEU_ENV=local abre la autenticación Fake y exige ALLOW_FAKE_AUTH=true en ~/$DIR/.env; usa dev (README)." >&2
   exit 1
 fi
@@ -182,7 +187,7 @@ done
 REMOTO
 
 # El 8090 solo escucha en 127.0.0.1 del servidor (C-M5): desde este equipo se entra por NPM (HTTPS), no por la LAN.
-MODO="$(remoto "sed -n 's/^PARCHEU_ENV=//p' ~/$DIR_REMOTO/.env | tail -1")"
+MODO="$(remoto "sed -n 's/^PARCHEU_ENV=//p' ~/$DIR_REMOTO/.env | tail -1" | tr -d "\"' \t\r" | tr '[:upper:]' '[:lower:]')"
 if curl -fsS --max-time 8 "https://api-parcheu.homeserverlab.site/v1/health" >/dev/null 2>&1; then
   echo "HTTPS OK: https://api-parcheu.homeserverlab.site/v1/health"
   if [ "$MODO" = "local" ]; then
