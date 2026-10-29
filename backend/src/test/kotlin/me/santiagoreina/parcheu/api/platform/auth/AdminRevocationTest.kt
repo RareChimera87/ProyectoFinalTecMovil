@@ -32,7 +32,7 @@ class AdminRevocationTest : FunSpec({
 
     fun withApp(spy: Spy, block: suspend (suspend (String) -> HttpStatusCode) -> Unit) = testApplication {
         application {
-            installAuth(spy, FakeOidcVerifier("tasks@test"))
+            installAuth(spy, FakeOidcVerifier("tasks@test", "token-oidc-de-prueba-largo-0123456789"))
             routing { authenticate(AuthProviders.FIREBASE) { get("/ping") { call.respondText("ok") } } }
         }
         block { token -> client.get("/ping") { header(HttpHeaders.Authorization, "Bearer $token") }.status }
