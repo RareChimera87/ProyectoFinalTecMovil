@@ -107,10 +107,16 @@ class AiGateway(
         } catch (e: Throwable) {
             val reported = (e as? LlmInvalidOutput)?.usage
             // Se cierra la reserva aunque la corrutina esté cancelada: si no, el gasto quedaría inflado hasta medianoche.
-            withContext(NonCancellable) { settle(call, reservation, reported ?: call.failedUsage(), estimated = reported == null) }
+            // Un fallo al cerrarla no tapa el error original.
+            try {
+                withContext(NonCancellable) { settle(call, reservation, reported ?: call.failedUsage(), estimated = reported == null) }
+            } catch (settleError: Throwable) {
+                e.addSuppressed(settleError)
+            }
             throw e
         }
-        settle(call, reservation, usageOf(result), estimated = false)
+        // También sin cancelación en el camino exitoso: el proveedor ya cobró y la fila de `ai_usage` no se puede perder.
+        withContext(NonCancellable) { settle(call, reservation, usageOf(result), estimated = false) }
         return result
     }
 
