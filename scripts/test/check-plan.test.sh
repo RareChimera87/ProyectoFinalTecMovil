@@ -118,7 +118,7 @@ expect fail "el pool no confía en el nombre del repo" grep -q "attribute_condit
 # debe existir antes de buscar en él: si el awk no lo encuentra, las negativas pasarían solas.
 roles_tf="$(awk '/terraform_roles_dev = \[/{f=1} f{print} f&&/\]/{exit}' "$TF")"
 apply_role="$(awk '/"google_project_iam_custom_role" "terraform_apply"/{f=1} f{print} f&&/^}/{exit}' "$TF")"
-acts_as="$(block terraform_acts_as)"
+acts_as="$(block terraform_acts_as_api; block terraform_acts_as_tasks)"
 expect ok   "extracto de terraform_roles_dev no vacío" grep -q 'roles/run.admin' <<<"$roles_tf"
 expect ok   "extracto de parcheuTerraformApply no vacío" grep -q 'secretmanager.secrets.create' <<<"$apply_role"
 expect ok   "extracto de terraform_acts_as no vacío" test -n "$acts_as"
@@ -128,9 +128,10 @@ done
 expect fail "sa-terraform sin projectIamAdmin" grep -q 'roles/resourcemanager.projectIamAdmin' "$TF"
 expect fail "parcheuTerraformApply no lee secretos, documentos ni exporta logs" grep -qE '"(secretmanager\.versions|datastore\.entities|logging\.(sinks|buckets|links|logEntries))\.' <<<"$apply_role"
 expect ok   "parcheuTerraformApply administra las métricas de logs" grep -q '"logging.logMetrics.create"' <<<"$apply_role"
-expect ok   "sa-terraform tiene actAs solo sobre sa-api y sa-tasks" grep -q '{ api = google_service_account.api.name, tasks = google_service_account.tasks.name }' <<<"$acts_as"
+expect ok   "sa-terraform tiene actAs sobre sa-api" grep -q 'service_account_id = google_service_account.api.name' <<<"$acts_as"
+expect ok   "sa-terraform tiene actAs sobre sa-tasks" grep -q 'service_account_id = google_service_account.tasks.name' <<<"$acts_as"
 # Ningún otro enlace serviceAccountUser/TokenCreator apunta a sa-terraform.
-otros="$(awk '/^resource /{b=$0; r=""} /role +=/{r=$0} /member +=.*google_service_account.terraform\[0\]/{print b " " r}' "$TF" | grep -E 'serviceAccount(User|TokenCreator|Admin)' | grep -v '"terraform_acts_as"')"
+otros="$(awk '/^resource /{b=$0; r=""} /role +=/{r=$0} /member +=.*google_service_account.terraform\[0\]/{print b " " r}' "$TF" | grep -E 'serviceAccount(User|TokenCreator|Admin)' | grep -vE '"terraform_acts_as_(api|tasks)"')"
 expect ok   "sin otros actAs/TokenCreator para sa-terraform" test -z "$otros"
 
 # C-M7: el claim environment es opcional (jobs sin environment): has() lo cubre.

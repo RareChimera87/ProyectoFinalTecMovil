@@ -60,7 +60,7 @@ locals {
   # servicios que usa modules/platform (sin roles/owner ni roles/editor). No administra
   # IAM de proyecto ni cuentas de servicio (C-M1): sa-api y sa-tasks, sus roles y sus
   # enlaces los crea este bootstrap; sa-terraform solo tiene actAs sobre esas dos
-  # (google_service_account_iam_member.terraform_acts_as) y el rol personalizado
+  # (google_service_account_iam_member.terraform_acts_as_{api,tasks}) y el rol personalizado
   # parcheuTerraformApply para secretos, Firestore, Firebase y métricas de logs sin
   # acceso a datos.
   terraform_roles_dev = [
@@ -341,9 +341,18 @@ resource "google_service_account_iam_member" "deployer_acts_as_api" {
 # sa-terraform (dev) crea recursos que corren como estas cuentas: Cloud Run api y jobs
 # (sa-api), Scheduler y la suscripción push de Pub/Sub (sa-tasks). actAs solo sobre ellas,
 # no sobre el proyecto: no puede lanzar nada como sa-deployer ni como sí misma.
-resource "google_service_account_iam_member" "terraform_acts_as" {
-  for_each           = local.is_prod ? {} : { api = google_service_account.api.name, tasks = google_service_account.tasks.name }
-  service_account_id = each.value
+# Dos recursos explícitos (no for_each) para que scripts/check-iam.sh resuelva el destino
+# desde la configuración del plan y compare el par con EXPECTED_SA_PAIRS.
+resource "google_service_account_iam_member" "terraform_acts_as_api" {
+  count              = local.is_prod ? 0 : 1
+  service_account_id = google_service_account.api.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.terraform[0].email}"
+}
+
+resource "google_service_account_iam_member" "terraform_acts_as_tasks" {
+  count              = local.is_prod ? 0 : 1
+  service_account_id = google_service_account.tasks.name
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${google_service_account.terraform[0].email}"
 }
