@@ -37,6 +37,13 @@ __pycache__/
 .env
 .env.*
 !.env.example
+!**/.env.example
+sa.json
+*-sa.json
+**/secrets/
+*.p12
+*.pem
+*.key
 # SO
 .DS_Store
 Thumbs.db

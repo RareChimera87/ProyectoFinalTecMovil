@@ -12,10 +12,18 @@ jobs:
     name: pr-title
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Pruebas de commit-lint
         run: scripts/test/commit-lint.test.sh
       - name: Valida el título del PR
         env:
           TITULO: ${{ github.event.pull_request.title }}
-        run: scripts/commit-lint.sh --titulo "$TITULO"
+          AUTOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          # Dependabot fija el formato "Actualiza: Bump ..." y no se puede reescribir; sus PR
+          # llevan la etiqueta gobernanza y los revisa una persona.
+          if [[ "$AUTOR" == "dependabot[bot]" ]]; then
+            echo "PR de Dependabot: se omite la validación del título."
+            exit 0
+          fi
+          scripts/commit-lint.sh --titulo "$TITULO"
