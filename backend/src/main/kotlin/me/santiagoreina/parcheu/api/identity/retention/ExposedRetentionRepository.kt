@@ -24,8 +24,13 @@ class ExposedRetentionRepository(private val db: Database) : RetentionRepository
     override suspend fun deleteNotificationsBefore(cutoff: Instant): Int =
         tx { it.update("delete from notifications where created_at < ?", cutoff.ts()) }
 
-    override suspend fun anonymizeAiUsageBefore(cutoff: Instant): Int =
-        tx { it.update("update ai_usage set user_id = null where user_id is not null and created_at < ?", cutoff.ts()) }
+    /** También borra los contadores diarios por persona (`ai_budget_user`, `daily_counters`, B-M1): solo sirven el día en curso. */
+    override suspend fun anonymizeAiUsageBefore(cutoff: Instant): Int = tx {
+        val day = "(?::timestamptz at time zone 'America/Bogota')::date"
+        it.update("update ai_usage set user_id = null where user_id is not null and created_at < ?", cutoff.ts()) +
+            it.update("delete from ai_budget_user where day < $day", cutoff.ts()) +
+            it.update("delete from daily_counters where day < $day", cutoff.ts())
+    }
 
     override suspend fun clearReportSnapshotsResolvedBefore(cutoff: Instant): Int = tx {
         it.update(

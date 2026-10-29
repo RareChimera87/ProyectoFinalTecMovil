@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.api.safety.moderation
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
@@ -45,6 +46,11 @@ import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
+import me.santiagoreina.parcheu.api.quota.DailyKind
+import me.santiagoreina.parcheu.api.quota.DailyLimiter
+import me.santiagoreina.parcheu.api.quota.InMemoryDailyCounterRepository
+import me.santiagoreina.parcheu.api.quota.InMemoryDevEntitlementService
+import me.santiagoreina.parcheu.api.quota.QuotaLimits
 import me.santiagoreina.parcheu.api.safety.InMemorySafetyRepository
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.startApp
@@ -115,7 +121,10 @@ class ModerationServiceTest : FunSpec({
         }
     }
 
-    class Fixture {
+    class Fixture(
+        withinDailyCap: (UUID) -> Boolean = { true },
+        sampleEvery: Int = ModerationService.DEFAULT_SAMPLE_EVERY,
+    ) {
         val identityRepo = InMemoryIdentityRepository().apply { listOf("ana", "beto").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val ana = identityRepo.user("ana")
         val beto = identityRepo.user("beto")
@@ -138,8 +147,10 @@ class ModerationServiceTest : FunSpec({
         val flakySafety = FlakySafety(safetyRepo)
         val notifier = FakeNotifier()
         val flakyNotifier = FlakyNotifier(notifier)
-        val moderation = ModerationService(MessageModerator(testGateway(llm)), chatRepo, chat.service, flakySafety, queue, FIXED_CLOCK, flakyNotifier)
-            .also { it.attachTo(chat) }
+        val moderation = ModerationService(
+            MessageModerator(testGateway(llm)), chatRepo, chat.service, flakySafety, queue, FIXED_CLOCK, flakyNotifier,
+            withinDailyCap, sampleEvery,
+        ).also { it.attachTo(chat) }
         val room = runBlocking { chat.service.createDirect(ana.id, beto.id, Mode.AMISTAD) }
 
         /** Beto escribe [text]; devuelve el id del mensaje guardado. */
@@ -161,6 +172,39 @@ class ModerationServiceTest : FunSpec({
             body shouldContain id.toString()
         }
         f.llm.calls shouldBe 0
+    }
+
+    test("B-M1: pasado el tope diario del autor solo se encola 1 de cada N mensajes, con muestreo determinista por id") {
+        val limiter = DailyLimiter(InMemoryDailyCounterRepository(), InMemoryDevEntitlementService(), QuotaLimits(dailyModerations = 3), FIXED_CLOCK)
+        val f = Fixture(withinDailyCap = { limiter.tryConsume(it, DailyKind.MODERATION) }, sampleEvery = 4)
+        repeat(3) { f.send("hola $it") }
+        f.queue.tasks shouldHaveSize 3
+        fun ids() = generateSequence { UUID.randomUUID() }
+        val sampled = ids().first { Math.floorMod(it.hashCode(), 4) == 0 }
+        val skipped = ids().first { Math.floorMod(it.hashCode(), 4) != 0 }
+        fun record(id: UUID) = MessageRecord(id, f.room.id, f.beto.id, "otro mensaje", false, false, null, FIXED_CLOCK.instant())
+        runBlocking {
+            f.moderation.enqueue(record(skipped))
+            f.moderation.enqueue(record(sampled))
+        }
+        f.queue.tasks shouldHaveSize 4
+        f.queue.tasks.last().body shouldContain sampled.toString()
+        f.llm.calls shouldBe 0
+        // El tope es del autor: Ana sigue con el suyo.
+        runBlocking { f.moderation.enqueue(record(skipped).copy(id = UUID.randomUUID(), senderId = f.ana.id)) }
+        f.queue.tasks shouldHaveSize 5
+    }
+
+    test("B-M1: si el contador del tope falla, el mensaje se modera igual (fail-open de la moderación)") {
+        val f = Fixture(withinDailyCap = { error("base caída") }, sampleEvery = 1_000_000)
+        f.send("hola")
+        f.queue.tasks shouldHaveSize 1
+    }
+
+    test("MODERATION_SAMPLE_EVERY: 10 por defecto, entero >= 1") {
+        moderationSampleEvery(emptyMap()) shouldBe 10
+        moderationSampleEvery(mapOf("MODERATION_SAMPLE_EVERY" to "3")) shouldBe 3
+        shouldThrow<IllegalStateException> { moderationSampleEvery(mapOf("MODERATION_SAMPLE_EVERY" to "0")) }
     }
 
     test("severidad alta oculta el mensaje en Postgres y Firestore y crea un reporte AUTO") {

@@ -43,6 +43,11 @@ import java.util.UUID
  * y repara el espejo de Firestore. El aviso de ayuda va primero y, si falla, no impide reportar ni ocultar; luego se
  * relanza el error. Un reintento puede duplicar el aviso, pero nunca se pierde. Con solo SELF_HARM no hay reporte, así que
  * si el aviso falla se encola `moderate-help` (sin LLM) en vez de relanzar el error: el reintento no depende del modelo.
+ *
+ * Tope por persona (B-M1, enmienda de ADR-0026): [withinDailyCap] cuenta los mensajes moderados del autor en el día
+ * (`MODERATION_DAILY_PER_USER`); pasado el tope solo se modera 1 de cada [sampleEvery] mensajes (muestreo determinista
+ * por id), así un bucle de mensajes no dispara una llamada al LLM por cada uno y el abuso sigue teniendo una
+ * probabilidad de revisión. Si el contador falla se modera igual (la moderación nunca se apaga por un error propio).
  */
 class ModerationService(
     private val moderator: MessageModerator,
@@ -52,12 +57,25 @@ class ModerationService(
     private val tasks: TaskQueue,
     private val clock: Clock,
     private val notifier: Notifier,
+    /** Cuenta un mensaje moderado del autor; false si ya pasó su tope del día (`DailyLimiter`, `MODERATION`). */
+    private val withinDailyCap: (UUID) -> Boolean = { true },
+    /** Pasado el tope, se modera 1 de cada [sampleEvery] mensajes (`MODERATION_SAMPLE_EVERY`, ≥ 1). */
+    private val sampleEvery: Int = DEFAULT_SAMPLE_EVERY,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    init {
+        require(sampleEvery >= 1) { "MODERATION_SAMPLE_EVERY debe ser al menos 1" }
+    }
+
     /** Encola la moderación de [message]; nunca propaga errores (el envío ya ocurrió). */
     suspend fun enqueue(message: MessageRecord) {
-        if (message.senderId == null) return
+        val author = message.senderId ?: return
+        if (!underCap(author) && !sampled(message.id)) {
+            log.atInfo().setMessage(SAMPLED_OUT).addKeyValue("event", SAMPLED_OUT)
+                .addKeyValue("messageId", message.id.toString()).log()
+            return
+        }
         try {
             tasks.enqueue(
                 TaskRequest(
@@ -74,6 +92,19 @@ class ModerationService(
                 .addKeyValue("messageId", message.id.toString()).addKeyValue("error", e.javaClass.simpleName).log()
         }
     }
+
+    /** ¿El autor sigue dentro de su tope diario? Un fallo del contador cuenta como sí (se modera). */
+    private fun underCap(author: UUID): Boolean = try {
+        withinDailyCap(author)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.atWarn().setMessage(CAP_FAILED).addKeyValue("event", CAP_FAILED).addKeyValue("error", e.javaClass.simpleName).log()
+        true
+    }
+
+    /** Muestreo determinista por id: el mismo mensaje siempre cae del mismo lado, también en los reintentos. */
+    private fun sampled(messageId: UUID): Boolean = Math.floorMod(messageId.hashCode(), sampleEvery) == 0
 
     /** Revisa el mensaje [messageId] y aplica las acciones que correspondan. */
     suspend fun moderate(messageId: UUID): ModerationOutcome {
@@ -204,6 +235,11 @@ class ModerationService(
         const val MODERATION_FAILED = "moderation_failed"
         const val MODERATION_ACTED = "moderation_acted"
         const val ENQUEUE_FAILED = "moderation_enqueue_failed"
+        const val SAMPLED_OUT = "moderation_sampled_out"
+        const val CAP_FAILED = "moderation_cap_failed"
+
+        /** Muestreo por defecto pasado el tope diario: 1 de cada 10 mensajes. */
+        const val DEFAULT_SAMPLE_EVERY = 10
 
         /** Marcas en `details` del reporte AUTO: qué decidió el primer intento, para reintentar sin el LLM. */
         const val HIDDEN_MARK = " [oculto]"

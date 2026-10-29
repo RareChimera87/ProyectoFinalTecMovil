@@ -5,6 +5,8 @@ import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
+import me.santiagoreina.parcheu.api.quota.DailyKind
+import me.santiagoreina.parcheu.api.quota.DailyLimiter
 import me.santiagoreina.parcheu.api.twin.memories.ExposedMemoryRepository
 import me.santiagoreina.parcheu.api.twin.memories.InMemoryMemoryRepository
 import me.santiagoreina.parcheu.api.twin.memories.MemoryExtractor
@@ -59,14 +61,15 @@ object DerivedTwinUserLookup : TwinUserLookup {
  * Cableado según el entorno: con base usa Postgres y la cola real [tasks]; sin base solo se admite
  * con `ENV=local` (memoria y cola Fake que ejecuta en línea).
  */
-fun twinModule(env: Env, db: Database?, clock: Clock, ai: AiGateway, tasks: TaskQueue): TwinModule {
+fun twinModule(env: Env, db: Database?, clock: Clock, ai: AiGateway, tasks: TaskQueue, daily: DailyLimiter): TwinModule {
+    val chargeAnswers: (UUID) -> Unit = { daily.consume(it, DailyKind.TWIN_ANSWERS) }
     if (db == null) {
         check(env == Env.LOCAL) { "El gemelo necesita la base de datos en $env: define DB_NAME y CLOUD_SQL_INSTANCE" }
-        return inMemoryTwinModule(clock, ai)
+        return inMemoryTwinModule(clock, ai, chargeAnswers = chargeAnswers)
     }
     val repo = ExposedTwinRepository(db)
     val memories = MemoryService(ExposedMemoryRepository(db), MemoryExtractor(ai), tasks, clock)
-    val service = TwinService(repo, PersonaBuilder(ai), tasks, clock)
+    val service = TwinService(repo, PersonaBuilder(ai), tasks, clock, chargeAnswers)
     val feedback = FeedbackService(ExposedFeedbackRepository(db), repo, service, clock)
     return TwinModule(service, ExposedTwinUserLookup(db), repo, memories, feedback)
 }
@@ -83,8 +86,9 @@ fun inMemoryTwinModule(
     runInline: Boolean = true,
     memoryRepo: InMemoryMemoryRepository = InMemoryMemoryRepository(repo),
     feedbackRepo: FeedbackRepository = InMemoryFeedbackRepository(),
+    chargeAnswers: (UUID) -> Unit = {},
 ): TwinModule {
-    val service = TwinService(repo, PersonaBuilder(ai), queue, clock)
+    val service = TwinService(repo, PersonaBuilder(ai), queue, clock, chargeAnswers)
     val memories = MemoryService(memoryRepo, MemoryExtractor(ai), queue, clock)
     if (runInline) {
         queue.inline = { task ->

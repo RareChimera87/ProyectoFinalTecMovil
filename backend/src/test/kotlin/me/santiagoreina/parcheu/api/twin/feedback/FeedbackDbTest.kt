@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.twin.feedback
 
+import me.santiagoreina.parcheu.api.quota.quotaModule
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
@@ -108,7 +109,7 @@ class FeedbackDbTest : FunSpec({
         TestDatabase.withCleanDatabase { ds ->
             runMigrations(ds)
             val db = connectExposed(ds)
-            val module = twinModule(Env.DEV, db, FIXED_CLOCK, testGateway(), FakeTaskQueue())
+            val module = twinModule(Env.DEV, db, FIXED_CLOCK, testGateway(), FakeTaskQueue(), quotaModule(Env.DEV, db, FIXED_CLOCK).daily)
             val repo = ExposedFeedbackRepository(db)
             val ana = newUser(db, "ana")
             val beto = newUser(db, "beto")

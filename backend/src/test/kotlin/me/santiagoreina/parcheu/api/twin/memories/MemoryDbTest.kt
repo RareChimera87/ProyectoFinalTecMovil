@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.twin.memories
 
+import me.santiagoreina.parcheu.api.quota.quotaModule
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -127,7 +128,7 @@ class MemoryDbTest : FunSpec({
         val db = connectExposed(ds)
         val capture = Capture()
         val queue = FakeTaskQueue()
-        block(twinModule(Env.DEV, db, FIXED_CLOCK, testGateway(capture.fake), queue), db, capture, queue)
+        block(twinModule(Env.DEV, db, FIXED_CLOCK, testGateway(capture.fake), queue, quotaModule(Env.DEV, db, FIXED_CLOCK).daily), db, capture, queue)
     }
 
     test("Postgres: los mensajes de otras personas y los no aprendibles nunca entran al prompt").config(enabled = TestDatabase.enabled) {
