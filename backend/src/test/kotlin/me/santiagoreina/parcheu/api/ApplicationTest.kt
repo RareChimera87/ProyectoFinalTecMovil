@@ -164,6 +164,42 @@ class ApplicationTest : FunSpec({
         }
     }
 
+    test("un cuerpo de más de 64 KB en /v1 responde 413 VALIDATION; uno normal pasa (B-B4)") {
+        testApplication {
+            val client = startApp(testContainer(listOf(ThrowingRoutes())))
+            val grande = client.post("/v1/_test/eco") {
+                bearer(fakeToken)()
+                contentType(ContentType.Application.Json)
+                setBody("""{"texto":"${"x".repeat(70 * 1024)}"}""")
+            }
+            grande.status shouldBe HttpStatusCode.PayloadTooLarge
+            grande.body<ApiError>().code shouldBe ErrorCode.VALIDATION
+            val normal = client.post("/v1/_test/eco") {
+                bearer(fakeToken)()
+                contentType(ContentType.Application.Json)
+                setBody("""{"texto":"${"x".repeat(10 * 1024)}"}""")
+            }
+            normal.status shouldBe HttpStatusCode.OK
+        }
+    }
+
+    test("un JSON que no deserializa responde 400 con mensaje genérico, sin clases ni campos internos (B-B6)") {
+        testApplication {
+            val client = startApp(testContainer(listOf(ThrowingRoutes())))
+            listOf("""{"texto": 5, "otro": }""", """{"campo": "x"}""", "[1, 2]").forEach { cuerpo ->
+                val response = client.post("/v1/_test/eco") {
+                    bearer(fakeToken)()
+                    contentType(ContentType.Application.Json)
+                    setBody(cuerpo)
+                }
+                response.status shouldBe HttpStatusCode.BadRequest
+                val error = response.body<ApiError>()
+                error.code shouldBe ErrorCode.VALIDATION
+                error.message shouldBe "Cuerpo de la petición inválido"
+            }
+        }
+    }
+
     test("NotFoundException de Ktor responde 404 NOT_FOUND con su mensaje") {
         testApplication {
             val response = startApp(testContainer(listOf(ThrowingRoutes()))).get("/v1/_test/ktor-not-found", bearer(fakeToken))
