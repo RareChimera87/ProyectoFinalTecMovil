@@ -144,4 +144,33 @@ class TokenAuthenticatorTest {
         assertEquals(0, tokens.refreshes)
         assertNull(server.takeRequest(1, TimeUnit.SECONDS)?.headers?.get("Authorization"))
     }
+
+    @Test
+    fun failedRefreshReleasesTheLockSoLaterRequestsRefreshAgain() {
+        val flaky = object : TokenProvider {
+            var calls = 0
+
+            override suspend fun currentToken(): String = "viejo"
+
+            override suspend fun refreshToken(): String {
+                if (++calls == 1) error("sin red")
+                return "nuevo"
+            }
+
+            override suspend fun currentUserId(): String? = null
+        }
+        val flakyClient = createOkHttpClient(flaky, server.hostName, cleartextHosts = setOf(server.hostName))
+        server.enqueue(MockResponse(code = 401))
+        runCatching {
+            flakyClient.newCall(Request.Builder().url(server.url("/v1/me")).build()).execute().close()
+        }
+        server.enqueue(MockResponse(code = 401))
+        server.enqueue(MockResponse(code = 200))
+
+        // Si el primer fallo hubiera dejado el candado tomado, esta llamada se colgaría.
+        val response = flakyClient.newCall(Request.Builder().url(server.url("/v1/me")).build()).execute()
+
+        assertEquals(200, response.code)
+        assertEquals(2, flaky.calls)
+    }
 }
