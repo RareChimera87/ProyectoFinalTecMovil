@@ -165,6 +165,25 @@ class ApplicationTest : FunSpec({
         }
     }
 
+    test("un cuerpo de más de 64 KB en /v1 responde 413 VALIDATION; uno normal pasa (B-B4)") {
+        testApplication {
+            val client = startApp(testContainer(listOf(ThrowingRoutes())))
+            val grande = client.post("/v1/_test/eco") {
+                bearer(fakeToken)()
+                contentType(ContentType.Application.Json)
+                setBody("""{"texto":"${"x".repeat(70 * 1024)}"}""")
+            }
+            grande.status shouldBe HttpStatusCode.PayloadTooLarge
+            grande.body<ApiError>().code shouldBe ErrorCode.VALIDATION
+            val normal = client.post("/v1/_test/eco") {
+                bearer(fakeToken)()
+                contentType(ContentType.Application.Json)
+                setBody("""{"texto":"${"x".repeat(10 * 1024)}"}""")
+            }
+            normal.status shouldBe HttpStatusCode.OK
+        }
+    }
+
     test("NotFoundException de Ktor responde 404 NOT_FOUND con su mensaje") {
         testApplication {
             val response = startApp(testContainer(listOf(ThrowingRoutes()))).get("/v1/_test/ktor-not-found", bearer(fakeToken))
