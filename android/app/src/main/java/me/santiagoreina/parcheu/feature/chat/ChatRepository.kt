@@ -39,6 +39,13 @@ interface ChatRepository {
     fun observeMessages(chatId: String): Flow<List<RemoteMessage>>
 
     /**
+     * Los mensajes que la moderación ocultó (`hidden == true`), en vivo y sin límite: sirve para que los
+     * que ya salieron de la ventana de [observeMessages] (o vinieron de [loadOlder]) dejen de mostrar su
+     * texto. Un fallo se ignora (el chat sigue con lo que tiene).
+     */
+    fun observeHidden(chatId: String): Flow<List<RemoteMessage>>
+
+    /**
      * Hasta [CHAT_PAGE_SIZE] mensajes **anteriores** a [before] (excluyente), ordenados de más viejo a más
      * nuevo; una lista más corta significa que ya no hay más. Lanza [ChatLiveException] si Firestore falla.
      * Dos mensajes con el mismo `createdAt` en el borde de una página pueden omitirse (marca de servidor).
@@ -73,6 +80,23 @@ class FirestoreChatRepository(
                     .addSnapshotListener { snapshot, error ->
                         if (error != null) {
                             close(ChatLiveException(liveErrorOf(error), error))
+                        } else if (snapshot != null) {
+                            trySend(snapshot.documents.map { it.toRemoteMessage() })
+                        }
+                    }
+            awaitClose { registration.remove() }
+        }
+    }
+
+    override fun observeHidden(chatId: String): Flow<List<RemoteMessage>> {
+        if (FirebaseApp.getApps(authSource.applicationContext()).isEmpty()) return emptyFlow()
+        return callbackFlow {
+            val registration =
+                messagesOf(chatId)
+                    .whereEqualTo("hidden", true)
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            close()
                         } else if (snapshot != null) {
                             trySend(snapshot.documents.map { it.toRemoteMessage() })
                         }

@@ -33,6 +33,10 @@ class FakeChatRepository(
         return if (failure != null) flow { throw failure } else messages
     }
 
+    val hidden = MutableStateFlow<List<RemoteMessage>>(emptyList())
+
+    override fun observeHidden(chatId: String): Flow<List<RemoteMessage>> = hidden
+
     /** Historial completo en memoria (más viejo primero); [loadOlder] sirve páginas de [CHAT_PAGE_SIZE] a partir de él. */
     var history: List<RemoteMessage> = emptyList()
     val loadOlderCalls = mutableListOf<Timestamp>()

@@ -295,6 +295,42 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun hiddenMessageInOlderPageShowsAsHiddenWithoutItsText() = runTest {
+        val repo = repo()
+        val all = history(CHAT_PAGE_SIZE + 5)
+        repo.history = all
+        val vm = viewModel(repo)
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+        vm.loadOlder()
+        assertEquals("mensaje 3", vm.state.value.messages.first { it.key == "h3" }.text)
+
+        repo.hidden.value = listOf(remote("h3", "uid-2", "", hidden = true, sec = 3))
+
+        val hidden = vm.state.value.messages.first { it.key == "h3" }
+        assertTrue(hidden.hidden)
+        assertEquals("", hidden.text)
+        assertEquals(CHAT_PAGE_SIZE + 5, vm.state.value.messages.size)
+    }
+
+    @Test
+    fun liveCopyWinsOverTheOlderOneAndMessagesStaySortedByCreatedAt() = runTest {
+        val repo = repo()
+        val vm = viewModel(repo)
+        val all = history(CHAT_PAGE_SIZE + 1)
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+        // El primero sale de la ventana y pasa a older; luego vuelve a entrar con otro texto.
+        repo.messages.value =
+            all.drop(1).takeLast(CHAT_PAGE_SIZE - 1) + remote("h999", "uid-2", "nuevo", sec = 999)
+        repo.messages.value =
+            listOf(remote("h1", "uid-2", "editado", sec = 1)) + repo.messages.value.drop(1)
+
+        val messages = vm.state.value.messages
+        assertEquals(1, messages.count { it.key == "h1" })
+        assertEquals("editado", messages.first { it.key == "h1" }.text)
+        assertEquals(messages.map { it.createdAt }, messages.map { it.createdAt }.sortedBy { it })
+    }
+
+    @Test
     fun loadOlderFailureKeepsMessagesAndAllowsRetry() = runTest {
         val repo = repo()
         val all = history(CHAT_PAGE_SIZE + 5)

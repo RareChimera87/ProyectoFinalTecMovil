@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -82,6 +83,9 @@ class ChatViewModel(
 
     /** Páginas anteriores a la ventana del listener (más viejo primero) y lo que esta fue soltando al avanzar. */
     private val older = MutableStateFlow<List<RemoteMessage>>(emptyList())
+
+    /** Mensajes ocultados por la moderación, por id: pisan la copia de [older] o de [remote]. */
+    private val hidden = MutableStateFlow<Map<String, RemoteMessage>>(emptyMap())
     private val local = MutableStateFlow<List<LocalMessage>>(emptyList())
     private val meta = MutableStateFlow(Meta())
 
@@ -89,11 +93,20 @@ class ChatViewModel(
     val effects: Flow<ChatEffect> = _effects.receiveAsFlow()
 
     val state: StateFlow<ChatUiState> =
-        combine(remote, older, local, meta) { remoteMessages, olderMessages, localMessages, m ->
+        combine(remote, older, hidden, local, meta) {
+                remoteMessages,
+                olderMessages,
+                hiddenById,
+                localMessages,
+                m
+            ->
             ChatUiState(
                 loading = m.loading,
                 header = m.header,
-                messages = merge(olderMessages + remoteMessages, localMessages),
+                messages = merge(
+                    stitch(olderMessages, remoteMessages, hiddenById),
+                    localMessages
+                ),
                 draft = m.draft,
                 consentBannerVisible = m.consentBannerVisible,
                 headerError = m.headerError,
@@ -107,7 +120,33 @@ class ChatViewModel(
     init {
         loadHeader()
         observeMessages()
+        observeHidden()
         viewModelScope.launch { repository.markRead(chatId) }
+    }
+
+    /** Escucha los mensajes ocultados para que los de [older] no conserven su texto (E8.5). */
+    private fun observeHidden() {
+        viewModelScope.launch {
+            repository
+                .observeHidden(chatId)
+                .catch { e -> if (e is CancellationException) throw e }
+                .collect { list -> hidden.value = list.associateBy { it.id } }
+        }
+    }
+
+    /**
+     * Une el historial con la ventana en vivo: gana la copia del snapshot, luego la de moderación, y el
+     * resultado va ordenado por `createdAt` (estable: los empates conservan el orden recibido).
+     */
+    private fun stitch(
+        olderMessages: List<RemoteMessage>,
+        remoteMessages: List<RemoteMessage>,
+        hiddenById: Map<String, RemoteMessage>
+    ): List<RemoteMessage> {
+        val liveIds = remoteMessages.mapTo(HashSet()) { it.id }
+        return (olderMessages.filter { it.id !in liveIds } + remoteMessages)
+            .map { hiddenById[it.id] ?: it }
+            .sortedWith(compareBy(nullsLast<Instant>()) { it.createdAt })
     }
 
     private var liveJob: Job? = null
