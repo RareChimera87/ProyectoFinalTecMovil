@@ -101,7 +101,7 @@ ParcheU/                                  (git: github.com/RareChimera87/Proyect
 │  │     ├─ navigation/  AppNavHost.kt, Routes.kt     (se fijan en E0.7)
 │  │     ├─ di/          AppModules.kt                (se fija en E0.7)
 │  │     ├─ feature/<nombre>/  XRoute.kt, XScreen.kt, XViewModel.kt, XModule.kt
-│  │     ├─ data/<dominio>/    XRepository.kt (XApi + interfaz + RemoteXRepository; Fake solo en src/test)
+│  │     ├─ data/<dominio>/    XRepository (interfaz) + impl. Retrofit (RemoteX, XRepositoryImpl o ApiX) + XApi; tambien en feature/<nombre>/; Fake solo en src/test
 │  │     └─ push/, core/  (red, errores, sesión)
 │  ├─ designsystem/                       tokens, componentes, mascota, grafo (layout + Canvas)
 │  └─ gradle/libs.versions.toml
