@@ -86,6 +86,7 @@ La llave ya está generada (sección 2). Pasos para el usuario:
 3. La primera vez que subas un AAB (E7.0), Play te pedirá registrar la llave de subida si no la tomó del propio AAB; el certificado se exporta con:
    `keytool -export -rfc -alias upload -keystore ~/.parcheu/upload-keystore.jks -file ~/.parcheu/upload-certificate.pem`.
 4. Ni el `.jks`, ni las contraseñas, ni `play-sa.json` se versionan jamás (gitleaks en CI, E10.2).
+5. **Variables del release (no son secretos):** `PARCHEU_API_URL_PROD` y `PARCHEU_HOSTING_URL_PROD` (URLs `https://` de la API y del Hosting de `parcheu-prod`), a nivel de repo o en los environments `play`/`play-alpha`. Sin ellas `android-release` falla antes de compilar (el AAB no puede llevar la URL de relleno de `app/build.gradle.kts`). Ver `docs/pendientes-humanos.md`, "URLs de prod del release".
 
 ## 7. Cuenta de servicio para la API de Play (CI y backend)
 

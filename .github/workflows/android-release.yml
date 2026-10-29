@@ -26,6 +26,8 @@ name: android-release
 # refs/heads/main, no el tag; lo que se publica lo fija scripts/release-params.sh (tag vX.Y.Z y commit
 # desplegado) y el aprobador revisa antes de que salga. Un environment, no el repo, guarda los secretos: una rama cualquiera
 # no puede leerlos aunque edite este archivo.
+# Variables obligatorias PARCHEU_API_URL_PROD y PARCHEU_HOSTING_URL_PROD (https): el paso "Validar las URLs de prod"
+# falla antes de compilar si faltan y Gradle (verificarUrlsProd) rechaza las URLs de relleno.
 # Variable opcional UPLOAD_CERT_SHA256: huella esperada del certificado de subida (por defecto, la de
 # docs/play-console.md).
 on:
@@ -252,9 +254,24 @@ jobs:
           base64 -d <<<"$UPLOAD_KEYSTORE" > "$RUNNER_TEMP/upload-keystore.jks"
           echo "UPLOAD_KEYSTORE_FILE=$RUNNER_TEMP/upload-keystore.jks" >> "$GITHUB_ENV"
 
+      - name: Validar las URLs de prod (variables PARCHEU_API_URL_PROD y PARCHEU_HOSTING_URL_PROD)
+        env:
+          API_URL_PROD: ${{ vars.PARCHEU_API_URL_PROD }}
+          HOSTING_URL_PROD: ${{ vars.PARCHEU_HOSTING_URL_PROD }}
+        run: |
+          faltan=()
+          [[ "$API_URL_PROD" == https://* ]] || faltan+=("PARCHEU_API_URL_PROD")
+          [[ "$HOSTING_URL_PROD" == https://* ]] || faltan+=("PARCHEU_HOSTING_URL_PROD")
+          if (( ${#faltan[@]} )); then
+            echo "::error::Faltan (o no son https) en las variables del repo o del environment: ${faltan[*]} (ver docs/pendientes-humanos.md, A-M1). Sin ellas el AAB saldría con la URL de relleno."
+            exit 1
+          fi
+
       - name: Construir el AAB prod firmado
         working-directory: android
         env:
+          API_URL_PROD: ${{ vars.PARCHEU_API_URL_PROD }}
+          HOSTING_URL_PROD: ${{ vars.PARCHEU_HOSTING_URL_PROD }}
           UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
           UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
           UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
@@ -265,6 +282,8 @@ jobs:
           -Pparcheu.versionCode="$VERSION_CODE"
           -Pparcheu.versionName="$VERSION_NAME"
           -Pparcheu.release.requireUploadKey=true
+          -Pparcheu.apiUrl.prod="$API_URL_PROD"
+          -Pparcheu.hostingUrl.prod="$HOSTING_URL_PROD"
 
       - name: Verificar la firma (llave de subida, nunca la de debug)
         env:

@@ -295,6 +295,37 @@ class AutoMerge(unittest.TestCase):
         self.assertEqual((r.returncode, r.stdout), (1, ""))
 
 
+class AndroidReleaseUrlsProd(unittest.TestCase):
+    """A-M1: el AAB de prod no sale con la URL de relleno."""
+
+    def setUp(self):
+        self.pasos = pasos(cargar("android-release.yml"))
+        self.nombres = [p.get("name", "") for p in self.pasos]
+        self.construir = next(p for p in self.pasos if p.get("name", "").startswith("Construir el AAB prod"))
+
+    def test_pasa_las_dos_propiedades_desde_vars(self):
+        self.assertIn('-Pparcheu.apiUrl.prod="$API_URL_PROD"', self.construir["run"])
+        self.assertIn('-Pparcheu.hostingUrl.prod="$HOSTING_URL_PROD"', self.construir["run"])
+        self.assertIn("vars.PARCHEU_API_URL_PROD", self.construir["env"]["API_URL_PROD"])
+        self.assertIn("vars.PARCHEU_HOSTING_URL_PROD", self.construir["env"]["HOSTING_URL_PROD"])
+        self.assertNotIn("allowPlaceholderUrls", self.construir["run"])
+
+    def test_valida_antes_de_compilar(self):
+        i_val = next(i for i, n in enumerate(self.nombres) if n.startswith("Validar las URLs de prod"))
+        i_build = next(i for i, n in enumerate(self.nombres) if n.startswith("Construir el AAB prod"))
+        self.assertLess(i_val, i_build)
+        run = self.pasos[i_val]["run"]
+        self.assertIn("exit 1", run)
+        self.assertIn("https://*", run)
+        self.assertIn("PARCHEU_API_URL_PROD", run)
+        self.assertIn("PARCHEU_HOSTING_URL_PROD", run)
+
+    def test_gradle_rechaza_el_relleno(self):
+        gradle = (RAIZ / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+        self.assertIn("verificarUrlsProd", gradle)
+        self.assertIn('"bundleProdRelease"', gradle)
+
+
 class PendientesHumanos(unittest.TestCase):
     def test_no_recomienda_code_owners_con_una_sola_cuenta(self):
         doc = (RAIZ / "docs" / "pendientes-humanos.md").read_text(encoding="utf-8")

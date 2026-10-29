@@ -27,6 +27,10 @@ fun urlProperty(name: String, default: String): String = providers.gradlePropert
     .orElse(localProperties.map { it.getProperty(name) ?: "" }.map { it.ifBlank { default } })
     .getOrElse(default)
 
+// URLs de relleno de prod (el proyecto parcheu-prod aún no existe). Un AAB que las lleve no debe llegar a Play.
+val prodApiRelleno = "https://api-parcheu-prod.us-central1.run.app/"
+val prodHostingRelleno = "https://parcheu-prod.web.app"
+
 // Host de una URL https (sin esquema, puerto ni camino), para el App Link de invitaciones (E6.1).
 fun hostOf(url: String): String = URI(url).host ?: error("URL de Hosting sin host: $url")
 
@@ -120,10 +124,11 @@ android {
         create("prod") {
             dimension = "env"
             // Pendiente humano (docs/pendientes-humanos.md, E0.7): cuando exista parcheu-prod y su servicio api,
-            // poner aquí la URL real (con el número de proyecto) o pasarla con -Pparcheu.apiUrl.prod.
-            val api =
-                urlProperty("parcheu.apiUrl.prod", "https://api-parcheu-prod.us-central1.run.app/")
-            val hosting = urlProperty("parcheu.hostingUrl.prod", "https://parcheu-prod.web.app")
+            // pasar la URL real con -Pparcheu.apiUrl.prod (el pipeline la lee de la variable PARCHEU_API_URL_PROD).
+            // Los valores de abajo son de relleno: verificarUrlsProd hace fallar el assemble/bundle de prodRelease
+            // si se quedan así.
+            val api = urlProperty("parcheu.apiUrl.prod", prodApiRelleno)
+            val hosting = urlProperty("parcheu.hostingUrl.prod", prodHostingRelleno)
             buildConfigField("String", "API_URL", "\"$api\"")
             buildConfigField("String", "HOSTING_URL", "\"$hosting\"")
             buildConfigField("String", "TERMS_URL", "\"$hosting/terminos\"")
@@ -255,6 +260,45 @@ roborazzi {
     // Las capturas de referencia se versionan junto a las pruebas.
     outputDir.set(file("src/test/screenshots"))
 }
+
+// A-M1: el AAB de prod no puede salir con las URLs de relleno. El pipeline pasa las dos propiedades (variables
+// PARCHEU_API_URL_PROD y PARCHEU_HOSTING_URL_PROD). Solo -Pparcheu.allowPlaceholderUrls=true (local, p. ej. probar
+// R8) lo salta; el workflow no lo pasa y su prueba lo vigila.
+val prodApiUrl = urlProperty("parcheu.apiUrl.prod", prodApiRelleno)
+val prodHostingUrl = urlProperty("parcheu.hostingUrl.prod", prodHostingRelleno)
+val allowPlaceholderUrls =
+    providers.gradleProperty("parcheu.allowPlaceholderUrls").map(String::toBoolean).getOrElse(false)
+val verificarUrlsProd = tasks.register("verificarUrlsProd") {
+    group = "verification"
+    description = "Falla si la API_URL o la HOSTING_URL de prod son las de relleno o están vacías."
+    // Copias locales: doLast no puede capturar el objeto del script (configuration cache).
+    val apiUrl = prodApiUrl
+    val hostingUrl = prodHostingUrl
+    val apiRelleno = prodApiRelleno
+    val hostingRelleno = prodHostingRelleno
+    val permitirRelleno = allowPlaceholderUrls
+    doLast {
+        if (permitirRelleno) return@doLast
+        fun invalida(url: String, relleno: String) =
+            url.isBlank() || url == relleno || !url.startsWith("https://")
+        val problemas = buildList {
+            if (invalida(apiUrl, apiRelleno)) add("API_URL: pasa -Pparcheu.apiUrl.prod=<url https>")
+            if (invalida(hostingUrl, hostingRelleno)) {
+                add("HOSTING_URL: pasa -Pparcheu.hostingUrl.prod=<url https>")
+            }
+        }
+        if (problemas.isNotEmpty()) {
+            throw GradleException(
+                "prodRelease con URL de relleno, vacía o sin https:\n  - " +
+                    problemas.joinToString("\n  - ") +
+                    "\nEl pipeline las lee de las variables PARCHEU_API_URL_PROD y " +
+                    "PARCHEU_HOSTING_URL_PROD (docs/pendientes-humanos.md)."
+            )
+        }
+    }
+}
+tasks.matching { it.name in setOf("assembleProdRelease", "bundleProdRelease") }
+    .configureEach { dependsOn(verificarUrlsProd) }
 
 dependencies {
     implementation(project(":designsystem"))

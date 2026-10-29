@@ -14,6 +14,17 @@ Pasos que solo puede hacer el dueño del repo tras mezclar el PR `fix/gobernanza
 4. **Fijado a SHA (C-M3):** Dependabot lee `.github/dependabot.yml` de la rama por defecto, así que no empieza a actuar hasta que este cambio llegue a `main` (en el siguiente release `dev` → `main`). Sus PR van a `dev` (`target-branch`), `pr-title` los exime porque Dependabot fija el título `Actualiza: Bump ...`, y llevan la etiqueta `gobernanza`. Dependabot propondrá cada semana los PR de acciones (con la etiqueta `gobernanza`). Revisa que el SHA nuevo corresponda al tag del comentario antes de mezclar.
 5. **Plan de Terraform (C-M2):** el job `infra-plan-dev` ya no recibe token de escritura, pero sigue ejecutando HCL del PR con la identidad WIF de solo lectura (`sa-terraform-plan`). Si quieres cerrarlo del todo, restringe en el bootstrap lo que esa cuenta lee y revisa a mano los PR que toquen `infra/` o `.terraform.lock.hcl`.
 
+## Auditoría 28 oct: URLs de prod del release (A-M1)
+
+`android-release` ya no compila el AAB de prod con la URL de relleno (`api-parcheu-prod.us-central1.run.app`): lee dos
+variables de GitHub, falla antes de compilar si faltan o no son `https://`, y Gradle (`verificarUrlsProd`) rechaza
+`assembleProdRelease`/`bundleProdRelease` si siguen siendo las de relleno. Hasta que existan, el release de prod falla a propósito.
+
+| # | Qué | Quién | Cuándo |
+|---|---|---|---|
+| 1 | Crear las variables (Settings > Secrets and variables > Actions > Variables, a nivel de repo o en los environments `play` y `play-alpha`): `PARCHEU_API_URL_PROD` (URL https del servicio `api` de `parcheu-prod`, con el número de proyecto, o el hostname público que se use) y `PARCHEU_HOSTING_URL_PROD` (p. ej. `https://parcheu-prod.web.app`). `gh variable set PARCHEU_API_URL_PROD -R RareChimera87/ProyectoFinalTecMovil --body <url>` | El usuario | Antes del primer release de prod |
+| 2 | Para probar R8 en local con `assembleProdRelease` sin esas URLs: `-Pparcheu.allowPlaceholderUrls=true` (el workflow nunca lo pasa). | Cada desarrollador | Si hace falta |
+
 ## E0.8 · Configuración de Firebase
 
 Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,
