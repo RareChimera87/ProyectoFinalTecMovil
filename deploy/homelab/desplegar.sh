@@ -29,7 +29,6 @@ done
 
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RAIZ="$(cd "$AQUI/../.." && pwd)"
-NOMBRE_HOST="${HOST#*@}"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
 
 paso() { printf '\n==> %s\n' "$*"; }
@@ -71,7 +70,7 @@ scp "${SSH_OPTS[@]}" "$AQUI/compose.yaml" "$AQUI/respaldar.sh" "$AQUI/.env.examp
 remoto "chmod +x ~/$DIR_REMOTO/respaldar.sh"
 
 paso "Preparando ~/$DIR_REMOTO/.env (no se sobrescribe si ya existe)"
-remoto "DIR=$DIR_REMOTO bash -s" <<'REMOTO'
+remoto "DIR=$DIR_REMOTO bash -s" <<'REMOTO' || falla "El .env del servidor no permite arrancar (ver arriba)."
 set -euo pipefail
 cd ~/"$DIR"
 # Un solo despliegue a la vez edita el .env.
@@ -81,10 +80,14 @@ aleatorio() { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 if [ ! -f .env ]; then
   umask 077
   {
-    echo "PARCHEU_ENV=local"
+    # dev por defecto (B-A2): local abre la autenticación Fake y exige ALLOW_FAKE_AUTH=true (README).
+    echo "PARCHEU_ENV=dev"
     echo "POSTGRES_PASSWORD=$(aleatorio)"
     echo "HMAC_ANON_KEY=$(aleatorio)"
     echo "TASKS_MODE=inline"
+    echo "FIREBASE_PROJECT_ID=parcheu-dev"
+    echo "AI_VERTEX_PROJECT=parcheu-dev"
+    echo "TASKS_SERVICE_ACCOUNT=sa-homelab@parcheu-dev.iam.gserviceaccount.com"
     echo "INTERNAL_OIDC_AUDIENCE=https://api-parcheu.homeserverlab.site"
   } > .env
   echo "Creado .env con contraseñas nuevas."
@@ -101,6 +104,16 @@ else
   echo "Se conserva el .env existente."
 fi
 chmod 600 .env
+# Falla antes de tocar los contenedores si el modo no puede arrancar (el backend también lo rechaza).
+MODO="$(sed -n 's/^PARCHEU_ENV=//p' .env | tail -1)"
+MODO="${MODO:-dev}"
+if [ "$MODO" = "local" ] && [ "$(sed -n 's/^ALLOW_FAKE_AUTH=//p' .env | tail -1)" != "true" ]; then
+  echo "PARCHEU_ENV=local abre la autenticación Fake y exige ALLOW_FAKE_AUTH=true en ~/$DIR/.env; usa dev (README)." >&2
+  exit 1
+fi
+if [ "$MODO" = "dev" ] && [ ! -f secrets/sa.json ]; then
+  echo "AVISO: PARCHEU_ENV=dev sin ~/$DIR/secrets/sa.json: la API no podrá usar Firebase ni Vertex (README, «Crear la llave»)." >&2
+fi
 REMOTO
 
 paso "Cargando la imagen, etiquetándola con su SHA y levantando los servicios"
@@ -113,6 +126,8 @@ exec 9>.desplegar.lock
 flock -w 120 9 || { echo "Otro despliegue tiene el candado de ~/$DIR/.desplegar.lock" >&2; exit 1; }
 docker load -i jib-image.tar >&2
 rm -f jib-image.tar
+# Red que comparte la API con NPM (compose.yaml la declara externa). Crearla es idempotente.
+docker network inspect parcheu-proxy >/dev/null 2>&1 || docker network create parcheu-proxy >&2
 NUEVA="$(docker image inspect parcheu-api:latest --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^APP_VERSION=//p' | head -1)"
 case "$NUEVA" in
   ''|dev) NUEVA="$(docker image inspect parcheu-api:latest --format '{{.Id}}' | sed 's/^sha256://' | cut -c1-12)" ;;
@@ -166,13 +181,7 @@ for tag in $(docker images parcheu-api --format '{{.Tag}}'); do
 done
 REMOTO
 
-paso "Comprobando alcance desde este equipo (http://$NOMBRE_HOST:$PUERTO/v1/health)"
-if curl -fsS --max-time 8 "http://$NOMBRE_HOST:$PUERTO/v1/health" >/dev/null 2>&1; then
-  echo "OK desde este equipo."
-else
-  echo "AVISO: la API sana en el servidor, pero no responde desde aquí: el 8090 solo escucha en 127.0.0.1 y 192.168.0.10 (no en Tailscale). Usa la LAN o --host con esa IP." >&2
-fi
-
+# El 8090 solo escucha en 127.0.0.1 del servidor (C-M5): desde este equipo se entra por NPM (HTTPS), no por la LAN.
 MODO="$(remoto "sed -n 's/^PARCHEU_ENV=//p' ~/$DIR_REMOTO/.env | tail -1")"
 if curl -fsS --max-time 8 "https://api-parcheu.homeserverlab.site/v1/health" >/dev/null 2>&1; then
   echo "HTTPS OK: https://api-parcheu.homeserverlab.site/v1/health"
@@ -180,7 +189,7 @@ if curl -fsS --max-time 8 "https://api-parcheu.homeserverlab.site/v1/health" >/d
     echo "ALERTA: PARCHEU_ENV=local (autenticación Fake: cualquiera suplanta a cualquier usuario) y el HTTPS responde. Si el Proxy Host de NPM no tiene una Access List que permita solo 192.168.0.0/24 y 100.64.0.0/10, agrégala o pasa a dev (README)." >&2
   fi
 else
-  echo "AVISO: https://api-parcheu.homeserverlab.site aún no responde (falta el Proxy Host en NPM o el DNS); no es un error." >&2
+  echo "AVISO: https://api-parcheu.homeserverlab.site no responde: falta el Proxy Host en NPM o el DNS, o NPM no alcanza la API (destino parcheu-api:8080 con NPM conectado a la red parcheu-proxy; README)." >&2
 fi
 
 paso "Instalando el respaldo diario (cron, 03:17)"
@@ -193,5 +202,5 @@ echo "Cron instalado."
 REMOTO
 
 paso "Listo"
-echo "API:  http://$NOMBRE_HOST:$PUERTO/v1/health (LAN)"
+echo "API:  https://api-parcheu.homeserverlab.site/v1/health (por NPM; en el servidor, http://127.0.0.1:$PUERTO)"
 echo "Modo: PARCHEU_ENV=$MODO  versión: $NUEVA  (ver deploy/homelab/README.md para pasar a dev con la llave de Google)"
