@@ -17,6 +17,8 @@ import me.santiagoreina.parcheu.contract.ConsentKind
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.EntitlementState
+import me.santiagoreina.parcheu.api.platform.db.tables.IntroResponse
+import me.santiagoreina.parcheu.contract.IntroductionStatus
 import me.santiagoreina.parcheu.contract.ExportDto
 import me.santiagoreina.parcheu.contract.MeDto
 import me.santiagoreina.parcheu.contract.Mode
@@ -86,5 +88,65 @@ class AccountExportServiceTest : FunSpec({
         dto.twin?.traits?.size shouldBe 6
         dto.entitlement?.plus shouldBe true
         dto.notifications shouldBe emptyList()
+    }
+
+    test("avisos que citan a terceros salen con texto neutro, sin ruta y con actor anónimo; las compras sin token") {
+        val extra = rows.copy(
+            notifications = listOf(
+                ExportNotificationRow(UUID.randomUUID(), "CHAT_MESSAGE", "Laura", "texto-privado-de-laura", "parcheu://chat/x", laura, false, now, null),
+                ExportNotificationRow(UUID.randomUUID(), "MATCH_EXPIRED", "Nadie por ahora", "Intenta de nuevo", "parcheu://match", null, false, now, now),
+            ),
+            purchases = listOf(ExportPurchaseRow(now, 4)),
+            introductions = listOf(
+                ExportIntroductionRow(UUID.randomUUID(), pedro, me, laura, Mode.AMISTAD, IntroductionStatus.DECLINED, "INTERESTED", now),
+            ),
+        )
+        val svc = AccountExportService(
+            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION), { extra }, signer, { null }, FIXED_CLOCK,
+        )
+        val dto = svc.build(me, meDto, extra, null)
+        val json = ContractJson.encodeToString(ExportDto.serializer(), dto)
+        json shouldNotContain "texto-privado-de-laura"
+        json shouldNotContain laura.toString()
+        dto.notifications.first().actor?.anonId shouldBe signer.anonId(me, laura)
+        dto.notifications.first().route shouldBe null
+        dto.notifications.last().body shouldBe "Intenta de nuevo"
+        dto.notifications.last().read shouldBe true
+        dto.purchases.single().notificationType shouldBe 4
+        dto.introductions.single().status shouldBe null
+        dto.introductions.single().myResponse shouldBe "INTERESTED"
+    }
+
+    test("un aviso locked no lleva actor y el actor demo sale marcado") {
+        val extra = rows.copy(
+            notifications = listOf(
+                ExportNotificationRow(UUID.randomUUID(), "WANT_TO_CONNECT", "t", "b", null, laura, true, now, null),
+                ExportNotificationRow(UUID.randomUUID(), "WANT_TO_CONNECT", "t", "b", null, pedro, false, now, null, actorIsDemo = true),
+            ),
+        )
+        val svc = AccountExportService(
+            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION), { extra }, signer, { null }, FIXED_CLOCK,
+        )
+        val dto = svc.build(me, meDto, extra, null)
+        dto.notifications.first().actor shouldBe null
+        dto.notifications.last().actor?.isDemo shouldBe true
+    }
+
+    test("a quien presenta no se le revela el 'No, gracias' de una persona presentada") {
+        fun made(status: IntroductionStatus, a: IntroResponse?, b: IntroResponse?) = ExportIntroductionRow(
+            UUID.randomUUID(), me, laura, pedro, Mode.AMISTAD, status, null, now, a, b,
+        )
+        val extra = rows.copy(
+            introductions = listOf(
+                made(IntroductionStatus.DECLINED, null, IntroResponse.DECLINED), // la otra persona dijo 'No'
+                made(IntroductionStatus.DECLINED, null, null), // lo declinó quien presenta: lo sabe
+                made(IntroductionStatus.CONNECTED, IntroResponse.INTERESTED, IntroResponse.INTERESTED),
+            ),
+        )
+        val svc = AccountExportService(
+            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION), { extra }, signer, { null }, FIXED_CLOCK,
+        )
+        svc.build(me, meDto, extra, null).introductions.map { it.status } shouldContainExactly
+            listOf(IntroductionStatus.PROPOSED, IntroductionStatus.DECLINED, IntroductionStatus.CONNECTED)
     }
 })

@@ -36,6 +36,7 @@ import me.santiagoreina.parcheu.api.simulation.TwinProfile
 import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
+import me.santiagoreina.parcheu.api.simulation.createRandom
 import me.santiagoreina.parcheu.contract.ApiError
 import me.santiagoreina.parcheu.contract.ChatSummary
 import me.santiagoreina.parcheu.contract.Decision
@@ -46,7 +47,6 @@ import me.santiagoreina.parcheu.contract.GraphDto
 import me.santiagoreina.parcheu.contract.MatchDto
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.SendMessage
-import me.santiagoreina.parcheu.contract.StartSimulation
 import me.santiagoreina.parcheu.contract.TicketStatus
 import me.santiagoreina.parcheu.contract.Visibility
 
@@ -86,8 +86,8 @@ class DemoApiTest : FunSpec({
             chatRepo.addUser(PersonRow(demo, DemoProfiles.all.first().name, null, "UIS", Visibility.ANONYMOUS, true, null), demoUid)
         }
 
-        /** Simulación DONE (el motor corre en línea) pedida por Ana con el demo. */
-        fun simulation(): String = runBlocking { module.service.start(ana, StartSimulation(demo.toString(), Mode.AMISTAD)).id }
+        /** Simulación DONE (el motor corre en línea) del match al azar de Ana con el demo. */
+        fun simulation(): String = runBlocking { module.service.createRandom(ana, demo).id.toString() }
 
         fun container() = testContainer(
             repo = identity, quota = sim.quota, ai = sim.ai, graph = sim.graph, chat = chat, simulation = module, notifier = push,

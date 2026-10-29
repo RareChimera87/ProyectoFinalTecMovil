@@ -82,11 +82,13 @@ class SafetyService(
                     throw ValidationFailed("La persona reportada no está en ese chat")
                 }
                 target = resolved
+                if (messageId != null) requireMessageOf(messageId, chatId!!, resolved)
             }
             ReportKind.AI_CONTENT -> {
                 if (request.targetUserId != null || request.anonId != null) {
                     throw ValidationFailed("Un reporte AI_CONTENT no lleva targetUserId ni anonId")
                 }
+                if (messageId != null) requireMessageOf(messageId, chatId!!, null)
                 val sim = request.simulationId?.let { parseUuid(it) } ?: throw ValidationFailed("AI_CONTENT necesita simulationId")
                 val turn = request.turnIndex ?: throw ValidationFailed("AI_CONTENT necesita turnIndex")
                 if (turn != REPORT_TURN_INDEX && (turn < 0 || turn > Short.MAX_VALUE)) throw ValidationFailed("turnIndex fuera de rango")
@@ -230,6 +232,15 @@ class SafetyService(
         }
         candidates -= viewer
         return candidates.firstOrNull { anonIds.anonId(viewer, it) == raw } ?: throw NotFound("La persona no existe")
+    }
+
+    /**
+     * El `messageId` reportado debe ser de [chatId] y, en un reporte USER, haberlo escrito el [target]:
+     * la administración (`HIDE_MESSAGE`, sanciones) actúa sobre ese id sin volver a comprobarlo.
+     */
+    private suspend fun requireMessageOf(messageId: UUID, chatId: UUID, target: UUID?) {
+        val message = chats.message(messageId)?.takeIf { it.chatId == chatId } ?: throw NotFound("El mensaje no existe")
+        if (target != null && message.senderId != target) throw ValidationFailed("El mensaje no es de la persona reportada")
     }
 
     private fun priorityOf(reason: ReportReason): Int = when (reason) {

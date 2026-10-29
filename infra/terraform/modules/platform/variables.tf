@@ -25,11 +25,6 @@ variable "firestore_location" {
   default     = "nam5"
 }
 
-variable "deployer_service_account_email" {
-  description = "Email de sa-deployer (lo crea bootstrap)."
-  type        = string
-}
-
 # --- Cloud Run ---------------------------------------------------------------
 
 variable "image" {

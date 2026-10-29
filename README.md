@@ -13,6 +13,7 @@ Remoto: https://github.com/RareChimera87/ProyectoFinalTecMovil
 | `contract/` | DTOs `@Serializable` compartidos entre app y backend |
 | `infra/` | Terraform (bootstrap, módulo de plataforma, entornos dev y prod) |
 | `firebase/` | Reglas de Firestore, índices, hosting |
+| `deploy/` | Despliegue del backend en el homeserver (Docker Compose, `deploy/homelab/`, ADR-0033) |
 | `scripts/` | Utilidades: `commit-lint`, hooks, protección de ramas |
 | `docs/` | Plan, arquitectura, backlog, ADR, equipo, revisiones |
 | `.github/` | Workflows y plantillas |

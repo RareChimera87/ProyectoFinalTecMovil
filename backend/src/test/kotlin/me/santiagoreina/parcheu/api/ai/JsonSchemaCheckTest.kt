@@ -5,6 +5,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -45,6 +46,20 @@ class JsonSchemaCheckTest : FunSpec({
         e.message!! shouldContain "$.afinidad > 100.0"
         e.message!! shouldContain "$.resumen es obligatorio"
         e.message!! shouldContain "$.dimensiones[0].nombre debe ser string"
+    }
+
+    test("el mensaje de LlmInvalidOutput no incluye texto de la entrada (B-B5)") {
+        val secretos = listOf("Calle 45 #12-30", "mi cédula es 1098765432", "Valentina", "soy gay")
+        val entradas = listOf(
+            """{"resumen": "${secretos[0]}" "afinidad": ${secretos[1]}""",
+            "${secretos[2]} dijo que ${secretos[3]}: {{{",
+            """{"afinidad": "${secretos[0]}", "x": [${secretos[3]}]}""",
+        )
+        entradas.forEach { entrada ->
+            val e = shouldThrow<LlmInvalidOutput> { JsonSchemaCheck.parseAndValidate(entrada, JUDGE_SCHEMA) }
+            secretos.forEach { e.message!! shouldNotContain it }
+            e.message!! shouldContain "La respuesta no es JSON válido"
+        }
     }
 
     test("el ejemplo que genera el Fake cumple cualquier esquema del juez") {

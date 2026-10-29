@@ -38,6 +38,7 @@ import me.santiagoreina.parcheu.api.simulation.judgeJson
 import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.twin.TaskPayload
+import me.santiagoreina.parcheu.api.simulation.createRandom
 import me.santiagoreina.parcheu.contract.ChatType
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.Decision
@@ -45,7 +46,6 @@ import me.santiagoreina.parcheu.contract.DecisionStatus
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
-import me.santiagoreina.parcheu.contract.StartSimulation
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -103,7 +103,7 @@ class ReportDbTest : FunSpec({
         )
             .also { m -> queue.inline = { task -> m.engine.run(ContractJson.decodeFromString<TaskPayload>(task.body).uuid()) } }
 
-        fun done(a: UUID, b: UUID): String = runBlocking { module.service.start(a, StartSimulation(b.toString(), Mode.AMISTAD)).id }
+        fun done(a: UUID, b: UUID): String = runBlocking { module.service.createRandom(a, b).id.toString() }
     }
 
     fun withDb(block: (Database) -> Unit) = TestDatabase.withCleanDatabase { ds ->

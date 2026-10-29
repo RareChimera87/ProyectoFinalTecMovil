@@ -10,6 +10,7 @@ import me.santiagoreina.parcheu.api.simulation.report.ExposedReportRepository
 import me.santiagoreina.parcheu.api.simulation.report.InMemoryReportRepository
 import me.santiagoreina.parcheu.api.simulation.report.ReportRepository
 import me.santiagoreina.parcheu.api.simulation.report.ReportService
+import me.santiagoreina.parcheu.api.graph.GraphFilter
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.graph.ViewContext
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
@@ -19,6 +20,7 @@ import me.santiagoreina.parcheu.api.platform.tasks.TaskQueue
 import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.twin.TaskPayload
 import me.santiagoreina.parcheu.contract.ContractJson
+import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.PersonRef
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Clock
@@ -54,6 +56,11 @@ fun graphPersonPresenter(graph: GraphModule): PersonPresenter = PersonPresenter 
             isDemo = view.isDemo,
         )
     }
+}
+
+/** Conexión en el modo pedido, leída del ego-grafo como en las presentaciones (E6.2). */
+fun graphConnectionCheck(graph: GraphModule): ConnectionCheck = ConnectionCheck { a, b, mode ->
+    graph.repository.egoEdges(a, GraphFilter(mode = mode)).any { it.other.id == b && it.state == EdgeState.CONNECTED }
 }
 
 /**
@@ -125,6 +132,6 @@ private fun assemble(
     val people = graphPersonPresenter(graph)
     val engine = SimulationEngine(repo, ai, quota.service, graph.edges, mirror, notifier, clock)
     val report = ReportService(repo, reportRepo, quota.service, graph.edges, chat.service, push, people, clock, demo)
-    val service = SimulationService(repo, quota.service, ai, tasks, people, mirror, clock, report, demoUsersEnabled)
+    val service = SimulationService(repo, quota.service, ai, tasks, people, graphConnectionCheck(graph), mirror, clock, report, demoUsersEnabled)
     return SimulationModule(service, engine, repo, report, reportRepo)
 }

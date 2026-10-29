@@ -32,11 +32,11 @@ import me.santiagoreina.parcheu.api.simulation.SimFixture
 import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
+import me.santiagoreina.parcheu.api.simulation.createRandom
 import me.santiagoreina.parcheu.contract.ConnectRequestsDto
 import me.santiagoreina.parcheu.contract.Decision
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.Mode
-import me.santiagoreina.parcheu.contract.StartSimulation
 import me.santiagoreina.parcheu.contract.Visibility
 import java.util.UUID
 
@@ -52,9 +52,9 @@ class ConnectRequestApiTest : FunSpec({
 
         fun id(uid: String) = ids.getValue(uid)
 
-        /** Simulación DONE pedida por [a] con [b]. */
+        /** Simulación DONE de un match al azar pedida por [a] con [b]. */
         fun done(a: String, b: String, mode: Mode = Mode.AMISTAD): String =
-            runBlocking { module.service.start(id(a), StartSimulation(id(b).toString(), mode)).id }
+            runBlocking { module.service.createRandom(id(a), id(b), mode).id.toString() }
 
         fun container(): AppContainer =
             testContainer(repo = identity, quota = sim.quota, ai = sim.ai, graph = sim.graph, simulation = module)

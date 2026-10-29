@@ -552,18 +552,12 @@ fun NodeDetailSheet(
                             )
                         }
                     }
-                    EdgeState.SIMULATED -> {
-                        TonalButton(
-                            "Simular de nuevo",
-                            onSimulateAgain,
-                            Modifier.fillMaxWidth(),
-                            enabled = !sheet.starting,
-                            icon = parcheIconPainter(ParcheIcon.Replay)
-                        )
+                    // Sin "Simular de nuevo": POST /v1/simulations solo simula con una arista CONNECTED en
+                    // el modo pedido (B-A1) y una SIMULATED no lo es, así que respondería 404.
+                    EdgeState.SIMULATED ->
                         if (last != null) {
                             PrimaryButton("Ver resultado", onViewResult, Modifier.fillMaxWidth())
                         }
-                    }
                     EdgeState.PENDING ->
                         if (last != null) {
                             PrimaryButton("Ver resultado", onViewResult, Modifier.fillMaxWidth())
