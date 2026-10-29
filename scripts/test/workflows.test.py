@@ -72,7 +72,7 @@ class ReviewCounter(unittest.TestCase):
 class RevisionAgente(unittest.TestCase):
     """La revisión la hace el agente del workflow; el check solo exige la etiqueta revisado-agente."""
 
-    def test_no_llama_a_ninguna_api_ni_usa_secretos(self):
+    def test_no_usa_secretos_ni_scripts_de_revision(self):
         texto = (WF / "revision-agente.yml").read_text(encoding="utf-8")
         self.assertNotIn("ANTHROPIC_API_KEY", texto)
         self.assertNotIn("secrets.", texto)
@@ -80,7 +80,7 @@ class RevisionAgente(unittest.TestCase):
 
     def test_exige_la_etiqueta_y_reacciona_a_labeled(self):
         wf = cargar("revision-agente.yml")
-        tipos = disparadores(wf)["pull_request"]["types"]
+        tipos = disparadores(wf)["pull_request_target"]["types"]
         self.assertIn("labeled", tipos)
         self.assertIn("unlabeled", tipos)
         run = pasos(wf)[0]["run"]
@@ -94,6 +94,70 @@ class MajorGate(unittest.TestCase):
         self.assertIn("revisado-agente", texto)
         self.assertNotIn("user.login", texto)
         self.assertNotIn("/reviews", texto)
+
+    def test_gates_corren_desde_la_base_sin_checkout(self):
+        # C-A1: con `pull_request` un PR reescribe su propio gate; con `pull_request_target` no.
+        for nombre in ("revision-agente.yml", "major-gate.yml"):
+            with self.subTest(nombre):
+                wf = cargar(nombre)
+                self.assertIn("pull_request_target", disparadores(wf))
+                self.assertNotIn("pull_request", disparadores(wf))
+                self.assertFalse([p for p in pasos(wf) if "uses" in p], "sin checkout ni acciones")
+                paso = pasos(wf)[-1]
+                self.assertIn("gobernanza", paso["run"])
+                self.assertIn("proteger-ramas", paso["run"])
+                self.assertIn("exit 1", paso["run"])
+
+    def test_rutas_sensibles_cubren_cualquier_workflow_y_renombrados(self):
+        # Un job `name: revision-agente` en cualquier workflow publica el mismo check con el mismo app_id.
+        for nombre in ("revision-agente.yml", "major-gate.yml"):
+            with self.subTest(nombre):
+                run = pasos(cargar(nombre))[-1]["run"]
+                regex = re.search(r"sensibles='([^']+)'", run).group(1)
+                for ruta in (".github/workflows/gitleaks.yml", ".github/workflows/nuevo.yaml",
+                             ".github/actions/x/action.yml", ".github/CODEOWNERS", ".github/dependabot.yml",
+                             "scripts/proteger-ramas.sh", "scripts/commit-lint.sh", "scripts/verbos-imperativo.txt"):
+                    self.assertTrue(re.search(regex, ruta), ruta)
+                for ruta in ("backend/build.gradle.kts", "scripts/check-adr.sh", ".github/pull_request_template.md"):
+                    self.assertFalse(re.search(regex, ruta), ruta)
+                # Renombrado: la ruta vieja (previous_filename) también cuenta; y se compara con changed_files.
+                self.assertIn("previous_filename", run)
+                self.assertIn("changed_files", str(pasos(cargar(nombre))[-1]["env"]))
+                self.assertIn("CAMBIADOS", run)
+
+
+class AccionesFijadas(unittest.TestCase):
+    """C-M3: toda acción externa va fijada a un SHA de 40 hex con comentario `# vX.Y.Z`."""
+
+    def test_ningun_uses_externo_sin_sha(self):
+        archivos = sorted(WF.glob("*.y*ml")) + sorted((RAIZ / ".github" / "actions").glob("**/action.y*ml"))
+        self.assertTrue(archivos)
+        sin_fijar = []
+        for f in archivos:
+            for n, linea in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+                # Cubre `uses: x`, `- uses: x` y el mapa en línea `- {uses: x, with: ...}`.
+                m = re.search(r"\buses:\s*[\"']?([^\s,}\"']+)[\"']?(.*)$", linea)
+                if not m or m.group(1).startswith("./") or linea.lstrip().startswith("#"):
+                    continue
+                if not (re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", m.group(1)) and re.search(r"#\s*v\d+\.\d+", m.group(2))):
+                    sin_fijar.append(f"{f.name}:{n}: {m.group(1)}")
+        self.assertEqual(sin_fijar, [])
+
+    def test_el_detector_distingue_formas(self):
+        patron = r"\buses:\s*[\"']?([^\s,}\"']+)[\"']?(.*)$"
+        self.assertEqual(re.search(patron, "  - {uses: actions/checkout@v4, with: {a: b}}").group(1), "actions/checkout@v4")
+
+    def test_dependabot_actualiza_las_acciones_cada_semana(self):
+        d = yaml.safe_load((RAIZ / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
+        act = [u for u in d["updates"] if u["package-ecosystem"] == "github-actions"]
+        self.assertEqual([u["schedule"]["interval"] for u in act], ["weekly"])
+        self.assertEqual([u["target-branch"] for u in act], ["dev"])  # la rama por defecto es main
+
+    def test_pr_title_exime_solo_a_dependabot_por_env(self):
+        paso = pasos(cargar("pr-title.yml"))[-1]
+        self.assertIn("github.event.pull_request.user.login", paso["env"]["AUTOR"])
+        self.assertNotIn("${{", paso["run"])  # nada interpolado en el script
+        self.assertIn('"$AUTOR" == "dependabot[bot]"', paso["run"])
 
 
 class GuardasDeDirectorio(unittest.TestCase):
@@ -118,6 +182,40 @@ class GuardasDeDirectorio(unittest.TestCase):
                 verificar = wf["jobs"]["verificar" if "verificar" in wf["jobs"] else "static"]
                 self.assertIn(f"needs.cambios.outputs.{clave} == 'true'", verificar["if"])
                 self.assertIn("needs.cambios.outputs.existe == 'true'", verificar["if"])
+
+    def test_plan_no_recibe_token_con_escritura(self):
+        # C-M2: el job que ejecuta el HCL del PR no tiene pull-requests: write ni GH_TOKEN.
+        wf = cargar("infra-ci.yml")
+        plan = wf["jobs"]["plan-dev"]
+        self.assertNotIn("pull-requests", plan["permissions"])
+        self.assertNotIn("GH_TOKEN", plan.get("env", {}))
+        self.assertIn("-lockfile=readonly", str(plan["steps"]))
+        comenta = wf["jobs"]["comentario-plan-dev"]
+        self.assertEqual(comenta["permissions"]["pull-requests"], "write")
+        descarga = next(s for s in comenta["steps"] if "download-artifact" in s.get("uses", ""))
+        self.assertIs(descarga.get("continue-on-error"), True)  # sin artefacto no queda en rojo
+        subida = next(s for s in plan["steps"] if "upload-artifact" in s.get("uses", ""))
+        self.assertNotIn("plan.json", subida["with"]["path"])  # trae valores sensitive en claro
+        texto = str(comenta["steps"])
+        self.assertIn("github-actions[bot]", texto)
+        self.assertIn("valla", texto)
+        self.assertFalse([p for p in comenta["steps"] if "terraform" in str(p.get("uses", "")) or "checkout" in str(p.get("uses", ""))])
+
+    def test_valla_del_comentario_con_pipefail(self):
+        # grep -o sale con 1 si el plan no tiene comillas invertidas: con pipefail no debe abortar.
+        import tempfile
+        run = next(s for s in cargar("infra-ci.yml")["jobs"]["comentario-plan-dev"]["steps"]
+                   if s.get("name") == "Comenta el plan en el PR")["run"]
+        lineas = run.splitlines()
+        ini = next(i for i, l in enumerate(lineas) if l.lstrip().startswith("maxima="))
+        fin = next(i for i, l in enumerate(lineas) if l.lstrip().startswith("valla="))
+        bloque = "\n".join(lineas[ini:fin + 1]) + '\necho -n "$valla"\n'
+        for contenido, minimo in (("Plan: 1 to add\n", 4), ("a ```` b\n```\n", 5)):
+            with self.subTest(contenido), tempfile.TemporaryDirectory() as d:
+                (Path(d) / "plan-corto.txt").write_text(contenido, encoding="utf-8")
+                r = subprocess.run(["bash", "-euo", "pipefail", "-c", bloque], cwd=d, capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertRegex(r.stdout, "^`{%d,}$" % minimo)
 
     def test_plan_dev_se_omite_sin_wif(self):
         wf = cargar("infra-ci.yml")
