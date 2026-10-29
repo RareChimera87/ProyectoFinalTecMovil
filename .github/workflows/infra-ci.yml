@@ -47,6 +47,7 @@ jobs:
               - 'scripts/grant-admin.sh'
               - 'scripts/test/grant-admin.test.sh'
               - 'scripts/test/check-plan.test.sh'
+              - 'scripts/test/check-iam.test.sh'
               - 'scripts/test/cargar-secretos.test.sh'
               - 'scripts/test/plan-iam-permisos.test.sh'
               - 'scripts/test/fixtures/plan-*.json'
@@ -95,6 +96,7 @@ jobs:
       - name: Pruebas de check-plan, check-iam, cargar-secretos y grant-admin
         run: |
           scripts/test/check-plan.test.sh
+          bash scripts/test/check-iam.test.sh
           scripts/test/cargar-secretos.test.sh
           scripts/test/plan-iam-permisos.test.sh
           scripts/test/grant-admin.test.sh
