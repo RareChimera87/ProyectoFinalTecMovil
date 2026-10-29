@@ -122,6 +122,7 @@ import me.santiagoreina.parcheu.api.twin.TwinRoutes
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.twin.twinModule
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Duration
@@ -236,7 +237,7 @@ class AppContainer(
     companion object {
         /**
          * Con `ENV=local` y `LOCAL_FAKE_ADMIN=true`, el token `fake-admin` lleva el claim `admin` (E8.5).
-         * Es opt-in porque el homeserver arranca en `local` con datos reales de testers: sin la variable
+         * Es opt-in porque el homeserver puede arrancar en `local` (con `ALLOW_FAKE_AUTH=true`) sobre datos reales: sin la variable
          * nadie puede moderar ni leer reportes con un token inventado. Nunca existe en dev ni prod.
          */
         const val LOCAL_ADMIN_UID = "admin"
@@ -258,13 +259,23 @@ class AppContainer(
          */
         fun fromConfig(config: AppConfig, vars: Map<String, String> = System.getenv()): AppContainer {
             val local = config.env == Env.LOCAL
+            // Defensa en profundidad (B-A2): los Fakes solo se cablean con el consentimiento de AppConfig.fromEnv.
+            check(!local || config.fakeAuthAllowed) {
+                "ENV=local abre la autenticación falsa; exige ALLOW_FAKE_AUTH=true y una base de datos local"
+            }
             val tokenVerifier = if (local) {
                 FakeTokenVerifier(adminUids = if (vars["LOCAL_FAKE_ADMIN"] == "true") setOf(LOCAL_ADMIN_UID) else emptySet())
             } else {
                 FirebaseTokenVerifier(requireNotNull(config.firebaseProjectId))
             }
             val oidcVerifier = if (local) {
-                FakeOidcVerifier(config.tasksServiceAccount)
+                // Sin token fijo (B-A2): FAKE_OIDC_TOKEN o uno aleatorio por arranque, que solo se ve en el registro.
+                val token = FakeOidcVerifier.tokenFromEnv(vars)
+                if (vars["FAKE_OIDC_TOKEN"].isNullOrBlank()) {
+                    LoggerFactory.getLogger(AppContainer::class.java)
+                        .warn("ENV=local: token OIDC Fake de este arranque para /internal/*: {} (fíjalo con FAKE_OIDC_TOKEN)", token)
+                }
+                FakeOidcVerifier(config.tasksServiceAccount, token)
             } else {
                 GoogleOidcVerifier(config.oidcAudience, config.tasksServiceAccount)
             }

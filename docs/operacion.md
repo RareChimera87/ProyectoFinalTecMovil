@@ -162,13 +162,15 @@ instalación, HTTPS y llaves está en [deploy/homelab/README.md](../deploy/homel
 Las alertas de GCP no cubren este entorno: la vigilancia es manual.
 
 **Piezas** (Docker Compose en `~/parcheu/` del servidor): `parcheu-db` (Postgres 16), `parcheu-migrate` (Flyway, una vez
-por despliegue) y `parcheu-api` (Ktor en el puerto 8090). Las colas y los jobs corren dentro de la API
-(`TASKS_MODE=inline`).
+por despliegue) y `parcheu-api` (Ktor; el 8090 solo escucha en `127.0.0.1` del servidor, desde fuera se entra por NPM y la
+red `parcheu-proxy`). Las colas y los jobs corren dentro de la API (`TASKS_MODE=inline`). El modo es `PARCHEU_ENV=dev`;
+`local` (autenticación Fake) exige `ALLOW_FAKE_AUTH=true` en `.env` y no debe usarse con datos de testers.
 
 ### Comprobar que está sano
 
 ```bash
-curl https://api-parcheu.homeserverlab.site/v1/health          # o http://192.168.0.10:8090/v1/health desde la LAN
+curl https://api-parcheu.homeserverlab.site/v1/health          # por NPM; ya no hay puerto en la LAN
+ssh user@homelab 'curl -fsS http://127.0.0.1:8090/v1/health'   # directo, si falla NPM
 ssh user@homelab 'cd ~/parcheu && docker compose ps'           # los tres servicios; migrate termina y sale (0)
 ssh user@homelab 'cd ~/parcheu && docker compose logs --tail 100 parcheu-api'
 ```
@@ -199,7 +201,8 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
    revisa en `admin.html` los reportes de prioridad 2 recientes. Es un hueco de código conocido (un barrido de moderación sin terminar).
 3. Si ves el mismo id de simulación repetido en los registros una y otra vez, hay una simulación que mata el proceso: míralo
    antes de que gaste IA ([incidentes](#incidentes-frecuentes-por-síntoma)).
-4. La IP `192.168.0.10` del servidor debe seguir siendo estática; si cambió, la API no arranca o queda inalcanzable.
+4. La IP `192.168.0.10` del servidor debe seguir siendo estática; si cambió, AdGuard apunta a otra máquina y el HTTPS queda
+   inalcanzable. Si NPM se recreó, vuelve a conectarlo a la red `parcheu-proxy` (README del homelab).
 
 ### Qué equivale a cada alerta de GCP
 
@@ -220,7 +223,7 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
 - **Atender reportes:** `admin.html` (Firebase Hosting, [ADR-0028](adr/0028-firebase-hosting-y-admin.md)) lista los reportes y
   permite resolverlos con una acción (descartar, ocultar el mensaje, suspender 24 h o banear). Los de prioridad 2 (`SELF_HARM`, `UNDERAGE`) se atienden
   el mismo día. Nunca copies textos de chats a canales de mensajería ni a issues.
-- **Token `fake-admin`:** solo existe con `LOCAL_FAKE_ADMIN=true` y `PARCHEU_ENV=local`; no lo actives en el homeserver, donde
+- **Token `fake-admin`:** solo existe con `LOCAL_FAKE_ADMIN=true` y `PARCHEU_ENV=local` (que además exige `ALLOW_FAKE_AUTH=true`); no lo actives en el homeserver, donde
   viven datos de testers.
 
 ## Datos: respaldo, purga y borrado

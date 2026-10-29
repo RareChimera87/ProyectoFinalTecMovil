@@ -26,6 +26,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.ai.AI_DAY
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.InMemoryAiUsageStore
@@ -46,7 +47,6 @@ import me.santiagoreina.parcheu.api.chat.inMemoryChatModule
 import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.quota.DailyKind
 import me.santiagoreina.parcheu.api.quota.DailyLimiter
@@ -435,7 +435,7 @@ class ModerationServiceTest : FunSpec({
             val body = """{"id":"$id"}"""
             client.post("/internal/tasks/moderate") { contentType(ContentType.Application.Json); setBody(body) }.status shouldBe HttpStatusCode.Forbidden
             client.post("/internal/tasks/moderate") {
-                header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+                header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }.status shouldBe HttpStatusCode.NoContent

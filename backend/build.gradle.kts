@@ -142,7 +142,12 @@ jib {
     }
 }
 
-// ENV es obligatorio en el backend (sin valor por defecto). `./gradlew run` es solo para desarrollo local.
+// ENV es obligatorio en el backend (sin valor por defecto). `./gradlew run` es solo para desarrollo local: sin ENV
+// arranca en local y da el consentimiento explícito a la autenticación Fake (ALLOW_FAKE_AUTH, B-A2). Si defines ENV
+// tú, también defines ALLOW_FAKE_AUTH.
 tasks.named<JavaExec>("run") {
-    if (System.getenv("ENV") == null) environment("ENV", "local")
+    if (System.getenv("ENV") == null) {
+        environment("ENV", "local")
+        if (System.getenv("ALLOW_FAKE_AUTH") == null) environment("ALLOW_FAKE_AUTH", "true")
+    }
 }

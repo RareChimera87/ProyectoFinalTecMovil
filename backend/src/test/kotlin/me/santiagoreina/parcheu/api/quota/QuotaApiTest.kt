@@ -17,8 +17,8 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.testing.testApplication
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.config.Env
@@ -105,7 +105,7 @@ class QuotaApiTest : FunSpec({
             sinToken.status shouldBe HttpStatusCode.Forbidden
 
             val res = client.post("/internal/dev/grant-plus") {
-                header(HttpHeaders.Authorization, bearer(FakeOidcVerifier.VALID_TOKEN))
+                header(HttpHeaders.Authorization, bearer(TEST_OIDC_TOKEN))
                 contentType(ContentType.Application.Json)
                 setBody(GrantPlus(anaId.toString(), 7))
             }
@@ -120,14 +120,14 @@ class QuotaApiTest : FunSpec({
             dto.simulations.used shouldBe 7
 
             val malo = client.post("/internal/dev/grant-plus") {
-                header(HttpHeaders.Authorization, bearer(FakeOidcVerifier.VALID_TOKEN))
+                header(HttpHeaders.Authorization, bearer(TEST_OIDC_TOKEN))
                 contentType(ContentType.Application.Json)
                 setBody(GrantPlus("no-es-uuid", 7))
             }
             malo.status shouldBe HttpStatusCode.BadRequest
             malo.body<ApiError>().code shouldBe ErrorCode.VALIDATION
             val dias = client.post("/internal/dev/grant-plus") {
-                header(HttpHeaders.Authorization, bearer(FakeOidcVerifier.VALID_TOKEN))
+                header(HttpHeaders.Authorization, bearer(TEST_OIDC_TOKEN))
                 contentType(ContentType.Application.Json)
                 setBody(GrantPlus(anaId.toString(), 0))
             }
@@ -141,7 +141,7 @@ class QuotaApiTest : FunSpec({
         testApplication {
             val client = startApp(testContainer(quota = prod, config = testConfig().copy(env = Env.PROD)))
             val res = client.post("/internal/dev/grant-plus") {
-                header(HttpHeaders.Authorization, bearer(FakeOidcVerifier.VALID_TOKEN))
+                header(HttpHeaders.Authorization, bearer(TEST_OIDC_TOKEN))
                 contentType(ContentType.Application.Json)
                 setBody(GrantPlus("00000000-0000-0000-0000-00000000000a", 7))
             }
