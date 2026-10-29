@@ -28,9 +28,10 @@ fun scenarioModule(
     simulation: SimulationModule,
     tasks: TaskQueue,
     notifier: Notifier,
+    moderationEnabled: Boolean = true,
 ): ScenarioModule {
     val service = ScenarioService(
-        chat.repository, chat.service, simulation.repository, ai, quota.service, graph.edges, tasks, notifier, clock,
+        chat.repository, chat.service, simulation.repository, ai, quota.service, graph.edges, tasks, notifier, clock, moderationEnabled,
     )
     chat.service.scenarioEnded = service.endedHook
     return ScenarioModule(service)

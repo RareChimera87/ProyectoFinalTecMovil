@@ -76,6 +76,8 @@ class ScenarioService(
     internal val tasks: TaskQueue,
     private val notifier: Notifier,
     private val clock: Clock,
+    /** `MODERATION_ENABLED=false` también salta la moderación del texto del veredicto. */
+    private val moderationEnabled: Boolean = true,
 ) {
     private val log = LoggerFactory.getLogger(ScenarioService::class.java)
     private val judge = SimulationJudge(ai)
@@ -277,7 +279,7 @@ class ScenarioService(
     private suspend fun moderated(id: UUID, billedTo: UUID, verdict: JudgeVerdict): JudgeVerdict {
         val text = (listOf(verdict.summary) + verdict.reasons + verdict.frictions + verdict.dimensions.mapNotNull { it.note })
             .filter { it.isNotBlank() }.joinToString("\n")
-        if (text.isEmpty()) return verdict
+        if (!moderationEnabled || text.isEmpty()) return verdict
         val findings = try {
             moderator.review(billedTo, text)
         } catch (e: CancellationException) {

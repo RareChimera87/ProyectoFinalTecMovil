@@ -81,7 +81,7 @@ class ScenarioApiTest : FunSpec({
 
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")
 
-    class Fixture(judgeFails: Boolean = false, moderation: (() -> JsonObject)? = null) {
+    class Fixture(judgeFails: Boolean = false, moderation: (() -> JsonObject)? = null, moderationEnabled: Boolean = true) {
         val clock = MovableClock(start)
         val identityRepo = InMemoryIdentityRepository().apply {
             listOf("ana", "beto", "carla").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) }
@@ -115,7 +115,7 @@ class ScenarioApiTest : FunSpec({
         val simQueue = FakeTaskQueue()
         val simulation = inMemorySimulationModule(clock, ai, quota, graph, simRepo, simQueue, chat = chat, runInline = false)
         val queue = FakeTaskQueue()
-        val scenario = inMemoryScenarioModule(clock, ai, quota, graph, chat, simulation, notifier, queue, runInline = false)
+        val scenario = scenarioModule(clock, ai, quota, graph, chat, simulation, queue, notifier, moderationEnabled)
 
         init {
             listOf(ana to "ana", beto to "beto", carla to "carla").forEach { (id, name) ->
@@ -327,6 +327,15 @@ class ScenarioApiTest : FunSpec({
             v.dimensions.all { it.note == null } shouldBe true
             v.affinity shouldBe 70
             v.dimensions.isNotEmpty() shouldBe true
+        }
+    }
+
+    test("con la moderación desactivada el veredicto no se modera ni se llama al moderador") {
+        val f = Fixture(moderation = { moderationJson("HARASSMENT", "HIGH") }, moderationEnabled = false)
+        testApplication {
+            val v = startApp(f.container()).judgedVerdict(f)
+            v.summary shouldNotBe ScenarioService.REDACTED_SUMMARY
+            f.fake.calls shouldBe 1
         }
     }
 

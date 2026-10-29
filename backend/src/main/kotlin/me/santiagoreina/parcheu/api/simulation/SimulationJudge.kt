@@ -19,7 +19,7 @@ import me.santiagoreina.parcheu.api.ai.AiGateway
 import me.santiagoreina.parcheu.api.ai.AiPurpose
 import me.santiagoreina.parcheu.api.ai.PromptData
 import me.santiagoreina.parcheu.api.ai.PromptData.takeCodePoints
-import me.santiagoreina.parcheu.api.chat.ChatService
+import me.santiagoreina.parcheu.api.platform.TextLimits
 import me.santiagoreina.parcheu.contract.Dimension
 import me.santiagoreina.parcheu.contract.Mode
 import java.util.UUID
@@ -65,7 +65,7 @@ class SimulationJudge(private val ai: AiGateway) {
         const val MAX_NAME_CHARS = 80
 
         /** Topes del prompt (el costo lo paga quien lo encola): por turno, número de turnos y total de caracteres. */
-        const val MAX_TURN_CHARS = ChatService.MAX_TEXT
+        const val MAX_TURN_CHARS = TextLimits.MESSAGE_CHARS
         const val MAX_JUDGE_TURNS = 80
         const val MAX_JUDGE_CHARS = 16_000
 

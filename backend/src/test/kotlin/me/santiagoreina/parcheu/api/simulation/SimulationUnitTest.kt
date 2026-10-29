@@ -191,6 +191,9 @@ class SimulationUnitTest : FunSpec({
         p shouldContain "(se omitieron ${200 - SimulationJudge.MAX_JUDGE_TURNS} turnos)"
         p shouldContain "mensaje 1<"
         p shouldContain "mensaje 200<"
+        p shouldContain "mensaje 40<"
+        p shouldContain "mensaje 161<"
+        (p.indexOf("mensaje 1<") < p.indexOf("(se omitieron") && p.indexOf("(se omitieron") < p.indexOf("mensaje 200<")) shouldBe true
         p shouldNotContain "mensaje 100<"
         // Por caracteres: 40 turnos de 1000 code points no caben en 16.000.
         val long = (1..40).map { StoredTurn(Side.A, "z".repeat(1000)) }
