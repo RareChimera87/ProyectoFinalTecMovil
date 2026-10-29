@@ -14,6 +14,11 @@ for i in 1 2 3 4; do git -C "$tmp" commit -q --allow-empty -m "c$i"; done
 sha() { git -C "$tmp" rev-parse --short=12 "HEAD~$1"; }
 VIEJO="$(sha 3)"; ANTES="$(sha 2)"; EL_103="$(sha 1)"; DESPUES="$(sha 0)"
 COMMIT_103="$(git -C "$tmp" rev-parse "HEAD~1")"
+# Rama que salió de dev antes de #103 y nunca lo mezcló (no es ancestro de #103 ni lo incluye).
+git -C "$tmp" checkout -q -b rama-vieja "$ANTES"
+git -C "$tmp" commit -q --allow-empty -m "rama sin #103"
+RAMA_SIN_103="$(git -C "$tmp" rev-parse --short=12 HEAD)"
+git -C "$tmp" checkout -q dev
 
 fallos=0
 caso() { # caso <descripción> <etiqueta> <patrón o "-" si no debe haber aviso>
@@ -25,8 +30,9 @@ caso() { # caso <descripción> <etiqueta> <patrón o "-" si no debe haber aviso>
   fi
 }
 caso "sin imagen anterior: sin aviso" "" "-"
-caso "imagen anterior a #103: avisa" "$VIEJO" "es anterior a #103"
-caso "otra imagen anterior a #103: avisa" "$ANTES" "es anterior a #103"
+caso "imagen anterior a #103: avisa" "$VIEJO" "no incluye #103"
+caso "otra imagen anterior a #103: avisa" "$ANTES" "no incluye #103"
+caso "rama anterior a #103 sin mezclar: avisa" "$RAMA_SIN_103" "no incluye #103"
 caso "la imagen de #103: sin aviso" "$EL_103" "-"
 caso "imagen posterior a #103: sin aviso" "$DESPUES" "-"
 caso "etiqueta dirty: avisa que no se sabe" "abc123def456-dirty" "no se puede saber"

@@ -10,7 +10,7 @@ COMMIT_103="76aa9c51c440502f0258bfb3ca8a5078130d1eb0"
 
 # aviso_reversion_anterior_a_103 <repo> <etiqueta>
 # Imprime un AVISO en stderr si la etiqueta (el SHA corto del commit con el que se construyó la imagen) es
-# anterior a #103 o no se puede ubicar en el historial. No cambia el código de salida: solo informa.
+# que no incluye #103 o no se puede ubicar en el historial. No cambia el código de salida: solo informa.
 aviso_reversion_anterior_a_103() {
   local repo="$1" etiqueta="${2:-}"
   [ -n "$etiqueta" ] || return 0
@@ -23,9 +23,10 @@ aviso_reversion_anterior_a_103() {
     echo "AVISO: la imagen de reversión $etiqueta no está en el historial de este repo; no se sabe si incluye #103 (README, «Reversión»)." >&2
     return 0
   fi
-  # Ancestro estricto de #103 (el propio commit de #103 ya lo incluye).
-  if git -C "$repo" merge-base --is-ancestor "$etiqueta" "$COMMIT_103^" 2>/dev/null; then
-    echo "AVISO: la imagen de reversión $etiqueta es anterior a #103 ($COMMIT_103): si el despliegue nuevo falla y se revierte a ella, arrancará sin exigir ALLOW_FAKE_AUTH en ENV=local. Tras este despliegue la reversión ya será segura (README, «Reversión»)." >&2
+  # Avisa salvo que #103 sea ancestro de la imagen (o ella misma): cubre también las ramas que salieron
+  # de dev antes de #103 y no lo mezclaron, que no son ancestro de #103 pero tampoco lo incluyen.
+  if ! git -C "$repo" merge-base --is-ancestor "$COMMIT_103" "$etiqueta" 2>/dev/null; then
+    echo "AVISO: la imagen de reversión $etiqueta no incluye #103 ($COMMIT_103): si el despliegue nuevo falla y se revierte a ella, arrancará sin exigir ALLOW_FAKE_AUTH en ENV=local. Tras este despliegue la reversión ya será segura (README, «Reversión»)." >&2
   fi
   return 0
 }
