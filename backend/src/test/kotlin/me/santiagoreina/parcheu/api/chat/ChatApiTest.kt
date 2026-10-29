@@ -21,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TASKS_ACCOUNT
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
 import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
@@ -82,7 +83,7 @@ class ChatApiTest : FunSpec({
                 config = testConfig(),
                 clock = FIXED_CLOCK,
                 tokenVerifier = FakeTokenVerifier(),
-                oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
+                oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT, TEST_OIDC_TOKEN),
                 identity = identity,
                 profile = profile,
                 quota = quota,

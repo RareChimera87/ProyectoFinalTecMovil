@@ -31,6 +31,7 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.LlmRequest
 import me.santiagoreina.parcheu.api.ai.testGateway
@@ -41,7 +42,6 @@ import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.matching.MatchingFlags
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
@@ -154,7 +154,7 @@ class ScenarioApiTest : FunSpec({
         get("/v1/scenario-sessions/$chatId") { auth(uid) }.body()
 
     suspend fun HttpClient.judgeTask(id: Any): HttpResponse = post("/internal/tasks/judge-scenario") {
-        header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+        header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
         contentType(ContentType.Application.Json)
         setBody("""{"id":"$id"}""")
     }
@@ -390,7 +390,7 @@ class ScenarioApiTest : FunSpec({
             runBlocking { f.scenario.service.sweep() }.requeued shouldBe 1
             f.judgeTasks() shouldHaveSize 1
             client.post("/internal/jobs/scenario-sweep") {
-                header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+                header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
             }.status shouldBe HttpStatusCode.NoContent
         }
     }

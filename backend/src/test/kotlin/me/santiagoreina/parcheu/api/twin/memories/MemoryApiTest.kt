@@ -23,10 +23,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
 import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.startApp
@@ -80,7 +80,7 @@ class MemoryApiTest : FunSpec({
     suspend fun HttpClient.postAs(uid: String, path: String) = post(path) { header(HttpHeaders.Authorization, bearer(uid)) }
 
     suspend fun HttpClient.internal(path: String, body: String? = null) = post(path) {
-        header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+        header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
         if (body != null) {
             contentType(ContentType.Application.Json)
             setBody(body)

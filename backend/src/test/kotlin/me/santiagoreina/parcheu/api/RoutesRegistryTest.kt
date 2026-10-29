@@ -10,7 +10,6 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 
 /**
@@ -77,7 +76,7 @@ class RoutesRegistryTest : FunSpec({
                 withClue("sin token $path") { sinToken shouldBe HttpStatusCode.Forbidden }
                 val conToken = client.request(path) {
                     method = HttpMethod.Post
-                    auth(FakeOidcVerifier.VALID_TOKEN)
+                    auth(TEST_OIDC_TOKEN)
                 }.status
                 withClue("con token $path") { conToken shouldBe HttpStatusCode.NotImplemented }
             }

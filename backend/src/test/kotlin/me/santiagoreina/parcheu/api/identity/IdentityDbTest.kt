@@ -27,6 +27,7 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.platform.AppContainer
@@ -83,7 +84,7 @@ class IdentityDbTest : FunSpec({
             config = testConfig(),
             clock = FIXED_CLOCK,
             tokenVerifier = FakeTokenVerifier(),
-            oidcVerifier = FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"),
+            oidcVerifier = FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com", TEST_OIDC_TOKEN),
             identity = identity,
             profile = profile,
             quota = quota,
