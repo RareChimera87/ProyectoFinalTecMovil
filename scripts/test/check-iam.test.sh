@@ -94,6 +94,7 @@ cat >"$tmp/ref.json" <<'JSON'
   {"type":"google_service_account_iam_member","name":"api_impersonates_play","expressions":{"service_account_id":{"references":["google_service_account.play[0].name","google_service_account.play[0]"]}}}
 ]}}}}}}
 JSON
+caso 1 "actor de otro proyecto con destino no resoluble" "$(con '{"type":"google_service_account_iam_member","values":{"role":"roles/iam.serviceAccountTokenCreator","member":"serviceAccount:sa-api@otro.iam.gserviceaccount.com"}}')" "ERROR: serviceAccount:sa-api@otro.iam.gserviceaccount.com tiene roles/iam.serviceAccountTokenCreator sobre un destino no resoluble en el plan"
 caso 0 "sa-api suplanta a sa-play creado en el mismo plan (referencia resoluble)" "$tmp/ref.json" "!ERROR:"
 sed 's/play/terraform/g; s/sa-play/sa-terraform/g' "$tmp/ref.json" >"$tmp/ref-terraform.json"
 caso 1 "sa-api suplanta a sa-terraform creado en el mismo plan" "$tmp/ref-terraform.json" "ERROR: serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com tiene roles/iam.serviceAccountTokenCreator sobre sa-terraform@parcheu-dev.iam.gserviceaccount.com: par no esperado"

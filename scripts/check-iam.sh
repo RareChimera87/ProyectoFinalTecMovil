@@ -174,8 +174,9 @@ en_par() { # en_par <miembro> <destino>: verdadero si el par está en EXPECTED_S
   return 1
 }
 
-es_actor_de_par() { # es_actor_de_par <miembro>: verdadero si el actor aparece en algún par esperado
+es_actor_de_par() { # es_actor_de_par <miembro>: verdadero si el actor es una cuenta del proyecto que aparece en algún par esperado
   local a="${1#serviceAccount:}" p; a="${a%@*}"
+  [ "$1" = "serviceAccount:$a@$PROJECT.iam.gserviceaccount.com" ] || return 1
   for p in "${EXPECTED_SA_PAIRS[@]}"; do [ "${p%%>*}" = "$a" ] && return 0; done
   return 1
 }
