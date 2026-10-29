@@ -76,10 +76,12 @@ interface SimulationRepository {
     ): Boolean
 
     /**
-     * Reemplaza la transcripción de una evaluación de escenario ya DONE (la única escritura posterior a `markDone`:
-     * retira los turnos de mensajes ocultados después de juzgar, B-B7). Devuelve false si no existe o no está DONE.
+     * Reemplaza la transcripción de una evaluación de escenario ya DONE por [transcript], solo si sigue siendo
+     * [expected] (compare-and-set: dos ocultados solapados no se pisan). La única escritura posterior a `markDone`:
+     * retira los turnos de mensajes ocultados después de juzgar (B-B7). Devuelve false si no existe, no es de
+     * escenario, no está DONE o la transcripción cambió; quien llama relee y reintenta.
      */
-    suspend fun replaceDoneTranscript(id: UUID, transcript: StoredTranscript): Boolean
+    suspend fun replaceDoneTranscript(id: UUID, expected: StoredTranscript, transcript: StoredTranscript): Boolean
 
     /** → FAILED con el motivo. Devuelve false si ya estaba terminada. */
     suspend fun markFailed(id: UUID, error: String, now: Instant): Boolean

@@ -144,6 +144,28 @@ class ScenarioDbTest : FunSpec({
         }
     }
 
+    test("ocultar un mensaje tras juzgar retira su turno en Postgres y replaceDoneTranscript es compare-and-set (B-B7)").config(enabled = TestDatabase.enabled) {
+        withWorld { w ->
+            val ana = w.user("Ana")
+            val beto = w.user("Beto")
+            val chat = w.chat.service.createScenario(ana.id, beto.id, Mode.AMISTAD, 1, start.plusSeconds(600))
+            w.chat.service.send(ana, chat.id, SendMessage("a-1", "Vamos al Chicamocha"))
+            val oculto = w.chat.service.send(beto, chat.id, SendMessage("b-1", "texto que se oculta luego"))
+            w.scenario.service.agree(ana.id, chat.id.toString())
+            w.scenario.service.agree(beto.id, chat.id.toString())
+            w.scenario.service.judge(chat.id)
+            val before = w.simulation.repository.find(chat.id).shouldNotBeNull().transcript
+            before.scenarios.single().turns shouldHaveSize 2
+
+            w.chat.service.hideMessage(java.util.UUID.fromString(oculto.id))
+            val after = w.simulation.repository.find(chat.id).shouldNotBeNull().transcript
+            after.scenarios.single().turns.map { it.text } shouldBe listOf("Vamos al Chicamocha")
+            // Con una transcripción esperada distinta a la guardada, no escribe.
+            w.simulation.repository.replaceDoneTranscript(chat.id, before, after) shouldBe false
+            w.simulation.repository.replaceDoneTranscript(chat.id, after, before) shouldBe true
+        }
+    }
+
     test("tras ends_at: el envío responde 409, el barrido cierra y una segunda pasada no duplica").config(enabled = TestDatabase.enabled) {
         withWorld { w ->
             val ana = w.user("Ana")

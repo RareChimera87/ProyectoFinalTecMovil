@@ -138,9 +138,9 @@ class InMemorySimulationRepository(scenarios: List<ScenarioDef> = DefaultScenari
         true
     }
 
-    override suspend fun replaceDoneTranscript(id: UUID, transcript: StoredTranscript): Boolean = synchronized(lock) {
+    override suspend fun replaceDoneTranscript(id: UUID, expected: StoredTranscript, transcript: StoredTranscript): Boolean = synchronized(lock) {
         val r = simulations[id] ?: return false
-        if (r.status != SimulationStatus.DONE) return false
+        if (r.status != SimulationStatus.DONE || r.origin != SimulationOrigin.SCENARIO || r.transcript != expected) return false
         simulations[id] = r.copy(transcript = transcript)
         true
     }

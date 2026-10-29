@@ -264,7 +264,8 @@ class ScenarioService(
         )
         if (!done) return
         // Un mensaje pudo ocultarse mientras el juez trabajaba, después de leer la lista: se retira ahora.
-        redactHidden(id)
+        // Fail-open: la evaluación ya está DONE y el aviso a las dos personas no debe depender de esto.
+        runCatching { redactHidden(id) }.onFailure { log.warn("judge-scenario: no se pudo reconciliar la transcripción de {}", id, it) }
         log.atInfo().setMessage("scenario_judged").addKeyValue("event", "scenario_judged").addKeyValue("chatId", id.toString()).log()
         listOf(record.userA, record.userB).forEach { notifyDone(it, id, report.score) }
     }
@@ -276,22 +277,26 @@ class ScenarioService(
      * No toca el veredicto ni la puntuación (ya calculados). Idempotente; no hace nada si aún no está DONE.
      */
     private suspend fun redactHidden(chatId: UUID) {
-        val record = sims.find(chatId) ?: return
-        if (record.origin != SimulationOrigin.SCENARIO || record.status != SimulationStatus.DONE) return
-        val visible = chats.messages(chatId)
-            .mapNotNull { m -> (if (m.senderId == record.userA) Side.A else if (m.senderId == record.userB) Side.B else null)?.let { it to m.text } }
-            .groupingBy { it }.eachCount().toMutableMap()
-        var changed = false
-        val scenarios = record.transcript.scenarios.map { sc ->
-            val kept = sc.turns.filter { turn ->
-                val key = turn.speaker to turn.text
-                val left = visible[key] ?: 0
-                if (left > 0) visible[key] = left - 1
-                (left > 0).also { if (!it) changed = true }
+        // Compare-and-set con reintento: si otro ocultado escribió entre la lectura y la escritura, se relee.
+        repeat(REDACT_ATTEMPTS) {
+            val record = sims.find(chatId) ?: return
+            if (record.origin != SimulationOrigin.SCENARIO || record.status != SimulationStatus.DONE) return
+            val visible = chats.messages(chatId)
+                .mapNotNull { m -> (if (m.senderId == record.userA) Side.A else if (m.senderId == record.userB) Side.B else null)?.let { it to m.text } }
+                .groupingBy { it }.eachCount().toMutableMap()
+            var changed = false
+            val scenarios = record.transcript.scenarios.map { sc ->
+                val kept = sc.turns.filter { turn ->
+                    val key = turn.speaker to turn.text
+                    val left = visible[key] ?: 0
+                    if (left > 0) visible[key] = left - 1
+                    (left > 0).also { if (!it) changed = true }
+                }
+                sc.copy(turns = kept)
             }
-            sc.copy(turns = kept)
+            if (!changed || sims.replaceDoneTranscript(chatId, record.transcript, StoredTranscript(scenarios))) return
         }
-        if (changed) sims.replaceDoneTranscript(chatId, StoredTranscript(scenarios))
+        log.warn("judge-scenario: la transcripción de {} cambió en cada intento de reconciliarla", chatId)
     }
 
     private class JudgeFailed(message: String) : RuntimeException(message)
@@ -396,6 +401,7 @@ class ScenarioService(
         const val JUDGE_PATH = "/tasks/judge-scenario"
         const val SWEEP_PATH = "/jobs/scenario-sweep"
         const val SWEEP_BATCH = 50
+        private const val REDACT_ATTEMPTS = 3
         val REQUEUE_MIN_AGE: Duration = Duration.ofMinutes(2)
     }
 }

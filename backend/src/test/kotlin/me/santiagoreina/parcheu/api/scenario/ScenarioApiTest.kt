@@ -75,6 +75,9 @@ class ScenarioApiTest : FunSpec({
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")
 
     class Fixture(judgeFails: Boolean = false) {
+        /** Se ejecuta dentro de la llamada al juez (para ocultar un mensaje "mientras juzga"). */
+        var duringJudge: () -> Unit = {}
+
         val clock = MovableClock(start)
         val identityRepo = InMemoryIdentityRepository().apply {
             listOf("ana", "beto", "carla").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) }
@@ -93,6 +96,7 @@ class ScenarioApiTest : FunSpec({
             textResponder = { requests += it; "texto" },
             jsonResponder = { r, _ ->
                 requests += r
+                duringJudge()
                 if (judgeFails) error("el juez falló") else judgeJson(70)
             },
         )
@@ -311,6 +315,27 @@ class ScenarioApiTest : FunSpec({
             // Idempotente.
             f.chat.service.hideMessage(hidden.id) shouldBe true
             f.simRepo.find(chat.id).shouldNotBeNull().transcript.scenarios.single().turns shouldHaveSize 2
+        }
+    }
+
+    test("un mensaje ocultado mientras el juez trabaja tampoco queda en la transcripción (B-B7)") {
+        val f = Fixture()
+        val chat = f.scenarioChat()
+        testApplication {
+            val client = startApp(f.container())
+            client.say("ana", chat.id, "a-1", "Hola").status shouldBe HttpStatusCode.OK
+            client.say("beto", chat.id, "b-1", "oculto durante el juicio").status shouldBe HttpStatusCode.OK
+            client.agree("ana", chat.id)
+            client.agree("beto", chat.id)
+            f.duringJudge = {
+                val m = f.chatRepo.allMessages.single { it.text == "oculto durante el juicio" }
+                runBlocking { f.chat.service.hideMessage(m.id) }
+            }
+            client.judgeTask(chat.id).status shouldBe HttpStatusCode.NoContent
+            val stored = f.simRepo.find(chat.id).shouldNotBeNull()
+            stored.status shouldBe SimulationStatus.DONE
+            stored.transcript.scenarios.single().turns.map { it.text } shouldBe listOf("Hola")
+            f.notifier.sent.count { it.notification.kind == NotificationKinds.SIMULATION_READY } shouldBe 2
         }
     }
 

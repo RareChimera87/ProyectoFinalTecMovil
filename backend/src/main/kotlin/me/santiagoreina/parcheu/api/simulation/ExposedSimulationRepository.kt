@@ -225,10 +225,11 @@ class ExposedSimulationRepository(private val db: Database) : SimulationReposito
             true
         }
 
-    override suspend fun replaceDoneTranscript(id: UUID, transcript: StoredTranscript): Boolean = tx {
-        Simulations.update({ (Simulations.id eq id) and (Simulations.status eq SimulationStatus.DONE) }) {
-            it[Simulations.transcript] = transcript.json()
-        } == 1
+    override suspend fun replaceDoneTranscript(id: UUID, expected: StoredTranscript, transcript: StoredTranscript): Boolean = tx {
+        val row = Simulations.selectAll().where { Simulations.id eq id }.forUpdate().singleOrNull() ?: return@tx false
+        val current = row.toRecord()
+        if (current.status != SimulationStatus.DONE || current.origin != SimulationOrigin.SCENARIO || current.transcript != expected) return@tx false
+        Simulations.update({ Simulations.id eq id }) { it[Simulations.transcript] = transcript.json() } == 1
     }
 
     override suspend fun markDone(
