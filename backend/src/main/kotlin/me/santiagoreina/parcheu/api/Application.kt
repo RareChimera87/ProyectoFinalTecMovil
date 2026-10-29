@@ -12,6 +12,7 @@ import me.santiagoreina.parcheu.api.platform.auth.AuthProviders
 import me.santiagoreina.parcheu.api.platform.auth.installAuth
 import me.santiagoreina.parcheu.api.platform.errors.installErrorHandling
 import me.santiagoreina.parcheu.api.platform.healthRoutes
+import me.santiagoreina.parcheu.api.platform.installAiRateLimit
 import me.santiagoreina.parcheu.api.platform.logging.installCallLogging
 import me.santiagoreina.parcheu.contract.ContractJson
 
@@ -24,6 +25,8 @@ fun Application.module(container: AppContainer) {
     install(ContentNegotiation) { json(ContractJson) }
     installErrorHandling()
     installAuth(container.tokenVerifier, container.oidcVerifier)
+    // Plataforma (B-M1): límite por persona en las rutas que disparan IA; cada dominio elige sus rutas con `aiRateLimited`.
+    installAiRateLimit()
 
     routing {
         route("/v1") {

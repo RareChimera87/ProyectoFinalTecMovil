@@ -9,6 +9,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
+import me.santiagoreina.parcheu.api.platform.aiRateLimited
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
@@ -29,9 +30,12 @@ class SimulationRoutes(
     private val viewerId: suspend (FirebaseUser) -> UUID,
 ) : DomainRoutes {
     override fun Route.v1() {
-        post("/simulations") {
-            val summary = simulation.service.start(viewerId(call.firebaseUser()), call.receive<StartSimulation>())
-            call.respond(HttpStatusCode.Accepted, summary)
+        // Límite por persona además del cupo (B-M1): corta reintentos en bucle antes de tocar la base.
+        aiRateLimited {
+            post("/simulations") {
+                val summary = simulation.service.start(viewerId(call.firebaseUser()), call.receive<StartSimulation>())
+                call.respond(HttpStatusCode.Accepted, summary)
+            }
         }
         get("/simulations") {
             val params = call.request.queryParameters
