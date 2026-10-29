@@ -1,6 +1,9 @@
 package me.santiagoreina.parcheu.api.platform.config
 
-/** Entorno de ejecución. `LOCAL` es el único que admite tokens Fake y nunca se asume por defecto. */
+/**
+ * Entorno de ejecución. `LOCAL` es el único que admite tokens Fake y nunca se asume por defecto: además exige
+ * `ALLOW_FAKE_AUTH=true` y una base de datos local (ver [AppConfig.fromEnv]).
+ */
 enum class Env { LOCAL, DEV, PROD }
 
 /** Datos de conexión a Postgres. En Cloud Run se usa [cloudSqlInstance] (conector IAM, sin VPC). */
@@ -17,6 +20,9 @@ data class DbConfig(
  * Configuración del servicio, leída solo de variables de entorno (nunca de archivos del repo).
  *
  * - `ENV` (local|dev|prod, obligatorio y sin valor por defecto: si falta, el arranque falla), `PORT` (8080), `APP_VERSION` (SHA del commit).
+ * - `ALLOW_FAKE_AUTH=true`: obligatoria con `ENV=local` en todos los modos, porque `local` cablea la autenticación
+ *   Fake (cualquier `fake-<uid>` entra como ese usuario). Con `ENV=local` la base además debe ser local
+ *   (ver [isLocalJdbcUrl]); en dev y prod la variable se ignora.
  * - `INTERNAL_OIDC_AUDIENCE`: audiencia de los tokens OIDC internos (la custom audience que fija E0.5,
  *   `https://api.parcheu-<env>.internal`). Si falta se usa `SERVICE_URL` como respaldo.
  * - `TASKS_SERVICE_ACCOUNT`: correo de `sa-tasks`, única identidad válida en las rutas `/internal`.
@@ -58,6 +64,13 @@ data class AppConfig(
             require(env != Env.LOCAL || (vars["K_SERVICE"].isNullOrBlank() && vars["CLOUD_RUN_JOB"].isNullOrBlank())) {
                 "ENV=local no se admite en Cloud Run (K_SERVICE/CLOUD_RUN_JOB definidos): usa dev o prod"
             }
+            if (env == Env.LOCAL) {
+                // El homeserver (ADR-0033) no es Cloud Run: sin esta bandera, un `.env` sin ENV=dev abriría la
+                // suplantación de cualquier usuario sobre datos reales.
+                require(vars["ALLOW_FAKE_AUTH"]?.trim().equals("true", ignoreCase = true)) {
+                    "ENV=local abre la autenticación falsa; exige ALLOW_FAKE_AUTH=true y una base de datos local"
+                }
+            }
             val db = vars["DB_NAME"]?.let { name ->
                 DbConfig(
                     name = name,
@@ -66,6 +79,12 @@ data class AppConfig(
                     cloudSqlInstance = vars["CLOUD_SQL_INSTANCE"],
                     jdbcUrl = vars["DB_URL"],
                 )
+            }
+            if (env == Env.LOCAL && db != null) {
+                require(db.cloudSqlInstance == null && (db.jdbcUrl == null || isLocalJdbcUrl(db.jdbcUrl))) {
+                    "ENV=local solo admite una base de datos local (localhost, 127.0.0.1 o un servicio de compose " +
+                        "sin dominio, p. ej. parcheu-db), no CLOUD_SQL_INSTANCE ni '${db.jdbcUrl}'"
+                }
             }
             val config = AppConfig(
                 env = env,
@@ -87,6 +106,27 @@ data class AppConfig(
         private const val LOCAL_TASKS_ACCOUNT = "sa-tasks@parcheu-local.iam.gserviceaccount.com"
 
         private fun String?.orNull(): String? = this?.takeIf { it.isNotBlank() }
+
+        /**
+         * Verdadero si el host de la URL JDBC es la máquina propia (`localhost`, `127.0.0.1`, `::1`) o un nombre
+         * de una sola etiqueta sin dígitos solos, como el servicio `parcheu-db` de la red interna de compose.
+         * Cualquier dominio con punto o IP de otra máquina (p. ej. Cloud SQL o una base compartida) se rechaza.
+         */
+        internal fun isLocalJdbcUrl(jdbcUrl: String): Boolean {
+            val rest = jdbcUrl.substringAfter("://", missingDelimiterValue = "")
+            if (rest.isEmpty()) return false
+            val authority = rest.substringBefore('/').substringBefore('?').substringAfterLast('@')
+            // Varios hosts (failover de pgjdbc) se aceptan solo si todos son locales.
+            val hosts = authority.split(',').map { h ->
+                if (h.startsWith("[")) h.substringAfter('[').substringBefore(']') else h.substringBefore(':')
+            }
+            return hosts.isNotEmpty() && hosts.all { host ->
+                val h = host.lowercase()
+                h == "localhost" || h == "127.0.0.1" || h == "::1" ||
+                    (h.isNotEmpty() && !h.contains('.') && !h.contains(':') && !h.all { it.isDigit() } &&
+                        h.all { it.isLetterOrDigit() || it == '-' || it == '_' })
+            }
+        }
     }
 
     /** Falla al arrancar el servicio, no en la primera petición, si falta algo que el entorno exige. */

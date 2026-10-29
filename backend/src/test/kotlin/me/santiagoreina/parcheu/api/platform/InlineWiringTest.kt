@@ -82,7 +82,7 @@ class InlineWiringTest : FunSpec({
     }
 
     test("sin TASKS_MODE=inline no hay trabajo en segundo plano") {
-        val vars = mapOf("ENV" to "local", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://localhost:1/parcheu")
+        val vars = mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://localhost:1/parcheu")
         AppContainer.fromConfig(AppConfig.fromEnv(vars), vars).background.shouldBeNull()
     }
 })

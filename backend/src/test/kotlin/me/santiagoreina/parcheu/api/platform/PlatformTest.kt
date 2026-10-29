@@ -3,8 +3,10 @@ package me.santiagoreina.parcheu.api.platform
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseTokenVerifier
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.Mode
 import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
@@ -21,7 +23,7 @@ class PlatformTest : FunSpec({
     }
 
     test("AppConfig usa valores por defecto locales salvo ENV, que es obligatorio") {
-        val config = AppConfig.fromEnv(mapOf("ENV" to "local"))
+        val config = AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true"))
         config.env shouldBe Env.LOCAL
         config.port shouldBe 8080
         config.version shouldBe "dev"
@@ -105,6 +107,81 @@ class PlatformTest : FunSpec({
         shouldThrow<IllegalArgumentException> { AppConfig.fromEnv(mapOf("ENV" to "LOCAL", "CLOUD_RUN_JOB" to "migrate")) }
     }
 
+    test("ENV=local sin ALLOW_FAKE_AUTH=true no arranca, en ningún modo (B-A2)") {
+        listOf(true, false).forEach { serving ->
+            shouldThrow<IllegalArgumentException> {
+                AppConfig.fromEnv(mapOf("ENV" to "local"), serving = serving)
+            }.message shouldContain "ALLOW_FAKE_AUTH=true"
+            shouldThrow<IllegalArgumentException> {
+                AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "1"), serving = serving)
+            }
+        }
+    }
+
+    test("ENV=local con ALLOW_FAKE_AUTH=true arranca con una base local y rechaza una remota") {
+        val local = mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "DB_NAME" to "parcheu")
+        listOf(
+            "jdbc:postgresql://localhost:5432/parcheu",
+            "jdbc:postgresql://127.0.0.1/parcheu",
+            "jdbc:postgresql://[::1]:5432/parcheu",
+            // Servicio de la red interna de compose (deploy/homelab/compose.yaml).
+            "jdbc:postgresql://parcheu-db:5432/parcheu",
+        ).forEach { url ->
+            AppConfig.fromEnv(local + ("DB_URL" to url)).db?.jdbcUrl shouldBe url
+        }
+        listOf(
+            "jdbc:postgresql://10.20.0.3:5432/parcheu",
+            "jdbc:postgresql://192.168.0.10:5432/parcheu",
+            "jdbc:postgresql://db.example.com/parcheu",
+            "jdbc:postgresql://localhost,db.example.com/parcheu",
+            "jdbc:postgresql://user@db.example.com:5432/parcheu",
+        ).forEach { url ->
+            shouldThrow<IllegalArgumentException> { AppConfig.fromEnv(local + ("DB_URL" to url)) }.message shouldContain "local"
+        }
+        shouldThrow<IllegalArgumentException> { AppConfig.fromEnv(local + ("CLOUD_SQL_INSTANCE" to "p:r:i")) }
+    }
+
+    test("dev y prod ignoran ALLOW_FAKE_AUTH: nunca cablean Fakes y admiten una base remota") {
+        val dev = mapOf(
+            "ENV" to "dev", "GCP_PROJECT" to "parcheu-dev", "INTERNAL_OIDC_AUDIENCE" to "https://api.parcheu-dev.internal",
+            "TASKS_SERVICE_ACCOUNT" to "sa-tasks@parcheu-dev.iam.gserviceaccount.com",
+            "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://db.example.com:1/parcheu",
+        )
+        listOf(dev, dev + ("ENV" to "prod")).forEach { vars ->
+            val sinBandera = AppConfig.fromEnv(vars)
+            val conBandera = AppConfig.fromEnv(vars + ("ALLOW_FAKE_AUTH" to "true"))
+            conBandera shouldBe sinBandera
+            val c = AppContainer.fromConfig(conBandera, vars + ("ALLOW_FAKE_AUTH" to "true"))
+            (c.tokenVerifier is FakeTokenVerifier) shouldBe false
+            (c.oidcVerifier is FakeOidcVerifier) shouldBe false
+        }
+    }
+
+    test("FakeOidcVerifier no acepta el token fijo antiguo; local usa FAKE_OIDC_TOKEN o uno aleatorio por arranque") {
+        val legacy = FakeOidcVerifier.LEGACY_TOKEN
+        legacy shouldBe "oidc-tasks-fake"
+        val v = FakeOidcVerifier("sa@p.iam.gserviceaccount.com", "token-de-prueba-0123456789")
+        runBlocking {
+            v.verify(legacy) shouldBe null
+            v.verify("token-de-prueba-0123456789")?.email shouldBe "sa@p.iam.gserviceaccount.com"
+        }
+        shouldThrow<IllegalArgumentException> { FakeOidcVerifier("sa@p.iam.gserviceaccount.com", legacy) }
+        shouldThrow<IllegalArgumentException> { FakeOidcVerifier.tokenFromEnv(mapOf("FAKE_OIDC_TOKEN" to legacy)) }
+        FakeOidcVerifier.tokenFromEnv(mapOf("FAKE_OIDC_TOKEN" to "fijo-de-pruebas-0123456789")) shouldBe "fijo-de-pruebas-0123456789"
+        val a = FakeOidcVerifier.tokenFromEnv(emptyMap())
+        val b = FakeOidcVerifier.tokenFromEnv(emptyMap())
+        (a == b) shouldBe false
+        a.length shouldBe 64
+
+        // El cableado de ENV=local tampoco acepta el token antiguo.
+        val vars = mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://localhost:1/parcheu")
+        val c = AppContainer.fromConfig(AppConfig.fromEnv(vars), vars)
+        val oidc = c.oidcVerifier as FakeOidcVerifier
+        runBlocking { oidc.verify(legacy) shouldBe null }
+        val fijo = AppContainer.fromConfig(AppConfig.fromEnv(vars), vars + ("FAKE_OIDC_TOKEN" to "fijo-de-pruebas-0123456789"))
+        runBlocking { fijo.oidcVerifier.verify("fijo-de-pruebas-0123456789").shouldNotBeNull() }
+    }
+
     test("fromConfig cablea verificadores reales fuera de local") {
         val config = AppConfig.fromEnv(
             mapOf(
@@ -122,13 +199,13 @@ class PlatformTest : FunSpec({
     }
 
     test("fromConfig sin base de datos falla con un mensaje claro") {
-        val config = AppConfig.fromEnv(mapOf("ENV" to "local"))
+        val config = AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true"))
         shouldThrow<IllegalArgumentException> { AppContainer.fromConfig(config) }.message shouldContain "DB_NAME"
     }
 
     test("LEGAL_TEXT_VERSION se lee del entorno y tiene un valor por defecto") {
-        AppConfig.fromEnv(mapOf("ENV" to "local")).legalTextVersion shouldBe AppConfig.DEFAULT_LEGAL_TEXT_VERSION
-        AppConfig.fromEnv(mapOf("ENV" to "local", "LEGAL_TEXT_VERSION" to "2027-01-01")).legalTextVersion shouldBe "2027-01-01"
+        AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true")).legalTextVersion shouldBe AppConfig.DEFAULT_LEGAL_TEXT_VERSION
+        AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "LEGAL_TEXT_VERSION" to "2027-01-01")).legalTextVersion shouldBe "2027-01-01"
     }
 
     test("FirebaseTokenVerifier no resuelve credenciales al construirse (ADC diferido)") {

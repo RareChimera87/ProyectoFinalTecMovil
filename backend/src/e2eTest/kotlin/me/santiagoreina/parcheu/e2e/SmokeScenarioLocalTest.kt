@@ -6,9 +6,9 @@ import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import kotlinx.coroutines.runBlocking
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.module
 import me.santiagoreina.parcheu.api.platform.AppContainer
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.DbConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
@@ -37,7 +37,7 @@ class SmokeScenarioLocalTest : FunSpec({
                 tasksServiceAccount = "sa-tasks@parcheu-local.iam.gserviceaccount.com", firebaseProjectId = null,
                 db = DbConfig("test", ds.username, ds.password, null, ds.jdbcUrl),
             )
-            val container = AppContainer.fromConfig(config, mapOf("ENV" to "local"))
+            val container = AppContainer.fromConfig(config, mapOf("ENV" to "local", "FAKE_OIDC_TOKEN" to TEST_OIDC_TOKEN))
             val server: EmbeddedServer<*, *> = embeddedServer(Netty, port = 0) { module(container) }.start(wait = false)
             try {
                 val port = runBlocking { server.engine.resolvedConnectors().first().port }
@@ -47,7 +47,7 @@ class SmokeScenarioLocalTest : FunSpec({
                         api.get<List<ChatSummary>>("/v1/chats", idToken).filter { it.id == chatId }.mapNotNull { it.lastMessage?.text }
                 }
                 fun pump(path: String, id: String) {
-                    api.expectOk("POST", "/internal$path", FakeOidcVerifier.VALID_TOKEN, """{"id":"$id"}""")
+                    api.expectOk("POST", "/internal$path", TEST_OIDC_TOKEN, """{"id":"$id"}""")
                 }
                 val hooks = object : SmokeHooks {
                     override fun personaQueued(userId: String) = pump("/tasks/build-persona", userId)

@@ -6,7 +6,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 
 class CloudTasksQueueTest : FunSpec({
-    val config = AppConfig.fromEnv(mapOf("ENV" to "local"))
+    val config = AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true"))
     val base = mapOf("SERVICE_URL" to "https://api.example.run.app")
     val full = "projects/parcheu-dev/locations/us-central1/queues/ai-light"
 
