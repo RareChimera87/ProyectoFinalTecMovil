@@ -5,12 +5,13 @@ name: revision-agente
 # comentario del PR). Cuando el veredicto es favorable, el integrador pone la etiqueta
 # `revisado-agente`. Este check solo verifica que esa etiqueta exista: no llama a ninguna API
 # ni necesita secretos. Sin la etiqueta, el PR no se considera revisado y el check falla.
+# Corre con `pull_request_target` (como auto-merge.yml): el YAML es el de la rama base y un PR no
+# puede editarlo para aprobarse a sí mismo. No hace checkout: nunca ejecuta código del PR.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
 
 permissions:
-  contents: read
   pull-requests: read
 
 concurrency:
@@ -31,5 +32,30 @@ jobs:
             echo "El PR tiene la etiqueta revisado-agente: revisión registrada."
           else
             echo "::error::Falta la etiqueta revisado-agente: el agente revisor del workflow debe revisar el PR y el integrador poner la etiqueta (PLAN.md §5)."
+            exit 1
+          fi
+
+      # Un PR que edite los propios gates, la protección de ramas o el CODEOWNERS no puede dejar en
+      # verde su check: este YAML corre desde la base (pull_request_target), así que el PR no lo
+      # reescribe, y además el PR debe llevar la etiqueta `gobernanza` para que una persona lo mire.
+      - name: Exige la etiqueta gobernanza si el PR toca los gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ETIQUETAS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          sensibles='^(\.github/workflows/(revision-agente|major-gate|auto-merge)\.yml|\.github/CODEOWNERS|scripts/proteger-ramas\.sh)$'
+          # Se guarda la lista antes de filtrar: si gh falla, el paso falla (fallar cerrado).
+          archivos="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename')"
+          tocados="$(grep -E "$sensibles" <<<"$archivos" || true)"
+          if [[ -z "$tocados" ]]; then
+            echo "El PR no toca los gates ni la protección de ramas."
+          elif [[ ",$ETIQUETAS," == *",gobernanza,"* ]]; then
+            echo "El PR toca los gates y lleva la etiqueta gobernanza (revisión humana):"
+            echo "$tocados"
+          else
+            echo "::error::El PR modifica los gates de revisión o la protección de ramas y no lleva la etiqueta gobernanza:"
+            echo "$tocados"
             exit 1
           fi

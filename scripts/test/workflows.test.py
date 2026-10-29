@@ -80,7 +80,7 @@ class RevisionAgente(unittest.TestCase):
 
     def test_exige_la_etiqueta_y_reacciona_a_labeled(self):
         wf = cargar("revision-agente.yml")
-        tipos = disparadores(wf)["pull_request"]["types"]
+        tipos = disparadores(wf)["pull_request_target"]["types"]
         self.assertIn("labeled", tipos)
         self.assertIn("unlabeled", tipos)
         run = pasos(wf)[0]["run"]
@@ -94,6 +94,39 @@ class MajorGate(unittest.TestCase):
         self.assertIn("revisado-agente", texto)
         self.assertNotIn("user.login", texto)
         self.assertNotIn("/reviews", texto)
+
+    def test_gates_corren_desde_la_base_sin_checkout(self):
+        # C-A1: con `pull_request` un PR reescribe su propio gate; con `pull_request_target` no.
+        for nombre in ("revision-agente.yml", "major-gate.yml"):
+            with self.subTest(nombre):
+                wf = cargar(nombre)
+                self.assertIn("pull_request_target", disparadores(wf))
+                self.assertNotIn("pull_request", disparadores(wf))
+                self.assertFalse([p for p in pasos(wf) if "uses" in p], "sin checkout ni acciones")
+                paso = pasos(wf)[-1]
+                self.assertIn("gobernanza", paso["run"])
+                self.assertIn("proteger-ramas", paso["run"])
+                self.assertIn("exit 1", paso["run"])
+
+
+class AccionesFijadas(unittest.TestCase):
+    """C-M3: toda acción externa va fijada a un SHA de 40 hex con comentario `# vX.Y.Z`."""
+
+    def test_ningun_uses_externo_sin_sha(self):
+        sin_fijar = []
+        for f in sorted(WF.glob("*.yml")):
+            for n, linea in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+                m = re.match(r"\s*(?:-\s+)?uses:\s*(\S+)(.*)$", linea)
+                if not m or m.group(1).startswith("./"):
+                    continue
+                if not (re.search(r"@[0-9a-f]{40}$", m.group(1)) and re.match(r"\s*#\s*v\d+\.\d+", m.group(2))):
+                    sin_fijar.append(f"{f.name}:{n}: {m.group(1)}")
+        self.assertEqual(sin_fijar, [])
+
+    def test_dependabot_actualiza_las_acciones_cada_semana(self):
+        d = yaml.safe_load((RAIZ / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
+        act = [u for u in d["updates"] if u["package-ecosystem"] == "github-actions"]
+        self.assertEqual([u["schedule"]["interval"] for u in act], ["weekly"])
 
 
 class GuardasDeDirectorio(unittest.TestCase):
