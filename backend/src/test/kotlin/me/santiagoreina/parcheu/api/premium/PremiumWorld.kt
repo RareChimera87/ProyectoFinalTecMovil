@@ -37,10 +37,10 @@ import me.santiagoreina.parcheu.api.simulation.inMemorySimulationModule
 import me.santiagoreina.parcheu.api.social.introductions.InMemoryIntroductionRepository
 import me.santiagoreina.parcheu.api.social.introductions.IntroductionSimulationNotifier
 import me.santiagoreina.parcheu.api.testContainer
+import me.santiagoreina.parcheu.api.simulation.createRandom
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NotificationKinds
-import me.santiagoreina.parcheu.contract.StartSimulation
 import me.santiagoreina.parcheu.contract.Visibility
 import java.time.Instant
 import java.time.LocalDate
@@ -105,7 +105,7 @@ class PremiumWorld(val plus: Boolean) {
     )
     val safety = inMemorySafetyModule(FIXED_CLOCK, chat, sim.graph, matching, safetyRepo, simulation)
 
-    /** Simulación DONE ana → fran (el motor corre en línea). */
+    /** Simulación DONE ana → fran de un match al azar (el motor corre en línea; fran no es conexión de ana). */
     val franSimulation: String
 
     init {
@@ -135,7 +135,7 @@ class PremiumWorld(val plus: Boolean) {
             Instant.parse("2026-10-25T11:00:00Z"),
         )
         if (plus) sim.plus(id("ana"))
-        franSimulation = runBlocking { simulation.service.start(id("ana"), StartSimulation(id("fran").toString(), Mode.AMISTAD)).id }
+        franSimulation = runBlocking { simulation.service.createRandom(id("ana"), id("fran")).id.toString() }
         runBlocking { communities.service.runWeekly() }
     }
 

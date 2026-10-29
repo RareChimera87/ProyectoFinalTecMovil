@@ -9,11 +9,10 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
 import me.santiagoreina.parcheu.api.simulation.SimFixture
+import me.santiagoreina.parcheu.api.simulation.createParche
 import me.santiagoreina.parcheu.api.simulation.SimulationEngine
 import me.santiagoreina.parcheu.contract.Mode
-import me.santiagoreina.parcheu.contract.StartSimulation
 import org.slf4j.LoggerFactory
-import java.util.UUID
 
 /**
  * E10.5: los logs que alimentan las métricas basadas en logs de Terraform (monitoring.tf) mantienen su
@@ -62,7 +61,7 @@ class ObservabilityLogsTest : FunSpec({
         val ana = f.person("ana")
         val beto = f.person("beto")
         val events = capture(SimulationEngine::class.java) {
-            f.module.service.start(ana, StartSimulation(beto.toString(), Mode.AMISTAD))
+            f.module.service.createParche(ana, beto, Mode.AMISTAD)
         }.named("simulation_done")
         events shouldHaveSize 1
         val fields = events.single().fields()
@@ -75,7 +74,7 @@ class ObservabilityLogsTest : FunSpec({
         val ana = f.person("ana")
         val beto = f.person("beto")
         val events = capture(SimulationEngine::class.java) {
-            f.module.service.start(ana, StartSimulation(beto.toString(), Mode.AMISTAD))
+            f.module.service.createParche(ana, beto, Mode.AMISTAD)
         }
         events.named("simulation_done") shouldHaveSize 0
         val failed = events.named("simulation_failed")
@@ -90,7 +89,7 @@ class ObservabilityLogsTest : FunSpec({
         val f = SimFixture(inline = false)
         val ana = f.person("ana")
         val beto = f.person("beto")
-        val id = UUID.fromString(f.module.service.start(ana, StartSimulation(beto.toString(), Mode.AMISTAD)).id)
+        val id = f.module.service.createParche(ana, beto, Mode.AMISTAD).id
         f.repo.block(beto, ana)
         val failed = capture(SimulationEngine::class.java) { f.module.engine.run(id) }.named("simulation_failed")
         failed shouldHaveSize 1

@@ -18,13 +18,12 @@ import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Progress
 import me.santiagoreina.parcheu.contract.SimulationStatus
-import me.santiagoreina.parcheu.contract.StartSimulation
 import java.util.UUID
 
 class SimulationEngineTest : FunSpec({
 
     suspend fun SimFixture.start(a: UUID, b: UUID, mode: Mode = Mode.AMISTAD): SimulationRecord =
-        checkNotNull(repo.find(UUID.fromString(module.service.start(a, StartSimulation(b.toString(), mode)).id)))
+        checkNotNull(repo.find(module.service.createParche(a, b, mode).id))
 
     test("una ejecución completa con FakeLlm termina en DONE con puntaje 0-100 y 3 escenarios juzgados") {
         val f = SimFixture()
@@ -136,8 +135,8 @@ class SimulationEngineTest : FunSpec({
         )
         val ana = f.person("ana")
         val beto = f.person("beto")
-        val summary = module.service.start(ana, StartSimulation(beto.toString(), Mode.AMISTAD))
-        val id = UUID.fromString(summary.id)
+        val summary = module.service.createParche(ana, beto, Mode.AMISTAD)
+        val id = summary.id
 
         shouldThrow<IllegalStateException> { module.engine.run(id) }
         val partial = inner.find(id)!!
@@ -158,7 +157,7 @@ class SimulationEngineTest : FunSpec({
         val f = SimFixture()
         val module = inMemorySimulationModule(me.santiagoreina.parcheu.api.FIXED_CLOCK, f.ai, f.quota, f.graph, f.repo, runInline = false)
         val ana = f.person("ana")
-        val id = UUID.fromString(module.service.start(ana, StartSimulation(f.person("beto").toString(), Mode.AMISTAD)).id)
+        val id = module.service.createParche(ana, f.person("beto"), Mode.AMISTAD).id
         f.repo.markRunning(id) shouldBe true
         val base = f.repo.find(id)!!
         val one = base.transcript.copy(scenarios = base.transcript.scenarios.toMutableList().also { it[0] = it[0].copy(turns = listOf(StoredTurn(Side.A, "hola"))) })
@@ -293,7 +292,7 @@ class SimulationEngineTest : FunSpec({
         val ana = f.person("ana")
         val beto = f.person("beto")
         f.exhaustBudget()
-        shouldThrow<AiBudgetExceeded> { f.module.service.start(ana, StartSimulation(beto.toString(), Mode.AMISTAD)) }
+        shouldThrow<AiBudgetExceeded> { f.module.service.createParche(ana, beto, Mode.AMISTAD) }
         f.usage.charges.shouldBeEmpty()
         f.repo.all().shouldBeEmpty()
         f.fake.calls shouldBe 0
@@ -315,7 +314,7 @@ class SimulationEngineTest : FunSpec({
         val ana = f.person("ana")
         val others = (1..6).map { f.person("p$it") }
         others.take(5).forEach { f.start(ana, it) }
-        shouldThrow<QuotaExceeded> { f.module.service.start(ana, StartSimulation(others[5].toString(), Mode.AMISTAD)) }
+        shouldThrow<QuotaExceeded> { f.module.service.createParche(ana, others[5], Mode.AMISTAD) }
         f.repo.all() shouldHaveSize 5
     }
 
@@ -324,7 +323,7 @@ class SimulationEngineTest : FunSpec({
         val module = inMemorySimulationModule(
             me.santiagoreina.parcheu.api.FIXED_CLOCK, ai, quota, graph, repo, mirror = mirror, notifier = notifier, runInline = false,
         )
-        return module to UUID.fromString(module.service.start(a, StartSimulation(b.toString(), mode)).id)
+        return module to module.service.createParche(a, b, mode).id
     }
 
     suspend fun SimFixture.shouldHaveFailedSilently(id: UUID, a: UUID, b: UUID, mode: Mode) {
