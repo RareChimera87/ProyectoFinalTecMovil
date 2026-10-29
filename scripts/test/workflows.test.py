@@ -192,6 +192,13 @@ class GuardasDeDirectorio(unittest.TestCase):
         self.assertIn("-lockfile=readonly", str(plan["steps"]))
         comenta = wf["jobs"]["comentario-plan-dev"]
         self.assertEqual(comenta["permissions"]["pull-requests"], "write")
+        descarga = next(s for s in comenta["steps"] if "download-artifact" in s.get("uses", ""))
+        self.assertIs(descarga.get("continue-on-error"), True)  # sin artefacto no queda en rojo
+        subida = next(s for s in plan["steps"] if "upload-artifact" in s.get("uses", ""))
+        self.assertNotIn("plan.json", subida["with"]["path"])  # trae valores sensitive en claro
+        texto = str(comenta["steps"])
+        self.assertIn("github-actions[bot]", texto)
+        self.assertIn("valla", texto)
         self.assertFalse([p for p in comenta["steps"] if "terraform" in str(p.get("uses", "")) or "checkout" in str(p.get("uses", ""))])
 
     def test_plan_dev_se_omite_sin_wif(self):

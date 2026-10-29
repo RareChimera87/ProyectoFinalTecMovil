@@ -152,7 +152,6 @@ jobs:
           name: infra-plan-dev
           path: |
             infra/terraform/envs/dev/plan.txt
-            infra/terraform/envs/dev/plan.json
           retention-days: 7
 
 
@@ -169,7 +168,10 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR: ${{ github.event.pull_request.number }}
     steps:
+      # plan.json no se sube: trae los valores `sensitive` en claro y el repo es público.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        # Si plan-dev falló antes de generar plan.txt no hay artefacto: no es motivo para dejar este job en rojo.
+        continue-on-error: true
         with:
           name: infra-plan-dev
           path: plan
@@ -191,16 +193,22 @@ jobs:
             echo
             echo '<details><summary>Plan completo</summary>'
             echo
-            echo '```'
             # Un comentario admite 65 536 caracteres: si el plan es más largo se corta aquí;
             # el plan completo queda en el artefacto infra-plan-dev.
-            head -c 55000 "$plan"
+            head -c 55000 "$plan" > plan-corto.txt
+            # El plan sale del HCL del PR y puede traer ```: la valla es más larga que cualquier
+            # secuencia de comillas invertidas del texto, para que no cierre el bloque.
+            maxima="$(grep -o '`\+' plan-corto.txt | awk '{ if (length($0) > m) m = length($0) } END { print m + 0 }')"
+            (( maxima < 3 )) && maxima=3
+            valla="$(printf '`%.0s' $(seq 1 $((maxima + 1))))"
+            echo "$valla"
+            cat plan-corto.txt
             echo
-            echo '```'
+            echo "$valla"
             echo '</details>'
           } > comentario.md
           previo="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
-            --jq "map(select(.body | startswith(\"$marca\"))) | .[0].id // empty" 2>/dev/null | head -1)"
+            --jq "map(select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marca\")))) | .[0].id // empty" 2>/dev/null | head -1)"
           if [[ -n "$previo" ]]; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$previo" -F body=@comentario.md >/dev/null
           else
