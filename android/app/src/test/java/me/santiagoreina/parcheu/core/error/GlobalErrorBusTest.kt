@@ -73,6 +73,41 @@ class GlobalErrorBusTest {
     }
 
     @Test
+    fun premiumErrorsAreNeverDeduplicated() = runTest {
+        // M1 de la revisión de #109: cerrar G1 (o 'Esperar' en G2) y volver a tocar el mismo botón dentro de
+        // la ventana debe abrirla otra vez; el manejador ya evita apilar una sobre otra.
+        val quota = AppError.QuotaExceeded(
+            QuotaKind.SIMULATION,
+            Instant.fromEpochSeconds(1_800_000_000)
+        )
+        bus.errors.test {
+            assertTrue(bus.publish(AppError.PlusRequired))
+            assertTrue(bus.publish(AppError.PlusRequired))
+            assertTrue(bus.publish(quota))
+            assertTrue(bus.publish(quota))
+            assertEquals(GlobalError.PlusRequired, awaitItem())
+            assertEquals(GlobalError.PlusRequired, awaitItem())
+            assertEquals(GlobalError.of(quota), awaitItem())
+            assertEquals(GlobalError.of(quota), awaitItem())
+        }
+    }
+
+    @Test
+    fun a402InBetweenDoesNotResetTheSessionDedupe() = runTest {
+        bus.errors.test {
+            assertTrue(bus.publish(AppError.Unauthorized))
+            assertTrue(bus.publish(AppError.PlusRequired))
+            assertFalse(bus.publish(AppError.Unauthorized))
+            assertTrue(bus.publish(AppError.TermsRequired))
+            assertFalse(bus.publish(AppError.TermsRequired))
+            assertEquals(GlobalError.SessionExpired, awaitItem())
+            assertEquals(GlobalError.PlusRequired, awaitItem())
+            assertEquals(GlobalError.TermsRequired, awaitItem())
+            expectNoEvents()
+        }
+    }
+
+    @Test
     fun unauthorizedWithoutSessionIsIgnored() = runTest {
         // Splash, A4 o justo después de cerrar sesión: el 401 es esperado y no hay nada que cerrar.
         signedIn = false

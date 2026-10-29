@@ -54,10 +54,13 @@ sealed interface GlobalError {
  *
  * - Sin sesión ([hasSession] `false`) un 401 no se publica: es lo esperado tras cerrar sesión o antes de
  *   entrar, y Splash y A4 lo tratan ellos mismos.
- * - El mismo error repetido dentro de [dedupeWindow] se publica una sola vez: al vencer la sesión fallan
- *   a la vez todas las llamadas en curso y solo se debe navegar una vez.
- * - Sin nadie escuchando (app en segundo plano) los eventos se pierden: no hay `replay`, para no navegar
- *   al volver por un error viejo.
+ * - La misma sesión vencida, suspensión o falta de términos repetida dentro de [dedupeWindow] se publica
+ *   una sola vez: en esos casos fallan a la vez todas las llamadas en curso y solo se debe navegar una vez.
+ *   Los 402 no se deduplican: cada uno es un toque de la persona (cerrar G1 y volver a tocar el botón debe
+ *   abrirla otra vez) y `GlobalErrorHandler` ya evita apilar G1/G2 sobre otra.
+ * - Sin `replay`: un evento solo llega a quien ya está suscrito. `GlobalErrorHandler` recoge mientras la
+ *   Activity vive, aunque esté en segundo plano (y entonces navega igual); si no hay nadie suscrito (sin
+ *   Activity) el evento se pierde, y no se navega luego por un error viejo.
  */
 class GlobalErrorBus(
     private val hasSession: () -> Boolean,
@@ -71,7 +74,7 @@ class GlobalErrorBus(
         )
     val errors: SharedFlow<GlobalError> = _errors.asSharedFlow()
 
-    private var last: Pair<GlobalError, TimeMark>? = null
+    private val lastSeen = mutableMapOf<GlobalError, TimeMark>()
 
     /**
      * Publica el caso global de [error], si lo tiene. Con [routesPremium] `false` los 402 no se publican:
@@ -81,17 +84,19 @@ class GlobalErrorBus(
         val global = GlobalError.of(error) ?: return false
         if (!routesPremium && global.isPremium()) return false
         if (global == GlobalError.SessionExpired && !hasSession()) return false
-        synchronized(this) {
-            val previous = last
-            if (previous != null && previous.first == global &&
-                previous.second.elapsedNow() < dedupeWindow
-            ) {
-                return false
+        if (global.isDeduplicated()) {
+            synchronized(this) {
+                val previous = lastSeen[global]
+                if (previous != null && previous.elapsedNow() < dedupeWindow) return false
+                lastSeen[global] = timeSource.markNow()
             }
-            last = global to timeSource.markNow()
         }
         return _errors.tryEmit(global)
     }
+
+    private fun GlobalError.isDeduplicated(): Boolean = this == GlobalError.SessionExpired ||
+        this == GlobalError.AccountSuspended ||
+        this == GlobalError.TermsRequired
 
     private fun GlobalError.isPremium(): Boolean =
         this == GlobalError.PlusRequired || this is GlobalError.QuotaExceeded

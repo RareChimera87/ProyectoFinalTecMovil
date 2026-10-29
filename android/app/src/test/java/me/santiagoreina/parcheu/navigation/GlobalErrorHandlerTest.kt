@@ -250,6 +250,25 @@ class GlobalErrorHandlerTest {
     }
 
     @Test
+    fun closingG1AndTappingAgainWithinTheWindowOpensItAgain() {
+        launch(Home, Parche())
+
+        bus.publish(AppError.PlusRequired)
+        composeRule.waitForIdle()
+        composeRule.runOnUiThread { navController.popBackStack() }
+        composeRule.waitForIdle()
+        // Mismo botón, menos de 3 s después (M1 de la revisión de #109).
+        bus.publish(AppError.PlusRequired)
+        composeRule.waitForIdle()
+
+        composeRule.runOnUiThread {
+            val stack = entries()
+            assertEquals(3, stack.size)
+            assertEquals(Paywall(PAYWALL_SOURCE_PARCHE), stack.last().toRoute<Paywall>())
+        }
+    }
+
+    @Test
     fun quotaExceededOpensTheG2OfThatQuota() {
         val resetsAt = Instant.fromEpochSeconds(1_800_000_000)
         launch(Home, Simulation("sim-1"))
