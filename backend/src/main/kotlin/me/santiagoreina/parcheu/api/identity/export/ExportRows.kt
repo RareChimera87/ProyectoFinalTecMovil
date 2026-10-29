@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.identity.export
 
 import me.santiagoreina.parcheu.api.identity.ConsentRecord
+import me.santiagoreina.parcheu.api.platform.db.tables.IntroResponse
 import me.santiagoreina.parcheu.contract.Answer
 import me.santiagoreina.parcheu.contract.ChatType
 import me.santiagoreina.parcheu.contract.EdgeState
@@ -85,6 +86,9 @@ data class ExportIntroductionRow(
     /** Respuesta de la propia persona (`INTERESTED`/`DECLINED`) cuando es una de las presentadas. */
     val myResponse: String?,
     val createdAt: Instant,
+    /** Respuestas crudas de las dos personas presentadas: solo para derivar lo que la app le muestra a quien presenta. */
+    val aResponse: IntroResponse? = null,
+    val bResponse: IntroResponse? = null,
 )
 
 data class ExportMatchRow(

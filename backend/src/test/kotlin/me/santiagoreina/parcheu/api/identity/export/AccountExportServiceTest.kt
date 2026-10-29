@@ -17,6 +17,7 @@ import me.santiagoreina.parcheu.contract.ConsentKind
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.EntitlementState
+import me.santiagoreina.parcheu.api.platform.db.tables.IntroResponse
 import me.santiagoreina.parcheu.contract.IntroductionStatus
 import me.santiagoreina.parcheu.contract.ExportDto
 import me.santiagoreina.parcheu.contract.MeDto
@@ -114,5 +115,23 @@ class AccountExportServiceTest : FunSpec({
         dto.purchases.single().notificationType shouldBe 4
         dto.introductions.single().status shouldBe null
         dto.introductions.single().myResponse shouldBe "INTERESTED"
+    }
+
+    test("a quien presenta no se le revela el 'No, gracias' de una persona presentada") {
+        fun made(status: IntroductionStatus, a: IntroResponse?, b: IntroResponse?) = ExportIntroductionRow(
+            UUID.randomUUID(), me, laura, pedro, Mode.AMISTAD, status, null, now, a, b,
+        )
+        val extra = rows.copy(
+            introductions = listOf(
+                made(IntroductionStatus.DECLINED, null, IntroResponse.DECLINED), // la otra persona dijo 'No'
+                made(IntroductionStatus.DECLINED, null, null), // lo declinó quien presenta: lo sabe
+                made(IntroductionStatus.CONNECTED, IntroResponse.INTERESTED, IntroResponse.INTERESTED),
+            ),
+        )
+        val svc = AccountExportService(
+            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION), { extra }, signer, { null }, FIXED_CLOCK,
+        )
+        svc.build(me, meDto, extra, null).introductions.map { it.status } shouldContainExactly
+            listOf(IntroductionStatus.PROPOSED, IntroductionStatus.DECLINED, IntroductionStatus.CONNECTED)
     }
 })

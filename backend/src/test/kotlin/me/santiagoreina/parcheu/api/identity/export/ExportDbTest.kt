@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.identity.export
 
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -19,6 +20,7 @@ import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.ExportDto
 import me.santiagoreina.parcheu.contract.ExportIntroRole
 import me.santiagoreina.parcheu.contract.ExportInviteRole
+import me.santiagoreina.parcheu.contract.IntroductionStatus
 import java.sql.Connection
 import java.sql.Timestamp
 import java.util.UUID
@@ -139,6 +141,9 @@ class ExportDbTest : FunSpec({
             val reportId = UUID.randomUUID()
             val introMade = UUID.randomUUID()
             val introReceived = UUID.randomUUID()
+            val introMadeDeclined = UUID.randomUUID()
+            val introHiddenSimulating = UUID.randomUUID()
+            val introHiddenDeclined = UUID.randomUUID()
             val matchId = UUID.randomUUID()
             val chat = UUID.randomUUID()
             ds.connection.use { c ->
@@ -181,6 +186,21 @@ class ExportDbTest : FunSpec({
                     "insert into introductions (id, introducer_id, mode, user_a, user_b, a_response, b_response, status, created_at) " +
                         "values (?, ?, 'ESTUDIO', ?, ?, 'INTERESTED', 'DECLINED', 'DECLINED', ?)",
                     introReceived, mari, ana, laura, now,
+                )
+                // Ana presentó a Laura y Mari, y Mari dijo 'No, gracias': a Ana la app le muestra PROPOSED.
+                c.exec(
+                    "insert into introductions (id, introducer_id, mode, user_a, user_b, b_response, status, created_at) " +
+                        "values (?, ?, 'AMISTAD', ?, ?, 'DECLINED', 'DECLINED', ?)",
+                    introMadeDeclined, ana, laura, mari, now,
+                )
+                // Presentaciones a Ana que ella nunca vio: una aún simulándose y otra que Pedro descartó ('No por ahora').
+                c.exec(
+                    "insert into introductions (id, introducer_id, mode, user_a, user_b, status, created_at) values (?, ?, 'AMISTAD', ?, ?, 'SIMULATING', ?)",
+                    introHiddenSimulating, pedro, ana, laura, now,
+                )
+                c.exec(
+                    "insert into introductions (id, introducer_id, mode, user_a, user_b, status, created_at) values (?, ?, 'ESTUDIO', ?, ?, 'DECLINED', ?)",
+                    introHiddenDeclined, pedro, laura, ana, now,
                 )
                 // Match con Laura (la elección de Laura no debe salir) y turno en la fila.
                 c.exec(
@@ -228,8 +248,13 @@ class ExportDbTest : FunSpec({
             report.details shouldBe "Me insistió demasiado"
             report.reportedAnonId shouldBe signer.anonId(ana, laura)
 
-            dto.introductions.size shouldBe 2
-            val made = dto.introductions.single { it.role == ExportIntroRole.MADE }
+            // Las dos presentaciones que Ana nunca vio (SIMULATING y 'No por ahora') no salen.
+            dto.introductions.size shouldBe 3
+            dto.introductions.map { it.id } shouldNotContain introHiddenSimulating.toString()
+            dto.introductions.map { it.id } shouldNotContain introHiddenDeclined.toString()
+            // El 'No, gracias' de Mari no se revela a quien presenta: sale PROPOSED, no DECLINED.
+            dto.introductions.single { it.id == introMadeDeclined.toString() }.status shouldBe IntroductionStatus.PROPOSED
+            val made = dto.introductions.single { it.id == introMade.toString() }
             made.people shouldContainExactly listOf(signer.anonId(ana, laura), signer.anonId(ana, pedro))
             val received = dto.introductions.single { it.role == ExportIntroRole.RECEIVED }
             received.introducerAnonId shouldBe signer.anonId(ana, mari)

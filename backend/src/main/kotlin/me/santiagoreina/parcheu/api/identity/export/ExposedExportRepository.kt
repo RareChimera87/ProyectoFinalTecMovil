@@ -22,6 +22,8 @@ import me.santiagoreina.parcheu.api.platform.db.tables.Reports
 import me.santiagoreina.parcheu.api.platform.db.tables.TwinFeedback
 import me.santiagoreina.parcheu.api.platform.db.tables.Twins
 import me.santiagoreina.parcheu.api.billing.notificationType
+import me.santiagoreina.parcheu.api.social.introductions.isDeclinedByIntroducer
+import me.santiagoreina.parcheu.api.social.introductions.isProposedToIntroduced
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -169,7 +171,13 @@ class ExposedExportRepository(private val db: Database) : ExportRepository {
                 ExportIntroductionRow(
                     it[Introductions.id], it[Introductions.introducerId], it[Introductions.userA], it[Introductions.userB],
                     it[Introductions.mode], it[Introductions.status], myResponse?.name, it[Introductions.createdAt].toInstant(),
+                    it[Introductions.aResponse], it[Introductions.bResponse],
                 )
+            }.filter { intro ->
+                // Una persona presentada solo exporta lo que la app le muestra (mismo predicado que IntroductionService):
+                // las que siguen simulándose o que quien presenta descartó revelarían su decisión.
+                intro.introducerId == userId ||
+                    isProposedToIntroduced(intro.status, isDeclinedByIntroducer(intro.status, intro.aResponse, intro.bResponse))
             }
 
             val matches = Matches.selectAll().where { (Matches.userA eq userId) or (Matches.userB eq userId) }

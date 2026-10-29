@@ -6,6 +6,8 @@ import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.toKotlin
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.quota.grantsPlus
+import me.santiagoreina.parcheu.api.social.introductions.introducerVisibleStatus
+import me.santiagoreina.parcheu.api.social.introductions.isDeclinedByIntroducer
 import me.santiagoreina.parcheu.api.twin.TwinState
 import me.santiagoreina.parcheu.api.twin.xpNextFor
 import me.santiagoreina.parcheu.contract.BlockedDto
@@ -114,7 +116,9 @@ class AccountExportService(
                 if (intro.introducerId == userId) {
                     ExportIntroduction(
                         id = intro.id.toString(), role = ExportIntroRole.MADE, mode = intro.mode,
-                        people = listOf(anon(intro.userA), anon(intro.userB)), status = intro.status,
+                        people = listOf(anon(intro.userA), anon(intro.userB)),
+                        // Igual que la app: el 'No, gracias' de una persona presentada no se revela a quien presenta.
+                        status = introducerVisibleStatus(intro.status, isDeclinedByIntroducer(intro.status, intro.aResponse, intro.bResponse)),
                         createdAt = intro.createdAt.toKotlin(),
                     )
                 } else {
