@@ -11,6 +11,14 @@ import retrofit2.HttpException
 
 /** Traduce errores de la API y de la red a [AppError]. */
 class ApiErrorMapper(private val json: Json = ContractJson) {
+    /**
+     * Bus al que `apiCall` reporta cada falla (sesión, términos, Plus, cupos). Lo conecta `errorModule` al
+     * arrancar Koin; queda `null` en las pruebas que crean el mapper a mano. Es una propiedad y no un
+     * parámetro porque el mapper compartido lo construye `networkModule`.
+     */
+    @Volatile
+    var globalErrors: GlobalErrorBus? = null
+
     fun map(error: ApiError): AppError = when (error.code) {
         ErrorCode.VALIDATION -> AppError.Validation(error.message)
         ErrorCode.UNAUTHENTICATED -> AppError.Unauthorized

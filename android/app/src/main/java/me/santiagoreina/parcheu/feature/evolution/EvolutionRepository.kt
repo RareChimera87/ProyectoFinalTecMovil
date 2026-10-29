@@ -20,5 +20,7 @@ interface EvolutionRepository {
 
 class EvolutionRepositoryImpl(private val api: EvolutionApi, private val mapper: ApiErrorMapper) :
     EvolutionRepository {
-    override suspend fun history(): ApiResult<HistoryDto> = apiCall(mapper) { api.history() }
+    // Sin ParcheU+ D9 muestra su estado bloqueado con su propio botón: el 402 no abre G1 solo.
+    override suspend fun history(): ApiResult<HistoryDto> =
+        apiCall(mapper, routesPremium = false) { api.history() }
 }
