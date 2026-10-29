@@ -96,7 +96,7 @@ Se descartó el multimódulo grande (ADR-0005/0006): el aislamiento entre agente
 - **ViewModel:** expone `StateFlow<XUiState>`; acciones como funciones públicas; efectos de una sola vez (navegación, snackbars) por `Channel<XEffect>` recibido con `LaunchedEffect`.
 - **Estado:** `sealed interface XUiState { Loading; Loaded(...); Empty; Error(AppError) }` cuando aplica.
 - **Datos:** una interfaz `XRepository` por dominio y una implementación con Retrofit cuyo nombre varía: `RemoteX` (p. ej. `RemoteHomeRepository`), `XRepositoryImpl` (p. ej. `AccountRepositoryImpl`) o `ApiX` (p. ej. `ApiConsentRepository`); chat, auth y billing usan `FirestoreChatRepository`, `FirebaseAuthRepository` y `BillingRepositoryImpl`. La interfaz Retrofit `XApi` va en el mismo archivo o en un `XApi.kt` aparte, y el conjunto vive en `feature/<nombre>/` o en `data/<dominio>/`. Los `FakeXRepository` viven solo en `src/test` (18 repositorios; 23 archivos `Fake*` en total) y sirven a las pruebas JVM; no hay Fakes en `src/debug` ni un flavor sin backend: el flavor `dev` apunta al backend de desarrollo.
-- **Errores:** `ApiError` del contrato → `AppError` (`Network`, `Unauthorized`, `PlusRequired`, `QuotaExceeded(kind, resetsAt)`, `AgeRequired`, `Underage`, `Blocked`, `Suspended`, `ScenarioEnded`, `AiBudget`, `Validation(msg)`, `NotFound`, `TermsRequired`, `Forbidden`, `Conflict`, `Unknown`; hay un caso por cada `ErrorCode` del contrato). Un `ErrorRouter` global abre G1 ante `PlusRequired` y la G2 correspondiente ante `QuotaExceeded`.
+- **Errores:** `ApiError` del contrato → `AppError` (`Network`, `Unauthorized`, `PlusRequired`, `QuotaExceeded(kind, resetsAt)`, `AgeRequired`, `Underage`, `Blocked`, `Suspended`, `ScenarioEnded`, `AiBudget`, `Validation(msg)`, `NotFound`, `TermsRequired`, `Forbidden`, `Conflict`, `Unknown`; hay un caso por cada `ErrorCode` del contrato). `apiCall` (`core/network/ApiResult.kt`), por el que pasan todas las llamadas, devuelve el `AppError` a quien llamó y además lo publica en `GlobalErrorBus` (`core/error`, Koin single conectado al `ApiErrorMapper` compartido): `SessionExpired` (`Unauthorized`: sesión vencida o cuenta borrada; solo si hay sesión iniciada y no se está cerrando: `SignOutFlow.inProgress` hace que `hasSession()` dé `false` desde el primer paso, así el 401 de `DELETE /v1/me/fcm-token` tras borrar la cuenta no navega), `AccountSuspended`, `TermsRequired`, `PlusRequired` y `QuotaExceeded(kind, resetsAt)`; sesión, suspensión y términos repetidos en 3 s se publican una vez (los 402 no se deduplican: cada uno es un toque). Lo consume `GlobalErrorHandler` (`navigation/`) en `ParcheUApp`, junto al `NavHost`: sesión vencida → arranca `BackgroundSignOut` (E8.2, en el scope de la app) y abre A4 sin historial en el acto, con un snackbar que explica por qué ('Continuar con Google' espera con Loading a que termine ese cierre, `SignOutFlow.awaitIdle()`, para que su último paso no cierre la sesión nueva); suspensión o ban → `Suspended` sin historial y **sin cerrar sesión** ('Descargar mis datos', 'Borrar mi cuenta', 'Cerrar sesión': las rutas que el backend exime de la suspensión), y nada con `Suspended`, Exportar, Borrar o H3 visibles; términos → A4 sin cerrar sesión (la hoja de aceptación); `PlusRequired` → G1 con el `source` de la pantalla visible; `QuotaExceeded` → la G2 de ese cupo. Con Splash o A4 visibles no hace nada (tratan la sesión ellos mismos) y con G1/G2 abierta no apila otra. Las pantallas no navegan por un 402: solo ajustan su estado; D9 y E1 muestran su propio bloqueo o aviso y su llamada usa `apiCall(routesPremium = false)`, y F1 además sale de la pila al agotar el match diario.
 - **DI:** Koin 4.1 (`koin-androidx-compose`). Un `XModule.kt` por feature; `AppModules.kt` los lista todos desde E0.7.
 
 ### 2.4 Navegación
@@ -109,6 +109,7 @@ Navigation Compose 2.9 con rutas `@Serializable` en `navigation/Routes.kt`; `App
 | `Onboarding` | A2-A4 | `page: Int = 0` |
 | `BasicProfile` | B0 'Tu perfil' (nueva, E2.6) | `edit: Boolean = false` |
 | `Underage` | bloqueo por edad (nueva, E2.6) | - |
+| `Suspended` | bloqueo por suspensión o ban (nueva): descargar mis datos, borrar la cuenta, cerrar sesión | - |
 | `TwinQuestions` | B1 | - |
 | `Modes` | B2 (+ diálogo B3) | `fromSettings: Boolean = false` |
 | `Consent` | B4 | - |
@@ -142,7 +143,7 @@ Navigation Compose 2.9 con rutas `@Serializable` en `navigation/Routes.kt`; `App
 | `ExportData` | descargar mis datos (nueva, E8.3) | - |
 | `BlockedUsers` | personas bloqueadas (nueva, E8.7) | - |
 
-G2 (límite) es un bottom sheet global controlado por el `ErrorRouter`. Deep links: `parcheu://` para notificaciones y App Links `https://<hosting>/i/{codigo}` → `AddFriends(code)`.
+G2 (límite) es una hoja (`LimitSheet`) en la ruta `Paywall(source = "limit:<KIND>:<resetsAt>")`; la abre `GlobalErrorHandler` (§2.3). Deep links: `parcheu://` para notificaciones y App Links `https://<hosting>/i/{codigo}` → `AddFriends(code)`.
 
 ### 2.5 Red, sesión y persistencia
 

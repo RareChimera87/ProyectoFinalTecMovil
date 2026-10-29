@@ -32,6 +32,10 @@ data class BasicProfile(val edit: Boolean = false) : AppRoute
 @Serializable
 data object Underage : AppRoute
 
+/** Bloqueo por suspensión o ban (403 SUSPENDED): exportar, borrar la cuenta o cerrar sesión. */
+@Serializable
+data object Suspended : AppRoute
+
 /** B1 · Preguntas del gemelo. */
 @Serializable
 data object TwinQuestions : AppRoute

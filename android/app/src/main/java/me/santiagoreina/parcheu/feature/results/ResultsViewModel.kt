@@ -23,8 +23,6 @@ import me.santiagoreina.parcheu.contract.TranscriptDto
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.data.results.ResultsRepository
-import me.santiagoreina.parcheu.feature.plus.PlusErrorRouter
-import me.santiagoreina.parcheu.navigation.AppRoute
 
 /** En qué va la decisión de conectar, vista desde quien mira. */
 enum class DecisionState {
@@ -97,9 +95,6 @@ sealed interface ResultsEffect {
     data class OpenChat(val chatId: String) : ResultsEffect
 
     data object OpenPaywall : ResultsEffect
-
-    /** Abre la hoja G2 del cupo agotado (E7.3), por ejemplo el informe del mes ya usado. */
-    data class OpenLimit(val route: AppRoute) : ResultsEffect
 }
 
 /**
@@ -175,12 +170,10 @@ class ResultsViewModel(
                 is ApiResult.Failure -> {
                     val error = result.error
                     if (error is AppError.QuotaExceeded && error.kind == QuotaKind.FULL_REPORT) {
-                        // El informe del mes ya se usó (otro dispositivo, p. ej.): se abre la G2 de E7.3.
+                        // El informe del mes ya se usó (otro dispositivo, p. ej.): el bus global abre la G2
+                        // de E7.3; aquí solo se apaga el botón.
                         update {
                             it.copy(report = it.report.copy(unlockAvailable = false), busy = null)
-                        }
-                        PlusErrorRouter.route(error, RESULTS_PAYWALL_SOURCE)?.let {
-                            _effects.send(ResultsEffect.OpenLimit(it))
                         }
                     } else {
                         update { it.copy(busy = null, notice = ResultsNotice.Failed(error)) }

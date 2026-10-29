@@ -2,15 +2,22 @@ package me.santiagoreina.parcheu.data.auth
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import me.santiagoreina.parcheu.contract.TwinAnswer
 import me.santiagoreina.parcheu.feature.twinquestions.DataStoreAnswerProgressStore
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -68,5 +75,66 @@ class SignOutFlowTest {
             firestore = FirestoreSessionReset { error("terminate falló") }
         )()
         assertEquals(listOf("second-cleaner", "firebase"), calls)
+    }
+
+    @Test
+    fun marksItselfInProgressFromTheFirstStepUntilTheEnd() = runBlocking {
+        lateinit var signOut: SignOutFlow
+        val seen = mutableListOf<Boolean>()
+        signOut = SignOutFlow(
+            PushUnregistration { seen += signOut.inProgress },
+            listOf(SessionCleaner { seen += signOut.inProgress }),
+            FirestoreSessionReset { seen += signOut.inProgress }
+        ) { seen += signOut.inProgress }
+        assertEquals(false, signOut.inProgress)
+        signOut()
+        assertEquals(listOf(true, true, true, true), seen)
+        assertEquals(false, signOut.inProgress)
+    }
+
+    @Test
+    fun aFailingPlatformSignOutStillClearsTheMark() = runBlocking {
+        val signOut = SignOutFlow(
+            PushUnregistration {},
+            emptyList(),
+            FirestoreSessionReset {}
+        ) { error("Firebase falló") }
+        runCatching { signOut() }
+        assertEquals(false, signOut.inProgress)
+    }
+
+    @Test
+    fun awaitIdleReturnsRightAwayWithoutASignOutInProgress() = runTest {
+        flow().awaitIdle()
+        assertEquals(emptyList<String>(), calls)
+    }
+
+    @Test
+    fun awaitIdleWaitsUntilThePlatformSignOutFinishes() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val signOut = SignOutFlow(
+            PushUnregistration { calls += "fcm" },
+            emptyList(),
+            FirestoreSessionReset { calls += "firestore" }
+        ) {
+            gate.await()
+            calls += "firebase"
+        }
+        launch { signOut() }
+        runCurrent()
+        val idle = async {
+            signOut.awaitIdle()
+            calls += "idle"
+        }
+        try {
+            runCurrent()
+            assertTrue(signOut.inProgress)
+            assertFalse(idle.isCompleted)
+        } finally {
+            // El cierre corre con NonCancellable: sin liberarlo, un fallo dejaría colgado runTest.
+            gate.complete(Unit)
+        }
+        idle.await()
+        assertEquals(listOf("fcm", "firestore", "firebase", "idle"), calls)
     }
 }

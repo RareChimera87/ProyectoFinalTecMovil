@@ -9,8 +9,6 @@ import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
-import me.santiagoreina.parcheu.feature.plus.PlusSources
-import me.santiagoreina.parcheu.navigation.Paywall
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -62,17 +60,12 @@ class IntroResultViewModelTest {
     }
 
     @Test
-    fun monthlyReportAlreadyUsedOpensG2() = runTest {
+    fun monthlyReportAlreadyUsedTurnsOffUnlockAndLeavesG2ToTheGlobalBus() = runTest {
         repo.unlockResult = ApiResult.Failure(AppError.QuotaExceeded(QuotaKind.FULL_REPORT, null))
         val vm = IntroResultViewModel("intro-1", repo)
         vm.effects.test {
             vm.onUnlock()
-            assertEquals(
-                IntroResultEffect.OpenLimit(
-                    Paywall(PlusSources.limit(QuotaKind.FULL_REPORT, null))
-                ),
-                awaitItem()
-            )
+            expectNoEvents()
         }
         assertNull(vm.content().notice)
         assertFalse(vm.content().introduction.report!!.unlockAvailable)

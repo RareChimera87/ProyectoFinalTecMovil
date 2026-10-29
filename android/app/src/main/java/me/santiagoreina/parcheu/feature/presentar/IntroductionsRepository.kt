@@ -84,8 +84,10 @@ class RemoteIntroductionsRepository(
 
     override suspend fun quota() = apiCall(mapper) { api.quota() }
 
+    // E1 muestra su propio aviso de cupo agotado con 'Ver ParcheU+': el 402 no pasa por el bus, que
+    // abriría además la G2 encima (B2 de la revisión de #109).
     override suspend fun introduce(mode: Mode, userA: String, userB: String) =
-        apiCall(mapper) { api.introduce(Introduce(mode, userA, userB)) }
+        apiCall(mapper, routesPremium = false) { api.introduce(Introduce(mode, userA, userB)) }
 
     override suspend fun introduction(id: String) = apiCall(mapper) { api.introduction(id) }
 
