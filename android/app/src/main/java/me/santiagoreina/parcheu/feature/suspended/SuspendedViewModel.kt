@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.data.auth.AuthRepository
@@ -30,6 +33,11 @@ class SuspendedViewModel(private val auth: AuthRepository) : ViewModel() {
     private val _effects = Channel<SuspendedEffect>(Channel.BUFFERED)
     val effects: Flow<SuspendedEffect> = _effects.receiveAsFlow()
 
+    private val _signingOut = MutableStateFlow(false)
+
+    /** `true` desde que se toca 'Cerrar sesión': el botón se desactiva y un segundo toque no hace nada. */
+    val signingOut: StateFlow<Boolean> = _signingOut.asStateFlow()
+
     fun onExportData() {
         viewModelScope.launch { _effects.send(SuspendedEffect.Open(ExportData)) }
     }
@@ -39,6 +47,8 @@ class SuspendedViewModel(private val auth: AuthRepository) : ViewModel() {
     }
 
     fun onSignOut() {
+        if (_signingOut.value) return
+        _signingOut.value = true
         viewModelScope.launch {
             auth.signOut()
             _effects.send(SuspendedEffect.ReplaceAll(Onboarding(page = LOGIN_PAGE)))

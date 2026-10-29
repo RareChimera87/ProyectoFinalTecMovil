@@ -2,7 +2,9 @@ package me.santiagoreina.parcheu.feature.suspended
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.Suspended
 import org.koin.compose.viewmodel.koinViewModel
@@ -23,10 +25,12 @@ fun SuspendedRoute(
             }
         }
     }
+    val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
     SuspendedScreen(
         onExportData = viewModel::onExportData,
         onDeleteAccount = viewModel::onDeleteAccount,
         onSignOut = viewModel::onSignOut,
+        signingOut = signingOut,
         modifier = modifier
     )
 }

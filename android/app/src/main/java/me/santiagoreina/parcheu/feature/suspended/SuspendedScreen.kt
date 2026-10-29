@@ -42,7 +42,8 @@ fun SuspendedScreen(
     onExportData: () -> Unit,
     onDeleteAccount: () -> Unit,
     onSignOut: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    signingOut: Boolean = false
 ) {
     val colors = ParcheUTheme.colors
     val spacing = ParcheUTheme.spacing
@@ -101,6 +102,7 @@ fun SuspendedScreen(
             ParcheUTextButton(
                 text = "Cerrar sesión",
                 onClick = onSignOut,
+                enabled = !signingOut,
                 modifier = Modifier.testTag(SuspendedTags.SIGN_OUT)
             )
         }
