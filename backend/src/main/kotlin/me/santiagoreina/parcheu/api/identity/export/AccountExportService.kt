@@ -6,14 +6,34 @@ import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.toKotlin
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.quota.grantsPlus
+import me.santiagoreina.parcheu.api.social.introductions.introducerVisibleStatus
+import me.santiagoreina.parcheu.api.social.introductions.isDeclinedByIntroducer
+import me.santiagoreina.parcheu.api.twin.TraitEngine
 import me.santiagoreina.parcheu.api.twin.TwinState
 import me.santiagoreina.parcheu.api.twin.xpNextFor
 import me.santiagoreina.parcheu.contract.BlockedDto
 import me.santiagoreina.parcheu.contract.ConsentState
 import me.santiagoreina.parcheu.contract.EntitlementDto
 import me.santiagoreina.parcheu.contract.ExportChat
+import me.santiagoreina.parcheu.contract.ExportCommunity
+import me.santiagoreina.parcheu.contract.ExportConnectionDecision
+import me.santiagoreina.parcheu.contract.ExportIntroRequest
+import me.santiagoreina.parcheu.contract.ExportReportUnlock
+import me.santiagoreina.parcheu.contract.ExportTwinVersion
 import me.santiagoreina.parcheu.contract.ExportConnection
 import me.santiagoreina.parcheu.contract.ExportDto
+import me.santiagoreina.parcheu.contract.ExportIntroRole
+import me.santiagoreina.parcheu.contract.ExportIntroduction
+import me.santiagoreina.parcheu.contract.ExportInviteRedemption
+import me.santiagoreina.parcheu.contract.ExportInviteRole
+import me.santiagoreina.parcheu.contract.ExportInvites
+import me.santiagoreina.parcheu.contract.ExportMatch
+import me.santiagoreina.parcheu.contract.ExportPurchase
+import me.santiagoreina.parcheu.contract.ExportQueueTicket
+import me.santiagoreina.parcheu.contract.ExportReport
+import me.santiagoreina.parcheu.contract.ExportTwinFeedback
+import me.santiagoreina.parcheu.contract.NotificationDto
+import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.ExportMessage
 import me.santiagoreina.parcheu.contract.MeDto
 import me.santiagoreina.parcheu.contract.PersonRef
@@ -22,6 +42,7 @@ import me.santiagoreina.parcheu.contract.Trait
 import me.santiagoreina.parcheu.contract.TraitKey
 import me.santiagoreina.parcheu.contract.TwinDto
 import java.time.Clock
+import kotlin.math.round
 import java.util.UUID
 
 /**
@@ -29,9 +50,12 @@ import java.util.UUID
  * consentimientos (historial completo), gemelo y respuestas, memorias, simulaciones, conexiones, chats
  * con **solo sus mensajes**, bloqueos y suscripción.
  *
+ * También: avisos de la bandeja, resumen de su persona, reportes que hizo, presentaciones (hechas y
+ * recibidas), matches y su turno en la fila, calificaciones del gemelo, invitaciones y eventos de compra.
+ *
  * De otras personas solo sale su `anonId` (HMAC del observador, arquitectura.md §6.1): nunca su uuid,
- * nombre, correo, foto ni mensajes. Por eso tampoco se exportan los avisos de la bandeja, que citan
- * nombres y textos de terceros. La consulta no escribe nada.
+ * nombre, correo, foto ni mensajes. Los avisos que pueden citar a terceros salen con el texto
+ * reemplazado ([NEUTRAL_TITLE]); de las compras nunca el token. La consulta no escribe nada.
  */
 class AccountExportService(
     private val identity: IdentityService,
@@ -86,6 +110,78 @@ class AccountExportService(
                     blockedAt = it.createdAt.toKotlin(),
                 )
             },
+            notifications = rows.notifications.map { notification(it, ::anon) },
+            twinPersonaSummary = rows.personaSummary,
+            reportsMade = rows.reportsMade.map {
+                ExportReport(
+                    id = it.id.toString(), kind = it.kind, reason = it.reason, details = it.details,
+                    reportedAnonId = it.targetId?.let(::anon), status = it.status,
+                    createdAt = it.createdAt.toKotlin(), resolvedAt = it.resolvedAt?.toKotlin(),
+                )
+            },
+            introductions = rows.introductions.map { intro ->
+                if (intro.introducerId == userId) {
+                    ExportIntroduction(
+                        id = intro.id.toString(), role = ExportIntroRole.MADE, mode = intro.mode,
+                        people = listOf(anon(intro.userA), anon(intro.userB)),
+                        // Igual que la app: el 'No, gracias' de una persona presentada no se revela a quien presenta.
+                        status = introducerVisibleStatus(intro.status, isDeclinedByIntroducer(intro.status, intro.aResponse, intro.bResponse)),
+                        createdAt = intro.createdAt.toKotlin(),
+                    )
+                } else {
+                    ExportIntroduction(
+                        id = intro.id.toString(), role = ExportIntroRole.RECEIVED, mode = intro.mode,
+                        people = listOf(anon(if (intro.userA == userId) intro.userB else intro.userA)),
+                        introducerAnonId = anon(intro.introducerId), myResponse = intro.myResponse,
+                        createdAt = intro.createdAt.toKotlin(),
+                    )
+                }
+            },
+            matches = rows.matches.map {
+                ExportMatch(
+                    id = it.id.toString(), mode = it.mode, status = it.status, otherAnonId = anon(it.otherUserId),
+                    myChoice = it.myChoice, createdAt = it.createdAt.toKotlin(), decideBy = it.decideBy.toKotlin(),
+                )
+            },
+            queueTicket = rows.queueTicket?.let { ExportQueueTicket(it.mode, it.status, it.enqueuedAt.toKotlin(), it.expiresAt.toKotlin()) },
+            twinFeedback = rows.twinFeedback.map {
+                ExportTwinFeedback(
+                    id = it.id.toString(), kind = it.kind, simulationId = it.simulationId?.toString(), turnIndex = it.turnIndex,
+                    questionId = it.questionId, predicted = it.predicted, actual = it.actual, rating = it.rating,
+                    createdAt = it.createdAt.toKotlin(),
+                )
+            },
+            invites = if (rows.inviteCode == null && rows.inviteRedemptions.isEmpty() && rows.redeemAttempts.isEmpty()) {
+                null
+            } else {
+                ExportInvites(
+                    code = rows.inviteCode,
+                    redemptions = rows.inviteRedemptions.map {
+                        val owner = it.ownerId == userId
+                        ExportInviteRedemption(
+                            role = if (owner) ExportInviteRole.OWNER else ExportInviteRole.REDEEMER,
+                            otherAnonId = anon(if (owner) it.redeemerId else it.ownerId),
+                            mode = it.mode, status = it.status, createdAt = it.createdAt.toKotlin(), acceptedAt = it.acceptedAt?.toKotlin(),
+                        )
+                    },
+                    redeemAttempts = rows.redeemAttempts.map { it.toKotlin() },
+                )
+            },
+            purchases = rows.purchases.map { ExportPurchase(it.receivedAt.toKotlin(), it.notificationType) },
+            connectionDecisions = rows.connectionDecisions.map { ExportConnectionDecision(it.simulationId.toString(), it.connect, it.decidedAt.toKotlin()) },
+            introRequests = rows.introRequests.map {
+                ExportIntroRequest(it.id.toString(), anon(it.viaUserId), anon(it.targetUserId), it.status.name, it.createdAt.toKotlin())
+            },
+            communities = rows.communities.map { ExportCommunity(it.name, it.week) },
+            twinVersions = rows.twinVersions.map { v ->
+                ExportTwinVersion(
+                    version = v.version,
+                    traits = v.traits?.let { values -> TraitKey.entries.mapIndexed { i, key -> Trait(key, round(values[i].toDouble() * TraitEngine.DECIMALS) / TraitEngine.DECIMALS) } }.orEmpty(),
+                    personaSummary = v.personaSummary,
+                    createdAt = v.createdAt.toKotlin(),
+                )
+            },
+            reportUnlocks = rows.reportUnlocks.map { ExportReportUnlock(it.simulationId.toString(), it.createdAt.toKotlin()) },
             entitlement = rows.entitlement?.let {
                 EntitlementDto(
                     plus = grantsPlus(it.state, it.expiresAt, now, it.autoRenewing),
@@ -95,6 +191,26 @@ class AccountExportService(
                     autoRenewing = it.autoRenewing,
                 )
             },
+        )
+    }
+
+    /**
+     * Los avisos generados para la propia persona (su simulación falló, nadie en la fila, memorias, moderación)
+     * conservan su texto; el resto cita nombres o mensajes de terceros y sale con texto neutro y sin ruta.
+     */
+    private fun notification(row: ExportNotificationRow, anon: (UUID) -> String): NotificationDto {
+        val own = row.kind in OWN_TEXT_KINDS
+        return NotificationDto(
+            id = row.id.toString(),
+            kind = row.kind,
+            title = if (own) row.title else NEUTRAL_TITLE,
+            body = if (own) row.body else NEUTRAL_BODY,
+            route = if (own) row.route else null,
+            // Un aviso bloqueado (`locked`) nunca lleva actor, como en la bandeja (regla 6).
+            actor = row.actorId?.takeIf { !row.locked }?.let { anonymousRef(anon(it), isDemo = row.actorIsDemo) },
+            locked = row.locked,
+            read = row.readAt != null,
+            createdAt = row.createdAt.toKotlin(),
         )
     }
 
@@ -117,4 +233,16 @@ class AccountExportService(
         personaReady = personaReady,
         accuracy = accuracy,
     )
+
+    private companion object {
+        const val NEUTRAL_TITLE = "Aviso de ParcheU"
+        const val NEUTRAL_BODY = "El texto se omite porque menciona a otra persona."
+        val OWN_TEXT_KINDS = setOf(
+            NotificationKinds.SIMULATION_FAILED,
+            NotificationKinds.MATCH_EXPIRED,
+            NotificationKinds.TWIN_MEMORIES,
+            NotificationKinds.TWIN_FEEDBACK,
+            NotificationKinds.ACCOUNT,
+        )
+    }
 }
