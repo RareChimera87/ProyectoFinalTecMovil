@@ -63,8 +63,8 @@ echo "check-iam.sh"
 expect ok   "plan de dev sin owner/editor" "$ROOT/scripts/check-iam.sh" "$FIX/plan-dev.json"
 expect ok   "plan de prod sin owner/editor" "$ROOT/scripts/check-iam.sh" "$FIX/plan-prod.json"
 expect ok   "prod con sa-play: sa-api suplanta a sa-play (ADR-0013)" "$ROOT/scripts/check-iam.sh" "$FIX/plan-prod-play.json"
-expect fail "prod con sa-play: sa-api suplanta a sa-terraform" "$ROOT/scripts/check-iam.sh" \
-  "$(jq '(.. | objects | select(.type? == "google_service_account_iam_member" and ((.values.service_account_id // "") | contains("sa-play")))).values.service_account_id |= sub("sa-play@"; "sa-terraform@")' "$FIX/plan-prod-play.json" >"$TMP/prod-mut.json"; echo "$TMP/prod-mut.json")"
+expect fail "prod con sa-play: sa-api suplanta a sa-terraform (destino conocido)" "$ROOT/scripts/check-iam.sh" \
+  "$(jq '(.. | objects | select(.type? == "google_service_account_iam_member" and .values.role? == "roles/iam.serviceAccountTokenCreator")).values.service_account_id = "projects/parcheu-prod/serviceAccounts/sa-terraform@parcheu-prod.iam.gserviceaccount.com"' "$FIX/plan-prod-play.json" >"$TMP/prod-mut.json"; echo "$TMP/prod-mut.json")"
 expect ok   "bootstrap con roles de Firebase para sa-deployer" "$ROOT/scripts/check-iam.sh" "$FIX/plan-bootstrap-dev.json"
 expect fail "sa-api con roles/editor" "$ROOT/scripts/check-iam.sh" \
   "$(add plan-dev.json '{"address":"x","type":"google_project_iam_member","name":"x","values":{"role":"roles/editor","member":"serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com"}}')"

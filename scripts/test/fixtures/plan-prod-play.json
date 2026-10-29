@@ -1906,8 +1906,7 @@
               "type": "google_service_account_iam_member",
               "values": {
                 "role": "roles/iam.serviceAccountTokenCreator",
-                "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com",
-                "service_account_id": "projects/parcheu-prod/serviceAccounts/sa-play@parcheu-prod.iam.gserviceaccount.com"
+                "member": "serviceAccount:sa-api@parcheu-prod.iam.gserviceaccount.com"
               }
             }
           ]

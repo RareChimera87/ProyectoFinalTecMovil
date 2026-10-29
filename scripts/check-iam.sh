@@ -23,8 +23,10 @@
 #     serviceAccountUser a nivel de PROYECTO para una cuenta fuera de EXPECTED_SA_NAMES,
 #     comparando el correo completo con PROJECT del plan;
 #   - esos mismos roles a nivel de CUENTA (google_service_account_iam_*) sobre una cuenta
-#     objetivo cuyo par "actúa>objetivo" no está en EXPECTED_SA_PAIRS (el destino se lee de
-#     service_account_id; si es desconocido hasta el apply, también es ERROR);
+#     objetivo cuyo par "actúa>objetivo" no está en EXPECTED_SA_PAIRS. El destino se toma de
+#     service_account_id o, si el plan lo deja null porque la cuenta se crea en el mismo plan,
+#     de la referencia de configuration (google_service_account.X[i]) resuelta al account_id
+#     del plan. Si no se resuelve, ERROR salvo que el actor tenga algún par esperado (AVISO);
 #   - roles/iam.serviceAccountAdmin para una cuenta fuera de SA_ADMIN_EXPECTED_NAMES;
 #   - roles/resourcemanager.projectIamAdmin sin condition, o con una condition que no contenga
 #     modifiedGrantsByRole o que nombre owner, editor o projectIamAdmin. La comprobación es
@@ -37,7 +39,7 @@
 #   - principal humano (user:, group: o domain:) con cualquier rol distinto de VIEWER_ROLES;
 #   - asignación con miembro o rol desconocido hasta el apply, si el rol no es de escalada
 #     (o es serviceAccountUser a nivel de cuenta sobre una cuenta esperada);
-#   - serviceAccountUser a nivel de cuenta con destino desconocido hasta el apply.
+#   - destino de cuenta no resoluble en el plan, si el actor tiene algún par esperado.
 set -euo pipefail
 
 PLAN="${1:?Uso: $0 plan.json}"
@@ -99,47 +101,68 @@ es_sa_de() { # es_sa_de <miembro> <nombres...>: verdadero si el miembro es exact
 # Estado de la condición: "sin" si no hay; "ok" si limita a modifiedGrantsByRole y no nombra
 # owner, editor ni projectIamAdmin; "mal" en cualquier otro caso.
 bindings() {
-  jq -r '
-    def unk(x): x == true or ((x | type) == "array" and (x | tostring | contains("true")));
-    def cn(c):
-      (if (c | type) == "object" then [c] else (c // []) end) as $a
-      | if ($a | length) == 0 then "sin"
-        else ([$a[] | (.expression // "")] | join(" ")) as $e
-          | if ($e | contains("modifiedGrantsByRole")) and (($e | test("roles/owner|roles/editor|projectIamAdmin")) | not)
-            then "ok" else "mal" end
-        end;
-    def destino_de(id):
-      if id == null then "(desconocido)" else (id | sub("^.*/serviceAccounts/"; "")) end;
-    def filas_plan:
-      [.planned_values.root_module | recurse(.child_modules[]?) | .resources[]?
-       | select(.type | test("_iam_(member|binding|policy)$")) | . as $r
-       | ($r.address // $r.type) as $dir
-       | (if ($r.type | startswith("google_service_account_iam_"))
-          then destino_de($r.values.service_account_id) else "-" end) as $dest
-       | if ($r.type | endswith("_iam_policy")) then
-           (($r.values.policy_data // "{}") | fromjson | (.bindings // []))[]
-           | . as $b | ($b.members // [])[]
-           | [($b.role // "(desconocido)"), ., $r.type, cn($b.condition), "plan", $dir, $dest] | @tsv
-         else
-           ((($r.values.members // []) + [($r.values.member // empty)])[]) as $m
-           | [($r.values.role // "(desconocido)"), $m, $r.type, cn($r.values.condition), "plan", $dir, $dest] | @tsv
-         end];
-    def filas_desconocidas:
-      [.resource_changes[]? | select(.type | test("_iam_(member|binding|policy)$")) | . as $rc
-       | select(($rc.change.actions // []) | any(. == "create" or . == "update"))
-       | ($rc.change.after_unknown // {}) as $u | ($rc.change.after // {}) as $a
-       | select(unk($u.member) or unk($u.members) or unk($u.role) or unk($u.policy_data))
-       | (if unk($u.role) then "(desconocido)" else ($a.role // "(desconocido)") end) as $rol
-       | (if ($rc.type | endswith("_iam_policy")) or unk($u.member) or unk($u.members) or unk($u.policy_data)
-          then ["(desconocido)"]
-          else ([($a.member // empty)] + ($a.members // [])) | if length == 0 then ["(desconocido)"] else . end
-          end)[] as $m
-       | (if ($rc.type | startswith("google_service_account_iam_"))
-          then (if unk($u.service_account_id) then "(desconocido)"
-                else destino_de($a.service_account_id) end)
-          else "-" end) as $dest
-       | [$rol, $m, $rc.type, "sin", "desconocido", ($rc.address // $rc.type), $dest] | @tsv];
-    [filas_plan, filas_desconocidas] | add | unique | .[]' "$PLAN"
+  jq -r --arg proj "$PROJECT" '
+    . as $plan
+    | def unk(x): x == true or ((x | type) == "array" and (x | tostring | contains("true")));
+      def cn(c):
+        (if (c | type) == "object" then [c] else (c // []) end) as $a
+        | if ($a | length) == 0 then "sin"
+          else ([$a[] | (.expression // "")] | join(" ")) as $e
+            | if ($e | contains("modifiedGrantsByRole")) and (($e | test("roles/owner|roles/editor|projectIamAdmin")) | not)
+              then "ok" else "mal" end
+          end;
+      def correo(id): id + "@" + $proj + ".iam.gserviceaccount.com";
+      def recursos: [$plan.planned_values.root_module | recurse(.child_modules[]?) | .resources[]?];
+      # Destino de una asignación a nivel de cuenta: la referencia de configuration
+      # (google_service_account.X[i]) se resuelve al account_id del recurso del plan.
+      # Sin configuración o sin referencia resoluble, "(desconocido)".
+      def destino_resuelto(addr):
+        (addr // "") as $a
+        | if $a == "" then "(desconocido)"
+          else
+            ($a | capture("^(?<p>(module\\.[^.]+\\.)*)(?<r>.*)$")) as $c
+            | ($c.r | sub("\\[[^]]*\\]$"; "")) as $sinidx
+            | ($sinidx | split(".")[0]) as $tipo
+            | ($sinidx | split(".")[1]) as $nombre
+            | ([$c.p | scan("module\\.([^.]+)\\.") | .[0]]) as $mods
+            | (reduce $mods[] as $m ($plan.configuration.root_module; .module_calls[$m].module)) as $cm
+            | ([($cm.resources // [])[] | select(.type == $tipo and .name == $nombre)][0].expressions.service_account_id.references // []) as $refs
+            | ([ $refs[] | select(test("^google_[a-z0-9_]+\\.[^.]+"))
+                 | capture("^(?<t>google_[a-z0-9_]+)\\.(?<n>[^.]+)") | ($c.p + .t + "." + .n) ]) as $dirs
+            | ([ $dirs[] as $d | recursos[] | select(.address == $d) | .values.account_id ][0]) as $id
+            | if $id == null then "(desconocido)" else correo($id) end
+          end;
+      def destino_de(addr; sid):
+        if sid != null then (sid | sub("^.*/serviceAccounts/"; "")) else destino_resuelto(addr) end;
+      def filas_plan:
+        [recursos[] | select(.type | test("_iam_(member|binding|policy)$")) | . as $r
+         | ($r.address // $r.type) as $dir
+         | (if ($r.type | startswith("google_service_account_iam_"))
+            then destino_de($r.address; $r.values.service_account_id) else "-" end) as $dest
+         | if ($r.type | endswith("_iam_policy")) then
+             (($r.values.policy_data // "{}") | fromjson | (.bindings // []))[]
+             | . as $b | ($b.members // [])[]
+             | [($b.role // "(desconocido)"), ., $r.type, cn($b.condition), "plan", $dir, $dest] | @tsv
+           else
+             ((($r.values.members // []) + [($r.values.member // empty)])[]) as $m
+             | [($r.values.role // "(desconocido)"), $m, $r.type, cn($r.values.condition), "plan", $dir, $dest] | @tsv
+           end];
+      def filas_desconocidas:
+        [.resource_changes[]? | select(.type | test("_iam_(member|binding|policy)$")) | . as $rc
+         | select(($rc.change.actions // []) | any(. == "create" or . == "update"))
+         | ($rc.change.after_unknown // {}) as $u | ($rc.change.after // {}) as $a
+         | select(unk($u.member) or unk($u.members) or unk($u.role) or unk($u.policy_data))
+         | (if unk($u.role) then "(desconocido)" else ($a.role // "(desconocido)") end) as $rol
+         | (if ($rc.type | endswith("_iam_policy")) or unk($u.member) or unk($u.members) or unk($u.policy_data)
+            then ["(desconocido)"]
+            else ([($a.member // empty)] + ($a.members // [])) | if length == 0 then ["(desconocido)"] else . end
+            end)[] as $m
+         | (if ($rc.type | startswith("google_service_account_iam_"))
+            then (if unk($u.service_account_id) then "(desconocido)"
+                  else destino_de($rc.address; $a.service_account_id) end)
+            else "-" end) as $dest
+         | [$rol, $m, $rc.type, "sin", "desconocido", ($rc.address // $rc.type), $dest] | @tsv];
+      [filas_plan, filas_desconocidas] | add | unique | .[]' "$PLAN"
 }
 
 en_par() { # en_par <miembro> <destino>: verdadero si el par está en EXPECTED_SA_PAIRS y ambos son del proyecto
@@ -148,6 +171,12 @@ en_par() { # en_par <miembro> <destino>: verdadero si el par está en EXPECTED_S
   [ "$1" = "serviceAccount:$m@$PROJECT.iam.gserviceaccount.com" ] || return 1
   [ "$2" = "$t@$PROJECT.iam.gserviceaccount.com" ] || return 1
   for p in "${EXPECTED_SA_PAIRS[@]}"; do [ "$p" = "$m>$t" ] && return 0; done
+  return 1
+}
+
+es_actor_de_par() { # es_actor_de_par <miembro>: verdadero si el actor aparece en algún par esperado
+  local a="${1#serviceAccount:}" p; a="${a%@*}"
+  for p in "${EXPECTED_SA_PAIRS[@]}"; do [ "${p%%>*}" = "$a" ] && return 0; done
   return 1
 }
 
@@ -188,8 +217,13 @@ while IFS=$'\t' read -r role member tipo estado origen addr destino; do
     roles/iam.serviceAccountTokenCreator|roles/iam.serviceAccountOpenIdTokenCreator|roles/iam.serviceAccountUser)
       if [ "$cuenta" = si ]; then
         # A nivel de cuenta: el par debe estar en EXPECTED_SA_PAIRS.
-        if [ "$destino" = "(desconocido)" ] && [ "$role" = roles/iam.serviceAccountUser ]; then
-          aviso "$member puede actuar como una cuenta de destino desconocido hasta el apply ($addr)"
+        if [ "$destino" = "(desconocido)" ]; then
+          # Destino no resoluble en el plan: si el actor tiene algún par esperado es AVISO; si no, ERROR.
+          if es_actor_de_par "$member"; then
+            aviso "destino no resoluble en el plan: $member tiene $role ($addr; ver EXPECTED_SA_PAIRS)"
+          else
+            error "$member tiene $role sobre un destino no resoluble en el plan ($addr): par no esperado"
+          fi
         else
           en_par "$member" "$destino" || error "$member tiene $role sobre $destino: par no esperado (ver EXPECTED_SA_PAIRS)"
         fi
