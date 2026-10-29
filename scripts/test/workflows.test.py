@@ -151,6 +151,13 @@ class AccionesFijadas(unittest.TestCase):
         d = yaml.safe_load((RAIZ / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
         act = [u for u in d["updates"] if u["package-ecosystem"] == "github-actions"]
         self.assertEqual([u["schedule"]["interval"] for u in act], ["weekly"])
+        self.assertEqual([u["target-branch"] for u in act], ["dev"])  # la rama por defecto es main
+
+    def test_pr_title_exime_solo_a_dependabot_por_env(self):
+        paso = pasos(cargar("pr-title.yml"))[-1]
+        self.assertIn("github.event.pull_request.user.login", paso["env"]["AUTOR"])
+        self.assertNotIn("${{", paso["run"])  # nada interpolado en el script
+        self.assertIn('"$AUTOR" == "dependabot[bot]"', paso["run"])
 
 
 class GuardasDeDirectorio(unittest.TestCase):
