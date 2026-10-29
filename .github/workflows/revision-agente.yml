@@ -3,8 +3,9 @@ name: revision-agente
 # PLAN.md §5. La revisión en busca de errores la hace un agente revisor del workflow de
 # implementación ANTES de mezclar (lee el diff, corre los tests, publica el veredicto como
 # comentario del PR). Cuando el veredicto es favorable, el integrador pone la etiqueta
-# `revisado-agente`. Este check solo verifica que esa etiqueta exista: no llama a ninguna API
-# ni necesita secretos. Sin la etiqueta, el PR no se considera revisado y el check falla.
+# `revisado-agente`. Este check verifica que esa etiqueta exista y, con el `github.token` de solo
+# lectura, que un PR que toque los gates lleve la etiqueta `gobernanza`; no usa más secretos.
+# Sin la etiqueta, el PR no se considera revisado y el check falla.
 # Corre con `pull_request_target` (como auto-merge.yml): el YAML es el de la rama base y un PR no
 # puede editarlo para aprobarse a sí mismo. No hace checkout: nunca ejecuta código del PR.
 on:
@@ -43,11 +44,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ETIQUETAS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           PR: ${{ github.event.pull_request.number }}
+          CAMBIADOS: ${{ github.event.pull_request.changed_files }}
         shell: bash
         run: |
-          sensibles='^(\.github/workflows/(revision-agente|major-gate|auto-merge)\.yml|\.github/CODEOWNERS|scripts/proteger-ramas\.sh)$'
+          # Cualquier workflow o acción compuesta puede publicar un check con el nombre del gate y el
+          # mismo app_id de Actions, así que se vigila todo .github/workflows y .github/actions.
+          sensibles='^(\.github/(workflows|actions)/|\.github/(CODEOWNERS|dependabot\.yml)$|scripts/(proteger-ramas\.sh|commit-lint\.sh|verbos-imperativo\.txt)$)'
           # Se guarda la lista antes de filtrar: si gh falla, el paso falla (fallar cerrado).
-          archivos="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename')"
+          # `F` = ruta actual, `P` = ruta anterior de un renombrado (equivale a borrar la vieja).
+          lista="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+            --jq '.[] | "F " + .filename, (select(.previous_filename != null) | "P " + .previous_filename)')"
+          listados="$(grep -c '^F ' <<<"$lista" || true)"
+          # La API devuelve como máximo 3000 archivos: si faltan, no se puede descartar nada (falla cerrado).
+          if (( listados < CAMBIADOS )); then
+            echo "::error::La API listó $listados de $CAMBIADOS archivos del PR: no se puede verificar que no toque los gates."
+            exit 1
+          fi
+          archivos="$(sed -E 's/^[FP] //' <<<"$lista")"
           tocados="$(grep -E "$sensibles" <<<"$archivos" || true)"
           if [[ -z "$tocados" ]]; then
             echo "El PR no toca los gates ni la protección de ramas."

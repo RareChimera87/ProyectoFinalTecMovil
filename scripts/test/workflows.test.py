@@ -72,7 +72,7 @@ class ReviewCounter(unittest.TestCase):
 class RevisionAgente(unittest.TestCase):
     """La revisión la hace el agente del workflow; el check solo exige la etiqueta revisado-agente."""
 
-    def test_no_llama_a_ninguna_api_ni_usa_secretos(self):
+    def test_no_usa_secretos_ni_scripts_de_revision(self):
         texto = (WF / "revision-agente.yml").read_text(encoding="utf-8")
         self.assertNotIn("ANTHROPIC_API_KEY", texto)
         self.assertNotIn("secrets.", texto)
@@ -108,20 +108,44 @@ class MajorGate(unittest.TestCase):
                 self.assertIn("proteger-ramas", paso["run"])
                 self.assertIn("exit 1", paso["run"])
 
+    def test_rutas_sensibles_cubren_cualquier_workflow_y_renombrados(self):
+        # Un job `name: revision-agente` en cualquier workflow publica el mismo check con el mismo app_id.
+        for nombre in ("revision-agente.yml", "major-gate.yml"):
+            with self.subTest(nombre):
+                run = pasos(cargar(nombre))[-1]["run"]
+                regex = re.search(r"sensibles='([^']+)'", run).group(1)
+                for ruta in (".github/workflows/gitleaks.yml", ".github/workflows/nuevo.yaml",
+                             ".github/actions/x/action.yml", ".github/CODEOWNERS", ".github/dependabot.yml",
+                             "scripts/proteger-ramas.sh", "scripts/commit-lint.sh", "scripts/verbos-imperativo.txt"):
+                    self.assertTrue(re.search(regex, ruta), ruta)
+                for ruta in ("backend/build.gradle.kts", "scripts/check-adr.sh", ".github/pull_request_template.md"):
+                    self.assertFalse(re.search(regex, ruta), ruta)
+                # Renombrado: la ruta vieja (previous_filename) también cuenta; y se compara con changed_files.
+                self.assertIn("previous_filename", run)
+                self.assertIn("changed_files", str(pasos(cargar(nombre))[-1]["env"]))
+                self.assertIn("CAMBIADOS", run)
+
 
 class AccionesFijadas(unittest.TestCase):
     """C-M3: toda acción externa va fijada a un SHA de 40 hex con comentario `# vX.Y.Z`."""
 
     def test_ningun_uses_externo_sin_sha(self):
+        archivos = sorted(WF.glob("*.y*ml")) + sorted((RAIZ / ".github" / "actions").glob("**/action.y*ml"))
+        self.assertTrue(archivos)
         sin_fijar = []
-        for f in sorted(WF.glob("*.yml")):
+        for f in archivos:
             for n, linea in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
-                m = re.match(r"\s*(?:-\s+)?uses:\s*(\S+)(.*)$", linea)
-                if not m or m.group(1).startswith("./"):
+                # Cubre `uses: x`, `- uses: x` y el mapa en línea `- {uses: x, with: ...}`.
+                m = re.search(r"\buses:\s*[\"']?([^\s,}\"']+)[\"']?(.*)$", linea)
+                if not m or m.group(1).startswith("./") or linea.lstrip().startswith("#"):
                     continue
-                if not (re.search(r"@[0-9a-f]{40}$", m.group(1)) and re.match(r"\s*#\s*v\d+\.\d+", m.group(2))):
+                if not (re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", m.group(1)) and re.search(r"#\s*v\d+\.\d+", m.group(2))):
                     sin_fijar.append(f"{f.name}:{n}: {m.group(1)}")
         self.assertEqual(sin_fijar, [])
+
+    def test_el_detector_distingue_formas(self):
+        patron = r"\buses:\s*[\"']?([^\s,}\"']+)[\"']?(.*)$"
+        self.assertEqual(re.search(patron, "  - {uses: actions/checkout@v4, with: {a: b}}").group(1), "actions/checkout@v4")
 
     def test_dependabot_actualiza_las_acciones_cada_semana(self):
         d = yaml.safe_load((RAIZ / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
