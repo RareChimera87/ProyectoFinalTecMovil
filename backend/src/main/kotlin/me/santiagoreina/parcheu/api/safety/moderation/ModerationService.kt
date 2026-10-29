@@ -45,9 +45,11 @@ import java.util.UUID
  * si el aviso falla se encola `moderate-help` (sin LLM) en vez de relanzar el error: el reintento no depende del modelo.
  *
  * Tope por persona (B-M1, enmienda de ADR-0026): [withinDailyCap] cuenta los mensajes moderados del autor en el día
- * (`MODERATION_DAILY_PER_USER`); pasado el tope solo se modera 1 de cada [sampleEvery] mensajes (muestreo determinista
- * por id), así un bucle de mensajes no dispara una llamada al LLM por cada uno y el abuso sigue teniendo una
- * probabilidad de revisión. Si el contador falla se modera igual (la moderación nunca se apaga por un error propio).
+ * (`MODERATION_DAILY_PER_USER`) y [withinSpend] mira su sub-techo de gasto de moderación (`AI_USER_DAILY_MODERATION_USD`);
+ * pasado cualquiera de los dos solo se modera 1 de cada [sampleEvery] mensajes (muestreo determinista por id), así un
+ * bucle de mensajes no dispara una llamada al LLM por cada uno y el abuso sigue teniendo una probabilidad de revisión.
+ * La moderación no cuenta para el techo personal general de IA (`AiPurpose.MODERATION`), así que gastarlo en
+ * simulaciones no la apaga. Si una comprobación falla se modera igual (la moderación nunca se apaga por un error propio).
  */
 class ModerationService(
     private val moderator: MessageModerator,
@@ -61,6 +63,8 @@ class ModerationService(
     private val withinDailyCap: (UUID) -> Boolean = { true },
     /** Pasado el tope, se modera 1 de cada [sampleEvery] mensajes (`MODERATION_SAMPLE_EVERY`, ≥ 1). */
     private val sampleEvery: Int = DEFAULT_SAMPLE_EVERY,
+    /** ¿Le queda al autor sub-techo de gasto de moderación hoy? (`AiGateway.moderationBudgetLeft`). */
+    private val withinSpend: suspend (UUID) -> Boolean = { true },
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -93,9 +97,12 @@ class ModerationService(
         }
     }
 
-    /** ¿El autor sigue dentro de su tope diario? Un fallo del contador cuenta como sí (se modera). */
-    private fun underCap(author: UUID): Boolean = try {
-        withinDailyCap(author)
+    /**
+     * ¿El autor sigue dentro de sus topes del día? Primero el gasto (sin cobrar nada), luego el contador, que solo
+     * se incrementa si se va a moderar fuera del muestreo. Un fallo de cualquiera cuenta como sí (se modera).
+     */
+    private suspend fun underCap(author: UUID): Boolean = try {
+        withinSpend(author) && withinDailyCap(author)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

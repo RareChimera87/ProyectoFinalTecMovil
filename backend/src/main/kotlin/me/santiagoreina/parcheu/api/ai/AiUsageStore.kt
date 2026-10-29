@@ -58,6 +58,9 @@ interface AiUsageStore {
 
     /** Cambia [hold] por el costo real: registra [entry] (si hubo llamada facturable) y descuenta la reserva. */
     suspend fun settle(hold: BudgetHold, entry: AiUsageEntry?)
+
+    /** Gasto registrado de [userId] en [day] con [purpose] (sub-techo de moderación). */
+    suspend fun userSpentMicros(day: LocalDate, userId: UUID, purpose: AiPurpose): Long
 }
 
 /**
@@ -76,7 +79,7 @@ class ExposedAiUsageStore(database: () -> Database) : AiUsageStore {
         withContext(Dispatchers.IO) {
             suspendTransaction(db = db) {
                 insertRows(entry)
-                adjust(sql(), entry.day, entry.userId, entry.costMicros)
+                adjust(sql(), entry.day, entry.userId?.takeIf { entry.purpose.chargesUserBudget }, entry.costMicros)
             }
         }
     }
@@ -96,7 +99,8 @@ class ExposedAiUsageStore(database: () -> Database) : AiUsageStore {
                 val user = userId?.let {
                     sql.run(
                         "insert into ai_budget_user (day, user_id, micros) select ?, u.id, " +
-                            "coalesce((select sum(a.cost_micros) from ai_usage a where a.user_id = u.id and a.day = ?), 0) " +
+                            "coalesce((select sum(a.cost_micros) from ai_usage a where a.user_id = u.id and a.day = ? " +
+                            "and a.purpose not in ($EXEMPT_PURPOSES)), 0) " +
                             "from users u where u.id = ? on conflict (day, user_id) do nothing",
                         day, day, it,
                     )
@@ -115,6 +119,15 @@ class ExposedAiUsageStore(database: () -> Database) : AiUsageStore {
                 entry?.let { insertRows(it) }
                 adjust(sql(), hold.day, hold.userId, (entry?.costMicros ?: 0L) - hold.micros)
             }
+        }
+    }
+
+    override suspend fun userSpentMicros(day: LocalDate, userId: UUID, purpose: AiPurpose): Long = withContext(Dispatchers.IO) {
+        suspendTransaction(db = db) {
+            sql().long(
+                "select coalesce(sum(cost_micros), 0) from ai_usage where user_id = ? and day = ? and purpose = ?",
+                userId, day, purpose.id,
+            ) ?: 0L
         }
     }
 
@@ -161,6 +174,11 @@ class ExposedAiUsageStore(database: () -> Database) : AiUsageStore {
     }
 
     private fun JdbcTransaction.sql(): Connection = connection.connection as Connection
+
+    private companion object {
+        /** Propósitos que no cuentan para el techo personal (semilla de `ai_budget_user`). Ids fijos del enum, sin entrada externa. */
+        val EXEMPT_PURPOSES = AiPurpose.entries.filterNot { it.chargesUserBudget }.joinToString { "'${it.id}'" }.ifEmpty { "''" }
+    }
 
     private fun Connection.run(statement: String, vararg args: Any) {
         prepareStatement(statement).use { st ->
@@ -209,10 +227,14 @@ class InMemoryAiUsageStore : AiUsageStore {
         }
     }
 
+    override suspend fun userSpentMicros(day: LocalDate, userId: UUID, purpose: AiPurpose): Long = synchronized(lock) {
+        rows.filter { it.day == day && it.userId == userId && it.purpose == purpose }.sumOf { it.costMicros }
+    }
+
     /** Micro-USD reservados ahora mismo por llamadas en curso (tests de la reserva). */
     fun heldMicros(day: LocalDate): Long = synchronized(lock) { heldGlobal[day] ?: 0L }
 
-    /** Gasto registrado de [userId] en [day], sin reservas. */
+    /** Gasto registrado de [userId] en [day] que cuenta para su techo, sin reservas. */
     fun userSpentMicros(day: LocalDate, userId: UUID): Long = synchronized(lock) { userSpent(day, userId) }
 
     /** Simula gasto previo del día (tests del guard). */
@@ -231,5 +253,6 @@ class InMemoryAiUsageStore : AiUsageStore {
     private fun spent(day: LocalDate): Long = rows.filter { it.day == day }.sumOf { it.costMicros } + (extraSpent[day] ?: 0L)
 
     private fun userSpent(day: LocalDate, userId: UUID): Long =
-        rows.filter { it.day == day && it.userId == userId }.sumOf { it.costMicros } + (extraUserSpent[day to userId] ?: 0L)
+        rows.filter { it.day == day && it.userId == userId && it.purpose.chargesUserBudget }.sumOf { it.costMicros } +
+            (extraUserSpent[day to userId] ?: 0L)
 }

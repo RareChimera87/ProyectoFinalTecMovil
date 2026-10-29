@@ -26,7 +26,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.ai.AI_DAY
 import me.santiagoreina.parcheu.api.ai.FakeLlmClient
+import me.santiagoreina.parcheu.api.ai.InMemoryAiUsageStore
 import me.santiagoreina.parcheu.api.ai.LlmInvalidOutput
 import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.chat.ChatMirror
@@ -124,6 +126,7 @@ class ModerationServiceTest : FunSpec({
     class Fixture(
         withinDailyCap: (UUID) -> Boolean = { true },
         sampleEvery: Int = ModerationService.DEFAULT_SAMPLE_EVERY,
+        withinSpend: suspend (UUID) -> Boolean = { true },
     ) {
         val identityRepo = InMemoryIdentityRepository().apply { listOf("ana", "beto").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val ana = identityRepo.user("ana")
@@ -143,13 +146,14 @@ class ModerationServiceTest : FunSpec({
         )
         val safety = inMemorySafetyModule(FIXED_CLOCK, chat, graph, repo = safetyRepo)
         val llm = FakeLlmClient()
+        val aiUsage = InMemoryAiUsageStore()
         val queue = FakeTaskQueue()
         val flakySafety = FlakySafety(safetyRepo)
         val notifier = FakeNotifier()
         val flakyNotifier = FlakyNotifier(notifier)
         val moderation = ModerationService(
-            MessageModerator(testGateway(llm)), chatRepo, chat.service, flakySafety, queue, FIXED_CLOCK, flakyNotifier,
-            withinDailyCap, sampleEvery,
+            MessageModerator(testGateway(llm, aiUsage)), chatRepo, chat.service, flakySafety, queue, FIXED_CLOCK, flakyNotifier,
+            withinDailyCap, sampleEvery, withinSpend,
         ).also { it.attachTo(chat) }
         val room = runBlocking { chat.service.createDirect(ana.id, beto.id, Mode.AMISTAD) }
 
@@ -193,6 +197,33 @@ class ModerationServiceTest : FunSpec({
         // El tope es del autor: Ana sigue con el suyo.
         runBlocking { f.moderation.enqueue(record(skipped).copy(id = UUID.randomUUID(), senderId = f.ana.id)) }
         f.queue.tasks shouldHaveSize 5
+    }
+
+    test("B-M1: se modera aunque el autor ya gastó su techo personal de IA (también la ayuda ante autolesión)") {
+        val f = Fixture()
+        // Techo personal por defecto: 0,75 USD, gastado en simulaciones.
+        f.aiUsage.seedUserSpent(AI_DAY, f.beto.id, 750_000)
+        f.llm.jsonResponder = { _, _ -> finding("SELF_HARM", "HIGH") }
+        val id = f.send("ya no quiero seguir")
+        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.ACTED
+        f.llm.calls shouldBe 1
+        f.notifier.sent shouldHaveSize 1
+    }
+
+    test("B-M1: pasado el sub-techo de gasto de moderación se muestrea en vez de apagarse, sin gastar el contador") {
+        var counted = 0
+        val f = Fixture(withinDailyCap = { counted++; true }, sampleEvery = 4, withinSpend = { false })
+        fun ids() = generateSequence { UUID.randomUUID() }
+        val sampled = ids().first { Math.floorMod(it.hashCode(), 4) == 0 }
+        val skipped = ids().first { Math.floorMod(it.hashCode(), 4) != 0 }
+        fun record(id: UUID) = MessageRecord(id, f.room.id, f.beto.id, "mensaje", false, false, null, FIXED_CLOCK.instant())
+        runBlocking {
+            f.moderation.enqueue(record(skipped))
+            f.moderation.enqueue(record(sampled))
+        }
+        f.queue.tasks shouldHaveSize 1
+        f.queue.tasks.single().body shouldContain sampled.toString()
+        counted shouldBe 0
     }
 
     test("B-M1: si el contador del tope falla, el mensaje se modera igual (fail-open de la moderación)") {

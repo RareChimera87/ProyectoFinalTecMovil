@@ -121,6 +121,35 @@ class AiBudgetReservationTest : FunSpec({
         usage.heldMicros(AI_DAY) shouldBe 0L
     }
 
+    test("la moderación no cuenta para el techo personal: se modera aunque el autor esté en su techo, y solo suma al total") {
+        val usage = InMemoryAiUsageStore()
+        val client = SlowLlmClient(delayMs = 0)
+        val gateway = AiGateway(client, testAiConfig(mapOf("AI_USER_DAILY_BUDGET_USD" to "0.01")), usage, AI_CLOCK)
+        usage.seedUserSpent(AI_DAY, ana, 10_000)
+        shouldThrow<UserAiBudgetExceeded> { gateway.text(turn(ana)) }
+
+        gateway.json(AiCall(AiPurpose.MODERATION, prompt, userId = ana, maxOutputTokens = 512), JUDGE_SCHEMA)
+        client.calls shouldBe 1
+        val entry = usage.entries.single()
+        entry.userId shouldBe ana
+        // Queda en ai_usage con la persona, pero su gasto para el techo general no cambia.
+        usage.userSpentMicros(AI_DAY, ana) shouldBe 10_000L
+        usage.userSpentMicros(AI_DAY, ana, AiPurpose.MODERATION) shouldBe entry.costMicros
+        usage.spentMicros(AI_DAY) shouldBe 10_000L + entry.costMicros
+        usage.heldMicros(AI_DAY) shouldBe 0L
+    }
+
+    test("sub-techo de moderación por autor: AI_USER_DAILY_MODERATION_USD, 0,25 por defecto") {
+        val usage = InMemoryAiUsageStore()
+        val gateway = AiGateway(SlowLlmClient(delayMs = 0), testAiConfig(mapOf("AI_USER_DAILY_MODERATION_USD" to "0.000001")), usage, AI_CLOCK)
+        gateway.moderationBudgetLeft(ana) shouldBe true
+        gateway.json(AiCall(AiPurpose.MODERATION, prompt, userId = ana), JUDGE_SCHEMA)
+        gateway.moderationBudgetLeft(ana) shouldBe false
+        gateway.moderationBudgetLeft(bruno) shouldBe true
+        testAiConfig().userDailyModerationUsd.toPlainString() shouldBe "0.25"
+        shouldThrow<IllegalArgumentException> { testAiConfig(mapOf("AI_USER_DAILY_MODERATION_USD" to "0")) }
+    }
+
     test("la llamada que no cabe en lo que le queda a la persona se rechaza antes de llamar") {
         val usage = InMemoryAiUsageStore()
         val client = SlowLlmClient(delayMs = 0)

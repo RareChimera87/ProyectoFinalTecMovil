@@ -14,9 +14,10 @@ enum class ModelTier { CHAT, JUDGE, LITE }
 
 /**
  * Propósito de una llamada: decide el nivel de modelo y queda en `ai_usage.purpose`. Las
- * features que necesiten uno nuevo lo agregan aquí.
+ * features que necesiten uno nuevo lo agregan aquí. [chargesUserBudget] = false: la llamada queda en
+ * `ai_usage.user_id` de la persona pero no cuenta para su techo diario general (B-M1), solo para el total.
  */
-enum class AiPurpose(val id: String, val tier: ModelTier) {
+enum class AiPurpose(val id: String, val tier: ModelTier, val chargesUserBudget: Boolean = true) {
     /** Turno de un `TwinAgent` en la simulación (E4.3). */
     SIMULATION_TURN("simulation_turn", ModelTier.CHAT),
     /** Juez de un escenario de simulación (E4.3). */
@@ -27,8 +28,12 @@ enum class AiPurpose(val id: String, val tier: ModelTier) {
     PERSONA("persona", ModelTier.LITE),
     /** Extracción de memorias candidatas (E9.2). */
     MEMORY_EXTRACTION("memory_extraction", ModelTier.LITE),
-    /** Moderación de contenido (E8.6). */
-    MODERATION("moderation", ModelTier.LITE),
+    /**
+     * Moderación de contenido (E8.6). Fuera del techo personal: si contara, quien gasta su techo con simulaciones
+     * escribiría sin moderación (ni ayuda ante autolesión) hasta medianoche. Su costo lo limitan el tope de mensajes
+     * moderados y el sub-techo `AI_USER_DAILY_MODERATION_USD`, que pasan al muestreo (ADR-0026).
+     */
+    MODERATION("moderation", ModelTier.LITE, chargesUserBudget = false),
     /** Nombres de comunidades (E6.4). */
     COMMUNITY_LABEL("community_label", ModelTier.LITE),
     /** Prueba de humo manual contra Vertex. */
@@ -93,7 +98,8 @@ class AiGateway(
         metered(call, { it.usage }) { model -> client.generateJson(call.toRequest(model), schema) }
 
     private suspend fun <T> metered(call: AiCall, usageOf: (T) -> LlmUsage, block: suspend (model: String) -> T): T {
-        val reservation = guard.reserve(modelFor(call.purpose.tier), config.models.lite, call.userId) { model, day ->
+        val budgetHolder = call.userId?.takeIf { call.purpose.chargesUserBudget }
+        val reservation = guard.reserve(modelFor(call.purpose.tier), config.models.lite, budgetHolder) { model, day ->
             config.prices.costMicros(model, day, call.ceilingUsage())
         }
         val result = try {
@@ -107,6 +113,13 @@ class AiGateway(
         settle(call, reservation, usageOf(result), estimated = false)
         return result
     }
+
+    /**
+     * ¿Le queda a [userId] sub-techo diario de moderación (`AI_USER_DAILY_MODERATION_USD`)? Consulta sin reservar:
+     * al pasarlo la moderación de esa persona pasa al muestreo en vez de apagarse (ADR-0026).
+     */
+    suspend fun moderationBudgetLeft(userId: UUID): Boolean =
+        usage.userSpentMicros(guard.today(), userId, AiPurpose.MODERATION) < config.userDailyModerationUsd.movePointRight(6).toLong()
 
     private suspend fun settle(call: AiCall, reservation: DailyBudgetGuard.Reservation, tokens: LlmUsage, estimated: Boolean) {
         val decision = reservation.decision
