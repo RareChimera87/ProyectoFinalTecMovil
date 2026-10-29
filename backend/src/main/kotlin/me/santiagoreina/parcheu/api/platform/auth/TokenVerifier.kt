@@ -22,6 +22,13 @@ data class ServiceCaller(val email: String)
 /** Verifica ID tokens de Firebase. Devuelve null si el token no es válido. */
 interface TokenVerifier {
     suspend fun verify(token: String): FirebaseUser?
+
+    /**
+     * Igual que [verify], pero con [checkRevoked] además comprueba que el token no haya sido revocado
+     * (`revokeRefreshTokens`, p. ej. al quitar el claim `admin`). Por defecto ignora la revocación:
+     * los verificadores Fake no tienen a quién consultarla; [FirebaseTokenVerifier] la implementa.
+     */
+    suspend fun verify(token: String, checkRevoked: Boolean): FirebaseUser? = verify(token)
 }
 
 /** Verifica tokens OIDC de Google para las rutas `/internal`. Devuelve null si no es válido. */

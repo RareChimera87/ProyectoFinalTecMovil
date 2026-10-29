@@ -106,6 +106,72 @@ expect ok   "sa-terraform (apply) solo desde la rama dev" grep -q 'local.dev_bra
 expect fail "sa-terraform no acepta el principal de todo el repo" grep -q 'local.repo_principal' <(block terraform_wif)
 expect ok   "el principal dev apunta a refs/heads/dev" grep -q 'dev_branch_principal = .*attribute.ref/refs/heads/dev' "$TF"
 expect ok   "sa-terraform-plan en prod solo desde la rama dev" grep -q 'plan_principal = local.is_prod ? local.dev_branch_principal : local.repo_principal' "$TF"
+# C-A3 / C-M7: sa-deployer de dev solo desde la rama dev; el de prod exige environment y tag.
+expect ok   "sa-deployer de dev solo desde la rama dev" grep -qE 'deployer_principal = local.is_prod \? .* : local.dev_branch_principal$' "$TF"
+expect fail "sa-deployer no acepta el principal de todo el repo" grep -qE 'deployer_principal = .*local.repo_principal' "$TF"
+expect ok   "sa-deployer de prod exige production y tag v*" grep -q 'attribute.env_ref/production@tag' "$TF"
+expect ok   "env_ref distingue los tags v*" grep -q "assertion.ref.startsWith('refs/tags/v') ? 'tag'" "$TF"
+# C-B10: la condición del pool usa IDs, no el nombre del repo.
+expect ok   "el pool exige repository_id y repository_owner_id" grep -q "attribute_condition = \"assertion.repository_id == .* && assertion.repository_owner_id == " "$TF"
+expect fail "el pool no confía en el nombre del repo" grep -q "attribute_condition = \"assertion.repository ==" "$TF"
+# C-M1: sa-terraform no administra cuentas de servicio ni el IAM del proyecto. Cada extracto
+# debe existir antes de buscar en él: si el awk no lo encuentra, las negativas pasarían solas.
+roles_tf="$(awk '/terraform_roles_dev = \[/{f=1} f{print} f&&/\]/{exit}' "$TF")"
+apply_role="$(awk '/"google_project_iam_custom_role" "terraform_apply"/{f=1} f{print} f&&/^}/{exit}' "$TF")"
+acts_as="$(block terraform_acts_as_api; block terraform_acts_as_tasks)"
+expect ok   "extracto de terraform_roles_dev no vacío" grep -q 'roles/run.admin' <<<"$roles_tf"
+expect ok   "extracto de parcheuTerraformApply no vacío" grep -q 'secretmanager.secrets.create' <<<"$apply_role"
+expect ok   "extracto de terraform_acts_as no vacío" test -n "$acts_as"
+for r in iam.serviceAccountAdmin iam.serviceAccountUser secretmanager.admin datastore.owner firebase.admin logging.configWriter; do
+  expect fail "sa-terraform sin roles/$r de proyecto" grep -q "roles/$r" <<<"$roles_tf"
+done
+expect fail "sa-terraform sin projectIamAdmin" grep -q 'roles/resourcemanager.projectIamAdmin' "$TF"
+expect fail "parcheuTerraformApply no lee secretos, documentos ni exporta logs" grep -qE '"(secretmanager\.versions|datastore\.entities|logging\.(sinks|buckets|links|logEntries))\.' <<<"$apply_role"
+expect ok   "parcheuTerraformApply administra las métricas de logs" grep -q '"logging.logMetrics.create"' <<<"$apply_role"
+expect ok   "sa-terraform tiene actAs sobre sa-api" grep -q 'service_account_id = google_service_account.api.name' <<<"$acts_as"
+expect ok   "sa-terraform tiene actAs sobre sa-tasks" grep -q 'service_account_id = google_service_account.tasks.name' <<<"$acts_as"
+# Ningún otro enlace serviceAccountUser/TokenCreator apunta a sa-terraform.
+otros="$(awk '/^resource /{b=$0; r=""} /role +=/{r=$0} /member +=.*google_service_account.terraform\[0\]/{print b " " r}' "$TF" | grep -E 'serviceAccount(User|TokenCreator|Admin)' | grep -vE '"terraform_acts_as_(api|tasks)"')"
+expect ok   "sin otros actAs/TokenCreator para sa-terraform" test -z "$otros"
+
+# C-M7: el claim environment es opcional (jobs sin environment): has() lo cubre.
+expect ok   "env_ref usa has(assertion.environment)" grep -q "has(assertion.environment) ? assertion.environment : '-'" "$TF"
+
+# C-M7: sa-play (prod) por WIF, con environment y ref: el conjunto exacto de env_ref.
+PLAY="$ROOT/infra/terraform/modules/platform/play.tf"
+refs="$(awk '/play_wif_env_refs = /{f=1} f{print} f&&/\]\)/{exit}' "$PLAY" | grep -oE '"[a-z-]+@[^"]+"' | sort | tr '\n' ' ')"
+expect ok   "sa-play acepta exactamente play@{dev,main,tag} y play-alpha@{main,tag}" \
+  test "$refs" = '"play-alpha@refs/heads/main" "play-alpha@tag" "play@refs/heads/dev" "play@refs/heads/main" "play@tag" '
+expect fail "ningún principal usa solo attribute.environment" grep -rq 'attribute.environment/' "$ROOT/infra/terraform/modules" "$ROOT/infra/terraform/bootstrap"
+
+# fix/wif-deployer-dev: los 5 removed {} en cada env (no destruir sa-api/sa-tasks al migrar).
+for e in dev prod; do
+  for addr in google_service_account.api google_service_account.tasks google_project_iam_member.api \
+              google_service_account_iam_member.api_acts_as_tasks google_service_account_iam_member.deployer_acts_as_api; do
+    expect ok "envs/$e: removed de module.platform.$addr con destroy = false" \
+      grep -qzP "removed \\{\\n  from = module\\.platform\\.${addr//./\\.}\\n  lifecycle \\{\\n    destroy = false" "$ROOT/infra/terraform/envs/$e/main.tf"
+  done
+done
+
+# C-B5: las alertas siempre tienen destinatario. Se prueba el comportamiento de la validación
+# con `terraform plan` (sin recursos; no lee stdin, que colgaba con el wrapper de CI) sobre un directorio que solo tiene la variable (sin providers ni GCP).
+PROD="$ROOT/infra/terraform/envs/prod/main.tf"
+alert_prod="$(awk '/variable "alert_emails"/{f=1} f{print} f&&/^}/{exit}' "$PROD")"
+expect ok   "extracto de alert_emails de prod no vacío" grep -q 'validation' <<<"$alert_prod"
+expect fail "alert_emails de prod sin valor por defecto" grep -q 'default' <<<"$alert_prod"
+if command -v terraform >/dev/null; then
+  for e in dev prod; do
+    d="$TMP/alertas-$e"; mkdir -p "$d"
+    awk '/^variable "alert_emails"/{f=1} f{print} f&&/^}/{exit}' "$ROOT/infra/terraform/envs/$e/main.tf" >"$d/v.tf"
+    # Sin pipe hacia grep -q: con pipefail, el SIGPIPE de terraform falsearía el resultado.
+    valida() { local out; out="$(cd "$d" && timeout 120 terraform plan -input=false -lock=false -var "alert_emails=$1" </dev/null 2>&1)"; ! grep -q 'Invalid value for variable' <<<"$out"; }
+    expect ok   "$e: alert_emails acepta un correo válido" valida '["equipo@parcheu.co"]'
+    expect fail "$e: alert_emails rechaza un correo inválido" valida '["equipo@parcheu"]'
+    expect fail "$e: alert_emails rechaza la lista vacía" valida '[]'
+  done
+else
+  echo "  (terraform no instalado: se omiten las pruebas de comportamiento de alert_emails)"
+fi
 
 echo "$pass pasaron, $failed fallaron"
 [ "$failed" -eq 0 ]

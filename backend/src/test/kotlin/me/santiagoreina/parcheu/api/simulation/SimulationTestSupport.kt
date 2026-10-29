@@ -24,6 +24,7 @@ import me.santiagoreina.parcheu.api.quota.UsageRepository
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
+import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.Visibility
 import java.time.Instant
 import java.util.UUID
@@ -130,3 +131,20 @@ class SimFixture(
 
     fun judgeRequests() = requests.filter { it.maxOutputTokens != TwinAgent.TURN_OUTPUT_CEILING }
 }
+
+/**
+ * Crea una simulación PARCHE cobrando el cupo, como `start` pero **sin** exigir la arista CONNECTED (B-A1).
+ * Solo para pruebas del motor y de lo que viene después (caché, memorias, cupo, avisos): así la arista que
+ * escribe el motor (SIMULATED) no se mezcla con una CONNECTED previa. La exigencia de conexión de
+ * `POST /v1/simulations` se prueba en `SimulationApiTest`.
+ */
+suspend fun SimulationService.createParche(a: UUID, b: UUID, mode: Mode = Mode.AMISTAD): SimulationRecord =
+    create(a, a, b, mode, SimulationOrigin.PARCHE, chargeQuota = true)
+
+/**
+ * Simulación RANDOM entre dos desconocidos, como la que crea el match al azar (E4.2, sin cupo semanal). Para
+ * pruebas del informe y de la decisión de conectar: tras B-A1, `POST /v1/simulations` solo simula con
+ * conexiones, así que la simulación con alguien a quien todavía no conoces es la del match.
+ */
+suspend fun SimulationService.createRandom(a: UUID, b: UUID, mode: Mode = Mode.AMISTAD): SimulationRecord =
+    create(a, a, b, mode, SimulationOrigin.RANDOM, chargeQuota = false)

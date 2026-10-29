@@ -40,10 +40,19 @@ fun Application.installErrorHandling() {
             call.respond(HttpStatusCode.NotImplemented, buildJsonObject { put("message", e.message ?: "No implementado") })
         }
         exception<BadRequestException> { call, e ->
-            call.respond(HttpStatusCode.BadRequest, ApiError(ErrorCode.VALIDATION, e.rootMessage()))
+            // Un cuerpo que no deserializa llega aquí con la SerializationException como causa: su mensaje
+            // lleva nombres de clases y campos internos, así que no se devuelve (B-B6).
+            val message = if (e.hasCause<SerializationException>()) {
+                log.warn("Cuerpo inválido en {} {}: {}", call.request.local.method.value, call.request.local.uri, e.rootMessage())
+                BODY_INVALID
+            } else {
+                e.rootMessage()
+            }
+            call.respond(HttpStatusCode.BadRequest, ApiError(ErrorCode.VALIDATION, message))
         }
         exception<SerializationException> { call, e ->
-            call.respond(HttpStatusCode.BadRequest, ApiError(ErrorCode.VALIDATION, e.message ?: "Cuerpo inválido"))
+            log.warn("Cuerpo inválido en {} {}: {}", call.request.local.method.value, call.request.local.uri, e.message)
+            call.respond(HttpStatusCode.BadRequest, ApiError(ErrorCode.VALIDATION, BODY_INVALID))
         }
         // Errores de cliente propios de Ktor que no derivan de BadRequestException: sin estos
         // handlers caerían en el catch-all y responderían 500 (issue #49). StatusPages elige el
@@ -72,7 +81,8 @@ fun Application.installErrorHandling() {
             }
         }
         exception<ContentTransformationException> { call, e ->
-            call.respond(HttpStatusCode.BadRequest, ApiError(ErrorCode.VALIDATION, e.message ?: "Cuerpo inválido"))
+            log.warn("Cuerpo inválido en {} {}: {}", call.request.local.method.value, call.request.local.uri, e.message)
+            call.respond(HttpStatusCode.BadRequest, ApiError(ErrorCode.VALIDATION, BODY_INVALID))
         }
         exception<NotFoundException> { call, e ->
             call.respond(HttpStatusCode.NotFound, ApiError(ErrorCode.NOT_FOUND, e.message ?: "No encontrado"))
@@ -98,6 +108,11 @@ fun Application.installErrorHandling() {
         }
     }
 }
+
+private const val BODY_INVALID = "Cuerpo de la petición inválido"
+
+private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean =
+    generateSequence(this) { it.cause }.any { it is T }
 
 private fun BadRequestException.rootMessage(): String =
     (generateSequence<Throwable>(this) { it.cause }.last().message ?: message ?: "Petición inválida")

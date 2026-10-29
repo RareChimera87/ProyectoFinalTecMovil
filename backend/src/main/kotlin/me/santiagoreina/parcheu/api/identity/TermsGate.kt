@@ -24,6 +24,14 @@ internal fun isExemptFromTerms(method: HttpMethod, path: String): Boolean =
     (method to path.trimEnd('/')) in EXEMPT
 
 /**
+ * Las rutas de `/v1/admin` con el claim `admin` no pasan por la puerta (B-B3): el claim basta para moderar y la persona
+ * admin puede no tener cuenta en la app o no haber aceptado términos (`AdminRoutes.adminUserId` admite null).
+ * Cada ruta sigue exigiendo el claim con `requireAdmin`; sin él, la puerta aplica como a cualquiera.
+ */
+internal fun isAdminRoute(user: FirebaseUser, path: String): Boolean =
+    user.admin && path.trimEnd('/').startsWith("/v1/admin/")
+
+/**
  * Lo único que puede hacer una cuenta de menor de edad (E2.6): ver su cuenta, descargar sus datos y
  * borrarla. `GET /v1/me/export` va aquí porque el bloqueo por edad lleva a 'Borrar cuenta' →
  * 'Descargar mis datos primero' (E8.3): el derecho de acceso (Ley 1581) no depende de la edad ni de los términos.
@@ -65,6 +73,7 @@ internal val TermsGate = createRouteScopedPlugin("TermsGate", ::TermsGateConfig)
         val method = call.request.httpMethod
         val path = call.request.path()
         when {
+            isAdminRoute(user, path) -> return@on
             isExemptFromUnderage(method, path) -> return@on
             isExemptFromTerms(method, path) -> service.requireNotUnderage(user)
             isExemptFromSuspension(method, path) -> service.requireFullAccess(user, ignoreSuspension = true)
