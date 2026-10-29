@@ -1,0 +1,14 @@
+# Mantiene al día las acciones fijadas a SHA (C-M3): Dependabot propone el SHA nuevo y conserva
+# el comentario `# vX.Y.Z`. Estos PR tocan .github/workflows/, así que llevan la etiqueta
+# `gobernanza` y los revisa una persona (ver docs/PLAN.md §5).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "Actualiza"
+    labels:
+      - dependencies
+      - gobernanza
