@@ -5,10 +5,19 @@ import me.santiagoreina.parcheu.contract.Answer
 import me.santiagoreina.parcheu.contract.ChatType
 import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.EntitlementState
+import me.santiagoreina.parcheu.contract.FeedbackKind
+import me.santiagoreina.parcheu.contract.IntroductionStatus
+import me.santiagoreina.parcheu.contract.MatchChoice
+import me.santiagoreina.parcheu.contract.MatchStatus
 import me.santiagoreina.parcheu.contract.MemoryDto
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.RedeemStatus
+import me.santiagoreina.parcheu.contract.ReportKind
+import me.santiagoreina.parcheu.contract.ReportReason
+import me.santiagoreina.parcheu.contract.ReportStatus
 import me.santiagoreina.parcheu.contract.SimulationOrigin
 import me.santiagoreina.parcheu.contract.SimulationStatus
+import me.santiagoreina.parcheu.contract.TicketStatus
 import java.time.Instant
 import java.util.UUID
 
@@ -27,7 +36,92 @@ data class ExportRows(
     val chats: List<ExportChatRow> = emptyList(),
     val blocks: List<ExportBlockRow> = emptyList(),
     val entitlement: ExportEntitlementRow? = null,
+    val notifications: List<ExportNotificationRow> = emptyList(),
+    val personaSummary: String? = null,
+    val reportsMade: List<ExportReportRow> = emptyList(),
+    val introductions: List<ExportIntroductionRow> = emptyList(),
+    val matches: List<ExportMatchRow> = emptyList(),
+    val queueTicket: ExportQueueTicketRow? = null,
+    val twinFeedback: List<ExportTwinFeedbackRow> = emptyList(),
+    val inviteCode: String? = null,
+    val inviteRedemptions: List<ExportRedemptionRow> = emptyList(),
+    val redeemAttempts: List<Instant> = emptyList(),
+    val purchases: List<ExportPurchaseRow> = emptyList(),
 )
+
+/** Aviso de la bandeja; el servicio decide si su texto se puede exportar (puede citar a terceros). */
+data class ExportNotificationRow(
+    val id: UUID,
+    val kind: String,
+    val title: String,
+    val body: String,
+    val route: String?,
+    val actorId: UUID?,
+    val locked: Boolean,
+    val createdAt: Instant,
+    val readAt: Instant?,
+)
+
+/** Reporte hecho por la persona. Sin `snapshot` (mensajes de terceros) ni datos de moderación. */
+data class ExportReportRow(
+    val id: UUID,
+    val kind: ReportKind,
+    val reason: ReportReason,
+    val details: String?,
+    val targetId: UUID?,
+    val status: ReportStatus,
+    val createdAt: Instant,
+    val resolvedAt: Instant?,
+)
+
+/** Presentación donde la persona es quien presenta ([introducerId] = ella) o una de las presentadas. */
+data class ExportIntroductionRow(
+    val id: UUID,
+    val introducerId: UUID,
+    val userA: UUID,
+    val userB: UUID,
+    val mode: Mode,
+    val status: IntroductionStatus,
+    /** Respuesta de la propia persona (`INTERESTED`/`DECLINED`) cuando es una de las presentadas. */
+    val myResponse: String?,
+    val createdAt: Instant,
+)
+
+data class ExportMatchRow(
+    val id: UUID,
+    val otherUserId: UUID,
+    val mode: Mode,
+    val status: MatchStatus,
+    val myChoice: MatchChoice?,
+    val createdAt: Instant,
+    val decideBy: Instant,
+)
+
+data class ExportQueueTicketRow(val mode: Mode, val status: TicketStatus, val enqueuedAt: Instant, val expiresAt: Instant)
+
+data class ExportTwinFeedbackRow(
+    val id: UUID,
+    val kind: FeedbackKind,
+    val simulationId: UUID?,
+    val turnIndex: Int?,
+    val questionId: Int?,
+    val predicted: String?,
+    val actual: String?,
+    val rating: Int?,
+    val createdAt: Instant,
+)
+
+data class ExportRedemptionRow(
+    val ownerId: UUID,
+    val redeemerId: UUID,
+    val mode: Mode,
+    val status: RedeemStatus,
+    val createdAt: Instant,
+    val acceptedAt: Instant?,
+)
+
+/** Evento de compra ligado a la persona: nunca el token ni el payload, solo fecha y tipo. */
+data class ExportPurchaseRow(val receivedAt: Instant, val notificationType: Int?)
 
 data class ExportSimulationRow(
     val id: UUID,

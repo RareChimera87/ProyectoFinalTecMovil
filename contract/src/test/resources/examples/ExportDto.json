@@ -154,5 +154,83 @@
     "basePlan": "anual",
     "expiresAt": "2027-10-23T15:30:00Z",
     "autoRenewing": true
-  }
+  },
+  "twinPersonaSummary": "Persona curiosa y planificada que disfruta los planes tranquilos.",
+  "reportsMade": [
+    {
+      "id": "0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+      "kind": "USER",
+      "reason": "HARASSMENT",
+      "details": "Me escribió varias veces después de pedirle que parara.",
+      "reportedAnonId": "k3Jp8wQ2",
+      "status": "RESOLVED",
+      "createdAt": "2026-10-23T15:30:00Z",
+      "resolvedAt": "2026-10-24T09:00:00Z"
+    }
+  ],
+  "introductions": [
+    {
+      "id": "1d2e3f4a-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+      "role": "MADE",
+      "mode": "AMISTAD",
+      "people": [
+        "h7Kq2xP9",
+        "k3Jp8wQ2"
+      ],
+      "status": "CONNECTED",
+      "createdAt": "2026-10-23T15:30:00Z"
+    }
+  ],
+  "matches": [
+    {
+      "id": "2e3f4a5b-6c7d-4e8f-90a1-b2c3d4e5f607",
+      "mode": "AMISTAD",
+      "status": "SIMULATION",
+      "otherAnonId": "h7Kq2xP9",
+      "myChoice": "SIMULATION",
+      "createdAt": "2026-10-23T15:30:00Z",
+      "decideBy": "2026-10-24T15:30:00Z"
+    }
+  ],
+  "queueTicket": {
+    "mode": "ESTUDIO",
+    "status": "WAITING",
+    "enqueuedAt": "2026-10-23T15:30:00Z",
+    "expiresAt": "2026-10-24T15:30:00Z"
+  },
+  "twinFeedback": [
+    {
+      "id": "3f4a5b6c-7d8e-4f90-a1b2-c3d4e5f60718",
+      "kind": "CONTROL",
+      "simulationId": "5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+      "turnIndex": 3,
+      "questionId": 7,
+      "predicted": "B",
+      "actual": "C",
+      "rating": 4,
+      "createdAt": "2026-10-23T15:30:00Z"
+    }
+  ],
+  "invites": {
+    "code": "ABCD-1234",
+    "redemptions": [
+      {
+        "role": "OWNER",
+        "otherAnonId": "h7Kq2xP9",
+        "mode": "AMISTAD",
+        "status": "CONNECTED",
+        "createdAt": "2026-10-23T15:30:00Z",
+        "acceptedAt": "2026-10-23T16:00:00Z"
+      }
+    ],
+    "redeemAttempts": [
+      "2026-10-23T15:29:00Z"
+    ]
+  },
+  "purchases": [
+    {
+      "receivedAt": "2026-10-23T15:30:00Z",
+      "notificationType": 4
+    }
+  ]
 }

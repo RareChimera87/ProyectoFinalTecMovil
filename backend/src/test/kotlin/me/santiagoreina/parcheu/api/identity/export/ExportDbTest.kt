@@ -17,6 +17,8 @@ import me.santiagoreina.parcheu.api.platform.db.runMigrations
 import me.santiagoreina.parcheu.api.twin.ExposedTwinRepository
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.ExportDto
+import me.santiagoreina.parcheu.contract.ExportIntroRole
+import me.santiagoreina.parcheu.contract.ExportInviteRole
 import java.sql.Connection
 import java.sql.Timestamp
 import java.util.UUID
@@ -118,6 +120,143 @@ class ExportDbTest : FunSpec({
             json shouldContain anon
             listOf(laura.toString(), lauraUid, "Laura", "Pinzón", "laura.privada@example.com", "https://photos/laura", "Medicina", lauraSecret)
                 .forEach { json shouldNotContain it }
+        }
+    }
+
+    test("la exportación completa trae avisos, matches, reportes, presentaciones, compras y más, sin terceros ni tokens").config(enabled = TestDatabase.enabled) {
+        TestDatabase.withCleanDatabase { ds ->
+            runMigrations(ds)
+            val db = connectExposed(ds)
+            val now = Timestamp.from(FIXED_CLOCK.instant())
+            val later = Timestamp.from(FIXED_CLOCK.instant().plusSeconds(86_400))
+            val ana = UUID.randomUUID()
+            val anaUid = "uid-ana-${UUID.randomUUID()}"
+            val laura = UUID.randomUUID()
+            val mari = UUID.randomUUID()
+            val pedro = UUID.randomUUID()
+            val secret = "secreto-de-terceros-${UUID.randomUUID()}"
+            val playToken = "play-token-${UUID.randomUUID()}"
+            val reportId = UUID.randomUUID()
+            val introMade = UUID.randomUUID()
+            val introReceived = UUID.randomUUID()
+            val matchId = UUID.randomUUID()
+            val chat = UUID.randomUUID()
+            ds.connection.use { c ->
+                fun user(id: UUID, uid: String, name: String) = c.exec(
+                    "insert into users (id, firebase_uid, email, display_name, photo_url, created_at, updated_at) " +
+                        "values (?, ?, ?, ?, 'https://photos/x', ?, ?)",
+                    id, uid, "$uid@example.com", name, now, now,
+                )
+                user(ana, anaUid, "Ana Gómez")
+                user(laura, "uid-laura-${UUID.randomUUID()}", "Laura Pinzón")
+                user(mari, "uid-mari-${UUID.randomUUID()}", "Mariana Ruiz")
+                user(pedro, "uid-pedro-${UUID.randomUUID()}", "Pedro Cárdenas")
+                c.exec("insert into twins (user_id, persona_summary, updated_at) values (?, 'Persona curiosa que ama el café.', ?)", ana, now)
+                // Avisos: uno propio (texto conservado) y otros que citan a terceros (texto reemplazado).
+                c.exec(
+                    "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'SIMULATION_FAILED', ?::jsonb, ?)",
+                    UUID.randomUUID(), ana, """{"title":"La simulación no se pudo completar","body":"No se gastó tu cupo.","route":"parcheu://home"}""", now,
+                )
+                c.exec(
+                    "insert into notifications (id, user_id, kind, payload, created_at, read_at) values (?, ?, 'CHAT_MESSAGE', ?::jsonb, ?, ?)",
+                    UUID.randomUUID(), ana, """{"title":"Laura Pinzón","body":"$secret","route":"parcheu://chat/$chat","actorId":"$laura"}""", now, now,
+                )
+                // Reporte hecho por Ana a Laura (con instantánea de mensajes de Laura) y otro de Laura contra Ana.
+                c.exec(
+                    "insert into reports (id, reporter_id, target_id, kind, reason, details, snapshot, source, status, resolution, resolved_by, created_at) " +
+                        "values (?, ?, ?, 'USER', 'HARASSMENT', 'Me insistió demasiado', ?::jsonb, 'USER', 'RESOLVED', 'nota-interna-moderacion', ?, ?)",
+                    reportId, ana, laura, """{"messages":[{"text":"$secret"}]}""", mari, now,
+                )
+                c.exec(
+                    "insert into reports (id, reporter_id, target_id, kind, reason, details, source, status, created_at) " +
+                        "values (?, ?, ?, 'USER', 'OTHER', 'Detalle-de-laura-contra-ana', 'USER', 'OPEN', ?)",
+                    UUID.randomUUID(), laura, ana, now,
+                )
+                // Presentación hecha por Ana (Laura-Pedro) y recibida (Mari presenta a Ana con Laura; Laura ya declinó).
+                c.exec(
+                    "insert into introductions (id, introducer_id, mode, user_a, user_b, status, created_at) values (?, ?, 'AMISTAD', ?, ?, 'CONNECTED', ?)",
+                    introMade, ana, laura, pedro, now,
+                )
+                c.exec(
+                    "insert into introductions (id, introducer_id, mode, user_a, user_b, a_response, b_response, status, created_at) " +
+                        "values (?, ?, 'ESTUDIO', ?, ?, 'INTERESTED', 'DECLINED', 'DECLINED', ?)",
+                    introReceived, mari, ana, laura, now,
+                )
+                // Match con Laura (la elección de Laura no debe salir) y turno en la fila.
+                c.exec(
+                    "insert into matches (id, mode, user_a, user_b, choice_a, choice_b, status, created_at, decide_by) " +
+                        "values (?, 'AMISTAD', ?, ?, 'SIMULATION', 'SCENARIO', 'PENDING_CHOICE', ?, ?)",
+                    matchId, laura, ana, now, later,
+                )
+                c.exec("insert into match_queue (user_id, mode, enqueued_at, expires_at) values (?, 'ESTUDIO', ?, ?)", ana, now, later)
+                c.exec(
+                    "insert into twin_feedback (id, user_id, kind, question_id, predicted, actual, rating, created_at) values (?, ?, 'CONTROL', 1, 'A', 'B', 4, ?)",
+                    UUID.randomUUID(), ana, now,
+                )
+                c.exec("insert into invites (code, user_id) values ('ABCD-1234', ?)", ana)
+                c.exec(
+                    "insert into invite_redemptions (owner_id, redeemer_id, mode, status, created_at, accepted_at) values (?, ?, 'AMISTAD', 'CONNECTED', ?, ?)",
+                    ana, pedro, now, now,
+                )
+                c.exec("insert into invite_redemptions (owner_id, redeemer_id, mode, status, created_at) values (?, ?, 'ESTUDIO', 'PENDING', ?)", laura, ana, now)
+                c.exec("insert into invite_redeem_attempts (id, user_id, created_at) values (?, ?, ?)", UUID.randomUUID(), ana, now)
+                c.exec(
+                    "insert into purchase_events (message_id, purchase_token, payload, user_id, received_at) values ('m1', ?, ?::jsonb, ?, ?)",
+                    playToken, """{"subscriptionNotification":{"notificationType":4,"purchaseToken":"$playToken","subscriptionId":"plus"}}""", ana, now,
+                )
+                c.exec("insert into purchase_events (message_id, purchase_token, payload, received_at) values ('m-ajeno', 'otro', '{}'::jsonb, ?)", now)
+            }
+
+            val signer = AnonIdSigner.forTests()
+            val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, "2026-10-29")
+            val service = AccountExportService(identity, ExposedExportRepository(db), signer, ExposedTwinRepository(db)::state, FIXED_CLOCK)
+            val dto = runBlocking { service.export(FirebaseUser(anaUid, "ana@example.com", "Ana Gómez")) }
+            val json = ContractJson.encodeToString(ExportDto.serializer(), dto)
+
+            // Avisos: ambos, el propio con su texto y el de Laura reemplazado, con actor anónimo.
+            dto.notifications.size shouldBe 2
+            dto.notifications.single { it.kind == "SIMULATION_FAILED" }.body shouldBe "No se gastó tu cupo."
+            val chatNotice = dto.notifications.single { it.kind == "CHAT_MESSAGE" }
+            chatNotice.read shouldBe true
+            chatNotice.actor?.anonId shouldBe signer.anonId(ana, laura)
+            chatNotice.route shouldBe null
+
+            dto.twinPersonaSummary shouldBe "Persona curiosa que ama el café."
+
+            val report = dto.reportsMade.single()
+            report.id shouldBe reportId.toString()
+            report.details shouldBe "Me insistió demasiado"
+            report.reportedAnonId shouldBe signer.anonId(ana, laura)
+
+            dto.introductions.size shouldBe 2
+            val made = dto.introductions.single { it.role == ExportIntroRole.MADE }
+            made.people shouldContainExactly listOf(signer.anonId(ana, laura), signer.anonId(ana, pedro))
+            val received = dto.introductions.single { it.role == ExportIntroRole.RECEIVED }
+            received.introducerAnonId shouldBe signer.anonId(ana, mari)
+            received.people shouldContainExactly listOf(signer.anonId(ana, laura))
+            received.myResponse shouldBe "INTERESTED"
+            received.status shouldBe null // el estado revelaría que Laura declinó
+
+            val match = dto.matches.single()
+            match.myChoice?.name shouldBe "SCENARIO" // Ana es user_b: la elección de Laura (SIMULATION) no sale
+            match.otherAnonId shouldBe signer.anonId(ana, laura)
+            dto.queueTicket?.mode?.name shouldBe "ESTUDIO"
+
+            dto.twinFeedback.single().rating shouldBe 4
+            dto.twinFeedback.single().actual shouldBe "B"
+
+            val invites = dto.invites!!
+            invites.code shouldBe "ABCD-1234"
+            invites.redemptions.map { it.role } shouldContainExactly listOf(ExportInviteRole.OWNER, ExportInviteRole.REDEEMER)
+            invites.redeemAttempts.size shouldBe 1
+
+            dto.purchases.single().notificationType shouldBe 4
+
+            listOf(
+                laura.toString(), mari.toString(), pedro.toString(), "Laura", "Pinzón", "Mariana", "Pedro", "Cárdenas",
+                "photos/x", "@example.com", secret, playToken, "nota-interna-moderacion", "Detalle-de-laura-contra-ana",
+                "purchaseToken", "m-ajeno", "otro",
+            ).forEach { json shouldNotContain it }
         }
     }
 })
