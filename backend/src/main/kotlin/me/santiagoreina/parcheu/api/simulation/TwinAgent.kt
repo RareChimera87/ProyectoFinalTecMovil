@@ -18,10 +18,15 @@ data class AgentReply(val text: String, val ended: Boolean, val usage: UsageTota
 class TwinAgent(
     private val ai: AiGateway,
     val side: Side,
-    private val userId: UUID,
+    userId: UUID,
     private val persona: String,
     private val memories: List<TwinMemory>,
     private val mode: Mode,
+    /**
+     * A quién se cobra el turno en `ai_usage.user_id` y en su techo diario (B-M1): quien pidió la simulación, no el
+     * dueño del gemelo, para que pedir simulaciones con alguien no gaste el presupuesto de IA de esa persona.
+     */
+    private val billedTo: UUID = userId,
 ) {
     suspend fun reply(scenario: ScenarioDef, turns: List<StoredTurn>): AgentReply {
         val prompt = TwinPromptBuilder.build(
@@ -39,7 +44,7 @@ class TwinAgent(
                 purpose = AiPurpose.SIMULATION_TURN,
                 prompt = prompt.prompt,
                 system = prompt.system,
-                userId = userId,
+                userId = billedTo,
                 maxOutputTokens = TURN_OUTPUT_CEILING,
                 temperature = 0.9,
             ),

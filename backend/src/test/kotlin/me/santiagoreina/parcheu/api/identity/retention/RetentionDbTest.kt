@@ -70,6 +70,11 @@ class RetentionDbTest : FunSpec({
                     c.exec("insert into ai_usage (day, purpose, provider, model, user_id, created_at) values ('2026-01-01', 'KEEP', 'p', 'm', ?, ?)", u1, kept(c90))
                     c.exec("insert into ai_usage (day, purpose, provider, model, user_id, created_at) values ('2026-01-01', 'DROP', 'p', 'm', ?, ?)", u1, due(c90))
                     c.exec("insert into ai_usage_daily (day, provider, model, tokens_in, tokens_out, cost_micros) values ('2026-01-01', 'p', 'm', 10, 20, 30)")
+                    // Contadores diarios por persona (B-M1): se borran con el mismo plazo; los del día se conservan.
+                    c.exec("insert into ai_budget_user (day, user_id, micros) values ('2026-01-01', ?, 5)", u1)
+                    c.exec("insert into ai_budget_user (day, user_id, micros) values ('2026-10-25', ?, 5)", u1)
+                    c.exec("insert into daily_counters (user_id, day, kind, count) values (?, '2026-01-01', 'MODERATION', 3)", u1)
+                    c.exec("insert into daily_counters (user_id, day, kind, count) values (?, '2026-10-25', 'TWIN_ANSWERS', 3)", u1)
 
                     // 3. Snapshot de reportes: 180 días tras resolverse; uno abierto antiguo no se toca.
                     val c180 = now.minusSeconds(180 * day)
@@ -161,6 +166,12 @@ class RetentionDbTest : FunSpec({
                         c.count("select count(*) from ai_usage where purpose = 'DROP' and user_id is null") shouldBe 1
                     }
                     withClue("agregados diarios") { c.count("select count(*) from ai_usage_daily where cost_micros = 30") shouldBe 1 }
+                    withClue("contadores diarios por persona") {
+                        c.count("select count(*) from ai_budget_user where day = '2026-10-25'") shouldBe 1
+                        c.count("select count(*) from ai_budget_user") shouldBe 1
+                        c.count("select count(*) from daily_counters where day = '2026-10-25'") shouldBe 1
+                        c.count("select count(*) from daily_counters") shouldBe 1
+                    }
                     withClue("snapshots") {
                         c.count("select count(*) from reports where id = ? and snapshot is not null", reportKept) shouldBe 1
                         c.count("select count(*) from reports where id = ? and snapshot is null", reportDue) shouldBe 1
@@ -195,7 +206,7 @@ class RetentionDbTest : FunSpec({
                     }
                     withClue("reporte") {
                         first.purged[RetentionRule.NOTIFICATIONS] shouldBe 1
-                        first.purged[RetentionRule.AI_USAGE] shouldBe 1
+                        first.purged[RetentionRule.AI_USAGE] shouldBe 3
                         first.purged[RetentionRule.REPORT_SNAPSHOTS] shouldBe 1
                         first.purged[RetentionRule.TRANSCRIPTS] shouldBe 1
                         first.purged[RetentionRule.MATCH_QUEUE] shouldBe 1

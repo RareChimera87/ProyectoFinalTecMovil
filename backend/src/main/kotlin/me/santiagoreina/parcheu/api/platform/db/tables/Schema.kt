@@ -12,10 +12,10 @@ object Schema {
     val graph: List<Table> = listOf(Edges, Communities, CommunityMembers)
     val chat: List<Table> = listOf(Chats, ChatMembers, ChatMessages)
     val social: List<Table> = listOf(Invites, InviteRedemptions, InviteRedeemAttempts, Introductions, IntroRequests)
-    val notifications: List<Table> = listOf(Notifications, UsageEvents)
+    val notifications: List<Table> = listOf(Notifications, UsageEvents, DailyCounters)
     val safety: List<Table> = listOf(Blocks, Reports)
     val billing: List<Table> = listOf(Entitlements, PurchaseEvents)
-    val ai: List<Table> = listOf(AiUsage, AiUsageDaily)
+    val ai: List<Table> = listOf(AiUsage, AiUsageDaily, AiBudgetGlobal, AiBudgetUser)
 
     /** Tablas base (sin vistas). */
     val tables: List<Table> = identity + twin + meet + graph + chat + social + notifications + safety + billing + ai

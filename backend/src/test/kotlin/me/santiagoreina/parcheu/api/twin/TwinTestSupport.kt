@@ -20,7 +20,8 @@ class TwinFixture(
     val fake: FakeLlmClient = FakeLlmClient(textResponder = { PERSONA_TEXT }),
     val repo: InMemoryTwinRepository = InMemoryTwinRepository(),
     val queue: FakeTaskQueue = FakeTaskQueue(),
+    chargeAnswers: (java.util.UUID) -> Unit = {},
 ) {
     val gateway = testGateway(fake)
-    val module = inMemoryTwinModule(FIXED_CLOCK, gateway, repo, queue, runInline = false)
+    val module = inMemoryTwinModule(FIXED_CLOCK, gateway, repo, queue, runInline = false, chargeAnswers = chargeAnswers)
 }

@@ -38,5 +38,12 @@ class Conflict(message: String) : DomainException(ErrorCode.CONFLICT, message)
 class ScenarioEnded(message: String = "El escenario ya terminó") : DomainException(ErrorCode.SCENARIO_ENDED, message)
 
 /** Presupuesto diario de IA agotado: 503 con `retryAt`. */
-class AiBudgetExceeded(retryAt: Instant) :
-    DomainException(ErrorCode.AI_BUDGET, "Presupuesto diario de IA agotado", retryAt = retryAt)
+open class AiBudgetExceeded(retryAt: Instant, message: String = "Presupuesto diario de IA agotado") :
+    DomainException(ErrorCode.AI_BUDGET, message, retryAt = retryAt)
+
+/**
+ * Techo diario de IA de **una** persona agotado (B-M1, ADR-0010): el mismo 503 `AI_BUDGET` con `retryAt`, pero
+ * solo para ella; los demás siguen. Es un [AiBudgetExceeded] para que quien ya lo maneja (devolver el cupo, dejar
+ * la simulación FAILED, moderación fail-open) lo trate igual.
+ */
+class UserAiBudgetExceeded(retryAt: Instant) : AiBudgetExceeded(retryAt, "Llegaste al tope diario de uso de IA")

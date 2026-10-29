@@ -11,6 +11,10 @@ import me.santiagoreina.parcheu.contract.QuotaKind
  *   costo de IA sin App Check, ADR-0015). Se configura con variables de entorno:
  *   `QUOTA_PLUS_DAILY_SIMULATIONS` (20), `QUOTA_PLUS_DAILY_RANDOM_MATCHES` (10) y
  *   `QUOTA_PLUS_DAILY_FULL_REPORTS` (20).
+ * - **Topes internos** ([DailyLimiter], B-M1): reenvíos de las 12 respuestas del gemelo por día
+ *   (`QUOTA_FREE_DAILY_TWIN_ANSWERS` 10, `QUOTA_PLUS_DAILY_TWIN_ANSWERS` 30) y mensajes moderados con IA
+ *   por persona y día (`MODERATION_DAILY_PER_USER` 200; después se muestrea, ADR-0026), con un corte duro de
+ *   moderaciones muestreadas (`MODERATION_SAMPLED_DAILY_PER_USER` 100) a partir del cual ya no se encola ninguna.
  */
 data class QuotaLimits(
     val freeWeeklySimulations: Int = 5,
@@ -19,11 +23,16 @@ data class QuotaLimits(
     val plusDailySimulations: Int = 20,
     val plusDailyRandomMatches: Int = 10,
     val plusDailyFullReports: Int = 20,
+    val freeDailyTwinAnswers: Int = 10,
+    val plusDailyTwinAnswers: Int = 30,
+    val dailyModerations: Int = 200,
+    val dailySampledModerations: Int = 100,
 ) {
     init {
         listOf(
             freeWeeklySimulations, freeDailyRandomMatches, freeMonthlyFullReports,
             plusDailySimulations, plusDailyRandomMatches, plusDailyFullReports,
+            freeDailyTwinAnswers, plusDailyTwinAnswers, dailyModerations, dailySampledModerations,
         ).forEach { require(it >= 0) { "Los límites de cupo no pueden ser negativos" } }
     }
 
@@ -43,7 +52,9 @@ data class QuotaLimits(
     }
 
     companion object {
-        /** Lee el uso justo de Plus del entorno; los límites gratis son fijos (los promete la UI). */
+        /**
+         * Lee el uso justo de Plus y los topes internos del entorno; los cupos gratis son fijos (los promete la UI).
+         */
         fun fromEnv(vars: Map<String, String> = System.getenv()): QuotaLimits {
             val defaults = QuotaLimits()
             fun int(name: String, default: Int): Int {
@@ -55,6 +66,10 @@ data class QuotaLimits(
                 plusDailySimulations = int("QUOTA_PLUS_DAILY_SIMULATIONS", defaults.plusDailySimulations),
                 plusDailyRandomMatches = int("QUOTA_PLUS_DAILY_RANDOM_MATCHES", defaults.plusDailyRandomMatches),
                 plusDailyFullReports = int("QUOTA_PLUS_DAILY_FULL_REPORTS", defaults.plusDailyFullReports),
+                freeDailyTwinAnswers = int("QUOTA_FREE_DAILY_TWIN_ANSWERS", defaults.freeDailyTwinAnswers),
+                plusDailyTwinAnswers = int("QUOTA_PLUS_DAILY_TWIN_ANSWERS", defaults.plusDailyTwinAnswers),
+                dailyModerations = int("MODERATION_DAILY_PER_USER", defaults.dailyModerations),
+                dailySampledModerations = int("MODERATION_SAMPLED_DAILY_PER_USER", defaults.dailySampledModerations),
             )
         }
     }

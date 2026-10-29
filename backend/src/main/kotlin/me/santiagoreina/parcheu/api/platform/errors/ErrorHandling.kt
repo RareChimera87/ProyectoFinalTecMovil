@@ -99,6 +99,13 @@ fun Application.installErrorHandling() {
                 call.respond(HttpStatusCode.Unauthorized, ApiError(ErrorCode.UNAUTHENTICATED, "Falta un token válido"))
             }
         }
+        status(HttpStatusCode.TooManyRequests) { _ ->
+            // Límite por persona de las rutas de IA (B-M1). El contrato no tiene un código para 429: como 500 y 501,
+            // cuerpo `{"message"}` simple; el plugin `RateLimit` ya puso `Retry-After` en segundos.
+            if (content is OutgoingContent.NoContent) {
+                call.respond(HttpStatusCode.TooManyRequests, buildJsonObject { put("message", "Demasiadas solicitudes seguidas; espera un momento") })
+            }
+        }
         status(HttpStatusCode.NotFound) { _ ->
             // Solo el 404 sin cuerpo (ninguna ruta coincidió, o una ruta respondió un 404 vacío) se
             // convierte en ApiError; un 404 que una ruta ya respondió con su ApiError se deja intacto.

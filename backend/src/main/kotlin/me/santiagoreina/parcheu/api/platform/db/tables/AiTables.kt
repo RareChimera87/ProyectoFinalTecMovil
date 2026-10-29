@@ -31,3 +31,21 @@ object AiUsageDaily : Table("ai_usage_daily") {
     val costMicros = long("cost_micros").default(0)
     override val primaryKey = PrimaryKey(day, provider, model)
 }
+
+/**
+ * Gasto del día (registrado + reservas en curso) que `DailyBudgetGuard` bloquea con `FOR UPDATE` antes de cada
+ * llamada (B-M1). La fila nace con el total de `ai_usage_daily`.
+ */
+object AiBudgetGlobal : Table("ai_budget_global") {
+    val day = date("day")
+    val micros = long("micros").default(0)
+    override val primaryKey = PrimaryKey(day)
+}
+
+/** Lo mismo por persona: techo diario `AI_USER_DAILY_BUDGET_USD` (B-M1). La fila nace con su gasto de `ai_usage`. */
+object AiBudgetUser : Table("ai_budget_user") {
+    val day = date("day")
+    val userId = userRef("user_id", ReferenceOption.CASCADE)
+    val micros = long("micros").default(0)
+    override val primaryKey = PrimaryKey(day, userId)
+}

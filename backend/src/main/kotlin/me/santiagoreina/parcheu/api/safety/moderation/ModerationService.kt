@@ -43,6 +43,17 @@ import java.util.UUID
  * y repara el espejo de Firestore. El aviso de ayuda va primero y, si falla, no impide reportar ni ocultar; luego se
  * relanza el error. Un reintento puede duplicar el aviso, pero nunca se pierde. Con solo SELF_HARM no hay reporte, así que
  * si el aviso falla se encola `moderate-help` (sin LLM) en vez de relanzar el error: el reintento no depende del modelo.
+ *
+ * Tope por persona (B-M1, enmienda de ADR-0026): [withinDailyCap] cuenta los mensajes moderados del autor en el día
+ * (`MODERATION_DAILY_PER_USER`) y [withinSpend] mira su sub-techo de gasto de moderación (`AI_USER_DAILY_MODERATION_USD`);
+ * pasado cualquiera de los dos solo se modera 1 de cada [sampleEvery] mensajes (muestreo determinista por id), así un
+ * bucle de mensajes no dispara una llamada al LLM por cada uno y el abuso sigue teniendo una probabilidad de revisión.
+ * La cola muestreada tiene su propio corte duro, [withinSampledCap] (`MODERATION_SAMPLED_DAILY_PER_USER`): agotado, no
+ * se encola nada más ese día y se registra `moderation_sampled_out` con `reason=sampled_cap`. Así el gasto de moderación
+ * de una persona queda acotado a una fracción conocida del presupuesto total (como mucho el sub-techo, más lo que haya
+ * en vuelo, más el corte duro por el costo de una moderación). El sub-techo en USD es suave (mira el gasto registrado).
+ * La moderación no cuenta para el techo personal general de IA (`AiPurpose.MODERATION`), así que gastarlo en
+ * simulaciones no la apaga. Si una comprobación falla se modera igual (la moderación nunca se apaga por un error propio).
  */
 class ModerationService(
     private val moderator: MessageModerator,
@@ -52,12 +63,36 @@ class ModerationService(
     private val tasks: TaskQueue,
     private val clock: Clock,
     private val notifier: Notifier,
+    /** Cuenta un mensaje moderado del autor; false si ya pasó su tope del día (`DailyLimiter`, `MODERATION`). */
+    private val withinDailyCap: (UUID) -> Boolean = { true },
+    /** Pasado el tope, se modera 1 de cada [sampleEvery] mensajes (`MODERATION_SAMPLE_EVERY`, ≥ 1). */
+    private val sampleEvery: Int = DEFAULT_SAMPLE_EVERY,
+    /** ¿Le queda al autor sub-techo de gasto de moderación hoy? (`AiGateway.moderationBudgetLeft`). */
+    private val withinSpend: suspend (UUID) -> Boolean = { true },
+    /** Cuenta una moderación muestreada del autor; false si ya agotó el corte duro del día (`DailyKind.MODERATION_SAMPLED`). */
+    private val withinSampledCap: (UUID) -> Boolean = { true },
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    init {
+        require(sampleEvery >= 1) { "MODERATION_SAMPLE_EVERY debe ser al menos 1" }
+    }
+
     /** Encola la moderación de [message]; nunca propaga errores (el envío ya ocurrió). */
     suspend fun enqueue(message: MessageRecord) {
-        if (message.senderId == null) return
+        val author = message.senderId ?: return
+        if (!underCap(author)) {
+            val reason = when {
+                !sampled(message.id) -> "sampling"
+                !underSampledCap(author) -> "sampled_cap"
+                else -> null
+            }
+            if (reason != null) {
+                log.atInfo().setMessage(SAMPLED_OUT).addKeyValue("event", SAMPLED_OUT)
+                    .addKeyValue("messageId", message.id.toString()).addKeyValue("reason", reason).log()
+                return
+            }
+        }
         try {
             tasks.enqueue(
                 TaskRequest(
@@ -74,6 +109,35 @@ class ModerationService(
                 .addKeyValue("messageId", message.id.toString()).addKeyValue("error", e.javaClass.simpleName).log()
         }
     }
+
+    /**
+     * ¿El autor sigue dentro de sus topes del día? Primero el gasto (sin cobrar nada), luego el contador, que solo
+     * se incrementa si se va a moderar fuera del muestreo. Un fallo de cualquiera cuenta como sí (se modera).
+     */
+    private suspend fun underCap(author: UUID): Boolean = try {
+        withinSpend(author) && withinDailyCap(author)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.atWarn().setMessage(CAP_FAILED).addKeyValue("event", CAP_FAILED).addKeyValue("error", e.javaClass.simpleName).log()
+        true
+    }
+
+    /**
+     * ¿Le queda al autor cola muestreada hoy? Solo se consulta (y se cuenta) para un mensaje que cayó en el muestreo.
+     * Un fallo del contador cuenta como sí: la moderación no se apaga por un error propio.
+     */
+    private fun underSampledCap(author: UUID): Boolean = try {
+        withinSampledCap(author)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.atWarn().setMessage(CAP_FAILED).addKeyValue("event", CAP_FAILED).addKeyValue("error", e.javaClass.simpleName).log()
+        true
+    }
+
+    /** Muestreo determinista por id: el mismo mensaje siempre cae del mismo lado, también en los reintentos. */
+    private fun sampled(messageId: UUID): Boolean = Math.floorMod(messageId.hashCode(), sampleEvery) == 0
 
     /** Revisa el mensaje [messageId] y aplica las acciones que correspondan. */
     suspend fun moderate(messageId: UUID): ModerationOutcome {
@@ -204,6 +268,11 @@ class ModerationService(
         const val MODERATION_FAILED = "moderation_failed"
         const val MODERATION_ACTED = "moderation_acted"
         const val ENQUEUE_FAILED = "moderation_enqueue_failed"
+        const val SAMPLED_OUT = "moderation_sampled_out"
+        const val CAP_FAILED = "moderation_cap_failed"
+
+        /** Muestreo por defecto pasado el tope diario: 1 de cada 10 mensajes. */
+        const val DEFAULT_SAMPLE_EVERY = 10
 
         /** Marcas en `details` del reporte AUTO: qué decidió el primer intento, para reintentar sin el LLM. */
         const val HIDDEN_MARK = " [oculto]"

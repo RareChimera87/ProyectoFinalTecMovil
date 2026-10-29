@@ -10,6 +10,8 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import me.santiagoreina.parcheu.api.ai.AI_DAY
+import me.santiagoreina.parcheu.api.ai.AiPurpose
 import me.santiagoreina.parcheu.api.ai.LlmRequest
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
 import me.santiagoreina.parcheu.api.platform.errors.QuotaExceeded
@@ -61,6 +63,20 @@ class SimulationEngineTest : FunSpec({
         f.mirror.docs.any { it.status == SimulationStatus.RUNNING && it.progress == Progress(1, 3, MAX_TURNS_PER_SCENARIO) } shouldBe true
         f.notifier.sent.map { it.userId to it.status } shouldBe listOf(ana to SimulationStatus.DONE, beto to SimulationStatus.DONE)
         f.usage.refunded(sim.id.toString()) shouldBe false
+    }
+
+    test("B-M1: los turnos de ambos gemelos y el juez se cobran a quien pidió la simulación, no al dueño de cada gemelo") {
+        val f = SimFixture()
+        val ana = f.person("ana")
+        val beto = f.person("beto")
+        val sim = f.start(ana, beto)
+        sim.status shouldBe SimulationStatus.DONE
+        val turns = f.aiUsage.entries.filter { it.purpose == AiPurpose.SIMULATION_TURN }
+        turns shouldHaveSize 3 * MAX_TURNS_PER_SCENARIO
+        // La mitad son turnos del gemelo de Beto (lado B): antes se cobraban a Beto.
+        turns.map { it.userId }.toSet() shouldBe setOf(sim.requestedBy ?: ana)
+        f.aiUsage.entries.filter { it.purpose == AiPurpose.SIMULATION_JUDGE }.map { it.userId }.toSet() shouldBe setOf(sim.requestedBy ?: ana)
+        f.aiUsage.userSpentMicros(AI_DAY, beto) shouldBe 0L
     }
 
     test("un agente puede cerrar con [FIN] desde el turno 4, no antes") {

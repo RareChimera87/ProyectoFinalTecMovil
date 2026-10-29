@@ -27,6 +27,8 @@ import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
+import me.santiagoreina.parcheu.api.quota.DailyKind
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.contract.Answers
 import me.santiagoreina.parcheu.contract.ApiError
 import me.santiagoreina.parcheu.contract.ErrorCode
@@ -67,6 +69,24 @@ class TwinApiTest : FunSpec({
         header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
         contentType(ContentType.Application.Json)
         setBody("""{"id":"$id"}""")
+    }
+
+    test("B-M1: el 11.º envío de respuestas del día da 402 sin kind y no encola otra persona; uno inválido no cuenta") {
+        val daily = inMemoryQuotaModule(FIXED_CLOCK).daily
+        val fixture = TwinFixture(chargeAnswers = { daily.consume(it, DailyKind.TWIN_ANSWERS) })
+        testApplication {
+            val client = app(fixture)
+            client.answer("ana", Answers(emptyList())).status shouldBe HttpStatusCode.BadRequest
+            repeat(10) { client.answer("ana", answersOf()).status shouldBe HttpStatusCode.OK }
+            val res = client.answer("ana", answersOf())
+            res.status shouldBe HttpStatusCode.PaymentRequired
+            val error = res.body<ApiError>()
+            error.code shouldBe ErrorCode.QUOTA_EXCEEDED
+            error.kind shouldBe null
+            fixture.queue.tasks shouldHaveSize 10
+            // Otra persona conserva su tope.
+            client.answer("carolina.restrepo", answersOf()).status shouldBe HttpStatusCode.OK
+        }
     }
 
     test("GET /v1/twin/questions devuelve las 12 preguntas en orden, sin pesos") {

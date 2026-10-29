@@ -83,7 +83,7 @@ class QuotaApiTest : FunSpec({
 
     test("GET /v1/quota responde 404 si el usuario aún no tiene sesión") {
         val quota = inMemoryQuotaModule(MovableClock(bogota("2026-10-28T15:00-05:00")))
-        val sinUsuario = QuotaModule(quota.service, { null }, quota.devPlus, quota.clock)
+        val sinUsuario = QuotaModule(quota.service, { null }, quota.devPlus, quota.clock, quota.daily)
         testApplication {
             val client = startApp(testContainer(quota = sinUsuario))
             val res = client.get("/v1/quota") { header(HttpHeaders.Authorization, anaToken) }
@@ -137,7 +137,7 @@ class QuotaApiTest : FunSpec({
 
     test("sin concesión dev (prod) POST /internal/dev/grant-plus responde 404") {
         val base = inMemoryQuotaModule(MovableClock(bogota("2026-10-28T15:00-05:00")))
-        val prod = QuotaModule(base.service, base.users, devPlus = null, clock = base.clock)
+        val prod = QuotaModule(base.service, base.users, devPlus = null, clock = base.clock, daily = base.daily)
         testApplication {
             val client = startApp(testContainer(quota = prod, config = testConfig().copy(env = Env.PROD)))
             val res = client.post("/internal/dev/grant-plus") {
