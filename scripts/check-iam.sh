@@ -20,18 +20,24 @@
 #   - allUsers o allAuthenticatedUsers con cualquier rol, salvo allUsers con PUBLIC_ALLOWED_ROLES;
 #   - roles/iam.serviceAccountKeyAdmin, securityAdmin o roleAdmin para cualquiera;
 #   - roles/iam.serviceAccountTokenCreator, serviceAccountOpenIdTokenCreator o
-#     serviceAccountUser (este último a nivel de proyecto) para una cuenta fuera de
-#     EXPECTED_SA_NAMES, comparando el correo completo con PROJECT del plan;
+#     serviceAccountUser a nivel de PROYECTO para una cuenta fuera de EXPECTED_SA_NAMES,
+#     comparando el correo completo con PROJECT del plan;
+#   - esos mismos roles a nivel de CUENTA (google_service_account_iam_*) sobre una cuenta
+#     objetivo cuyo par "actúa>objetivo" no está en EXPECTED_SA_PAIRS (el destino se lee de
+#     service_account_id; si es desconocido hasta el apply, también es ERROR);
 #   - roles/iam.serviceAccountAdmin para una cuenta fuera de SA_ADMIN_EXPECTED_NAMES;
-#   - roles/resourcemanager.projectIamAdmin sin condition, o con una que no contenga
-#     modifiedGrantsByRole o que nombre owner, editor o projectIamAdmin;
+#   - roles/resourcemanager.projectIamAdmin sin condition, o con una condition que no contenga
+#     modifiedGrantsByRole o que nombre owner, editor o projectIamAdmin. La comprobación es
+#     textual (una búsqueda de subcadena en la expresión CEL), no evalúa la expresión;
 #   - una asignación de rol de escalada con miembro o rol desconocido hasta el apply;
 #   - si el plan es de bootstrap: sa-api sin sus roles mínimos, sa-deployer sin los roles de
 #     Firebase y Cloud Run, sa-terraform-plan con roles de datos o de facturación para cuentas
 #     de servicio (ver las secciones 4-6 abajo).
 # AVISO (no cambia el código de salida):
 #   - principal humano (user:, group: o domain:) con cualquier rol distinto de VIEWER_ROLES;
-#   - asignación con miembro o rol desconocido hasta el apply, si el rol no es de escalada.
+#   - asignación con miembro o rol desconocido hasta el apply, si el rol no es de escalada
+#     (o es serviceAccountUser a nivel de cuenta sobre una cuenta esperada);
+#   - serviceAccountUser a nivel de cuenta con destino desconocido hasta el apply.
 set -euo pipefail
 
 PLAN="${1:?Uso: $0 plan.json}"
@@ -51,6 +57,14 @@ EXPECTED_SA_NAMES=(sa-terraform sa-deployer)
 # Cuentas que pueden tener roles/iam.serviceAccountAdmin: sa-terraform crea las cuentas
 # de la plataforma en el bootstrap (ver docs/arquitectura.md §12).
 SA_ADMIN_EXPECTED_NAMES=(sa-terraform)
+# Pares "cuenta_que_actúa>cuenta_objetivo" esperados para TokenCreator, OpenIdTokenCreator
+# y serviceAccountUser a nivel de cuenta (google_service_account_iam_*). Cualquier otro par es ERROR.
+EXPECTED_SA_PAIRS=(
+  "sa-api>sa-play"            # ADR-0013: la API suplanta a sa-play (modules/platform/play.tf, api_impersonates_play)
+  "sa-deployer>sa-deployer"   # bootstrap/main.tf, deployer_signs_own_tokens
+  "sa-api>sa-tasks"           # serviceAccountUser: identidad OIDC de Tasks (iam.tf, api_acts_as_tasks)
+  "sa-deployer>sa-api"        # serviceAccountUser: el deployer despliega la API (iam.tf, deployer_acts_as_api)
+)
 # Roles de solo lectura que no generan aviso para un principal humano.
 VIEWER_ROLES=(roles/viewer roles/logging.viewer roles/monitoring.viewer)
 # Roles que cuentan como escalada si el miembro es desconocido hasta el apply.
@@ -79,7 +93,8 @@ es_sa_de() { # es_sa_de <miembro> <nombres...>: verdadero si el miembro es exact
   return 1
 }
 
-# Filas TSV: rol, miembro, tipo de recurso, estado de la condición (sin|ok|mal), origen y dirección.
+# Filas TSV: rol, miembro, tipo de recurso, estado de la condición (sin|ok|mal), origen, dirección
+# y destino (cuenta objetivo "nombre@proyecto" en recursos google_service_account_iam_*; "-" si no aplica).
 # "(desconocido)" marca el rol o el miembro que Terraform calcula en el apply.
 # Estado de la condición: "sin" si no hay; "ok" si limita a modifiedGrantsByRole y no nombra
 # owner, editor ni projectIamAdmin; "mal" en cualquier otro caso.
@@ -93,17 +108,21 @@ bindings() {
           | if ($e | contains("modifiedGrantsByRole")) and (($e | test("roles/owner|roles/editor|projectIamAdmin")) | not)
             then "ok" else "mal" end
         end;
+    def destino_de(id):
+      if id == null then "(desconocido)" else (id | sub("^.*/serviceAccounts/"; "")) end;
     def filas_plan:
       [.planned_values.root_module | recurse(.child_modules[]?) | .resources[]?
        | select(.type | test("_iam_(member|binding|policy)$")) | . as $r
        | ($r.address // $r.type) as $dir
+       | (if ($r.type | startswith("google_service_account_iam_"))
+          then destino_de($r.values.service_account_id) else "-" end) as $dest
        | if ($r.type | endswith("_iam_policy")) then
            (($r.values.policy_data // "{}") | fromjson | (.bindings // []))[]
            | . as $b | ($b.members // [])[]
-           | [($b.role // "(desconocido)"), ., $r.type, cn($b.condition), "plan", $dir] | @tsv
+           | [($b.role // "(desconocido)"), ., $r.type, cn($b.condition), "plan", $dir, $dest] | @tsv
          else
            ((($r.values.members // []) + [($r.values.member // empty)])[]) as $m
-           | [($r.values.role // "(desconocido)"), $m, $r.type, cn($r.values.condition), "plan", $dir] | @tsv
+           | [($r.values.role // "(desconocido)"), $m, $r.type, cn($r.values.condition), "plan", $dir, $dest] | @tsv
          end];
     def filas_desconocidas:
       [.resource_changes[]? | select(.type | test("_iam_(member|binding|policy)$")) | . as $rc
@@ -115,21 +134,39 @@ bindings() {
           then ["(desconocido)"]
           else ([($a.member // empty)] + ($a.members // [])) | if length == 0 then ["(desconocido)"] else . end
           end)[] as $m
-       | [$rol, $m, $rc.type, "sin", "desconocido", ($rc.address // $rc.type)] | @tsv];
+       | (if ($rc.type | startswith("google_service_account_iam_"))
+          then (if unk($u.service_account_id) then "(desconocido)"
+                else destino_de($a.service_account_id) end)
+          else "-" end) as $dest
+       | [$rol, $m, $rc.type, "sin", "desconocido", ($rc.address // $rc.type), $dest] | @tsv];
     [filas_plan, filas_desconocidas] | add | unique | .[]' "$PLAN"
+}
+
+en_par() { # en_par <miembro> <destino>: verdadero si el par está en EXPECTED_SA_PAIRS y ambos son del proyecto
+  local m="${1#serviceAccount:}" t="$2" p
+  m="${m%@*}"; t="${t%@*}"
+  [ "$1" = "serviceAccount:$m@$PROJECT.iam.gserviceaccount.com" ] || return 1
+  [ "$2" = "$t@$PROJECT.iam.gserviceaccount.com" ] || return 1
+  for p in "${EXPECTED_SA_PAIRS[@]}"; do [ "$p" = "$m>$t" ] && return 0; done
+  return 1
 }
 
 all="$(bindings)"
 
 # 1-3. Reglas por asignación (planned_values y valores desconocidos).
-while IFS=$'\t' read -r role member tipo estado origen addr; do
+while IFS=$'\t' read -r role member tipo estado origen addr destino; do
   [ -z "$role" ] && continue
-  # Valor desconocido hasta el apply: si el rol es de escalada, error; si no, aviso.
+  cuenta=no; [[ "$tipo" == google_service_account_iam_* ]] && cuenta=si
+  destino_nombre="${destino%@*}"
+  # Valores desconocidos hasta el apply.
   if [ "$role" = "(desconocido)" ] || [ "$member" = "(desconocido)" ]; then
-    if en_lista "$role" "${ESCALATION_ROLES[@]}"; then
-      error "asignación con valores desconocidos hasta el apply ($addr): rol $role, miembro $member"
+    if [ "$member" = "(desconocido)" ] && [ "$role" = roles/iam.serviceAccountUser ] \
+       && [ "$cuenta" = si ] && en_lista "$destino_nombre" "${EXPECTED_SA_NAMES[@]}"; then
+      aviso "miembro desconocido hasta el apply sobre una cuenta esperada ($addr): $member puede actuar como $destino"
+    elif en_lista "$role" "${ESCALATION_ROLES[@]}"; then
+      error "asignación con valores desconocidos hasta el apply ($addr): rol $role, miembro $member, destino $destino"
     else
-      aviso "asignación con valores desconocidos hasta el apply ($addr): rol $role, miembro $member"
+      aviso "asignación con valores desconocidos hasta el apply ($addr): rol $role, miembro $member, destino $destino"
     fi
     continue
   fi
@@ -148,11 +185,19 @@ while IFS=$'\t' read -r role member tipo estado origen addr; do
   case "$role" in
     roles/iam.serviceAccountKeyAdmin|roles/iam.securityAdmin|roles/iam.roleAdmin)
       error "$member tiene $role (escalada)" ;;
-    roles/iam.serviceAccountTokenCreator|roles/iam.serviceAccountOpenIdTokenCreator)
-      es_sa_de "$member" "${EXPECTED_SA_NAMES[@]}" || error "$member tiene $role (escalada)" ;;
-    roles/iam.serviceAccountUser)
-      if [[ "$tipo" == google_project_iam_* ]]; then
+    roles/iam.serviceAccountTokenCreator|roles/iam.serviceAccountOpenIdTokenCreator|roles/iam.serviceAccountUser)
+      if [ "$cuenta" = si ]; then
+        # A nivel de cuenta: el par debe estar en EXPECTED_SA_PAIRS.
+        if [ "$destino" = "(desconocido)" ] && [ "$role" = roles/iam.serviceAccountUser ]; then
+          aviso "$member puede actuar como una cuenta de destino desconocido hasta el apply ($addr)"
+        else
+          en_par "$member" "$destino" || error "$member tiene $role sobre $destino: par no esperado (ver EXPECTED_SA_PAIRS)"
+        fi
+      elif [ "$role" = roles/iam.serviceAccountUser ]; then
+        # A nivel de proyecto: solo cuentas esperadas.
         es_sa_de "$member" "${EXPECTED_SA_NAMES[@]}" || error "$member tiene $role a nivel de proyecto"
+      else
+        es_sa_de "$member" "${EXPECTED_SA_NAMES[@]}" || error "$member tiene $role (escalada)"
       fi ;;
     roles/iam.serviceAccountAdmin)
       es_sa_de "$member" "${SA_ADMIN_EXPECTED_NAMES[@]}" || error "$member tiene $role (escalada)" ;;
