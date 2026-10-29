@@ -260,10 +260,10 @@ jobs:
           HOSTING_URL_PROD: ${{ vars.PARCHEU_HOSTING_URL_PROD }}
         run: |
           faltan=()
-          [[ "$API_URL_PROD" == https://* ]] || faltan+=("PARCHEU_API_URL_PROD")
+          [[ "$API_URL_PROD" == https://*/ ]] || faltan+=("PARCHEU_API_URL_PROD")
           [[ "$HOSTING_URL_PROD" == https://* ]] || faltan+=("PARCHEU_HOSTING_URL_PROD")
           if (( ${#faltan[@]} )); then
-            echo "::error::Faltan (o no son https) en las variables del repo o del environment: ${faltan[*]} (ver docs/pendientes-humanos.md, A-M1). Sin ellas el AAB saldría con la URL de relleno."
+            echo "::error::Faltan (o no son https; la de la API debe terminar en /) en las variables del repo o del environment: ${faltan[*]} (ver docs/pendientes-humanos.md, A-M1). Sin ellas el AAB saldría con la URL de relleno."
             exit 1
           fi
 

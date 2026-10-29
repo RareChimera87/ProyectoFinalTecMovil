@@ -5,12 +5,13 @@ Reglas, índices y Hosting de Firebase. Decisiones: [ADR-0004](../docs/adr/0004-
 
 | Archivo | Qué es |
 |---|---|
+| `firebase.prod.json` | Config de Hosting de prod (rewrite `/v1/**` a Cloud Run y `predeploy` de assetlinks); `firebase.json` es la de dev |
 | `firebase.json` | Reglas, índices, Hosting (`public/`) y emulador de Firestore |
 | `.firebaserc` | Alias `dev` (`parcheu-dev`) y `prod` (`parcheu-prod`) |
 | `firestore.rules` | Todo denegado; lectura solo de miembros, participantes o dueño; ninguna escritura de clientes |
 | `firestore.indexes.json` | Índices compuestos (vacío: la 1.0 aún no tiene consultas compuestas; las agregan E5.2 y E4.x si las necesitan) |
 | `public/` | Hosting: `/privacidad`, `/terminos`, `/borrar-cuenta` (E8.4), `/.well-known/assetlinks.json` y el respaldo web de `/i/{codigo}` (E6.1, rewrite `/i/**` en `firebase.json`) |
-| `public/admin.html`, `admin.css`, `admin.js` | Panel de moderación (E8.5). Sin código en línea: la CSP de `/admin*` (`firebase.json`) no admite `unsafe-inline`. Llama a `/v1/admin/*` en el mismo origen (rewrite `/v1/**` → servicio Cloud Run `api`, `us-central1`); no hay campo de URL porque el backend no instala CORS y el token de admin no debe salir a otro origen. En `parcheu-dev` sirve solo si existe el servicio `api` en Cloud Run (el homeserver no lo es). SDK `firebase-*-compat` 11.0.2 de gstatic con SRI (`integrity` sha384): los archivos por versión son inmutables (`max-age=31536000`); al subir de versión hay que recalcular el hash con `curl -s <url> \| openssl dgst -sha384 -binary \| openssl base64 -A` |
+| `public/admin.html`, `admin.css`, `admin.js` | Panel de moderación (E8.5). Sin código en línea: la CSP de `/admin*` (`firebase.json`) no admite `unsafe-inline`. Llama a `/v1/admin/*` en el mismo origen (rewrite `/v1/**` → servicio Cloud Run `api`, `us-central1`, solo en `firebase.prod.json`); no hay campo de URL porque el backend no instala CORS y el token de admin no debe salir a otro origen. `firebase.json` (dev) no lleva ese rewrite porque en `parcheu-dev` el backend corre en el homeserver y la API de Hosting rechaza un rewrite a un servicio inexistente; el panel solo funciona detrás de `firebase.prod.json`. `firebase.prod.json` es `firebase.json` más el rewrite y un `predeploy` que renderiza el assetlinks de prod (una prueba fija que no difieran en nada más); el deploy de prod debe usar `--config firebase.prod.json` con `PLAY_APP_SIGNING_SHA256` definida. SDK `firebase-*-compat` 11.0.2 de gstatic con SRI (`integrity` sha384): los archivos por versión son inmutables (`max-age=31536000`); al subir de versión hay que recalcular el hash con `curl -s <url> \| openssl dgst -sha384 -binary \| openssl base64 -A` |
 | `test/` | Pruebas de las reglas con `@firebase/rules-unit-testing` en el emulador |
 
 ## Documentos de Firestore (arquitectura.md §8.2)
@@ -57,7 +58,7 @@ archivo por entorno (C-B9): las fuentes están en `assetlinks/dev.json` y `asset
 | dev (`parcheu-dev`) | `me.santiagoreina.parcheu.dev` | debug de la máquina de I3 (cada desarrollador que quiera probar el App Link en su teléfono agrega la suya) |
 | prod (`parcheu-prod`) | `me.santiagoreina.parcheu` | llave de subida (`docs/play-console.md` §2) y la de **Play App Signing**, que se inyecta desde la variable `PLAY_APP_SIGNING_SHA256` (el render falla si falta) |
 
-El deploy de prod debe correr, antes de `firebase deploy`, `PLAY_APP_SIGNING_SHA256=<huella> node render-assetlinks.mjs prod`
+El deploy de prod (`--config firebase.prod.json`) corre ese render solo en su `predeploy` (falla cerrado sin la huella); equivale a correr, antes de `firebase deploy`, `PLAY_APP_SIGNING_SHA256=<huella> node render-assetlinks.mjs prod`
 (pendiente en `firebase-deploy.yml`, ver `docs/pendientes-humanos.md`). Mientras tanto no se despliega prod.
 
 Para agregar una huella: `keytool -list -v -keystore <keystore>` (o Play Console > Integridad de la app) y

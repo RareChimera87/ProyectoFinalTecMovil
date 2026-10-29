@@ -281,8 +281,13 @@ val verificarUrlsProd = tasks.register("verificarUrlsProd") {
         if (permitirRelleno) return@doLast
         fun invalida(url: String, relleno: String) =
             url.isBlank() || url == relleno || !url.startsWith("https://")
+
+        // Retrofit exige que baseUrl termine en "/".
+        fun sinBarra(url: String) = !url.endsWith("/")
         val problemas = buildList {
-            if (invalida(apiUrl, apiRelleno)) add("API_URL: pasa -Pparcheu.apiUrl.prod=<url https>")
+            if (invalida(apiUrl, apiRelleno) || sinBarra(apiUrl)) {
+                add("API_URL: pasa -Pparcheu.apiUrl.prod=<url https que termine en />")
+            }
             if (invalida(hostingUrl, hostingRelleno)) {
                 add("HOSTING_URL: pasa -Pparcheu.hostingUrl.prod=<url https>")
             }

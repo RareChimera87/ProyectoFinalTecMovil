@@ -6,13 +6,26 @@ import { readFileSync } from 'node:fs';
 
 const leer = (ruta) => readFileSync(new URL(ruta, import.meta.url), 'utf8');
 const config = JSON.parse(leer('../firebase.json'));
+const configProd = JSON.parse(leer('../firebase.prod.json'));
 const html = leer('../public/admin.html');
 const js = leer('../public/admin.js');
 
 describe('firebase.json', () => {
-  it('reescribe /v1/** al servicio api de Cloud Run', () => {
-    const r = config.hosting.rewrites.find((x) => x.source === '/v1/**');
+  it('dev no reescribe /v1/** (no hay servicio api en Cloud Run de parcheu-dev; el deploy fallaría)', () => {
+    assert.ok(!config.hosting.rewrites.some((x) => x.run || x.source === '/v1/**'));
+  });
+
+  it('prod reescribe /v1/** al servicio api de Cloud Run y renderiza assetlinks antes de desplegar', () => {
+    const r = configProd.hosting.rewrites.find((x) => x.source === '/v1/**');
     assert.deepEqual(r?.run, { serviceId: 'api', region: 'us-central1' });
+    assert.deepEqual(configProd.hosting.predeploy, ['node render-assetlinks.mjs prod']);
+  });
+
+  it('prod es dev más el rewrite y el predeploy, nada más', () => {
+    const base = structuredClone(configProd);
+    base.hosting.rewrites = base.hosting.rewrites.filter((x) => x.source !== '/v1/**');
+    delete base.hosting.predeploy;
+    assert.deepEqual(base, config);
   });
 
   it('/admin* lleva CSP estricta y cabeceras de aislamiento', () => {
@@ -23,6 +36,10 @@ describe('firebase.json', () => {
       assert.ok(csp.includes(d), d);
     }
     assert.ok(!csp.includes('unsafe-inline') && !csp.includes('unsafe-eval'));
+    assert.ok(!csp.includes('*.googleapis.com') && !csp.includes('*.web.app'), 'hosts exactos');
+    for (const d of ['https://securetoken.googleapis.com', 'https://identitytoolkit.googleapis.com', 'https://apis.google.com']) {
+      assert.ok(csp.includes(d), d);
+    }
     assert.equal(v['X-Content-Type-Options'], 'nosniff');
     assert.equal(v['Referrer-Policy'], 'no-referrer');
     assert.equal(v['X-Robots-Tag'], 'noindex');

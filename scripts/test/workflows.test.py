@@ -317,6 +317,7 @@ class AndroidReleaseUrlsProd(unittest.TestCase):
         run = self.pasos[i_val]["run"]
         self.assertIn("exit 1", run)
         self.assertIn("https://*", run)
+        self.assertIn("https://*/ ]]", run)  # la URL de la API debe terminar en /
         self.assertIn("PARCHEU_API_URL_PROD", run)
         self.assertIn("PARCHEU_HOSTING_URL_PROD", run)
 
