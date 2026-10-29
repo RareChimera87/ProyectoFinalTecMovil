@@ -47,7 +47,10 @@ class SharedPrefsPushTokenStore(context: Context) : PushTokenStore {
         set(value) = prefs.edit().putString("registered_user", value).apply()
 
     override fun clear() {
-        prefs.edit().clear().apply()
+        // No se vacía el archivo: `permission_asked` (NotificationPermission) comparte "push" y debe sobrevivir.
+        prefs.edit().remove(
+            "last_token"
+        ).remove("registered_token").remove("registered_user").apply()
     }
 }
 

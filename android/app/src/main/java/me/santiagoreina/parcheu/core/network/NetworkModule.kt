@@ -60,7 +60,7 @@ fun createOkHttpClient(
     }.build()
 
 /**
- * Variante del cliente para los endpoints síncronos lentos (hoy solo `GET /v1/me/export`, que el servidor
+ * Variante del cliente para los endpoints síncronos lentos (toda `AccountApi`: `GET /v1/me/export` y `DELETE /v1/me`), que el servidor
  * arma completo antes de responder; ninguno de simulación o escenario lo es: responden 202 o leen estado).
  * Comparte el pool de conexiones, los interceptores y el autenticador de [client]; solo cambian los
  * timeouts de lectura, escritura y llamada. No hay timeout por petición en OkHttp una vez iniciada la
