@@ -120,6 +120,11 @@ object Examples {
         "ExportInviteRedemption" to ExportInviteRedemption.serializer(),
         "ExportInvites" to ExportInvites.serializer(),
         "ExportPurchase" to ExportPurchase.serializer(),
+        "ExportConnectionDecision" to ExportConnectionDecision.serializer(),
+        "ExportIntroRequest" to ExportIntroRequest.serializer(),
+        "ExportCommunity" to ExportCommunity.serializer(),
+        "ExportTwinVersion" to ExportTwinVersion.serializer(),
+        "ExportReportUnlock" to ExportReportUnlock.serializer(),
         // Admin
         "Resolve" to Resolve.serializer(),
         "AdminReport" to AdminReport.serializer(),

@@ -7,7 +7,13 @@ import me.santiagoreina.parcheu.api.platform.db.tables.Blocks
 import me.santiagoreina.parcheu.api.platform.db.tables.ChatMembers
 import me.santiagoreina.parcheu.api.platform.db.tables.ChatMessages
 import me.santiagoreina.parcheu.api.platform.db.tables.Chats
+import me.santiagoreina.parcheu.api.platform.db.tables.CommunityMembers
+import me.santiagoreina.parcheu.api.platform.db.tables.Communities
+import me.santiagoreina.parcheu.api.platform.db.tables.ConnectionDecisions
 import me.santiagoreina.parcheu.api.platform.db.tables.Consents
+import me.santiagoreina.parcheu.api.platform.db.tables.IntroRequests
+import me.santiagoreina.parcheu.api.platform.db.tables.ReportUnlocks
+import me.santiagoreina.parcheu.api.platform.db.tables.TwinVersions
 import me.santiagoreina.parcheu.api.platform.db.tables.EdgesView
 import me.santiagoreina.parcheu.api.platform.db.tables.Entitlements
 import me.santiagoreina.parcheu.api.platform.db.tables.InviteRedeemAttempts
@@ -129,7 +135,14 @@ class ExposedExportRepository(private val db: Database) : ExportRepository {
                 ExportEntitlementRow(it[Entitlements.state], it[Entitlements.basePlan], it[Entitlements.expiresAt]?.toInstant(), it[Entitlements.autoRenewing])
             }
 
-            val notifications = Notifications.selectAll().where { Notifications.userId eq userId }
+            // Como la app (ADR-0012 regla 4): lo ligado a alguien bloqueado en cualquier sentido no se exporta.
+            val blockedEitherWay: Set<UUID> = Blocks.selectAll()
+                .where { (Blocks.blockerId eq userId) or (Blocks.blockedId eq userId) }
+                .flatMap { listOf(it[Blocks.blockerId], it[Blocks.blockedId]) }
+                .filter { it != userId }
+                .toSet()
+
+            val visibleNotifications = Notifications.selectAll().where { Notifications.userId eq userId }
                 .orderBy(Notifications.createdAt to SortOrder.ASC, Notifications.id to SortOrder.ASC)
                 .map {
                     val payload = it[Notifications.payload] as? JsonObject
@@ -146,6 +159,11 @@ class ExposedExportRepository(private val db: Database) : ExportRepository {
                         readAt = it[Notifications.readAt]?.toInstant(),
                     )
                 }
+                .filter { it.actorId == null || it.actorId !in blockedEitherWay }
+            val actorDemo = visibleNotifications.mapNotNull { it.actorId }.toSet().let { ids ->
+                if (ids.isEmpty()) emptySet() else Users.select(Users.id).where { (Users.id inList ids) and (Users.isDemo eq true) }.map { it[Users.id] }.toSet()
+            }
+            val notifications = visibleNotifications.map { it.copy(actorIsDemo = it.actorId in actorDemo) }
 
             val personaSummary = Twins.select(Twins.personaSummary).where { Twins.userId eq userId }.singleOrNull()?.get(Twins.personaSummary)
 
@@ -173,6 +191,10 @@ class ExposedExportRepository(private val db: Database) : ExportRepository {
                     it[Introductions.mode], it[Introductions.status], myResponse?.name, it[Introductions.createdAt].toInstant(),
                     it[Introductions.aResponse], it[Introductions.bResponse],
                 )
+            }.filter { intro ->
+                // Como la app: con alguien bloqueado de la presentación no se ve (ni quien presenta ni la otra persona).
+                val involved = if (intro.introducerId == userId) listOf(intro.userA, intro.userB) else listOf(intro.introducerId, if (intro.userA == userId) intro.userB else intro.userA)
+                involved.none { it in blockedEitherWay }
             }.filter { intro ->
                 // Una persona presentada solo exporta lo que la app le muestra (mismo predicado que IntroductionService):
                 // las que siguen simulándose o que quien presenta descartó revelarían su decisión.
@@ -223,10 +245,39 @@ class ExposedExportRepository(private val db: Database) : ExportRepository {
                 .orderBy(PurchaseEvents.receivedAt to SortOrder.ASC, PurchaseEvents.messageId to SortOrder.ASC)
                 .map { ExportPurchaseRow(it[PurchaseEvents.receivedAt].toInstant(), notificationType(it[PurchaseEvents.payload])) }
 
+            // Solo de las simulaciones que ya se exportan (no las de presentaciones, que ella no ve).
+            val exportedSims = simulations.map { it.id }.toSet()
+            val connectionDecisions = ConnectionDecisions.selectAll().where { ConnectionDecisions.userId eq userId }
+                .orderBy(ConnectionDecisions.decidedAt to SortOrder.ASC)
+                .filter { it[ConnectionDecisions.simulationId] in exportedSims }
+                .map { ExportConnectionDecisionRow(it[ConnectionDecisions.simulationId], it[ConnectionDecisions.connect], it[ConnectionDecisions.decidedAt].toInstant()) }
+            val reportUnlocks = ReportUnlocks.selectAll().where { ReportUnlocks.userId eq userId }
+                .orderBy(ReportUnlocks.createdAt to SortOrder.ASC)
+                .filter { it[ReportUnlocks.simulationId] in exportedSims }
+                .map { ExportReportUnlockRow(it[ReportUnlocks.simulationId], it[ReportUnlocks.createdAt].toInstant()) }
+            // Solo las que ella pidió: en las que es `via` o `target` saldría el deseo de otra persona.
+            val introRequests = IntroRequests.selectAll().where { IntroRequests.requesterId eq userId }
+                .orderBy(IntroRequests.createdAt to SortOrder.ASC, IntroRequests.id to SortOrder.ASC)
+                .map {
+                    ExportIntroRequestRow(
+                        it[IntroRequests.id], it[IntroRequests.viaUserId], it[IntroRequests.targetUserId],
+                        it[IntroRequests.status], it[IntroRequests.createdAt].toInstant(),
+                    )
+                }
+            // Solo su pertenencia (nombre y semana), nunca los demás miembros.
+            val communities = (CommunityMembers innerJoin Communities).select(Communities.name, Communities.week)
+                .where { CommunityMembers.userId eq userId }
+                .orderBy(Communities.week to SortOrder.ASC, Communities.name to SortOrder.ASC)
+                .map { ExportCommunityRow(it[Communities.name], it[Communities.week].toString()) }
+            val twinVersions = TwinVersions.selectAll().where { TwinVersions.userId eq userId }
+                .orderBy(TwinVersions.version to SortOrder.ASC)
+                .map { ExportTwinVersionRow(it[TwinVersions.version], it[TwinVersions.traits], it[TwinVersions.personaSummary], it[TwinVersions.createdAt].toInstant()) }
+
             ExportRows(
                 consents, answers, memories, simulations, connections, chats, blocks, entitlement,
                 notifications, personaSummary, reportsMade, introductions, matches, queueTicket, twinFeedback,
                 inviteCode, redemptions, redeemAttempts, purchases,
+                connectionDecisions, introRequests, communities, twinVersions, reportUnlocks,
             )
         }
     }

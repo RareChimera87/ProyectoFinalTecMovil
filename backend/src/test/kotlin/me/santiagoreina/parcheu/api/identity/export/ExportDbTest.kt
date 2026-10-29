@@ -146,6 +146,10 @@ class ExportDbTest : FunSpec({
             val introHiddenDeclined = UUID.randomUUID()
             val matchId = UUID.randomUUID()
             val chat = UUID.randomUUID()
+            val nando = UUID.randomUUID()
+            val demoUser = UUID.randomUUID()
+            val ownSim = UUID.randomUUID()
+            val introRequestId = UUID.randomUUID()
             ds.connection.use { c ->
                 fun user(id: UUID, uid: String, name: String) = c.exec(
                     "insert into users (id, firebase_uid, email, display_name, photo_url, created_at, updated_at) " +
@@ -156,11 +160,14 @@ class ExportDbTest : FunSpec({
                 user(laura, "uid-laura-${UUID.randomUUID()}", "Laura Pinzón")
                 user(mari, "uid-mari-${UUID.randomUUID()}", "Mariana Ruiz")
                 user(pedro, "uid-pedro-${UUID.randomUUID()}", "Pedro Cárdenas")
+                user(nando, "uid-nando-${UUID.randomUUID()}", "Fernando Bloqueado")
+                user(demoUser, "uid-demo-${UUID.randomUUID()}", "Perfil Demo")
+                c.exec("update users set is_demo = true where id = ?", demoUser)
                 c.exec("insert into twins (user_id, persona_summary, updated_at) values (?, 'Persona curiosa que ama el café.', ?)", ana, now)
                 // Avisos: uno propio (texto conservado) y otros que citan a terceros (texto reemplazado).
                 c.exec(
                     "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'SIMULATION_FAILED', ?::jsonb, ?)",
-                    UUID.randomUUID(), ana, """{"title":"La simulación no se pudo completar","body":"No se gastó tu cupo.","route":"parcheu://home"}""", now,
+                    UUID.randomUUID(), ana, """{"title":"La simulación no se pudo completar","body":"No se gastó tu cupo.","route":"parcheu://simulation/$ownSim"}""", now,
                 )
                 c.exec(
                     "insert into notifications (id, user_id, kind, payload, created_at, read_at) values (?, ?, 'CHAT_MESSAGE', ?::jsonb, ?, ?)",
@@ -186,6 +193,41 @@ class ExportDbTest : FunSpec({
                     "insert into introductions (id, introducer_id, mode, user_a, user_b, a_response, b_response, status, created_at) " +
                         "values (?, ?, 'ESTUDIO', ?, ?, 'INTERESTED', 'DECLINED', 'DECLINED', ?)",
                     introReceived, mari, ana, laura, now,
+                )
+                // Datos propios extra: decisión de conectar y desbloqueo sobre una simulación suya, solicitudes, comunidad y gemelo.
+                c.exec(
+                    "insert into simulations (id, mode, user_a, user_b, requested_by, origin, status, score, created_at) " +
+                        "values (?, 'AMISTAD', ?, ?, ?, 'PARCHE', 'DONE', 70, ?)",
+                    ownSim, ana, pedro, ana, now,
+                )
+                c.exec("insert into connection_decisions (simulation_id, user_id, connect, decided_at) values (?, ?, true, ?)", ownSim, ana, now)
+                c.exec("insert into connection_decisions (simulation_id, user_id, connect, decided_at) values (?, ?, false, ?)", ownSim, pedro, now)
+                c.exec("insert into report_unlocks (user_id, simulation_id, created_at) values (?, ?, ?)", ana, ownSim, now)
+                c.exec("insert into intro_requests (id, requester_id, via_user_id, target_user_id, created_at) values (?, ?, ?, ?, ?)", introRequestId, ana, mari, laura, now)
+                c.exec("insert into intro_requests (id, requester_id, via_user_id, target_user_id, created_at) values (?, ?, ?, ?, ?)", UUID.randomUUID(), laura, ana, pedro, now)
+                c.exec("insert into intro_requests (id, requester_id, via_user_id, target_user_id, created_at) values (?, ?, ?, ?, ?)", UUID.randomUUID(), pedro, laura, ana, now)
+                val community = UUID.randomUUID()
+                c.exec("insert into communities (id, week, name, stable_key, created_at) values (?, '2026-10-19', 'Los madrugadores', 'k1', ?)", community, now)
+                listOf(ana, laura).forEach { c.exec("insert into community_members (community_id, user_id) values (?, ?)", community, it) }
+                c.exec("insert into twin_versions (user_id, version, traits, persona_summary, created_at) values (?, 1, ?::real[], 'Versión vieja del resumen', ?)", ana, "{0.5,0.5,0.5,0.5,0.5,0.25}", now)
+                // Bloqueos: Ana bloqueó a Fernando; lo suyo (aviso y presentación) no sale, como en la app.
+                c.exec("insert into blocks (blocker_id, blocked_id, created_at) values (?, ?, ?)", ana, nando, now)
+                c.exec(
+                    "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'CHAT_MESSAGE', ?::jsonb, ?)",
+                    UUID.randomUUID(), ana, """{"title":"Fernando","body":"hola","actorId":"$nando"}""", now,
+                )
+                c.exec(
+                    "insert into introductions (id, introducer_id, mode, user_a, user_b, status, created_at) values (?, ?, 'AMISTAD', ?, ?, 'PROPOSED', ?)",
+                    UUID.randomUUID(), nando, ana, laura, now,
+                )
+                // Aviso bloqueado (locked) con actor: el actor no sale. Aviso con un actor demo: sale marcado como demo.
+                c.exec(
+                    "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'WANT_TO_CONNECT', ?::jsonb, ?)",
+                    UUID.randomUUID(), ana, """{"title":"Quieren conectar contigo","body":"x","actorId":"$pedro","locked":true}""", now,
+                )
+                c.exec(
+                    "insert into notifications (id, user_id, kind, payload, created_at) values (?, ?, 'WANT_TO_CONNECT', ?::jsonb, ?)",
+                    UUID.randomUUID(), ana, """{"title":"Alguien","body":"x","actorId":"$demoUser"}""", now,
                 )
                 // Ana presentó a Laura y Mari, y Mari dijo 'No, gracias': a Ana la app le muestra PROPOSED.
                 c.exec(
@@ -234,8 +276,13 @@ class ExportDbTest : FunSpec({
             val json = ContractJson.encodeToString(ExportDto.serializer(), dto)
 
             // Avisos: ambos, el propio con su texto y el de Laura reemplazado, con actor anónimo.
-            dto.notifications.size shouldBe 2
+            // Propio, de Laura, bloqueado (locked) y de un demo; el de Fernando (bloqueado por Ana) no sale.
+            dto.notifications.size shouldBe 4
             dto.notifications.single { it.kind == "SIMULATION_FAILED" }.body shouldBe "No se gastó tu cupo."
+            // Una ruta propia con id se conserva (parcheu://simulation/{id}).
+            dto.notifications.single { it.kind == "SIMULATION_FAILED" }.route shouldBe "parcheu://simulation/$ownSim"
+            dto.notifications.filter { it.kind == "WANT_TO_CONNECT" }.single { it.locked }.actor shouldBe null
+            dto.notifications.filter { it.kind == "WANT_TO_CONNECT" }.single { !it.locked }.actor?.isDemo shouldBe true
             val chatNotice = dto.notifications.single { it.kind == "CHAT_MESSAGE" }
             chatNotice.read shouldBe true
             chatNotice.actor?.anonId shouldBe signer.anonId(ana, laura)
@@ -267,6 +314,21 @@ class ExportDbTest : FunSpec({
             match.otherAnonId shouldBe signer.anonId(ana, laura)
             dto.queueTicket?.mode?.name shouldBe "ESTUDIO"
 
+            // Datos propios que faltaban: decisión de conectar, desbloqueo, solicitud que ella pidió, comunidad y gemelo.
+            dto.connectionDecisions.single().let { it.simulationId shouldBe ownSim.toString(); it.connect shouldBe true }
+            dto.reportUnlocks.single().simulationId shouldBe ownSim.toString()
+            dto.introRequests.single().let {
+                it.id shouldBe introRequestId.toString()
+                it.viaAnonId shouldBe signer.anonId(ana, mari)
+                it.targetAnonId shouldBe signer.anonId(ana, laura)
+            }
+            dto.communities.single().let { it.name shouldBe "Los madrugadores"; it.week shouldBe "2026-10-19" }
+            dto.twinVersions.single().let {
+                it.version shouldBe 1
+                it.personaSummary shouldBe "Versión vieja del resumen"
+                it.traits.size shouldBe 6
+            }
+
             dto.twinFeedback.single().rating shouldBe 4
             dto.twinFeedback.single().actual shouldBe "B"
 
@@ -279,7 +341,7 @@ class ExportDbTest : FunSpec({
 
             listOf(
                 laura.toString(), mari.toString(), pedro.toString(), "Laura", "Pinzón", "Mariana", "Pedro", "Cárdenas",
-                "photos/otro", "uid-laura", "uid-mari", "uid-pedro", secret, playToken, "nota-interna-moderacion", "Detalle-de-laura-contra-ana",
+                "photos/otro", "uid-laura", "uid-mari", "uid-pedro", nando.toString(), "Fernando", "uid-nando", secret, playToken, "nota-interna-moderacion", "Detalle-de-laura-contra-ana",
                 "purchaseToken", "m-ajeno", "otro",
             ).forEach { json shouldNotContain it }
         }

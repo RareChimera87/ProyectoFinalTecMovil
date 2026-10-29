@@ -8,12 +8,18 @@ import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.quota.grantsPlus
 import me.santiagoreina.parcheu.api.social.introductions.introducerVisibleStatus
 import me.santiagoreina.parcheu.api.social.introductions.isDeclinedByIntroducer
+import me.santiagoreina.parcheu.api.twin.TraitEngine
 import me.santiagoreina.parcheu.api.twin.TwinState
 import me.santiagoreina.parcheu.api.twin.xpNextFor
 import me.santiagoreina.parcheu.contract.BlockedDto
 import me.santiagoreina.parcheu.contract.ConsentState
 import me.santiagoreina.parcheu.contract.EntitlementDto
 import me.santiagoreina.parcheu.contract.ExportChat
+import me.santiagoreina.parcheu.contract.ExportCommunity
+import me.santiagoreina.parcheu.contract.ExportConnectionDecision
+import me.santiagoreina.parcheu.contract.ExportIntroRequest
+import me.santiagoreina.parcheu.contract.ExportReportUnlock
+import me.santiagoreina.parcheu.contract.ExportTwinVersion
 import me.santiagoreina.parcheu.contract.ExportConnection
 import me.santiagoreina.parcheu.contract.ExportDto
 import me.santiagoreina.parcheu.contract.ExportIntroRole
@@ -36,6 +42,7 @@ import me.santiagoreina.parcheu.contract.Trait
 import me.santiagoreina.parcheu.contract.TraitKey
 import me.santiagoreina.parcheu.contract.TwinDto
 import java.time.Clock
+import kotlin.math.round
 import java.util.UUID
 
 /**
@@ -161,6 +168,20 @@ class AccountExportService(
                 )
             },
             purchases = rows.purchases.map { ExportPurchase(it.receivedAt.toKotlin(), it.notificationType) },
+            connectionDecisions = rows.connectionDecisions.map { ExportConnectionDecision(it.simulationId.toString(), it.connect, it.decidedAt.toKotlin()) },
+            introRequests = rows.introRequests.map {
+                ExportIntroRequest(it.id.toString(), anon(it.viaUserId), anon(it.targetUserId), it.status.name, it.createdAt.toKotlin())
+            },
+            communities = rows.communities.map { ExportCommunity(it.name, it.week) },
+            twinVersions = rows.twinVersions.map { v ->
+                ExportTwinVersion(
+                    version = v.version,
+                    traits = v.traits?.let { values -> TraitKey.entries.mapIndexed { i, key -> Trait(key, round(values[i].toDouble() * TraitEngine.DECIMALS) / TraitEngine.DECIMALS) } }.orEmpty(),
+                    personaSummary = v.personaSummary,
+                    createdAt = v.createdAt.toKotlin(),
+                )
+            },
+            reportUnlocks = rows.reportUnlocks.map { ExportReportUnlock(it.simulationId.toString(), it.createdAt.toKotlin()) },
             entitlement = rows.entitlement?.let {
                 EntitlementDto(
                     plus = grantsPlus(it.state, it.expiresAt, now, it.autoRenewing),
@@ -185,7 +206,8 @@ class AccountExportService(
             title = if (own) row.title else NEUTRAL_TITLE,
             body = if (own) row.body else NEUTRAL_BODY,
             route = if (own) row.route else null,
-            actor = row.actorId?.let { anonymousRef(anon(it), isDemo = false) },
+            // Un aviso bloqueado (`locked`) nunca lleva actor, como en la bandeja (regla 6).
+            actor = row.actorId?.takeIf { !row.locked }?.let { anonymousRef(anon(it), isDemo = row.actorIsDemo) },
             locked = row.locked,
             read = row.readAt != null,
             createdAt = row.createdAt.toKotlin(),

@@ -117,6 +117,21 @@ class AccountExportServiceTest : FunSpec({
         dto.introductions.single().myResponse shouldBe "INTERESTED"
     }
 
+    test("un aviso locked no lleva actor y el actor demo sale marcado") {
+        val extra = rows.copy(
+            notifications = listOf(
+                ExportNotificationRow(UUID.randomUUID(), "WANT_TO_CONNECT", "t", "b", null, laura, true, now, null),
+                ExportNotificationRow(UUID.randomUUID(), "WANT_TO_CONNECT", "t", "b", null, pedro, false, now, null, actorIsDemo = true),
+            ),
+        )
+        val svc = AccountExportService(
+            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION), { extra }, signer, { null }, FIXED_CLOCK,
+        )
+        val dto = svc.build(me, meDto, extra, null)
+        dto.notifications.first().actor shouldBe null
+        dto.notifications.last().actor?.isDemo shouldBe true
+    }
+
     test("a quien presenta no se le revela el 'No, gracias' de una persona presentada") {
         fun made(status: IntroductionStatus, a: IntroResponse?, b: IntroResponse?) = ExportIntroductionRow(
             UUID.randomUUID(), me, laura, pedro, Mode.AMISTAD, status, null, now, a, b,

@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.api.identity.export
 
 import me.santiagoreina.parcheu.api.identity.ConsentRecord
+import me.santiagoreina.parcheu.api.platform.db.tables.IntroRequestStatus
 import me.santiagoreina.parcheu.api.platform.db.tables.IntroResponse
 import me.santiagoreina.parcheu.contract.Answer
 import me.santiagoreina.parcheu.contract.ChatType
@@ -48,7 +49,29 @@ data class ExportRows(
     val inviteRedemptions: List<ExportRedemptionRow> = emptyList(),
     val redeemAttempts: List<Instant> = emptyList(),
     val purchases: List<ExportPurchaseRow> = emptyList(),
+    val connectionDecisions: List<ExportConnectionDecisionRow> = emptyList(),
+    val introRequests: List<ExportIntroRequestRow> = emptyList(),
+    val communities: List<ExportCommunityRow> = emptyList(),
+    val twinVersions: List<ExportTwinVersionRow> = emptyList(),
+    val reportUnlocks: List<ExportReportUnlockRow> = emptyList(),
 )
+
+data class ExportConnectionDecisionRow(val simulationId: UUID, val connect: Boolean, val decidedAt: Instant)
+
+/** Solicitud de presentación que la persona pidió (`requester_id` = ella). */
+data class ExportIntroRequestRow(
+    val id: UUID,
+    val viaUserId: UUID,
+    val targetUserId: UUID,
+    val status: IntroRequestStatus,
+    val createdAt: Instant,
+)
+
+data class ExportCommunityRow(val name: String, val week: String)
+
+data class ExportTwinVersionRow(val version: Int, val traits: List<Float>?, val personaSummary: String?, val createdAt: Instant)
+
+data class ExportReportUnlockRow(val simulationId: UUID, val createdAt: Instant)
 
 /** Aviso de la bandeja; el servicio decide si su texto se puede exportar (puede citar a terceros). */
 data class ExportNotificationRow(
@@ -61,6 +84,7 @@ data class ExportNotificationRow(
     val locked: Boolean,
     val createdAt: Instant,
     val readAt: Instant?,
+    val actorIsDemo: Boolean = false,
 )
 
 /** Reporte hecho por la persona. Sin `snapshot` (mensajes de terceros) ni datos de moderación. */

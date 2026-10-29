@@ -179,6 +179,49 @@ public data class ExportPurchase(
     val notificationType: Int? = null,
 )
 
+/** Su decisión de conectar (o no) tras una simulación (`connection_decisions`); solo la propia. */
+@Serializable
+public data class ExportConnectionDecision(
+    val simulationId: String,
+    val connect: Boolean,
+    val decidedAt: Instant,
+)
+
+/** Solicitud de presentación que la persona pidió ('Pedir presentación'); `via` y `target` solo como `anonId`. */
+@Serializable
+public data class ExportIntroRequest(
+    val id: String,
+    val viaAnonId: String,
+    val targetAnonId: String,
+    /** `PENDING`, `ACCEPTED`, `DECLINED` o `EXPIRED`. */
+    val status: String,
+    val createdAt: Instant,
+)
+
+/** Comunidad semanal a la que perteneció (perfilamiento propio): nombre y semana, sin los demás miembros. */
+@Serializable
+public data class ExportCommunity(
+    val name: String,
+    /** Lunes de la semana (ISO `YYYY-MM-DD`, America/Bogota). */
+    val week: String,
+)
+
+/** Versión pasada de su gemelo: rasgos y resumen de persona de entonces. */
+@Serializable
+public data class ExportTwinVersion(
+    val version: Int,
+    val traits: List<Trait> = emptyList(),
+    val personaSummary: String? = null,
+    val createdAt: Instant,
+)
+
+/** Informe de una simulación que desbloqueó con Plus y cuándo. */
+@Serializable
+public data class ExportReportUnlock(
+    val simulationId: String,
+    val unlockedAt: Instant,
+)
+
 /**
  * GET /v1/me/export: copia completa de los datos del usuario (E8.3, Ley 1581).
  *
@@ -189,8 +232,14 @@ public data class ExportPurchase(
  * - Tokens: `purchaseToken` de Play y su payload (solo se da fecha y tipo), tokens FCM y `firebase_uid`.
  * - Reportes de los que la persona es el reportado, y la instantánea de mensajes de cualquier reporte (texto de
  *   terceros), el id de quien resolvió y las notas de moderación.
- * - Datos operativos sin contenido personal propio: cuotas y uso de IA, versiones y exactitud del gemelo,
- *   cursores internos y desbloqueos de informes.
+ * - Presentaciones y avisos con personas que bloqueó o que la bloquearon: la app los oculta (ADR-0012 regla 4) y
+ *   la exportación hace lo mismo, para no mostrar actividad que la app le esconde.
+ * - Presentaciones recibidas que la persona nunca vio (en simulación o descartadas por quien presenta) y el estado
+ *   `DECLINED` de una presentación hecha cuando lo declinó una persona presentada: revelarían decisiones ajenas.
+ * - Solicitudes de presentación donde es `via` o `target` (revelarían el deseo de otra persona o algo que el
+ *   `target` no ve): solo salen las que ella pidió.
+ * - Datos operativos sin contenido personal propio: cuotas y uso de IA, cursores internos y la serie semanal de
+ *   `twin_accuracy` (su valor vigente ya sale en `twin.accuracy`). Los tokens FCM ya están en la línea de tokens.
  */
 @Serializable
 public data class ExportDto(
@@ -215,4 +264,10 @@ public data class ExportDto(
     val twinFeedback: List<ExportTwinFeedback> = emptyList(),
     val invites: ExportInvites? = null,
     val purchases: List<ExportPurchase> = emptyList(),
+    val connectionDecisions: List<ExportConnectionDecision> = emptyList(),
+    val introRequests: List<ExportIntroRequest> = emptyList(),
+    val communities: List<ExportCommunity> = emptyList(),
+    /** Historial de su gemelo (`twin_versions`): rasgos y resumen de persona por versión. */
+    val twinVersions: List<ExportTwinVersion> = emptyList(),
+    val reportUnlocks: List<ExportReportUnlock> = emptyList(),
 )
