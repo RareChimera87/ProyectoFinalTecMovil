@@ -144,8 +144,8 @@ class ExportDbTest : FunSpec({
             ds.connection.use { c ->
                 fun user(id: UUID, uid: String, name: String) = c.exec(
                     "insert into users (id, firebase_uid, email, display_name, photo_url, created_at, updated_at) " +
-                        "values (?, ?, ?, ?, 'https://photos/x', ?, ?)",
-                    id, uid, "$uid@example.com", name, now, now,
+                        "values (?, ?, ?, ?, ?, ?, ?)",
+                    id, uid, "$uid@example.com", name, "https://photos/${if (id == ana) "ana" else "otro"}", now, now,
                 )
                 user(ana, anaUid, "Ana Gómez")
                 user(laura, "uid-laura-${UUID.randomUUID()}", "Laura Pinzón")
@@ -254,7 +254,7 @@ class ExportDbTest : FunSpec({
 
             listOf(
                 laura.toString(), mari.toString(), pedro.toString(), "Laura", "Pinzón", "Mariana", "Pedro", "Cárdenas",
-                "photos/x", "@example.com", secret, playToken, "nota-interna-moderacion", "Detalle-de-laura-contra-ana",
+                "photos/otro", "uid-laura", "uid-mari", "uid-pedro", secret, playToken, "nota-interna-moderacion", "Detalle-de-laura-contra-ana",
                 "purchaseToken", "m-ajeno", "otro",
             ).forEach { json shouldNotContain it }
         }
