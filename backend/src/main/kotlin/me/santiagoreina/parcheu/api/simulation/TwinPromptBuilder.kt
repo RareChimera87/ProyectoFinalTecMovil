@@ -72,7 +72,7 @@ object TwinPromptBuilder {
             )
         }
         return MemorySelection.select(mode, candidates)
-            .map { MemorySelection.sanitize(it.text).replace(END_MARK, "").replace(SPACES, " ").trim() }
+            .map { PromptData.neutralize(MemorySelection.sanitize(it.text)).replace(END_MARK, "").replace(SPACES, " ").trim() }
             .filter { it.isNotEmpty() }
             .distinct()
             .take(MAX_MEMORIES_IN_PROMPT)
@@ -130,5 +130,5 @@ object TwinPromptBuilder {
 
     /** Quita la marca de cierre y limita la longitud; [PromptData.wrap] neutraliza saltos y corchetes angulares. */
     private fun clean(text: String, maxChars: Int): String =
-        PromptData.neutralize(text.replace(END_MARK, "")).replace(SPACES, " ").takeCodePoints(maxChars).trim()
+        PromptData.neutralize(text).replace(END_MARK, "").replace(SPACES, " ").takeCodePoints(maxChars).trim()
 }
