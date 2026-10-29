@@ -61,7 +61,8 @@ locals {
   # IAM de proyecto ni cuentas de servicio (C-M1): sa-api y sa-tasks, sus roles y sus
   # enlaces los crea este bootstrap; sa-terraform solo tiene actAs sobre esas dos
   # (google_service_account_iam_member.terraform_acts_as) y el rol personalizado
-  # parcheuTerraformApply para secretos, Firestore y Firebase sin acceso a datos.
+  # parcheuTerraformApply para secretos, Firestore, Firebase y métricas de logs sin
+  # acceso a datos.
   terraform_roles_dev = [
     "roles/serviceusage.serviceUsageAdmin", # habilita las APIs de modules/platform (main.tf)
     "roles/run.admin",                      # servicio api, jobs y su IAM de invocación (cloud_run.tf)
@@ -71,7 +72,6 @@ locals {
     "roles/cloudscheduler.admin",           # trabajos programados (scheduler.tf)
     "roles/pubsub.admin",                   # tema play-rtdn, su IAM y la suscripción push (pubsub.tf)
     "roles/monitoring.admin",               # uptime, canales, alertas y tablero (monitoring.tf)
-    "roles/logging.configWriter",           # métricas basadas en logs (monitoring.tf, E10.5)
   ]
 
   # Roles de proyecto de sa-api (antes en modules/platform/iam.tf). Viven aquí para que
@@ -182,7 +182,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     # "<environment>@<ref>", con "tag" en lugar de la ref para refs/tags/v* y "-" sin
     # environment. Permite exigir environment y ref a la vez en un principalSet (que no
     # admite prefijos): sa-deployer de prod usa production@tag; sa-play, play@... (play.tf).
-    "attribute.env_ref" = "('environment' in assertion ? assertion.environment : '-') + '@' + (assertion.ref.startsWith('refs/tags/v') ? 'tag' : assertion.ref)"
+    "attribute.env_ref" = "(has(assertion.environment) ? assertion.environment : '-') + '@' + (assertion.ref.startsWith('refs/tags/v') ? 'tag' : assertion.ref)"
   }
 
   # Solo tokens emitidos para este repositorio pueden intercambiarse. Por ID y no por
@@ -250,9 +250,9 @@ resource "google_project_iam_member" "terraform" {
   member   = "serviceAccount:${google_service_account.terraform[0].email}"
 }
 
-# Lo que sa-terraform necesita de Secret Manager, Firestore y Firebase sin los roles
-# admin/owner, que incluyen leer valores de secretos (versions.access) y documentos de
-# Firestore (datastore.entities.*). Terraform solo crea contenedores de secretos sin valor
+# Lo que sa-terraform necesita de Secret Manager, Firestore, Firebase y métricas de logs
+# sin los roles admin/owner/configWriter, que incluyen leer valores de secretos
+# (versions.access), documentos de Firestore (datastore.entities.*) o exportar logs (sinks). Terraform solo crea contenedores de secretos sin valor
 # (los valores los carga scripts/cargar-secretos.sh con el ADC de una persona), así que no
 # necesita ningún permiso de versiones. setIamPolicy de secretos queda por el
 # secretAccessor de sa-api (secrets.tf).
@@ -279,6 +279,13 @@ resource "google_project_iam_custom_role" "terraform_apply" {
     "firebase.projects.get",
     "firebase.projects.update",
     "resourcemanager.projects.get",
+    # Métricas basadas en logs de monitoring.tf (E10.5). No roles/logging.configWriter:
+    # incluye logging.sinks.* y buckets/links, con los que se exportarían todos los logs.
+    "logging.logMetrics.create",
+    "logging.logMetrics.delete",
+    "logging.logMetrics.get",
+    "logging.logMetrics.list",
+    "logging.logMetrics.update",
   ]
   depends_on = [google_project_service.bootstrap]
 }
