@@ -674,9 +674,9 @@ No hay pasos en consolas externas. Queda una decisión de contrato:
 
 | # | Paso | Dueño | Cuándo |
 |---|---|---|---|
-| 1 | **'Simular' desde D6 (ADR-0023, flujo 11 D6 → F4).** `POST /v1/simulations` solo acepta `otherUserId` = `users.id` y fof solo entrega `anonId`, así que D6 salió sin 'Simular' (la nota al pie remite a la presentación). Decidir entre (a) aceptar `anonId` en `SimulationRequest` y resolverlo en el servidor contra `FofService.candidates` del observador (cambio compatible del contrato + botón en D6 → F4), o (b) enmendar ADR-0023 para quitar 'Simular' de D6. Ver la ficha de E6.3 en `docs/backlog.md`. | I1 (API) + I3 (UI) | Antes de la ventana de E7.4 (18 nov) |
+| 1 | **'Simular' desde D6 (ADR-0023, flujo 11 D6 → F4).** `POST /v1/simulations` solo acepta `otherUserId` = `users.id` y fof solo entrega `anonId`, así que D6 salió sin 'Simular' (la nota al pie remite a la presentación). Decidir entre (a) aceptar `anonId` en `SimulationRequest` y resolverlo en el servidor contra `FofService.candidates` del observador (cambio compatible del contrato + botón en D6 → F4), o (b) enmendar ADR-0023 para quitar 'Simular' de D6. **Tras B-A1 (#104) la (a) queda descartada:** `POST /v1/simulations` exige una arista CONNECTED en el modo pedido y un candidato fof no la tiene; haría falta otro origen con su propia regla. Queda la (b). Ver la ficha de E6.3 en `docs/backlog.md`. | I1 (API) + I3 (UI) | Antes de la ventana de E7.4 (18 nov) |
 
-Sigue abierta (revisión de la ola 12, E7.4): si se elige (a), `POST /v1/simulations` pasaría a aceptar contenido de fof (premium), así que su ficha debe exigir `@Premium("POST /v1/simulations")` y una sonda en `PremiumEndpoints`. Si se elige (b), cerrar el pendiente enmendando ADR-0023.
+Sigue abierta (revisión de la ola 12, E7.4; la (a) descartada por B-A1): si se elige (a), `POST /v1/simulations` pasaría a aceptar contenido de fof (premium), así que su ficha debe exigir `@Premium("POST /v1/simulations")` y una sonda en `PremiumEndpoints`. Si se elige (b), cerrar el pendiente enmendando ADR-0023.
 | 2 | **Aprobación del revisor par** del PR (feature major, check `major-gate`) según `docs/equipo.md`. | Par de E6.3 | Ventana de la ola 10 (12 nov) |
 
 ## E5.1 · API de chat
