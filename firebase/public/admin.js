@@ -3,7 +3,8 @@
 // Hosting sirve solo para el proyecto donde está desplegada. Todo texto de usuario se pinta con
 // textContent: el snapshot de mensajes es contenido no confiable. El SDK (compat, 11.0.2) se carga
 // con SRI desde admin.html y la CSP no permite scripts en línea. La API se llama siempre al mismo
-// origen (/v1/**, rewrite de firebase.json a Cloud Run): el token de admin no sale a otra URL.
+// origen (/v1/**, rewrite de firebase.prod.json a Cloud Run; dev no lo tiene): el token de admin no
+// sale a otra URL.
 
 const $ = (id) => document.getElementById(id);
 const ACCIONES = [
