@@ -70,10 +70,16 @@ de la base al usuario IAM una vez (como `postgres`, desde Cloud SQL Studio o `gc
 | `sa-terraform` | bootstrap (solo dev) | `apply` en CI, **solo desde la rama `dev`** (principal `attribute.ref/refs/heads/dev`): administradores de cada servicio usado (sin owner/editor). `projectIamAdmin` con condición: solo puede otorgar los roles de `sa-api`, nunca `owner`. Sin roles sobre la facturación. No existe en prod (allí aplica el usuario) |
 | `sa-terraform-plan` | bootstrap | `plan` en CI, solo metadatos: `run.viewer`, `secretmanager.viewer`, `cloudtasks.viewer`, `cloudscheduler.viewer`, `pubsub.viewer`, `monitoring.viewer`, `iam.serviceAccountViewer`, `serviceusage.*` y el rol personalizado `parcheuTerraformPlan` (solo `*.get/list` de bases, repos, instancias y proyecto). **Sin** `roles/viewer`, `securityReviewer` ni `firebase.viewer`: incluyen `datastore.entities.*` y `logging.logEntries.list`. Lee el estado (`objectViewer`; el plan de CI corre con `-lock=false`). En dev cualquier PR del repo puede usarla (no hay datos reales); en prod solo jobs de la rama `dev` (ADR-0012) |
 
-`scripts/check-iam.sh` falla si alguna cuenta de servicio recibe `roles/owner` o `roles/editor`, si a
-`sa-api`/`sa-deployer` les falta un rol esperado, si `sa-terraform-plan` recibe un rol con acceso a datos
-(o su rol personalizado incluye `datastore.entities.*`, `logging.logEntries.*`...), si alguna cuenta
-recibe roles sobre la facturación o si `projectIamAdmin` se asigna sin condición.
+`scripts/check-iam.sh plan.json` lee el JSON de `terraform show -json plan` (no consulta GCP) y sale con 1
+ante cualquier **ERROR**: `roles/owner` o `roles/editor` para cualquier principal; `allUsers` o
+`allAuthenticatedUsers` con cualquier rol, salvo `roles/run.invoker` para `allUsers` (lista blanca
+`PUBLIC_ALLOWED_ROLES`); `serviceAccountKeyAdmin` o `securityAdmin`; `serviceAccountTokenCreator` y
+`serviceAccountUser` a nivel de proyecto fuera de las cuentas esperadas (`EXPECTED_SA_NAMES`:
+`sa-terraform`, `sa-deployer`); `serviceAccountAdmin` fuera de `SA_ADMIN_EXPECTED_NAMES` (`sa-terraform`);
+`projectIamAdmin` sin condición; y los chequeos de bootstrap (`sa-api`/`sa-deployer` sin sus roles,
+`sa-terraform-plan` con roles de datos o de facturación). Las listas blancas están al inicio del script.
+Los **AVISO** de `user:` con roles distintos de `viewer`, `logging.viewer` y `monitoring.viewer` no cambian
+el código de salida (0). Solo revisa lo que está en el plan, no la política real del proyecto.
 
 El **presupuesto de facturación** (50 % y 90 %) se crea en `bootstrap/` con el ADC del usuario, no en la
 plataforma: la cuenta de facturación se comparte con otros proyectos y ninguna identidad de CI tiene roles

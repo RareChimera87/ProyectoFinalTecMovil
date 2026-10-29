@@ -6,7 +6,7 @@ Despliegue del backend Ktor en el homeserver del equipo (Docker Compose), en vez
 |---|---|
 | `parcheu-db` | Postgres 16 con volumen `parcheu-pgdata`; **no publica puertos** |
 | `parcheu-migrate` | Flyway (modo `migrate`) una sola vez antes de la API |
-| `parcheu-api` | Ktor publicado en `127.0.0.1:8090` y `192.168.0.10:8090` del host (loopback y LAN; no en `0.0.0.0`, ni Tailscale; el router no lo expone). Se cambia con `PARCHEU_BIND_LOCAL` / `PARCHEU_BIND_LAN` en `.env` |
+| `parcheu-api` | Ktor publicado solo en `127.0.0.1:8090` del host (ni LAN, ni Tailscale, ni `0.0.0.0`; se cambia con `PARCHEU_BIND_LOCAL`) y conectado a la red de Docker `parcheu-proxy`, por la que entra NPM (ver «HTTPS con Nginx Proxy Manager»). Arranca con `PARCHEU_ENV=dev` por defecto |
 
 Memoria: API con `-Xmx384m` y tope de 640 MB, Postgres 384 MB, migración 512 MB solo mientras corre.
 No toca los demás contenedores del servidor (seafile, n8n, nginx-proxy-manager, etc.).
@@ -21,10 +21,10 @@ deploy/homelab/desplegar.sh --host usuario@192.168.0.10
 deploy/homelab/desplegar.sh --sin-build     # reutiliza backend/build/jib-image.tar
 ```
 
-El script: comprueba que el 8090 esté libre (o sea de ParcheU) y aborta si no, construye la imagen, copia imagen y compose a `~/parcheu/`, crea `~/parcheu/.env` con contraseñas aleatorias la primera vez (`chmod 600`, nunca se sobrescribe; solo agrega claves que falten, como `TASKS_MODE=inline`), carga la imagen y la etiqueta con su SHA (`PARCHEU_TAG`, la anterior queda en `PARCHEU_PREV_TAG`), levanta la API con un solo `docker compose up` (la migración corre antes por `depends_on`), verifica la salud desde el servidor y, **si falla, revierte solo a la imagen anterior** (las migraciones de Flyway no se deshacen: usa migraciones compatibles hacia atrás). Tras un despliegue sano borra las etiquetas anteriores a la previa (nunca `docker image prune`), avisa si el HTTPS responde con `PARCHEU_ENV=local` e instala un cron de respaldo diario (03:17, `respaldar.sh`, 7 días en `~/parcheu/backups`, `respaldo.log` rotado a 1 MiB). Es idempotente: se puede repetir para actualizar. Las ediciones del `.env` son atómicas (archivo temporal + `mv`, con `.env.bak` previo) y los despliegues simultáneos se serializan con `flock`; si `docker compose up` falla, el `.env` vuelve a la etiqueta anterior.
+El script: comprueba que el 8090 esté libre (o sea de ParcheU) y aborta si no, construye la imagen, copia imagen y compose a `~/parcheu/`, crea `~/parcheu/.env` con contraseñas aleatorias la primera vez (`PARCHEU_ENV=dev` y los valores de «Activar el modo»; `chmod 600`, nunca se sobrescribe; solo agrega claves que falten, como `TASKS_MODE=inline`), aborta si el `.env` pide `PARCHEU_ENV=local` sin `ALLOW_FAKE_AUTH=true`, crea la red `parcheu-proxy` si falta, carga la imagen y la etiqueta con su SHA (`PARCHEU_TAG`, la anterior queda en `PARCHEU_PREV_TAG`), levanta la API con un solo `docker compose up` (la migración corre antes por `depends_on`), verifica la salud desde el servidor y, **si falla, revierte solo a la imagen anterior** (las migraciones de Flyway no se deshacen: usa migraciones compatibles hacia atrás). Tras un despliegue sano borra las etiquetas anteriores a la previa (nunca `docker image prune`), avisa si el HTTPS responde con `PARCHEU_ENV=local` e instala un cron de respaldo diario (03:17, `respaldar.sh`, 7 días en `~/parcheu/backups`, `respaldo.log` rotado a 1 MiB). Es idempotente: se puede repetir para actualizar. Las ediciones del `.env` son atómicas (archivo temporal + `mv`, con `.env.bak` previo) y los despliegues simultáneos se serializan con `flock`; si `docker compose up` falla, el `.env` vuelve a la etiqueta anterior.
 
 Advertencias operativas:
-- **La IP `192.168.0.10` del servidor debe ser estática** (reserva DHCP en el router): el compose publica el 8090 en esa IP y, si cambia, la API no arranca o queda inalcanzable.
+- **La IP `192.168.0.10` del servidor debe ser estática** (reserva DHCP en el router): AdGuard resuelve `*.homeserverlab.site` a esa IP; si cambia, el HTTPS de NPM queda inalcanzable.
 - **Evita desplegar con cambios sin commit**: la etiqueta sale del SHA; el script le agrega `-dirty` si el árbol tiene cambios, pero esa imagen no es reproducible.
 - **Reversión y migraciones:** Flyway no se deshace. Si la versión nueva aplicó una migración y luego se revierte la imagen, el código viejo corre contra el esquema nuevo; y si la anterior trae migraciones que la actual no conoce (por ejemplo tras volver a una rama con migraciones en otro orden), Flyway falla por orden. Escribe migraciones compatibles hacia atrás y, ante un fallo así, restaura un respaldo.
 - Una simulación cuyo proceso muere varias veces seguidas se reencola en cada ciclo de recuperación (cada 15 min, ventana de 24 h); no hay contador de recuperaciones porque exigiría una migración. Vigila el gasto de IA si ves el mismo id repetido en los registros.
@@ -40,20 +40,20 @@ Sin Cloud Tasks ni Cloud Scheduler, la API ejecuta las tareas asíncronas dentro
 Respaldo a mano: `ssh user@homelab '~/parcheu/respaldar.sh'`. Restaurar, en orden: `docker compose stop parcheu-api`; vaciar la base (`docker compose exec parcheu-db psql -U parcheu -d postgres -c 'DROP DATABASE parcheu WITH (FORCE)' -c 'CREATE DATABASE parcheu OWNER parcheu'`; no uses `down -v`, porque `parcheu-migrate` correría Flyway antes); `gunzip -c parcheu-AAAAMMDD-HHMMSS.sql.gz | docker compose exec -T parcheu-db psql -v ON_ERROR_STOP=1 -U parcheu parcheu`; fijar en `PARCHEU_TAG` una imagen compatible con el esquema del respaldo y `docker compose up -d`.
 Registros: `ssh user@homelab 'cd ~/parcheu && docker compose logs -f parcheu-api'`.
 
-## Qué funciona sin la llave de Google (`PARCHEU_ENV=local`, el valor inicial)
+## Qué funciona sin la llave de Google (`PARCHEU_ENV=local`, solo con `ALLOW_FAKE_AUTH=true`)
 
-El backend arranca con `ENV=local`: autenticación Fake (`Authorization: Bearer fake-<uid>` para `/v1/*`), IA falsa (`FakeLlmClient`, sin gastar), FCM falso, chat y espejos de Firestore en memoria, tareas en proceso (`TASKS_MODE=inline`).
+El valor por defecto es `dev`. Para pruebas sin Google se puede poner `PARCHEU_ENV=local` **y** `ALLOW_FAKE_AUTH=true` en `.env` (sin la segunda, la API y la migración no arrancan, y `desplegar.sh` aborta). Entonces el backend arranca con `ENV=local`: autenticación Fake (`Authorization: Bearer fake-<uid>` para `/v1/*`; para `/internal/*` un token aleatorio por arranque que sale en los registros, `docker compose logs parcheu-api | grep 'token OIDC Fake'`), IA falsa (`FakeLlmClient`, sin gastar), FCM falso, chat y espejos de Firestore en memoria, tareas en proceso (`TASKS_MODE=inline`).
 
-Funciona: `GET /v1/health`, sesión y términos, perfil, gemelo (`build-persona` en línea), grafo, invitaciones, cuotas, `grant-plus` de prueba, `seed-demo`, y todo con Postgres real. Se prueba con `curl`:
+Funciona: `GET /v1/health`, sesión y términos, perfil, gemelo (`build-persona` en línea), grafo, invitaciones, cuotas, `grant-plus` de prueba, `seed-demo`, y todo con Postgres real. Se prueba con `curl` desde el propio servidor (el 8090 solo escucha en loopback):
 
 ```bash
-curl http://192.168.0.10:8090/v1/health        # desde la LAN (o https://api-parcheu.homeserverlab.site si ya hay Proxy Host)
-curl -XPOST -H 'Authorization: Bearer fake-ana' http://192.168.0.10:8090/v1/session
+ssh user@homelab "curl http://127.0.0.1:8090/v1/health"
+ssh user@homelab "curl -XPOST -H 'Authorization: Bearer fake-ana' http://127.0.0.1:8090/v1/session"
 ```
 
 No funciona: iniciar sesión desde la app Android (envía un ID token real de Firebase, que en modo `local` no se valida), IA real (Vertex), notificaciones push, espejos de Firestore (chat y progreso en vivo), borrado de usuarios en Firebase Auth, verificación de compras en Play (`verify` responde 500; Plus se prueba con `grant-plus`). El gemelo y las simulaciones corren en proceso, con IA falsa.
 
-**Seguridad.** En modo `local` cualquiera con acceso al puerto puede suplantar a cualquier usuario. Por eso el 8090 queda solo en loopback y la LAN: **no lo publiques por Cloudflare en modo `local`.** Mientras `PARCHEU_ENV=local`, el Proxy Host de NPM debe llevar una *Access List* que permita solo `192.168.0.0/24` y `100.64.0.0/10` (Tailscale), o crearse únicamente después de pasar a `dev`; `desplegar.sh` avisa si el HTTPS responde con `local`. El token `fake-admin` (moderación y lectura de todos los reportes, con los textos de los chats) solo existe si defines `LOCAL_FAKE_ADMIN=true`; no va en `.env.example` ni conviene activarlo en el homeserver, donde viven datos de testers.
+**Seguridad.** En modo `local` cualquiera que llegue a la API puede suplantar a cualquier usuario y abrir `/internal/*` si ve el token de los registros. Por eso el 8090 solo escucha en loopback (no hay puerto en la LAN que se salte la *Access List* de NPM) y `local` exige `ALLOW_FAKE_AUTH=true`: **no lo publiques por Cloudflare en modo `local` ni lo uses con datos de testers.** Mientras `PARCHEU_ENV=local`, el Proxy Host de NPM debe llevar una *Access List* que permita solo `192.168.0.0/24` y `100.64.0.0/10` (Tailscale); `desplegar.sh` avisa si el HTTPS responde con `local`. El token `fake-admin` (moderación y lectura de todos los reportes, con los textos de los chats) solo existe si defines `LOCAL_FAKE_ADMIN=true`; no va en `.env.example` ni conviene activarlo en el homeserver, donde viven datos de testers.
 
 ## Con la app real: `PARCHEU_ENV=dev` y la llave de Google
 
@@ -95,11 +95,11 @@ ssh user@homelab 'chmod 600 ~/parcheu/secrets/sa.json'
 shred -u /tmp/sa.json
 ```
 
-Si la organización bloquea llaves (`iam.disableServiceAccountKeyCreation`), no hay alternativa sin ADC; en ese caso quédate en modo `local`. La cuenta se creó fuera de Terraform a propósito (es temporal): bórrala al terminar las pruebas.
+Si la organización bloquea llaves (`iam.disableServiceAccountKeyCreation`), no hay alternativa sin ADC; en ese caso solo queda el modo `local` (con `ALLOW_FAKE_AUTH=true` y sin datos de testers). La cuenta se creó fuera de Terraform a propósito (es temporal): bórrala al terminar las pruebas.
 
 ### Activar el modo
 
-Edita `~/parcheu/.env` en el servidor:
+`desplegar.sh` ya escribe estos valores en un `.env` nuevo; en uno anterior, edita `~/parcheu/.env` en el servidor:
 
 ```
 PARCHEU_ENV=dev
@@ -115,7 +115,19 @@ Las tareas asíncronas (gemelo, memorias, simulaciones, purga de cuentas) y los 
 
 ## HTTPS con Nginx Proxy Manager (paso del usuario)
 
-El servidor ya tiene NPM con el certificado comodín `*.homeserverlab.site` (Let's Encrypt, vence en ene 2027) y AdGuard reescribe `*.homeserverlab.site` a `192.168.0.10` en la LAN. En NPM crea un *Proxy Host*: dominio `api-parcheu.homeserverlab.site`, esquema `http`, destino `192.168.0.10` puerto `8090`, pestaña SSL con el certificado existente `npm-1` y *Force SSL*. Nada de esto lo hace `desplegar.sh`. **Mientras `PARCHEU_ENV=local`** agrega una *Access List* en NPM (pestaña Details del Proxy Host) que permita solo `192.168.0.0/24` y `100.64.0.0/10` y deniegue el resto, o crea el Proxy Host solo después de pasar a `dev`. Después, `curl https://api-parcheu.homeserverlab.site/v1/health` debe responder. Funciona en el emulador y en teléfonos de la LAN (o por Tailscale usando el DNS de AdGuard).
+El servidor ya tiene NPM con el certificado comodín `*.homeserverlab.site` (Let's Encrypt, vence en ene 2027) y AdGuard reescribe `*.homeserverlab.site` a `192.168.0.10` en la LAN. La API ya no escucha en `192.168.0.10:8090` (C-M5, 28 oct 2026): NPM la alcanza por Docker. Sigue este orden para que el HTTPS no se caiga entre medias (el destino viejo `192.168.0.10:8090` funciona hasta el redespliegue y el nuevo, desde él):
+
+1. **Docker ≥ 28 en el servidor:** `ssh user@homelab 'docker version --format {{.Server.Version}}'`. Antes de la 28, un equipo de la LAN que enrute hacia la red bridge puede llegar al contenedor (`172.x:8080`) aunque el puerto esté publicado solo en `127.0.0.1`; si no puedes actualizar, bloquéalo con reglas `raw` de iptables o sin `ip_forward`.
+2. **Red y NPM, antes de desplegar:** mira el modo de red de NPM (`docker inspect <contenedor-de-npm> --format '{{.HostConfig.NetworkMode}}'`, nombre en `docker ps`). Si no es `host`, crea la red y conecta NPM (`desplegar.sh` también la crea si falta, de forma idempotente):
+
+   ```bash
+   ssh user@homelab 'docker network create parcheu-proxy; docker network connect parcheu-proxy <contenedor-de-npm>'
+   ```
+
+   Si NPM se recrea con su propio compose, la conexión se pierde: agrega `parcheu-proxy` como red externa (`external: true`) en ese compose.
+3. **Desplegar:** `deploy/homelab/desplegar.sh`.
+4. **Proxy Host:** en NPM crea (o edita) el *Proxy Host*: dominio `api-parcheu.homeserverlab.site`, esquema `http`, destino `parcheu-api` puerto `8080` (o `127.0.0.1` puerto `8090` si NPM corre con `network_mode: host`), pestaña SSL con el certificado existente `npm-1` y *Force SSL*. Nada de esto lo hace `desplegar.sh`. **Si usas `PARCHEU_ENV=local`** agrega una *Access List* en NPM (pestaña Details del Proxy Host) que permita solo `192.168.0.0/24` y `100.64.0.0/10` y deniegue el resto.
+5. **Verificar:** Después, `curl https://api-parcheu.homeserverlab.site/v1/health` debe responder. Funciona en el emulador y en teléfonos de la LAN (o por Tailscale usando el DNS de AdGuard).
 
 ## Exponerlo a testers de Play (túnel de Cloudflare existente)
 
@@ -123,7 +135,7 @@ Fuera de alcance por ahora: no hay testers ni publicación en Play. Para publica
 
 ## Probar la app de debug en el teléfono
 
-Ver «Backend en el homeserver» en [docs/desarrollo-local.md](../../docs/desarrollo-local.md): `parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/` en `android/local.properties` (respaldo HTTP: `http://192.168.0.10:8090/`). El `devDebug` permite HTTP, como respaldo, solo hacia 192.168.0.10 y 10.0.2.2; el release y el flavor `prod` no.
+Ver «Backend en el homeserver» en [docs/desarrollo-local.md](../../docs/desarrollo-local.md): `parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/` en `android/local.properties`. Ya no hay respaldo HTTP por la LAN (el 8090 solo escucha en loopback); el permiso HTTP del `devDebug` hacia 192.168.0.10 queda sin uso, y el de 10.0.2.2 sirve para el backend local del emulador.
 
 ## Volver a Cloud SQL y Cloud Run
 
