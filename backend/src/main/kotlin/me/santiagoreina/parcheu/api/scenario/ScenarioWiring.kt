@@ -34,6 +34,7 @@ fun scenarioModule(
         chat.repository, chat.service, simulation.repository, ai, quota.service, graph.edges, tasks, notifier, clock, moderationEnabled,
     )
     chat.service.scenarioEnded = service.endedHook
+    chat.service.messageHidden = service.hiddenHook
     return ScenarioModule(service)
 }
 

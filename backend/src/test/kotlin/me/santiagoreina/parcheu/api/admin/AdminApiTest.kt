@@ -48,6 +48,7 @@ import me.santiagoreina.parcheu.contract.FcmToken
 import me.santiagoreina.parcheu.contract.MessageDto
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Page
+import me.santiagoreina.parcheu.contract.ReportCreated
 import me.santiagoreina.parcheu.contract.ReportKind
 import me.santiagoreina.parcheu.contract.ReportReason
 import me.santiagoreina.parcheu.contract.ReportRequest
@@ -63,8 +64,8 @@ import java.util.UUID
 class AdminApiTest : FunSpec({
     val uids = listOf("ana", "beto", "admin")
 
-    class World {
-        val identity = InMemoryIdentityRepository().also { repo -> uids.forEach { repo.seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
+    class World(seeded: List<String> = uids) {
+        val identity = InMemoryIdentityRepository().also { repo -> seeded.forEach { repo.seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val f = MatchFixture(idFor = { name -> identity.user(name).id }).also { f -> listOf("ana", "beto").forEach { f.person(it) } }
         val ana: UUID = identity.user("ana").id
         val beto: UUID = identity.user("beto").id
@@ -145,6 +146,20 @@ class AdminApiTest : FunSpec({
             resolve.status shouldBe HttpStatusCode.Forbidden
             resolve.body<ApiError>().code shouldBe ErrorCode.FORBIDDEN
             client.get("/v1/admin/reports").status shouldBe HttpStatusCode.Unauthorized
+        }
+    }
+
+    test("un admin sin cuenta en la app ni términos aceptados modera igual: TermsGate no lo frena (B-B3)") {
+        val w = World(seeded = listOf("ana", "beto"))
+        val chat = w.direct()
+        testApplication {
+            val client = app(w)
+            val created = client.report("ana", ReportRequest(ReportKind.USER, targetUserId = w.beto.toString(), chatId = chat.id.toString(), reason = ReportReason.OTHER))
+                .body<ReportCreated>()
+            client.get("/v1/admin/reports") { auth("admin") }.status shouldBe HttpStatusCode.OK
+            client.resolve("admin", created.id, AdminAction.DISMISS).status shouldBe HttpStatusCode.OK
+            // Quien no es admin y no tiene cuenta sigue topando con la puerta, no con el 403 del claim.
+            client.get("/v1/admin/reports") { auth("sin-cuenta") }.status shouldBe HttpStatusCode.NotFound
         }
     }
 

@@ -37,6 +37,7 @@ ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty" }
 ktor-server-content-negotiation = { group = "io.ktor", name = "ktor-server-content-negotiation" }
 ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json" }
 ktor-server-status-pages = { group = "io.ktor", name = "ktor-server-status-pages" }
+ktor-server-body-limit = { group = "io.ktor", name = "ktor-server-body-limit" }
 ktor-server-auth = { group = "io.ktor", name = "ktor-server-auth" }
 ktor-server-call-logging = { group = "io.ktor", name = "ktor-server-call-logging" }
 ktor-server-test-host = { group = "io.ktor", name = "ktor-server-test-host" }

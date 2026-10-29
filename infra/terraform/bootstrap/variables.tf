@@ -18,3 +18,18 @@ variable "github_repository" {
   type        = string
   default     = "RareChimera87/ProyectoFinalTecMovil"
 }
+
+# IDs numéricos del repo y de su dueño (`gh api repos/RareChimera87/ProyectoFinalTecMovil --jq '.id,.owner.id'`,
+# 28 oct 2026). El pool los exige en vez del nombre: un nombre se puede liberar y volver a registrar
+# (repo borrado o usuario renombrado), un ID no se reutiliza. Si el repo se transfiere, cámbialos aquí.
+variable "github_repository_id" {
+  description = "ID numérico del repositorio (claim repository_id del token OIDC de GitHub)."
+  type        = string
+  default     = "1428919058"
+}
+
+variable "github_repository_owner_id" {
+  description = "ID numérico del dueño del repositorio (claim repository_owner_id)."
+  type        = string
+  default     = "82991195"
+}

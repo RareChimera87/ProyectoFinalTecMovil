@@ -104,9 +104,9 @@ object PremiumEndpoints {
         ) {
             // caro es ParcheU+ en los dos mundos: con ana gratis, el plan que cuenta es el de ana, no el de él.
             world.sim.plus(world.id("caro"))
-            // Cuatro simulaciones (gratis tiene 5 por semana y ya gastó una con fran). Con ParcheU+ el pool
-            // tiene 3 básicos y 14 premium: que las cuatro salgan solo con básicos es ~1e-11.
-            val used = listOf("caro", "dani", "eva", "gabi").flatMap { other ->
+            // Cuatro simulaciones con conexiones de ana en Amistad (el POST las exige; gratis tiene 5 por semana).
+            // Con ParcheU+ el pool tiene 3 básicos y 14 premium: que las cuatro salgan solo con básicos es ~1e-11.
+            val used = listOf("caro", "dani", "gabi", "hugo").flatMap { other ->
                 val response = client.post("/v1/simulations") {
                     auth("ana")
                     contentType(ContentType.Application.Json)
