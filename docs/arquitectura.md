@@ -92,11 +92,11 @@ Se descartó el multimódulo grande (ADR-0005/0006): el aislamiento entre agente
 
 ### 2.3 Capas y patrón
 
-- **UI:** Composables sin estado (`XScreen(state, onAction)`) y un `XRoute` que conecta con el ViewModel. Previews con datos falsos.
+- **UI:** Composables sin estado (`XScreen(state, onAction)`) y un `XRoute` que conecta con el ViewModel. Las previews usan datos de muestra en archivos `*Samples.kt` dentro de `src/main` (p. ej. `HomeSamples.kt`, `NotificationsSamples.kt`).
 - **ViewModel:** expone `StateFlow<XUiState>`; acciones como funciones públicas; efectos de una sola vez (navegación, snackbars) por `Channel<XEffect>` recibido con `LaunchedEffect`.
 - **Estado:** `sealed interface XUiState { Loading; Loaded(...); Empty; Error(AppError) }` cuando aplica.
-- **Datos:** `XRepository` (interfaz) + `XRepositoryImpl` (Retrofit, Firestore, DataStore) + `FakeXRepository` (en `src/test` y `src/debug` para previews y flavor sin backend).
-- **Errores:** `ApiError` del contrato → `AppError` (`Network`, `Unauthorized`, `PlusRequired`, `QuotaExceeded(kind, resetsAt)`, `AgeRequired`, `Underage`, `Blocked`, `Suspended`, `ScenarioEnded`, `AiBudget`, `Validation(msg)`, `NotFound`, `Unknown`). Un `ErrorRouter` global abre G1 ante `PlusRequired` y la G2 correspondiente ante `QuotaExceeded`.
+- **Datos:** un archivo `XRepository.kt` por dominio que agrupa la interfaz Retrofit `XApi`, la interfaz `XRepository` y su implementación `RemoteXRepository` (Retrofit; `FirestoreChatRepository` para el chat y, donde no hay red, nombres propios como `FirebaseAuthRepository` o `BillingRepositoryImpl`). Los `FakeXRepository` viven solo en `src/test` (23 archivos) y sirven a las pruebas JVM; no hay Fakes en `src/debug` ni un flavor sin backend: el flavor `dev` apunta al backend de desarrollo.
+- **Errores:** `ApiError` del contrato → `AppError` (`Network`, `Unauthorized`, `PlusRequired`, `QuotaExceeded(kind, resetsAt)`, `AgeRequired`, `Underage`, `Blocked`, `Suspended`, `ScenarioEnded`, `AiBudget`, `Validation(msg)`, `NotFound`, `TermsRequired`, `Forbidden`, `Conflict`, `Unknown`; hay un caso por cada `ErrorCode` del contrato). Un `ErrorRouter` global abre G1 ante `PlusRequired` y la G2 correspondiente ante `QuotaExceeded`.
 - **DI:** Koin 4.1 (`koin-androidx-compose`). Un `XModule.kt` por feature; `AppModules.kt` los lista todos desde E0.7.
 
 ### 2.4 Navegación
@@ -178,8 +178,8 @@ G2 (límite) es un bottom sheet global controlado por el `ErrorRouter`. Deep lin
 
 ```
 backend/src/main/kotlin/me/santiagoreina/parcheu/api/
-  Application.kt         módulos Ktor, registro de todos los routers (fijo desde E0.3)
-  platform/              config, auth (Firebase y OIDC), errores, db, tasks, firestore, notifier, clock
+  Application.kt         módulo Ktor (plugins, autenticación y rutas); recorre `container.domains` (fijo desde E0.3)
+  platform/              AppContainer (cableado), config, auth (Firebase y OIDC), errores, db, tasks, firestore, notifier, clock
   ai/                    LlmClient, Gemini, Claude, Fake, DailyBudgetGuard, precios
   identity/              sesión, términos, perfil básico y edad, modos, consentimientos, privacidad, borrado, exportación, retención
   twin/                  preguntas, TraitEngine, persona, memorias, feedback
@@ -198,10 +198,14 @@ backend/src/main/kotlin/me/santiagoreina/parcheu/api/
   demo/                  seed-demo y purge-demo
 ```
 
+Cada dominio trae su `XWiring.kt` con `xModule(...)` (Postgres, Firestore y Cloud Tasks reales) e `inMemoryXModule(...)` (implementaciones `InMemory*`, que viven en `src/main` porque sirven a `ENV=local` además de a las pruebas). `platform/AppContainer.kt` los une: `AppContainer.fromConfig` (llamado desde `Main.kt` con la configuración leída de las variables de entorno) elige el cableado real o el local, y `allDomains(...)` arma la lista de `DomainRoutes` que `Application.module` registra. Un dominio nuevo se enchufa añadiendo su módulo al contenedor, no tocando `Application.kt`.
+
+**Autorización entre usuarios (deuda conocida).** La regla "¿puede A ver o actuar sobre B?" no está centralizada: `GraphVisibilityPolicy` cubre el grafo, pero chat, simulaciones, invitaciones y seguridad comprueban la relación (conexión, bloqueo, HIDDEN) cada uno por su lado. Unificarla en una sola política es deuda técnica conocida (auditoría del 28 oct); mientras tanto, cada dominio nuevo que lea datos de otra persona debe pasar por esa política o añadir su caso a las pruebas de privacidad.
+
 ### 3.2 Decisiones
 
 - **Ktor 3 (Netty)**, JVM 21, Kotlin 2.2.10, kotlinx.serialization con el mismo `Json` que el contrato.
-- **DI manual** por constructores en `Application.kt` (sin framework): todo es explícito y fácil de leer para agentes.
+- **DI manual** por constructores, sin framework, en `platform/AppContainer.kt` (`AppContainer(config, clock, tokenVerifier, oidcVerifier, …)`): todo es explícito y fácil de leer para agentes. `Application.kt` solo instala plugins y registra las rutas de `container.domains`.
 - **Exposed DSL** + HikariCP + Cloud SQL Java Connector (IAM, sin VPC connector); transacciones explícitas en servicios.
 - **Autenticación:** plugin `firebase` (verifica ID token con Firebase Admin y carga el usuario; `suspended_until` y `deleted_at` se comprueban aquí) y plugin `oidc-internal` (verifica tokens de Google emitidos para la cuenta `sa-tasks` con audiencia = `INTERNAL_OIDC_AUDIENCE`, valor fijo `https://api.parcheu-<env>.internal` (custom audience de Cloud Run; no la URL del servicio) y email = `sa-tasks`. Es la misma audiencia en Cloud Tasks, Scheduler y el push de Pub/Sub (RTDN); la variable de entorno y su valor por entorno están en la tabla de `infra/terraform/README.md`).
 - **Errores:** `StatusPages` traduce excepciones de dominio a `ApiError` (sección 5.1).
@@ -388,7 +392,7 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | GET `/v1/twin/questions` | - | `List<QuestionDto{id, text, optionA, optionB}>` | - |
 | POST `/v1/twin/answers` | `Answers{items: List<Answer{questionId, answer}>}` (12) | `TwinDto` | VALIDATION |
 | GET `/v1/twin` | - | `TwinDto{traits: List<Trait{key, value}>, level, xp, xpNext, version, personaReady, accuracy?}` | - |
-| GET `/v1/twin/evolution` | - | `List<TwinPoint{month, accuracy, level}>` | - |
+| GET `/v1/twin/evolution` | - | `List<TwinPoint{month, accuracy, level}>`: un punto por **semana** con datos en `twin_accuracy` (orden ascendente); `month` es el mes `yyyy-MM` de esa semana, así que varios puntos pueden repetir mes; `level` es el nivel actual (no hay historial de niveles) | - |
 | GET `/v1/twin/memories` | `?status=` | `Page<MemoryDto{id, text, mode, status, createdAt}>` | - |
 | POST `/v1/twin/memories/{id}/accept` · `/reject` | - | `MemoryDto` | NOT_FOUND |
 | GET `/v1/twin/feedback-prompts` | - | `List<FeedbackPrompt{id, kind: RATING\|CONTROL, text, options?}>` | - |
@@ -778,104 +782,62 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 
 ## 13. Versiones de librerías
 
-Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Las del backend las fijó E0.3 (22-oct-2026, contra Maven Central y el portal de plugins de Gradle); las que siguen marcadas '(verificar)' son de Android u otras partes y las fija su feature. Avisos para los agentes:
-Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Avisos para los agentes: Las del backend las fijó E0.3 (22-oct-2026, contra Maven Central y el portal de plugins de Gradle); las que siguen marcadas '(verificar)' son de Android u otras partes y las fija su feature. Avisos para los agentes:
-Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Las del backend las fijó E0.3 (22-oct-2026, contra Maven Central y el portal de plugins de Gradle); las que siguen marcadas '(verificar)' son de Android u otras partes y las fija su feature. Avisos para los agentes:
-Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Las del backend las fijó E0.3 (22-oct-2026, contra Maven Central y el portal de plugins de Gradle); las que siguen marcadas '(verificar)' son de Android u otras partes y las fija su feature. Avisos para los agentes:
-Ya fijadas por el proyecto base: AGP 9.4.1, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle 9.6.0, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0. El resto lo **fijan E0.3 (backend) y E0.7 (Android)** con un criterio de aceptación explícito: build verde con versiones fijadas y esta tabla actualizada en el mismo PR (única excepción a la regla de que las features no tocan docs). Hasta entonces, las versiones de abajo son la referencia más reciente que conocemos y llevan '(verificar)'. **E0.7 (22 oct 2026) fijó las de Android** en `android/gradle/libs.versions.toml` y las verificó compilando cada librería con Kotlin 2.2.10; regla: Kotlin 2.2 lee metadatos hasta 2.3, así que no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin. Avisos para los agentes:
-- **Testcontainers:** la serie 2.x cambió los nombres de artefacto (`org.testcontainers:testcontainers-postgresql`, `testcontainers-junit-jupiter`); no mezclar con los nombres 1.x.
-- **Exposed:** 1.0 cambió paquetes y API respecto de 0.x; E0.3 elige **una** serie y los agentes no copian ejemplos de la otra.
-- **Kotest:** existe la serie 6.x; E0.3 decide entre 5.9.x y 6.x según compatibilidad con Kotlin 2.2.
-- **Jib y Gradle Play Publisher:** confirmar compatibilidad de Jib con Gradle 9. GPP quedó en 4.1.1, verificada con AGP 9.4.1 en E10.2.
+Fuente de verdad: los catálogos `android/gradle/libs.versions.toml`, `backend/gradle/libs.versions.toml` y `contract/gradle/libs.versions.toml`, más `firebase/package.json`, `infra/terraform/**/versions.tf` y `.github/workflows/*` para Terraform y Node. Esta tabla los resume: la actualiza en el mismo PR quien cambie una versión (única excepción a la regla de que las features no tocan docs). Hoy todas están fijadas; si una librería nueva aún no tiene versión en ningún archivo, se anota aquí con '(verificar)' hasta que la fije su feature.
 
-| Librería | Versión de referencia | Uso |
+Reglas y avisos para los agentes:
+
+- **Kotlin 2.2.10** lee metadatos hasta 2.3: no se sube ninguna librería compilada con Kotlin 2.4 o superior hasta que el proyecto suba Kotlin (por eso Koin 4.1.1, googleid 1.1.1 y la BoM de Firebase 34.x).
+- **Testcontainers:** la serie 2.x cambió los nombres de artefacto (`org.testcontainers:testcontainers-postgresql`, `testcontainers-junit-jupiter`); no mezclar con los nombres 1.x.
+- **Exposed:** el proyecto usa la serie 1.x (paquetes `org.jetbrains.exposed.v1.*`); no copiar ejemplos de la 0.x.
+- **Coil:** `coil-compose` y `coil-network-okhttp` (3.4.0; la 3.5+ está compilada con Kotlin 2.4) están en el catálogo de Android, pero ninguna pantalla las usa todavía, así que no son una dependencia real y no figuran en la tabla; quien cargue imágenes remotas las agrega a `app/build.gradle.kts`.
+- **Gradle Play Publisher:** la serie 4.x funciona con AGP 9.4.1 (verificado en E10.2).
+
+Base común (los tres builds): AGP 9.4.1 (solo Android), Kotlin 2.2.10, Gradle 9.6.0, Compose BOM 2026.02.01, core-ktx 1.19.1, lifecycle 2.11.0, activity-compose 1.13.0.
+
+| Librería | Versión | Uso |
 |---|---|---|
-| kotlinx-serialization (plugin y json) | plugin 2.2.10; json 1.9.0 (fijada en contract/ y backend/) | DTOs |
-| kotlinx-coroutines | backend 1.11.0 (fijada en E0.3); Android: la fija E0.7 (verificar) | Concurrencia |
-| Koin (`koin-bom`, `koin-androidx-compose`) | 4.1.1 (verificar) | DI Android |
-| Navigation Compose | 2.9.5 (verificar) | Navegación |
-| Retrofit + converter kotlinx-serialization | 3.0.0 (verificar) | Red |
-| OkHttp | 5.1.0 (verificar) | Red |
-| DataStore Preferences | 1.1.7 (verificar) | Persistencia |
-| Coil 3 (`coil-compose`, `coil-network-okhttp`) | 3.3.0 (verificar) | Imágenes |
-| core-splashscreen | 1.0.1 (verificar) | Splash |
-| Credential Manager (`credentials`, `credentials-play-services-auth`) | 1.5.0 (verificar) | Login |
-| googleid | 1.1.1 (verificar) | Login |
-| Firebase BoM (auth, firestore, messaging, crashlytics) | 34.x (verificar) | Firebase |
-| Play Billing (`billing-ktx`) | 8.x (verificar; la agrega E7.0) | Suscripciones |
-| ZXing core | 3.5.3 (verificar) | Generar QR |
-| play-services-code-scanner | 16.1.0 (verificar) | Escanear QR |
-| Robolectric | 4.16 (verificar; `@Config(sdk=[35])`) | Tests JVM |
-| Roborazzi | 1.50.0 (verificar) | Capturas |
-| Turbine | 1.2.1 (verificar) | Tests de Flow |
-| Spotless + ktlint | 7.x / 1.7.x (verificar) | Estilo |
-| Ktor (server, client para tests) | 3.5.2 (fijada en E0.3, vía `ktor-bom`) | Backend |
-| Exposed (`exposed-core`, `exposed-jdbc`, `exposed-java-time`, `exposed-json`) | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`; java-time y json desde E0.4) | SQL |
-| Exposed | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`) | SQL |
-| HikariCP | 7.1.0 (fijada en E0.3) | Pool |
-| PostgreSQL JDBC | 42.7.14 (fijada en E0.3) | Driver |
-| Cloud SQL Java Connector (`postgres-socket-factory`) | 1.30.1 (fijada en E0.3) | Conexión IAM |
-| Flyway (`flyway-core`, `flyway-database-postgresql`) | 13.11.1 (fijada en E0.3) | Migraciones |
-| Firebase Admin Java | 9.11.0 (fijada en E0.3) | Auth, FCM, Firestore |
-| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
-| kotlinx-serialization (plugin y json) | plugin 2.2.10; json 1.9.0 (fijada en E0.7; el plugin funciona con el Kotlin integrado de AGP 9.4.1, ADR-0005) | DTOs |
-| kotlinx-coroutines | Android 1.10.2 (fijada en E0.7; core, android y test); backend 1.11.0 (fijada en E0.3) | Concurrencia |
-| Koin (`koin-bom`, `koin-android`, `koin-androidx-compose`, `koin-test`) | 4.1.1 (fijada en E0.7; 4.2.x se compila con Kotlin 2.3.20 y se deja para cuando suba Kotlin) | DI Android |
-| Navigation Compose (+ `navigation-testing`) | 2.9.8 (fijada en E0.7; última 2.9.x, ADR-0006) | Navegación |
-| Retrofit + converter kotlinx-serialization | 3.0.0 (fijada en E0.7) | Red |
-| OkHttp (+ `logging-interceptor`, `mockwebserver3` para tests) | 5.5.1 (fijada en E0.7) | Red |
-| DataStore Preferences | 1.2.1 (fijada en E0.7) | Persistencia |
-| Coil 3 (`coil-compose`, `coil-network-okhttp`) | 3.4.0 (fijada en E0.7; 3.5+ está compilada con Kotlin 2.4 y no la lee Kotlin 2.2) | Imágenes |
-| core-splashscreen | 1.2.0 (fijada en E0.7) | Splash |
-| Credential Manager (`credentials`, `credentials-play-services-auth`) | 1.6.0 (fijada en E0.7) | Login |
-| googleid | 1.1.1 (fijada en E0.7; 1.2.x está compilada con Kotlin 2.4) | Login |
-| Firebase BoM (auth, firestore, messaging, crashlytics) + plugin `google-services` | BoM 34.19.0; plugin 4.5.0 (fijadas en E0.7; la BoM 35 trae firebase-auth 25, compilada con Kotlin 2.4) | Firebase |
-| Play Billing (`billing-ktx`) | 8.3.0 (fijada en E0.7, agregada en E7.0; compilada con Kotlin 2.2.10; existe 9.x, cambiar solo si Play lo exige) | Suscripciones |
-| ZXing core | 3.5.4 (fijada en E0.7) | Generar QR |
-| play-services-code-scanner | 16.1.0 (fijada en E0.7) | Escanear QR |
-| Robolectric | 4.16.1 (fijada en E0.7; `@Config(sdk=[35])`) | Tests JVM |
-| Roborazzi (plugin, `roborazzi`, `roborazzi-compose`, `roborazzi-junit-rule`) | 1.77.0 (fijada en E0.7; `changeThreshold` 0,01) | Capturas |
-| Turbine | 1.2.1 (fijada en E0.7) | Tests de Flow |
-| Spotless + ktlint | 8.10.4 / 1.7.1 (fijadas en E0.7; estilo `android_studio`, máx. 100 columnas) | Estilo |
-| Ktor (server, client para tests) | 3.5.2 (fijada en E0.3, vía `ktor-bom`) | Backend |
-| Exposed (`exposed-core`, `exposed-jdbc`, `exposed-java-time`, `exposed-json`) | 1.6.0 (fijada en E0.3; serie 1.x, paquetes `org.jetbrains.exposed.v1.*`; java-time y json desde E0.4) | SQL |
-| HikariCP | 7.1.0 (fijada en E0.3) | Pool |
-| PostgreSQL JDBC | 42.7.14 (fijada en E0.3) | Driver |
-| Cloud SQL Java Connector (`postgres-socket-factory`) | 1.30.1 (fijada en E0.3) | Conexión IAM |
-| Flyway (`flyway-core`, `flyway-database-postgresql`) | 13.11.1 (fijada en E0.3) | Migraciones |
-| Firebase Admin Java | 9.11.0 (fijada en E0.3) | Auth, FCM, Firestore |
-| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
-| Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
-| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
-| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
-| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
-| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
-| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
-| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
-| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; agregada en E0.9) | Gemini en Vertex |
-| Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (fijada en E0.9; depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
-| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 (fijada en E0.3; la dependencia la agrega E0.9) | Gemini en Vertex |
-| Anthropic Java con Vertex | verificar artefacto y versión en E0.9 | Claude opcional |
-| google-cloud-tasks | 2.x (verificar) | Tareas |
-| Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev2025xxxx (verificar) | Billing |
-| logback + logstash-logback-encoder | 1.5.x / 8.x (verificar) | Logs JSON |
-| Kotest (runner, assertions, property) | 5.9.1 o 6.x (verificar compatibilidad con Kotlin 2.2) | Tests y propiedades |
-| Testcontainers (`testcontainers-postgresql`, `testcontainers-junit-jupiter`) | 2.x (verificar nombres y versión) | Tests de BD |
-| foojay-resolver-convention (plugin de settings) | 1.0.0 (verificar) | Toolchains JDK |
-| Jib Gradle plugin | 3.4.5 (verificar) | Imagen |
-| Gradle Play Publisher | 4.1.1 (fijada en E10.2; la serie 4.x funciona con AGP 9.4.1, sin plan B) | Subida a Play |
-| google-cloud-tasks | 2.99.0 (fijada en E0.3; la dependencia la agrega la primera feature que encola) | Tareas |
-| Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev20260924-2.0.0 (fijada en E0.3; la dependencia la agrega E7.2) | Billing |
-| logback + logstash-logback-encoder | 1.6.5 / 9.0 (fijadas en E0.3) | Logs JSON |
-| Kotest (runner, assertions, property) | 6.2.6 (fijada en E0.3; compila y corre con Kotlin 2.2.10) | Tests y propiedades |
-| Testcontainers (`testcontainers-postgresql`, `testcontainers-junit-jupiter`) | 2.0.5 (fijada en E0.3; clase `org.testcontainers.postgresql.PostgreSQLContainer`) | Tests de BD |
-| foojay-resolver-convention (plugin de settings) | 1.0.0 (fijada en contract/ y backend/) | Toolchains JDK |
-| Jib Gradle plugin | 3.5.4 (fijada en E0.3; compatible con Gradle 9.6; base `eclipse-temurin:21-jre`) | Imagen |
-| Gradle Play Publisher | 3.12.x (verificar compatibilidad con AGP 9) | Subida a Play |
-| Terraform / provider google, google-beta | 1.15 / 7.x (verificar) | Infra |
-| `@firebase/rules-unit-testing` | 6.0.0 (con `firebase` 13.1.0 y Node 24; el emulador pide Java 21) | Tests de reglas |
-| Terraform / provider google, google-beta | 1.15.9 / 7.46.1 (fijado en E0.5, `.terraform.lock.hcl`) | Infra |
-| `@firebase/rules-unit-testing` | 4.x (verificar) | Tests de reglas |
+| kotlinx-serialization (plugin y json) | plugin 2.2.10; json 1.9.0 (iguales en `contract/`, `backend/` y Android; el plugin funciona con el Kotlin integrado de AGP 9.4.1, ADR-0005) | DTOs |
+| kotlinx-coroutines | Android 1.10.2 (core, android y test); backend 1.11.0 | Concurrencia |
+| Koin (`koin-bom`, `koin-android`, `koin-androidx-compose`, `koin-test`) | 4.1.1 (4.2.x se compila con Kotlin 2.3.20) | DI Android |
+| Navigation Compose (+ `navigation-testing`) | 2.9.8 (última 2.9.x, ADR-0006) | Navegación |
+| Retrofit + converter kotlinx-serialization | 3.0.0 | Red |
+| OkHttp (+ `logging-interceptor`, `mockwebserver3` para tests) | 5.5.1 | Red |
+| DataStore Preferences | 1.2.1 | Persistencia |
+| core-splashscreen | 1.2.0 | Splash |
+| Credential Manager (`credentials`, `credentials-play-services-auth`) | 1.6.0 | Login |
+| googleid | 1.1.1 (1.2.x está compilada con Kotlin 2.4) | Login |
+| Firebase BoM (auth, firestore, messaging, crashlytics) | 34.19.0 (la BoM 35 trae firebase-auth 25, compilada con Kotlin 2.4) | Firebase |
+| Plugin `google-services` | 4.5.0 | Firebase |
+| Plugin de Crashlytics (`com.google.firebase.crashlytics`) | 3.0.6 (sube los mapas de R8 de los release, E10.5) | Crashlytics |
+| Play Billing (`billing-ktx`) | 8.3.0 (compilada con Kotlin 2.2.10; existe 9.x, cambiar solo si Play lo exige) | Suscripciones |
+| ZXing core | 3.5.4 | Generar QR |
+| play-services-code-scanner | 16.1.0 | Escanear QR |
+| Robolectric | 4.16.1 (`@Config(sdk=[35])`) | Tests JVM |
+| Roborazzi (plugin, `roborazzi`, `roborazzi-compose`, `roborazzi-junit-rule`) | 1.77.0 (`changeThreshold` 0,01) | Capturas |
+| Turbine | 1.2.1 | Tests de Flow |
+| Spotless + ktlint | 8.10.4 / 1.7.1 (estilo `android_studio`, máx. 100 columnas) | Estilo |
+| Gradle Play Publisher | 4.1.1 | Subida a Play |
+| foojay-resolver-convention (plugin de settings) | 1.0.0 (en `android/`, `backend/` y `contract/`) | Toolchains JDK |
+| Ktor (server, client para tests) | 3.5.2 (vía `ktor-bom`) | Backend |
+| Exposed (`exposed-core`, `exposed-jdbc`, `exposed-java-time`, `exposed-json`) | 1.6.0 | SQL |
+| HikariCP | 7.1.0 | Pool |
+| PostgreSQL JDBC | 42.7.14 | Driver |
+| Cloud SQL Java Connector (`postgres-socket-factory`) | 1.30.1 | Conexión IAM |
+| Flyway (`flyway-core`, `flyway-database-postgresql`) | 13.11.1 | Migraciones |
+| Firebase Admin Java | 9.11.0 | Auth, FCM, Firestore |
+| google-api-client | 2.9.1 | Verificación de tokens de Google |
+| Google Gen AI Java (`com.google.genai:google-genai`) | 1.78.0 | Gemini en Vertex |
+| Anthropic Java con Vertex (`anthropic-java-vertex` + `anthropic-java-client-okhttp`) | 3.1.0 (depende de kotlin-stdlib 1.9, compatible con Kotlin 2.2) | Claude opcional |
+| google-cloud-tasks | 2.99.0 | Tareas |
+| Google Play Android Publisher API v3 (`google-api-services-androidpublisher`) | v3-rev20260924-2.0.0 | Billing |
+| logback + logstash-logback-encoder | 1.6.5 / 9.0 | Logs JSON |
+| Kotest (runner, assertions, property) | 6.2.6 (compila y corre con Kotlin 2.2.10) | Tests y propiedades |
+| Testcontainers (`testcontainers-postgresql`, `testcontainers-junit-jupiter`) | 2.0.5 (clase `org.testcontainers.postgresql.PostgreSQLContainer`) | Tests de BD |
+| JUnit Jupiter (BOM) | 5.13.4 (en `backend/` y `contract/`) | Tests |
+| ASM | 9.10.1 (test de delegación, E3.5) | Tests |
+| Jib Gradle plugin | 3.5.4 (compatible con Gradle 9.6; base `eclipse-temurin:21-jre`) | Imagen |
+| Terraform / provider google, google-beta | 1.15.9 (`TF_VERSION` en `infra-ci.yml`; `versions.tf` exige `>= 1.15.0, < 2.0.0`) / 7.46.1 (`.terraform.lock.hcl`, restricción `~> 7.0`) | Infra |
+| `@firebase/rules-unit-testing` | 6.0.0 (con `firebase` 13.1.0, `firebase-tools` 15.34.0 y Node 24; el emulador pide Java 21) | Tests de reglas |
 
 ---
 
