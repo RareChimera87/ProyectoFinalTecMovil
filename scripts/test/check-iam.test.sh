@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Pruebas de scripts/check-iam.sh con planes JSON mínimos embebidos (heredoc).
+# Pruebas de scripts/check-iam.sh con planes JSON mínimos embebidos (heredoc o inline).
 # No necesita gcloud ni credenciales. Uso: scripts/test/check-iam.test.sh
+# Cada caso comprueba el código de salida y, si se indica, una línea de la salida:
+# el patrón es un texto fijo; "!" delante significa que NO debe aparecer.
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECK="$DIR/check-iam.sh"
 fallos=0
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
-# Plan base limpio: una asignación de sa-api que cumple todo.
+# Plan base limpio: una asignación de sa-api en parcheu-dev (el proyecto se toma de aquí).
 cat >"$tmp/base.json" <<'JSON'
 {"planned_values":{"root_module":{"resources":[
-  {"type":"google_project_iam_member","values":{"role":"roles/cloudsql.client","member":"serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com","condition":[]}}
+  {"type":"google_project_iam_member","values":{"project":"parcheu-dev","role":"roles/cloudsql.client","member":"serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com","condition":[]}}
 ]}}}
 JSON
 
@@ -20,38 +22,82 @@ con() { # con <recurso json>: plan base con un recurso más; devuelve su ruta
   jq --argjson r "$1" '.planned_values.root_module.resources += [$r]' "$tmp/base.json" >"$out"
   echo "$out"
 }
-caso() { # caso <acepta|rechaza> <descripción> <plan>
-  local salida rc
+mk() { # mk <recursos json> [resource_changes json]: plan con esos recursos; devuelve su ruta
+  n=$((n + 1)); local out="$tmp/caso$n.json"
+  jq -n --argjson r "$1" --argjson c "${2:-[]}" \
+    '{planned_values:{root_module:{resources:$r}}, resource_changes:$c}' >"$out"
+  echo "$out"
+}
+caso() { # caso <rc esperado> <descripción> <plan> [patrón]
+  local salida rc pat="${4:-}" ok=1
   salida="$("$CHECK" "$3" 2>&1)"; rc=$?
-  if [[ "$1" == acepta && $rc -eq 0 ]] || [[ "$1" == rechaza && $rc -eq 1 ]]; then
-    echo "ok   $1: $2"
+  [ "$rc" = "$1" ] || ok=0
+  if [ -n "$pat" ]; then
+    if [[ "$pat" == !* ]]; then grep -qF -- "${pat#!}" <<<"$salida" && ok=0
+    else grep -qF -- "$pat" <<<"$salida" || ok=0; fi
+  fi
+  if [ "$ok" = 1 ]; then
+    echo "ok   rc=$rc: $2"
   else
-    echo "FALLA debía $1 (rc=$rc): $2"; sed 's/^/     /' <<<"$salida"; fallos=$((fallos + 1))
+    echo "FALLA (rc=$rc, esperaba $1, patrón '${pat:-ninguno}'): $2"; sed 's/^/     /' <<<"$salida"
+    fallos=$((fallos + 1))
   fi
 }
 SA_DEPLOYER='serviceAccount:sa-deployer@parcheu-dev.iam.gserviceaccount.com'
 SA_OTRA='serviceAccount:sa-otra@parcheu-dev.iam.gserviceaccount.com'
+EXPR_REAL="api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly(['roles/aiplatform.user','roles/cloudsql.client'])"
 
-caso acepta "política limpia" "$tmp/base.json"
+echo "reglas por asignación"
+caso 0 "política limpia" "$tmp/base.json" "!ERROR:"
+caso 0 "allUsers con roles/run.invoker" "$(con '{"type":"google_cloud_run_v2_service_iam_member","values":{"role":"roles/run.invoker","member":"allUsers"}}')" "!ERROR:"
+caso 1 "allUsers con roles/viewer" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/viewer","member":"allUsers"}}')" "ERROR: allUsers tiene roles/viewer"
+caso 1 "allAuthenticatedUsers con roles/run.invoker" "$(con '{"type":"google_cloud_run_v2_service_iam_member","values":{"role":"roles/run.invoker","member":"allAuthenticatedUsers"}}')" "ERROR: allAuthenticatedUsers tiene roles/run.invoker"
+caso 1 "serviceAccountKeyAdmin" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/iam.serviceAccountKeyAdmin","member":"serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com"}}')" "ERROR: serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com tiene roles/iam.serviceAccountKeyAdmin"
+caso 1 "roleAdmin" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/iam.roleAdmin","member":"serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com"}}')" "ERROR: serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com tiene roles/iam.roleAdmin"
+caso 0 "serviceAccountTokenCreator para sa-deployer" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountTokenCreator\",\"member\":\"$SA_DEPLOYER\"}}")" "!ERROR:"
+caso 1 "serviceAccountTokenCreator para otra SA" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountTokenCreator\",\"member\":\"$SA_OTRA\"}}")" "ERROR: $SA_OTRA tiene roles/iam.serviceAccountTokenCreator"
+caso 1 "serviceAccountTokenCreator para sa-terraform de otro proyecto" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/iam.serviceAccountTokenCreator","member":"serviceAccount:sa-terraform@otro-proyecto.iam.gserviceaccount.com"}}')" "ERROR: serviceAccount:sa-terraform@otro-proyecto.iam.gserviceaccount.com tiene roles/iam.serviceAccountTokenCreator"
+caso 0 "serviceAccountOpenIdTokenCreator para sa-deployer" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountOpenIdTokenCreator\",\"member\":\"$SA_DEPLOYER\"}}")" "!ERROR:"
+caso 1 "serviceAccountOpenIdTokenCreator para otra SA" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountOpenIdTokenCreator\",\"member\":\"$SA_OTRA\"}}")" "ERROR: $SA_OTRA tiene roles/iam.serviceAccountOpenIdTokenCreator"
+caso 0 "serviceAccountAdmin para sa-terraform (bootstrap)" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/iam.serviceAccountAdmin","member":"serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com"}}')" "!ERROR:"
+caso 1 "serviceAccountAdmin para sa-deployer" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountAdmin\",\"member\":\"$SA_DEPLOYER\"}}")" "ERROR: $SA_DEPLOYER tiene roles/iam.serviceAccountAdmin"
+caso 1 "serviceAccountUser a nivel de proyecto para otra SA" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountUser\",\"member\":\"$SA_OTRA\"}}")" "ERROR: $SA_OTRA tiene roles/iam.serviceAccountUser a nivel de proyecto"
+caso 0 "serviceAccountUser a nivel de SA (no es de proyecto)" "$(con "{\"type\":\"google_service_account_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountUser\",\"member\":\"$SA_OTRA\"}}")" "!ERROR:"
 
-caso acepta "allUsers con roles/run.invoker" "$(con '{"type":"google_cloud_run_v2_service_iam_member","values":{"role":"roles/run.invoker","member":"allUsers"}}')"
-caso rechaza "allUsers con roles/viewer" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/viewer","member":"allUsers"}}')"
-caso rechaza "allAuthenticatedUsers con roles/run.invoker" "$(con '{"type":"google_cloud_run_v2_service_iam_member","values":{"role":"roles/run.invoker","member":"allAuthenticatedUsers"}}')"
+echo "projectIamAdmin"
+caso 1 "projectIamAdmin sin condition" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/resourcemanager.projectIamAdmin","member":"serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com","condition":[]}}')" "ERROR: serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com tiene roles/resourcemanager.projectIamAdmin sin condition"
+caso 0 "projectIamAdmin con la condición real (modifiedGrantsByRole)" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/resourcemanager.projectIamAdmin\",\"member\":\"serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com\",\"condition\":[{\"title\":\"solo-roles\",\"expression\":\"$EXPR_REAL\"}]}}")" "!ERROR:"
+caso 1 "projectIamAdmin con expression \"true\"" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/resourcemanager.projectIamAdmin","member":"serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com","condition":[{"title":"t","expression":"true"}]}}')" "ERROR: serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com tiene roles/resourcemanager.projectIamAdmin con una condition que no limita"
 
-caso rechaza "serviceAccountKeyAdmin" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/iam.serviceAccountKeyAdmin","member":"serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com"}}')"
-caso acepta "serviceAccountTokenCreator para sa-deployer" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountTokenCreator\",\"member\":\"$SA_DEPLOYER\"}}")"
-caso rechaza "serviceAccountTokenCreator para otra SA" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountTokenCreator\",\"member\":\"$SA_OTRA\"}}")"
-caso acepta "serviceAccountAdmin para sa-terraform (bootstrap)" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/iam.serviceAccountAdmin","member":"serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com"}}')"
-caso rechaza "serviceAccountAdmin para sa-deployer" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountAdmin\",\"member\":\"$SA_DEPLOYER\"}}")"
-caso rechaza "serviceAccountUser a nivel de proyecto para otra SA" "$(con "{\"type\":\"google_project_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountUser\",\"member\":\"$SA_OTRA\"}}")"
-caso acepta "serviceAccountUser a nivel de SA (no es de proyecto)" "$(con "{\"type\":\"google_service_account_iam_member\",\"values\":{\"role\":\"roles/iam.serviceAccountUser\",\"member\":\"$SA_OTRA\"}}")"
+echo "principales humanos y de grupo"
+caso 1 "user: con roles/editor" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/editor","member":"user:persona@ejemplo.com","condition":[]}}')" "ERROR: user:persona@ejemplo.com tiene roles/editor"
+caso 0 "user: con roles/viewer (sin aviso)" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/viewer","member":"user:persona@ejemplo.com","condition":[]}}')" "!AVISO: user:persona"
+caso 0 "user: con otro rol (solo aviso)" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/iam.securityReviewer","member":"user:persona@ejemplo.com","condition":[]}}')" "AVISO: user:persona@ejemplo.com tiene roles/iam.securityReviewer"
+caso 0 "domain: con roles/storage.admin (solo aviso)" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/storage.admin","member":"domain:x.com","condition":[]}}')" "AVISO: domain:x.com tiene roles/storage.admin"
+caso 0 "group: con roles/storage.objectAdmin (solo aviso)" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/storage.objectAdmin","member":"group:equipo@ejemplo.com","condition":[]}}')" "AVISO: group:equipo@ejemplo.com tiene roles/storage.objectAdmin"
 
-caso rechaza "projectIamAdmin sin condition" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/resourcemanager.projectIamAdmin","member":"serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com","condition":[]}}')"
-caso acepta "projectIamAdmin con condition" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/resourcemanager.projectIamAdmin","member":"serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com","condition":[{"title":"solo-roles-de-la-plataforma","expression":"true"}]}}')"
+echo "valores desconocidos hasta el apply (resource_changes)"
+DESC_KADMIN='[{"type":"google_project_iam_member","values":{"project":"parcheu-dev","role":"roles/iam.serviceAccountKeyAdmin","condition":[]}}]'
+DESC_KADMIN_CAMBIO='[{"type":"google_project_iam_member","address":"google_project_iam_member.kadmin","change":{"actions":["create"],"after":{"role":"roles/iam.serviceAccountKeyAdmin"},"after_unknown":{"member":true}}}]'
+caso 1 "miembro desconocido con roles/iam.serviceAccountKeyAdmin" "$(mk "$DESC_KADMIN" "$DESC_KADMIN_CAMBIO")" "ERROR: asignación con valores desconocidos hasta el apply (google_project_iam_member.kadmin): rol roles/iam.serviceAccountKeyAdmin, miembro (desconocido)"
+DESC_VIEWER_CAMBIO='[{"type":"google_project_iam_member","address":"google_project_iam_member.viewer","change":{"actions":["create"],"after":{"role":"roles/viewer"},"after_unknown":{"member":true}}}]'
+caso 0 "miembro desconocido con roles/viewer (solo aviso)" "$(mk '[{"type":"google_project_iam_member","values":{"project":"parcheu-dev"}}]' "$DESC_VIEWER_CAMBIO")" "AVISO: asignación con valores desconocidos hasta el apply (google_project_iam_member.viewer): rol roles/viewer, miembro (desconocido)"
+DESC_POL_CAMBIO='[{"type":"google_project_iam_policy","address":"google_project_iam_policy.pol","change":{"actions":["create"],"after":{},"after_unknown":{"policy_data":true}}}]'
+caso 0 "política con policy_data desconocido (solo aviso)" "$(mk '[{"type":"google_project_iam_policy","values":{"project":"parcheu-dev"}}]' "$DESC_POL_CAMBIO")" "AVISO: asignación con valores desconocidos hasta el apply (google_project_iam_policy.pol)"
 
-caso rechaza "user: con roles/editor" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/editor","member":"user:persona@ejemplo.com","condition":[]}}')"
-caso acepta "user: con roles/viewer" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/viewer","member":"user:persona@ejemplo.com","condition":[]}}')"
-caso acepta "user: con otro rol (solo aviso)" "$(con '{"type":"google_project_iam_member","values":{"role":"roles/iam.securityReviewer","member":"user:persona@ejemplo.com","condition":[]}}')"
+echo "políticas completas (*_iam_policy)"
+caso 1 "google_project_iam_policy con allUsers y roles/owner" "$(mk '[{"type":"google_project_iam_policy","values":{"project":"parcheu-dev","policy_data":"{\"bindings\":[{\"role\":\"roles/owner\",\"members\":[\"allUsers\"]}]}"}}]')" "ERROR: allUsers tiene roles/owner"
+caso 1 "google_cloud_run_v2_service_iam_policy con allUsers y roles/run.admin" "$(mk '[{"type":"google_cloud_run_v2_service_iam_policy","values":{"project":"parcheu-dev","policy_data":"{\"bindings\":[{\"role\":\"roles/run.admin\",\"members\":[\"allUsers\"]}]}"}}]')" "ERROR: allUsers tiene roles/run.admin"
+caso 0 "google_project_iam_policy con sa-deployer como TokenCreator" "$(mk "[{\"type\":\"google_project_iam_policy\",\"values\":{\"project\":\"parcheu-dev\",\"policy_data\":\"{\\\"bindings\\\":[{\\\"role\\\":\\\"roles/iam.serviceAccountTokenCreator\\\",\\\"members\\\":[\\\"$SA_DEPLOYER\\\"]}]}\"}}]")" "!ERROR:"
 
-echo "$((fallos)) fallo(s)"
+echo "entrada inválida"
+printf '' >"$tmp/vacio.json"
+caso 5 "archivo vacío" "$tmp/vacio.json" "no es un plan"
+echo '{"foo":1}' >"$tmp/sin_planned.json"
+caso 5 "objeto sin planned_values" "$tmp/sin_planned.json" "no es un plan"
+echo '{}' >"$tmp/vacio_obj.json"
+caso 5 "{} como plan" "$tmp/vacio_obj.json" "no es un plan"
+caso 2 "archivo inexistente" "$tmp/no-existe.json" "no se puede leer"
+
+echo "$fallos fallo(s)"
 ((fallos == 0)) && echo "check-iam.test: todo en orden" || { echo "check-iam.test: $fallos fallo(s)"; exit 1; }
