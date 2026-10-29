@@ -51,20 +51,27 @@ variable "simulations_max_concurrent_dispatches" {
   default     = 10
 }
 
+# Sin correo, las políticas de alerta se crean sin canal y nadie se entera. En dev el valor por
+# defecto es el correo de contacto público del proyecto (el de firebase/public/*.html), para que
+# el `apply` de CI (que no pasa -var) siempre tenga destinatario; los demás se agregan con -var.
 variable "alert_emails" {
-  description = "Correos que reciben las alertas de monitoring.tf (E10.5). Se pasa con -var o un .tfvars local, nunca en el repo."
+  description = "Correos que reciben las alertas de monitoring.tf (E10.5). Al menos uno."
   type        = list(string)
-  default     = []
+  default     = ["sanctireinadiaz@gmail.com"]
+
+  validation {
+    condition     = length(var.alert_emails) > 0 && alltrue([for e in var.alert_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", e))])
+    error_message = "alert_emails necesita al menos un correo válido: sin canal, las alertas no avisan a nadie."
+  }
 }
 
 module "platform" {
   source = "../../modules/platform"
 
-  project_id                     = local.project_id
-  environment                    = "dev"
-  region                         = local.region
-  deployer_service_account_email = "sa-deployer@${local.project_id}.iam.gserviceaccount.com"
-  alert_emails                   = var.alert_emails
+  project_id   = local.project_id
+  environment  = "dev"
+  region       = local.region
+  alert_emails = var.alert_emails
 
   api_min_instances   = 0
   api_max_instances   = 3
@@ -103,4 +110,43 @@ output "sql_connection_name" {
 
 output "internal_oidc_audience" {
   value = module.platform.internal_oidc_audience
+}
+
+# fix/wif-deployer-dev: sa-api, sa-tasks, los roles de proyecto de sa-api y los enlaces
+# entre cuentas pasaron a bootstrap/. Si este estado ya los tenía, se olvidan sin
+# destruirlos (el bootstrap los importa; ver docs/pendientes-humanos.md). Sin ellos en el
+# estado, estos bloques no hacen nada.
+removed {
+  from = module.platform.google_service_account.api
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_service_account.tasks
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_project_iam_member.api
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_service_account_iam_member.api_acts_as_tasks
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_service_account_iam_member.deployer_acts_as_api
+  lifecycle {
+    destroy = false
+  }
 }

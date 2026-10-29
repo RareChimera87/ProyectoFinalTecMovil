@@ -7,7 +7,7 @@ locals {
     DB_NAME                = google_sql_database.main.name
     DB_USER                = google_sql_user.api.name
     DB_IAM_AUTH            = "true"
-    TASKS_SERVICE_ACCOUNT  = google_service_account.tasks.email
+    TASKS_SERVICE_ACCOUNT  = data.google_service_account.tasks.email
     TASKS_QUEUE_SIM        = google_cloud_tasks_queue.this["simulations"].name
     TASKS_QUEUE_AI_LIGHT   = google_cloud_tasks_queue.this["ai-light"].name
     TASKS_QUEUE_MAINT      = google_cloud_tasks_queue.this["maintenance"].name
@@ -42,7 +42,7 @@ resource "google_cloud_run_v2_service" "api" {
   custom_audiences    = [local.internal_audience]
 
   template {
-    service_account                  = google_service_account.api.email
+    service_account                  = data.google_service_account.api.email
     timeout                          = "${var.api_timeout_seconds}s"
     max_instance_request_concurrency = var.api_concurrency
 
@@ -88,7 +88,6 @@ resource "google_cloud_run_v2_service" "api" {
 
   depends_on = [
     google_project_service.apis,
-    google_project_iam_member.api,
     google_secret_manager_secret_iam_member.api_accessor,
   ]
 }
@@ -108,7 +107,7 @@ resource "google_cloud_run_v2_service_iam_member" "tasks_invoker" {
   location = var.region
   name     = google_cloud_run_v2_service.api.name
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.tasks.email}"
+  member   = "serviceAccount:${data.google_service_account.tasks.email}"
 }
 
 # Tres Cloud Run Jobs con la misma imagen y distinto argumento (ADR-0011, ADR-0027).
@@ -125,7 +124,7 @@ resource "google_cloud_run_v2_job" "this" {
     parallelism = 1
 
     template {
-      service_account = google_service_account.api.email
+      service_account = data.google_service_account.api.email
       timeout         = each.value.timeout
       max_retries     = 0
 
@@ -160,5 +159,5 @@ resource "google_cloud_run_v2_job" "this" {
     ]
   }
 
-  depends_on = [google_project_service.apis, google_project_iam_member.api]
+  depends_on = [google_project_service.apis]
 }

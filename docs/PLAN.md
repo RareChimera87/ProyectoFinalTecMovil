@@ -101,7 +101,7 @@ ParcheU/                                  (git: github.com/RareChimera87/Proyect
 │  │     ├─ navigation/  AppNavHost.kt, Routes.kt     (se fijan en E0.7)
 │  │     ├─ di/          AppModules.kt                (se fija en E0.7)
 │  │     ├─ feature/<nombre>/  XRoute.kt, XScreen.kt, XViewModel.kt, XModule.kt
-│  │     ├─ data/<dominio>/    XRepository.kt, XRepositoryImpl.kt (+ Fake en src/test y src/debug)
+│  │     ├─ data/<dominio>/    XRepository (interfaz) + impl. Retrofit (RemoteX, XRepositoryImpl o ApiX) + XApi; tambien en feature/<nombre>/; Fake solo en src/test
 │  │     └─ push/, core/  (red, errores, sesión)
 │  ├─ designsystem/                       tokens, componentes, mascota, grafo (layout + Canvas)
 │  └─ gradle/libs.versions.toml
@@ -111,6 +111,7 @@ ParcheU/                                  (git: github.com/RareChimera87/Proyect
 ├─ contract/                              DTOs @Serializable compartidos (includeBuild desde android y backend)
 ├─ infra/terraform/{bootstrap, modules/platform, envs/dev, envs/prod}
 ├─ firebase/                              firestore.rules, índices, tests de reglas, hosting/
+├─ deploy/homelab/                        Docker Compose del backend en el homeserver (ADR-0033): compose.yaml, desplegar.sh, respaldar.sh
 ├─ scripts/                               commit-lint (+ verbos-imperativo.txt), check-migration-order, demo-mutacion-privacidad,
 │                                         grant-admin, crear-proyectos, cargar-secretos, fetch-google-services, lado-a-lado
 ├─ docs/                                  PLAN, arquitectura, backlog, equipo, adr/, mockups-inventario, mockups/png, revisiones,

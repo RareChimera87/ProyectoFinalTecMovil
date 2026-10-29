@@ -21,13 +21,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChatTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUIconButton
@@ -45,7 +49,8 @@ data class ChatActions(
     val onRetryLive: () -> Unit = {},
     val onPrivacy: () -> Unit = {},
     val onDismissConsent: () -> Unit = {},
-    val onRetryLoad: () -> Unit = {}
+    val onRetryLoad: () -> Unit = {},
+    val onLoadOlder: () -> Unit = {}
 )
 
 /** F9 · Chat en vivo. Sin estado propio salvo el menú: todo llega en [state]. */
@@ -144,8 +149,17 @@ fun ChatScreen(
 @Composable
 private fun MessageList(state: ChatUiState, actions: ChatActions, modifier: Modifier) {
     val listState = rememberLazyListState()
-    LaunchedEffect(state.messages.size) {
+    // Solo baja al llegar un mensaje nuevo (cambia el último): al cargar páginas anteriores la lista no salta.
+    LaunchedEffect(state.messages.lastOrNull()?.key) {
         if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.lastIndex)
+    }
+    // Al llegar al primer mensaje pide la página anterior (A-M3); las claves estables conservan la posición.
+    val loadOlder by rememberUpdatedState(actions.onLoadOlder)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.lastScrolledBackward }
+            .distinctUntilChanged()
+            .filter { it }
+            .collect { loadOlder() }
     }
     if (state.messages.isEmpty() && !state.loading) {
         // Con el listener caído no se afirma que no hay mensajes: el error y su Reintentar van arriba.

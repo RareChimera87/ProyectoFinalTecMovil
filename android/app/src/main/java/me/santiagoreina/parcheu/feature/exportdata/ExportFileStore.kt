@@ -10,6 +10,7 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.santiagoreina.parcheu.data.auth.SessionCleaner
 
 /** Nombre del archivo de 'Descargar mis datos': `parcheu-datos-<yyyy-MM-dd>.json` (fecha de Bogotá). */
 fun exportFileName(date: String): String = "parcheu-datos-$date.json"
@@ -36,6 +37,14 @@ interface ExportFileStore {
 
     /** Borra las copias para compartir (al salir de la pantalla). */
     fun clear()
+}
+
+/**
+ * [SessionCleaner] de 'Descargar mis datos' (A-B3): el JSON exportado vive en `cache/exports/` y contiene
+ * los datos de la persona; no puede sobrevivir al cierre de sesión (antes solo se borraba en `onCleared`).
+ */
+fun exportFilesCleaner(files: ExportFileStore) = SessionCleaner {
+    withContext(Dispatchers.IO) { files.clear() }
 }
 
 /**

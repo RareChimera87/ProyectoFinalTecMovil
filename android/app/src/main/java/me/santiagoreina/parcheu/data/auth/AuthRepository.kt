@@ -21,12 +21,16 @@ sealed interface SignInResult {
  * → `POST /v1/session`. La UI depende solo de esta interfaz; las pruebas usan `FakeAuthRepository`.
  */
 interface AuthRepository {
-    /** `true` si hay un usuario de Firebase con sesión en el dispositivo. */
+    /**
+     * `true` si hay un usuario de Firebase con sesión en el dispositivo y no se está cerrando ([signOut] en
+     * curso cuenta como sesión cerrada desde su primer paso).
+     */
     fun hasSession(): Boolean
 
     /**
      * Abre el selector de cuentas de Google sobre [activityContext] (debe ser una Activity: Credential
-     * Manager muestra su hoja encima de ella) y completa el login con Firebase y la API.
+     * Manager muestra su hoja encima de ella) y completa el login con Firebase y la API. Si hay un [signOut]
+     * en curso, espera a que termine antes de abrir el selector.
      */
     suspend fun signInWithGoogle(activityContext: Context): SignInResult
 

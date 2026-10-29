@@ -1,8 +1,9 @@
 # Bootstrap de un entorno de ParcheU (ADR-0014). Se aplica una vez por proyecto
-# con el ADC del usuario: bucket de estado, WIF para GitHub Actions y las cuentas
+# con el ADC del usuario: bucket de estado, WIF para GitHub Actions, las cuentas
 # de servicio con las que CI despliega (sa-deployer) y ejecuta Terraform
-# (sa-terraform-plan para `plan`; sa-terraform para `apply` solo en dev) y el
-# presupuesto de facturación.
+# (sa-terraform-plan para `plan`; sa-terraform para `apply` solo en dev), las
+# identidades de ejecución sa-api y sa-tasks con sus roles (enmienda del 28 oct de
+# ADR-0014: así sa-terraform no administra IAM) y el presupuesto de facturación.
 
 locals {
   # IDs reales de los proyectos. Si alguno cambia (sufijo por ID ocupado),
@@ -16,12 +17,18 @@ locals {
   state_bucket = "${local.project_id}-tfstate"
   is_prod      = var.environment == "prod"
 
-  repo_principal = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repository}"
-  # En prod, sa-deployer solo lo pueden usar jobs del environment `production`
-  # de GitHub (que exige la aprobación del usuario).
-  deployer_principal = local.is_prod ? "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.environment/production" : local.repo_principal
+  pool_principal = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}"
+  repo_principal = "${local.pool_principal}/attribute.repository/${var.github_repository}"
   # Solo jobs que corren sobre la rama dev (protegida: solo entra por PR aprobado).
-  dev_branch_principal = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.ref/refs/heads/dev"
+  # Un `pull_request` trae ref refs/pull/<n>/merge y una rama cualquiera refs/heads/<rama>.
+  dev_branch_principal = "${local.pool_principal}/attribute.ref/refs/heads/dev"
+  # sa-deployer:
+  #   - dev: solo la rama dev (deploy-dev, smoke-e2e y firebase-deploy corren en push a dev
+  #     o workflow_dispatch sobre dev). Antes era todo el repo: un PR podía reescribir las
+  #     reglas de Firestore o firmar tokens de Firebase con cualquier claim (C-A3).
+  #   - prod: environment `production` (aprobación del usuario) Y ref de tag v* (C-M7), con el
+  #     atributo derivado env_ref; un principalSet no admite prefijos.
+  deployer_principal = local.is_prod ? "${local.pool_principal}/attribute.env_ref/production@tag" : local.dev_branch_principal
   # sa-terraform-plan: en dev cualquier PR del repo puede hacer `plan` (no hay datos
   # reales); en prod solo la rama dev, porque cualquier PR podría usarla (ADR-0012).
   plan_principal = local.is_prod ? local.dev_branch_principal : local.repo_principal
@@ -50,30 +57,26 @@ locals {
   ]
 
   # dev: CI hace `apply` (solo desde la rama dev), así que sa-terraform administra los
-  # servicios que usa modules/platform (sin roles/owner ni roles/editor). El rol
-  # projectIamAdmin va aparte, con condición (google_project_iam_member.terraform_iam_admin).
+  # servicios que usa modules/platform (sin roles/owner ni roles/editor). No administra
+  # IAM de proyecto ni cuentas de servicio (C-M1): sa-api y sa-tasks, sus roles y sus
+  # enlaces los crea este bootstrap; sa-terraform solo tiene actAs sobre esas dos
+  # (google_service_account_iam_member.terraform_acts_as_{api,tasks}) y el rol personalizado
+  # parcheuTerraformApply para secretos, Firestore, Firebase y métricas de logs sin
+  # acceso a datos.
   terraform_roles_dev = [
-    "roles/serviceusage.serviceUsageAdmin",
-    "roles/iam.serviceAccountAdmin",
-    "roles/iam.serviceAccountUser",
-    "roles/run.admin",
-    "roles/artifactregistry.admin",
-    "roles/cloudsql.admin",
-    "roles/secretmanager.admin",
-    "roles/cloudtasks.admin",
-    "roles/cloudscheduler.admin",
-    "roles/pubsub.admin",
-    "roles/datastore.owner",
-    "roles/firebase.admin",
-    "roles/monitoring.admin",
-    # Métricas basadas en logs de monitoring.tf (E10.5).
-    "roles/logging.configWriter",
+    "roles/serviceusage.serviceUsageAdmin", # habilita las APIs de modules/platform (main.tf)
+    "roles/run.admin",                      # servicio api, jobs y su IAM de invocación (cloud_run.tf)
+    "roles/artifactregistry.admin",         # repositorio de imágenes y su política de limpieza
+    "roles/cloudsql.admin",                 # instancia, base y usuario IAM de sa-api (sql.tf)
+    "roles/cloudtasks.admin",               # colas (tasks.tf)
+    "roles/cloudscheduler.admin",           # trabajos programados (scheduler.tf)
+    "roles/pubsub.admin",                   # tema play-rtdn, su IAM y la suscripción push (pubsub.tf)
+    "roles/monitoring.admin",               # uptime, canales, alertas y tablero (monitoring.tf)
   ]
 
-  # Roles que modules/platform asigna a sa-api: sa-terraform solo puede otorgar
-  # estos (condición de projectIamAdmin). Mantener alineado con
-  # modules/platform/iam.tf (local.api_project_roles).
-  terraform_grantable_roles = [
+  # Roles de proyecto de sa-api (antes en modules/platform/iam.tf). Viven aquí para que
+  # ninguna identidad de CI necesite projectIamAdmin.
+  api_project_roles = [
     "roles/aiplatform.user",
     "roles/cloudsql.client",
     "roles/cloudsql.instanceUser",
@@ -174,10 +177,17 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.workflow"      = "assertion.workflow"
     "attribute.event_name"    = "assertion.event_name"
     "attribute.owner"         = "assertion.repository_owner"
+    # Se mapea para auditar; la condición del pool lo exige.
+    "attribute.repository_owner_id" = "assertion.repository_owner_id"
+    # "<environment>@<ref>", con "tag" en lugar de la ref para refs/tags/v* y "-" sin
+    # environment. Permite exigir environment y ref a la vez en un principalSet (que no
+    # admite prefijos): sa-deployer de prod usa production@tag; sa-play, play@... (play.tf).
+    "attribute.env_ref" = "(has(assertion.environment) ? assertion.environment : '-') + '@' + (assertion.ref.startsWith('refs/tags/v') ? 'tag' : assertion.ref)"
   }
 
-  # Solo tokens emitidos para este repositorio pueden intercambiarse.
-  attribute_condition = "assertion.repository == '${var.github_repository}'"
+  # Solo tokens emitidos para este repositorio pueden intercambiarse. Por ID y no por
+  # nombre (C-B10): un nombre liberado se puede volver a registrar, un ID no.
+  attribute_condition = "assertion.repository_id == '${var.github_repository_id}' && assertion.repository_owner_id == '${var.github_repository_owner_id}'"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
@@ -225,6 +235,7 @@ resource "google_project_iam_member" "deployer" {
 # E10.6: el smoke e2e de deploy-dev crea tokens personalizados de Firebase con el claim `is_test`. Con WIF no hay llave
 # privada, así que el Admin SDK los firma con IAM signBlob de la propia cuenta: sa-deployer necesita poder
 # crear tokens de sí misma (solo sobre esta cuenta, no sobre el proyecto). En prod no hay smoke automático.
+# Desde C-A3 solo la rama dev puede suplantar a sa-deployer, así que un PR ya no llega a este permiso.
 resource "google_service_account_iam_member" "deployer_signs_own_tokens" {
   count              = local.is_prod ? 0 : 1
   service_account_id = google_service_account.deployer.name
@@ -239,19 +250,111 @@ resource "google_project_iam_member" "terraform" {
   member   = "serviceAccount:${google_service_account.terraform[0].email}"
 }
 
-# projectIamAdmin sin condición permitiría otorgarse roles/owner. Con la condición
-# solo puede otorgar los roles que usa modules/platform.
-resource "google_project_iam_member" "terraform_iam_admin" {
+# Lo que sa-terraform necesita de Secret Manager, Firestore, Firebase y métricas de logs
+# sin los roles admin/owner/configWriter, que incluyen leer valores de secretos
+# (versions.access), documentos de Firestore (datastore.entities.*) o exportar logs (sinks). Terraform solo crea contenedores de secretos sin valor
+# (los valores los carga scripts/cargar-secretos.sh con el ADC de una persona), así que no
+# necesita ningún permiso de versiones. setIamPolicy de secretos queda por el
+# secretAccessor de sa-api (secrets.tf).
+resource "google_project_iam_custom_role" "terraform_apply" {
+  count       = local.is_prod ? 0 : 1
+  project     = local.project_id
+  role_id     = "parcheuTerraformApply"
+  title       = "ParcheU Terraform apply (sin datos)"
+  description = "Contenedores de secretos, base de Firestore y proyecto de Firebase, sin leer valores ni documentos."
+  permissions = [
+    "secretmanager.secrets.create",
+    "secretmanager.secrets.delete",
+    "secretmanager.secrets.get",
+    "secretmanager.secrets.list",
+    "secretmanager.secrets.update",
+    "secretmanager.secrets.getIamPolicy",
+    "secretmanager.secrets.setIamPolicy",
+    "datastore.databases.create",
+    "datastore.databases.delete",
+    "datastore.databases.get",
+    "datastore.databases.getMetadata",
+    "datastore.databases.list",
+    "datastore.databases.update",
+    "firebase.projects.get",
+    "firebase.projects.update",
+    "resourcemanager.projects.get",
+    # Métricas basadas en logs de monitoring.tf (E10.5). No roles/logging.configWriter:
+    # incluye logging.sinks.* y buckets/links, con los que se exportarían todos los logs.
+    "logging.logMetrics.create",
+    "logging.logMetrics.delete",
+    "logging.logMetrics.get",
+    "logging.logMetrics.list",
+    "logging.logMetrics.update",
+  ]
+  depends_on = [google_project_service.bootstrap]
+}
+
+resource "google_project_iam_member" "terraform_apply_custom" {
   count   = local.is_prod ? 0 : 1
   project = local.project_id
-  role    = "roles/resourcemanager.projectIamAdmin"
+  role    = google_project_iam_custom_role.terraform_apply[0].name
   member  = "serviceAccount:${google_service_account.terraform[0].email}"
+}
 
-  condition {
-    title       = "solo-roles-de-la-plataforma"
-    description = "sa-terraform solo otorga los roles de sa-api (nunca owner/editor)."
-    expression  = "api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([${join(",", [for r in local.terraform_grantable_roles : "'${r}'"])}])"
-  }
+# ---------------------------------------------------------------------------
+# Identidades de ejecución (antes en modules/platform/iam.tf)
+# ---------------------------------------------------------------------------
+
+resource "google_service_account" "api" {
+  project      = local.project_id
+  account_id   = "sa-api"
+  display_name = "ParcheU API"
+  description  = "Identidad de Cloud Run api y de los Cloud Run Jobs (migrate, seed-demo, purge-demo)."
+  depends_on   = [google_project_service.bootstrap]
+}
+
+resource "google_service_account" "tasks" {
+  project      = local.project_id
+  account_id   = "sa-tasks"
+  display_name = "ParcheU tasks"
+  description  = "Identidad OIDC de Cloud Tasks, Cloud Scheduler y Pub/Sub hacia /internal/*."
+  depends_on   = [google_project_service.bootstrap]
+}
+
+resource "google_project_iam_member" "api" {
+  for_each = toset(local.api_project_roles)
+  project  = local.project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.api.email}"
+}
+
+# La API crea tareas con token OIDC de sa-tasks: necesita actAs sobre ella.
+resource "google_service_account_iam_member" "api_acts_as_tasks" {
+  service_account_id = google_service_account.tasks.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.api.email}"
+}
+
+# CI despliega la API y los jobs que corren como sa-api.
+resource "google_service_account_iam_member" "deployer_acts_as_api" {
+  service_account_id = google_service_account.api.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.deployer.email}"
+}
+
+# sa-terraform (dev) crea recursos que corren como estas cuentas: Cloud Run api y jobs
+# (sa-api), Scheduler y la suscripción push de Pub/Sub (sa-tasks). actAs solo sobre ellas,
+# no sobre el proyecto: no puede lanzar nada como sa-deployer ni como sí misma.
+# Dos recursos explícitos (no for_each) para que scripts/check-iam.sh resuelva el destino
+# desde la configuración del plan y compare el par con EXPECTED_SA_PAIRS.
+resource "google_service_account_iam_member" "terraform_acts_as_api" {
+  count              = local.is_prod ? 0 : 1
+  service_account_id = google_service_account.api.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.terraform[0].email}"
+}
+
+resource "google_service_account_iam_member" "terraform_acts_as_tasks" {
+  count              = local.is_prod ? 0 : 1
+  service_account_id = google_service_account.tasks.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.terraform[0].email}"
 }
 
 # Lectura de metadatos que ningún rol predefinido ofrece sin datos asociados.

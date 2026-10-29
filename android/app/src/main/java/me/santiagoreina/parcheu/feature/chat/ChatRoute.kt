@@ -63,7 +63,8 @@ fun ChatContent(
                 onRetryLive = viewModel::retryLive,
                 onPrivacy = { navigator.navigate(PrivacySettings) },
                 onDismissConsent = viewModel::dismissConsentBanner,
-                onRetryLoad = viewModel::retryLoad
+                onRetryLoad = viewModel::retryLoad,
+                onLoadOlder = viewModel::loadOlder
             )
         }
     ChatScreen(

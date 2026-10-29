@@ -18,8 +18,8 @@ class RouteCatalogTest {
     }
 
     @Test
-    fun inventoryHasThirtySixRoutes() {
-        // arquitectura.md §2.4: 36 rutas. Si cambia, actualizar la tabla y este número en el mismo PR.
-        assertEquals(36, routeCatalog.size)
+    fun inventoryHasThirtySevenRoutes() {
+        // arquitectura.md §2.4: 37 rutas. Si cambia, actualizar la tabla y este número en el mismo PR.
+        assertEquals(37, routeCatalog.size)
     }
 }

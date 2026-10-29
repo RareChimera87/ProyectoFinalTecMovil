@@ -18,9 +18,7 @@ import me.santiagoreina.parcheu.contract.IntroductionStatus
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
-import me.santiagoreina.parcheu.feature.plus.PlusErrorRouter
 import me.santiagoreina.parcheu.feature.results.ResultsViewModel
-import me.santiagoreina.parcheu.navigation.AppRoute
 
 /** Lo que está en curso en E2. */
 enum class IntroResultBusy { UNLOCK, SEND, SKIP }
@@ -62,9 +60,6 @@ sealed interface IntroResultEffect {
     data object Close : IntroResultEffect
 
     data object OpenPaywall : IntroResultEffect
-
-    /** Abre la hoja G2 del cupo agotado (E7.3): el informe del mes ya se usó. */
-    data class OpenLimit(val route: AppRoute) : IntroResultEffect
 
     data object IntroduceAgain : IntroResultEffect
 }
@@ -152,9 +147,6 @@ class IntroResultViewModel(
                                 ),
                                 busy = null
                             )
-                        }
-                        PlusErrorRouter.route(error, PRESENTAR_PAYWALL_SOURCE)?.let {
-                            _effects.send(IntroResultEffect.OpenLimit(it))
                         }
                     } else {
                         update { it.copy(busy = null, notice = IntroResultNotice.Failed(error)) }

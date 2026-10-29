@@ -15,6 +15,7 @@ val routeCatalog: List<RouteEntry> =
         RouteEntry(Onboarding(page = 2), "A2-A4", "Onboarding"),
         RouteEntry(BasicProfile(), "B0", "Tu perfil"),
         RouteEntry(Underage, "Edad", "Bloqueo por edad"),
+        RouteEntry(Suspended, "Suspendida", "Cuenta suspendida"),
         RouteEntry(TwinQuestions, "B1", "Preguntas del gemelo"),
         RouteEntry(Modes(), "B2-B3", "Elegir modos"),
         RouteEntry(Consent, "B4", "Consentimiento"),

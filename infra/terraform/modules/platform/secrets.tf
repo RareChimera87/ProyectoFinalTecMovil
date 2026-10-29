@@ -24,5 +24,5 @@ resource "google_secret_manager_secret_iam_member" "api_accessor" {
   project   = var.project_id
   secret_id = each.value.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.api.email}"
+  member    = "serviceAccount:${data.google_service_account.api.email}"
 }

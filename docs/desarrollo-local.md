@@ -43,9 +43,10 @@ Para probar la app contra el backend de pruebas del homeserver (`deploy/homelab/
 
 ```properties
 parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/
+# emulador de Android contra un backend en tu máquina (único HTTP permitido): parcheu.apiUrl.dev=http://10.0.2.2:8090/
 ```
 
-`urlProperty` lee primero `-P`/`gradle.properties` y luego `local.properties`. La URL HTTPS necesita el Proxy Host de Nginx Proxy Manager (paso humano en `deploy/homelab/README.md`); AdGuard resuelve `*.homeserverlab.site` a `192.168.0.10` en la LAN (por Tailscale, con el DNS de AdGuard). Ya no hay respaldo HTTP por la LAN: desde el 28 oct 2026 la API del homeserver solo escucha en loopback y se entra por NPM. Solo el `devDebug` trae `network_security_config` con HTTP permitido hacia `192.168.0.10` (ya sin uso) y `10.0.2.2` (backend local desde el emulador; `app/src/devDebug/`); el release y el flavor `prod` exigen HTTPS. El homeserver corre en `dev` (Firebase real); el modo `local` allí exige `ALLOW_FAKE_AUTH=true` y con él la app no inicia sesión (ver el README del despliegue).
+`urlProperty` lee primero `-P`/`gradle.properties` y luego `local.properties`. La URL HTTPS necesita el Proxy Host de Nginx Proxy Manager (paso humano en `deploy/homelab/README.md`); AdGuard resuelve `*.homeserverlab.site` a `192.168.0.10` en la LAN (por Tailscale, con el DNS de AdGuard). Ya no hay respaldo HTTP por la LAN: desde el 28 oct 2026 la API del homeserver solo escucha en loopback y se entra por NPM. Solo el `devDebug` trae `network_security_config` con HTTP permitido, y únicamente hacia `10.0.2.2` (backend local desde el emulador; `app/src/devDebug/`); además `AuthInterceptor` no adjunta el ID token a ninguna petición HTTP salvo a `10.0.2.2` (A-B1). El release y el flavor `prod` exigen HTTPS. El homeserver corre en `dev` (Firebase real); el modo `local` allí exige `ALLOW_FAKE_AUTH=true` y con él la app no inicia sesión (ver el README del despliegue).
 
 **Advertencia:** `urlProperty` lee `local.properties` también al construir el flavor `prod`; si dejas ahí `parcheu.apiUrl.prod` (o cualquier URL de producción) un build local la usará. Revisa `android/local.properties` antes de generar un AAB y no dejes URLs de prod en él.
 

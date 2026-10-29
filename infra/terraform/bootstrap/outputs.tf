@@ -25,3 +25,13 @@ output "terraform_plan_service_account" {
   description = "Valor de TF_PLAN_SERVICE_ACCOUNT_{DEV,PROD} (plan en CI)."
   value       = google_service_account.terraform_plan.email
 }
+
+output "api_service_account" {
+  description = "sa-api (identidad de Cloud Run api y de los jobs). La lee modules/platform."
+  value       = google_service_account.api.email
+}
+
+output "tasks_service_account" {
+  description = "sa-tasks (OIDC de Tasks, Scheduler y Pub/Sub). La lee modules/platform."
+  value       = google_service_account.tasks.email
+}

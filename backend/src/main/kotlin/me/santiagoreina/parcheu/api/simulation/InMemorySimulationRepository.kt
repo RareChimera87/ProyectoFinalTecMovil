@@ -138,6 +138,13 @@ class InMemorySimulationRepository(scenarios: List<ScenarioDef> = DefaultScenari
         true
     }
 
+    override suspend fun replaceDoneTranscript(id: UUID, expected: StoredTranscript, transcript: StoredTranscript): Boolean = synchronized(lock) {
+        val r = simulations[id] ?: return false
+        if (r.status != SimulationStatus.DONE || r.origin != SimulationOrigin.SCENARIO || r.transcript != expected) return false
+        simulations[id] = r.copy(transcript = transcript)
+        true
+    }
+
     override suspend fun markFailed(id: UUID, error: String, now: Instant): Boolean = synchronized(lock) {
         val r = simulations[id] ?: return false
         if (r.status == SimulationStatus.DONE || r.status == SimulationStatus.FAILED) return false

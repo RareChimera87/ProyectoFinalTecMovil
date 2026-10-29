@@ -39,8 +39,21 @@ data class IntroductionRecord(
     fun otherThan(userId: UUID): UUID = if (userId == userA) userB else userA
 
     /** DECLINED por quien presenta ('No por ahora' en E2): nadie respondió todavía. */
-    val declinedByIntroducer: Boolean get() = status == IntroductionStatus.DECLINED && aResponse == null && bResponse == null
+    val declinedByIntroducer: Boolean get() = isDeclinedByIntroducer(status, aResponse, bResponse)
 }
+
+/** DECLINED por quien presenta ('No por ahora'): nadie respondió todavía. Regla única de la app y de la exportación. */
+fun isDeclinedByIntroducer(status: IntroductionStatus, aResponse: IntroResponse?, bResponse: IntroResponse?): Boolean =
+    status == IntroductionStatus.DECLINED && aResponse == null && bResponse == null
+
+/** Estado que ve quien presenta: el 'No, gracias' de una persona presentada nunca se revela (sigue PROPOSED). */
+fun introducerVisibleStatus(status: IntroductionStatus, declinedByIntroducer: Boolean): IntroductionStatus =
+    if (status == IntroductionStatus.DECLINED && !declinedByIntroducer) IntroductionStatus.PROPOSED else status
+
+/** Si la presentación ya le llegó a una persona presentada: propuesta, conectada o declinada por una de las presentadas. */
+fun isProposedToIntroduced(status: IntroductionStatus, declinedByIntroducer: Boolean): Boolean =
+    status == IntroductionStatus.PROPOSED || status == IntroductionStatus.CONNECTED ||
+        (status == IntroductionStatus.DECLINED && !declinedByIntroducer)
 
 /** Una fila de `intro_requests` ('Pedir presentación' desde D6). */
 data class IntroRequestRecord(

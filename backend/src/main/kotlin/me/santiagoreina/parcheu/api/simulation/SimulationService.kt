@@ -41,6 +41,8 @@ class SimulationService(
     private val ai: AiGateway,
     private val tasks: TaskQueue,
     private val people: PersonPresenter,
+    /** Conexión entre quien pide y la otra persona (solo `POST /v1/simulations`, origen PARCHE). */
+    private val connections: ConnectionCheck,
     private val mirror: SimulationMirror,
     private val clock: Clock,
     /** Quién ve el contenido completo (Plus o informe desbloqueado, E4.6). */
@@ -51,15 +53,26 @@ class SimulationService(
     private val log = LoggerFactory.getLogger(SimulationService::class.java)
 
     /**
-     * `POST /v1/simulations`: valida modo activo en ambos, edad si es Pareja, bloqueos y gemelos;
-     * comprueba el presupuesto de IA (503 `AI_BUDGET` **sin** cobrar), cobra el cupo con
-     * `ref_id = id de la simulación` y encola `simulate`.
+     * `POST /v1/simulations`: exige una arista CONNECTED con la otra persona **en el modo pedido** (Pareja
+     * solo con arista de Pareja); si no la hay responde 404 genérico antes de mirar bloqueos, modos, edad
+     * o gemelo, para que nadie averigüe los modos ajenos (ADR-0012) ni simule con un desconocido. Después,
+     * valida como [create], comprueba el presupuesto de IA (503 `AI_BUDGET` **sin** cobrar), cobra el
+     * cupo con `ref_id = id de la simulación` y encola `simulate`.
      */
     @Premium("POST /v1/simulations")
     suspend fun start(requester: UUID, body: StartSimulation): SimulationSummary {
         val other = runCatching { UUID.fromString(body.otherUserId.trim()) }.getOrNull()
             ?: throw ValidationFailed("otherUserId debe ser el id de una persona de tu parche")
-        val record = create(requester, requester, other, body.mode, SimulationOrigin.PARCHE, chargeQuota = true)
+        // Un bloqueo o una cuenta borrada tampoco cuentan como conexión (el ego-grafo los excluye y bloquear
+        // borra las aristas CONNECTED): salen como este mismo 404, no como BLOCKED.
+        if (other != requester && !connections.connected(requester, other, body.mode)) throw NotFound("Usuario no encontrado")
+        // Si el bloqueo llega entre la comprobación y create (carrera), también es el 404 genérico: BLOCKED no
+        // sale de este endpoint (§5.2). create lanza antes de cobrar o insertar, así que no queda nada a medias.
+        val record = try {
+            create(requester, requester, other, body.mode, SimulationOrigin.PARCHE, chargeQuota = true)
+        } catch (_: Blocked) {
+            throw NotFound("Usuario no encontrado")
+        }
         return summaryOf(requester, record)
     }
 
@@ -68,6 +81,11 @@ class SimulationService(
      * con [chargeQuota] cobra una `SIMULATION` a [requestedBy]. Lo usan `POST /v1/simulations`
      * (PARCHE) y, en sus features, el match al azar (E4.2, RANDOM sin cupo semanal) y las
      * presentaciones (E6.2, que pasan [id] = id de la presentación para que el cupo lleve ese `ref_id`).
+     *
+     * No exige conexión entre [userA] y [userB]: RANDOM empareja a desconocidos a propósito (el resto de
+     * reglas de aquí sí se aplica) e INTRODUCTION presenta a dos personas que aún no están
+     * conectadas, después de que `IntroductionService` comprobara que quien presenta está CONNECTED con las
+     * dos en ese modo. La conexión de PARCHE la exige [start] antes de llegar aquí.
      */
     suspend fun create(
         requestedBy: UUID?,

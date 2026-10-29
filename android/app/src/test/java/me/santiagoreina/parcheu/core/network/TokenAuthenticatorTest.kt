@@ -36,7 +36,8 @@ class TokenAuthenticatorTest {
     @Before
     fun setUp() {
         server.start()
-        client = createOkHttpClient(tokens, server.hostName)
+        client =
+            createOkHttpClient(tokens, server.hostName, cleartextHosts = setOf(server.hostName))
     }
 
     @After
@@ -82,7 +83,12 @@ class TokenAuthenticatorTest {
 
     @Test
     fun withoutSessionNoAuthorizationHeaderIsSent() {
-        val anonymous = createOkHttpClient(NoSessionTokenProvider, server.hostName)
+        val anonymous =
+            createOkHttpClient(
+                NoSessionTokenProvider,
+                server.hostName,
+                cleartextHosts = setOf(server.hostName)
+            )
         server.enqueue(MockResponse(code = 200))
 
         anonymous.newCall(Request.Builder().url(server.url("/v1/health")).build()).execute().close()
@@ -130,5 +136,52 @@ class TokenAuthenticatorTest {
         } finally {
             pool.shutdownNow()
         }
+    }
+
+    @Test
+    fun cleartextToARealHostSendsNoTokenAndDoesNotRefresh() {
+        // Sin el host en la lista de excepciones (como en una build normal), HTTP no lleva sesión.
+        val strict = createOkHttpClient(tokens, server.hostName)
+        server.enqueue(MockResponse(code = 401))
+
+        val response = strict.newCall(Request.Builder().url(server.url("/v1/me")).build()).execute()
+
+        assertEquals(401, response.code)
+        assertEquals(0, tokens.refreshes)
+        assertNull(server.takeRequest(1, TimeUnit.SECONDS)?.headers?.get("Authorization"))
+    }
+
+    @Test
+    fun failedRefreshReleasesTheLockSoLaterRequestsRefreshAgain() {
+        val flaky = object : TokenProvider {
+            var calls = 0
+
+            override suspend fun currentToken(): String = "viejo"
+
+            override suspend fun refreshToken(): String {
+                if (++calls == 1) error("sin red")
+                return "nuevo"
+            }
+
+            override suspend fun currentUserId(): String? = null
+        }
+        val flakyClient =
+            createOkHttpClient(flaky, server.hostName, cleartextHosts = setOf(server.hostName))
+        server.enqueue(MockResponse(code = 401))
+        runCatching {
+            flakyClient.newCall(
+                Request.Builder().url(server.url("/v1/me")).build()
+            ).execute().close()
+        }
+        server.enqueue(MockResponse(code = 401))
+        server.enqueue(MockResponse(code = 200))
+
+        // Si el primer fallo hubiera dejado el candado tomado, esta llamada se colgaría.
+        val response = flakyClient.newCall(
+            Request.Builder().url(server.url("/v1/me")).build()
+        ).execute()
+
+        assertEquals(200, response.code)
+        assertEquals(2, flaky.calls)
     }
 }
