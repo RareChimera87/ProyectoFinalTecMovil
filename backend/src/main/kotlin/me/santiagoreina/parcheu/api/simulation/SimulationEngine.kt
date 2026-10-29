@@ -140,11 +140,12 @@ class SimulationEngine(
         if (start.transcript.steps == 0 && serveFromCache(start, participants, a.version, b.version)) return
 
         val defs = repo.scenarios(start.mode).associateBy { it.id }
-        val agents = mapOf(
-            Side.A to TwinAgent(ai, Side.A, start.userA, a.persona, repo.acceptedMemories(start.userA, start.mode), start.mode),
-            Side.B to TwinAgent(ai, Side.B, start.userB, b.persona, repo.acceptedMemories(start.userB, start.mode), start.mode),
-        )
         val billedTo = start.requestedBy ?: start.userA
+        // Los dos gemelos y el juez se cobran a quien pidió la simulación (techo diario por persona, B-M1).
+        val agents = mapOf(
+            Side.A to TwinAgent(ai, Side.A, start.userA, a.persona, repo.acceptedMemories(start.userA, start.mode), start.mode, billedTo),
+            Side.B to TwinAgent(ai, Side.B, start.userB, b.persona, repo.acceptedMemories(start.userB, start.mode), start.mode, billedTo),
+        )
         var transcript = start.transcript
         var progress = start.progress
         for (i in transcript.scenarios.indices) {

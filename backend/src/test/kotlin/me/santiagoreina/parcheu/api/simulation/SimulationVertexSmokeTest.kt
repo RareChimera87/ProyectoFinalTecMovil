@@ -11,7 +11,6 @@ import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.SimulationStatus
-import me.santiagoreina.parcheu.contract.StartSimulation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
@@ -66,8 +65,8 @@ class SimulationVertexSmokeTest {
         )
         repo.putMemory(ana, TwinMemory(Mode.AMISTAD, "Los jueves juega microfútbol con el parche de la facultad."))
 
-        val summary = module.service.start(ana, StartSimulation(beto.toString(), Mode.AMISTAD))
-        val sim = repo.find(UUID.fromString(summary.id))!!
+        val summary = module.service.createParche(ana, beto, Mode.AMISTAD)
+        val sim = repo.find(summary.id)!!
         println("Estado: ${sim.status}, puntaje: ${sim.score}, error: ${sim.error}, uso: ${sim.usage}")
         sim.transcript.scenarios.forEach { s ->
             println("== ${s.title} (afinidad ${s.verdict?.affinity})")

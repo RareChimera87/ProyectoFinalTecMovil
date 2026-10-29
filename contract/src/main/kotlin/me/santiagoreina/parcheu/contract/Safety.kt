@@ -79,7 +79,168 @@ public data class ExportConnection(
     val connectedAt: Instant? = null,
 )
 
-/** GET /v1/me/export: copia completa de los datos del usuario (E8.3). */
+/** Reporte que la persona hizo (E8.1). De la persona reportada solo sale su `anonId`; sin instantánea ni notas de moderación. */
+@Serializable
+public data class ExportReport(
+    val id: String,
+    val kind: ReportKind,
+    val reason: ReportReason,
+    /** Texto libre que escribió quien reporta. */
+    val details: String? = null,
+    val reportedAnonId: String? = null,
+    val status: ReportStatus,
+    val createdAt: Instant,
+    val resolvedAt: Instant? = null,
+)
+
+@Serializable
+public enum class ExportIntroRole { MADE, RECEIVED }
+
+/**
+ * Presentación (E6.2) hecha por la persona ([ExportIntroRole.MADE]: `people` son las dos personas presentadas) o
+ * recibida ([ExportIntroRole.RECEIVED]: `people` es la otra persona presentada y `introducerAnonId` quien presentó).
+ * Solo `anonId`. `status` solo en las hechas; en las recibidas solo la respuesta propia, porque el estado y la
+ * respuesta de la otra persona revelarían su decisión.
+ */
+@Serializable
+public data class ExportIntroduction(
+    val id: String,
+    val role: ExportIntroRole,
+    val mode: Mode,
+    val people: List<String> = emptyList(),
+    val introducerAnonId: String? = null,
+    val status: IntroductionStatus? = null,
+    /** `INTERESTED` o `DECLINED`; solo la respuesta propia. */
+    val myResponse: String? = null,
+    val createdAt: Instant,
+)
+
+/** Match (E4) de la persona: fechas, modo, estado y su propia elección (no la de la otra persona). */
+@Serializable
+public data class ExportMatch(
+    val id: String,
+    val mode: Mode,
+    val status: MatchStatus,
+    val otherAnonId: String,
+    val myChoice: MatchChoice? = null,
+    val createdAt: Instant,
+    val decideBy: Instant,
+)
+
+/** Su turno vigente en la fila de emparejamiento. */
+@Serializable
+public data class ExportQueueTicket(
+    val mode: Mode,
+    val status: TicketStatus,
+    val enqueuedAt: Instant,
+    val expiresAt: Instant,
+)
+
+/** Calificación o control de su gemelo (E3). */
+@Serializable
+public data class ExportTwinFeedback(
+    val id: String,
+    val kind: FeedbackKind,
+    val simulationId: String? = null,
+    val turnIndex: Int? = null,
+    val questionId: Int? = null,
+    val predicted: String? = null,
+    val actual: String? = null,
+    val rating: Int? = null,
+    val createdAt: Instant,
+)
+
+@Serializable
+public enum class ExportInviteRole { OWNER, REDEEMER }
+
+/** Canje de un código de invitación; `otherAnonId` es la otra parte. */
+@Serializable
+public data class ExportInviteRedemption(
+    val role: ExportInviteRole,
+    val otherAnonId: String,
+    val mode: Mode,
+    val status: RedeemStatus,
+    val createdAt: Instant,
+    val acceptedAt: Instant? = null,
+)
+
+/** Su código de invitación, los canjes en los que participa y las fechas de sus intentos de canje. */
+@Serializable
+public data class ExportInvites(
+    val code: String? = null,
+    val redemptions: List<ExportInviteRedemption> = emptyList(),
+    val redeemAttempts: List<Instant> = emptyList(),
+)
+
+/** Evento de compra de la persona (RTDN, E7.1): solo fecha y tipo de notificación de Play. */
+@Serializable
+public data class ExportPurchase(
+    val receivedAt: Instant,
+    val notificationType: Int? = null,
+)
+
+/** Su decisión de conectar (o no) tras una simulación (`connection_decisions`); solo la propia. */
+@Serializable
+public data class ExportConnectionDecision(
+    val simulationId: String,
+    val connect: Boolean,
+    val decidedAt: Instant,
+)
+
+/** Solicitud de presentación que la persona pidió ('Pedir presentación'); `via` y `target` solo como `anonId`. */
+@Serializable
+public data class ExportIntroRequest(
+    val id: String,
+    val viaAnonId: String,
+    val targetAnonId: String,
+    /** `PENDING`, `ACCEPTED`, `DECLINED` o `EXPIRED`. */
+    val status: String,
+    val createdAt: Instant,
+)
+
+/** Comunidad semanal a la que perteneció (perfilamiento propio): nombre y semana, sin los demás miembros. */
+@Serializable
+public data class ExportCommunity(
+    val name: String,
+    /** Lunes de la semana (ISO `YYYY-MM-DD`, America/Bogota). */
+    val week: String,
+)
+
+/** Versión pasada de su gemelo: rasgos y resumen de persona de entonces. */
+@Serializable
+public data class ExportTwinVersion(
+    val version: Int,
+    val traits: List<Trait> = emptyList(),
+    val personaSummary: String? = null,
+    val createdAt: Instant,
+)
+
+/** Informe de una simulación que desbloqueó con Plus y cuándo. */
+@Serializable
+public data class ExportReportUnlock(
+    val simulationId: String,
+    val unlockedAt: Instant,
+)
+
+/**
+ * GET /v1/me/export: copia completa de los datos del usuario (E8.3, Ley 1581).
+ *
+ * Los campos desde `twinPersonaSummary` son opcionales con valor por defecto: un cliente que no los conozca los
+ * ignora (`ContractJson.ignoreUnknownKeys`). Qué se **excluye** y por qué:
+ * - Todo dato de otras personas (uuid, nombre, correo, foto, mensajes, respuestas a presentaciones, su elección
+ *   en un match): solo sale su `anonId`. Los avisos que citan a terceros salen con el texto reemplazado.
+ * - Tokens: `purchaseToken` de Play y su payload (solo se da fecha y tipo), tokens FCM y `firebase_uid`.
+ * - Reportes de los que la persona es el reportado, y la instantánea de mensajes de cualquier reporte (texto de
+ *   terceros), el id de quien resolvió y las notas de moderación.
+ * - Presentaciones y avisos con personas que bloqueó o que la bloquearon: la app los oculta (ADR-0012 regla 4) y
+ *   la exportación hace lo mismo, para no mostrar actividad que la app le esconde.
+ * - Presentaciones recibidas que la persona nunca vio (en simulación o descartadas por quien presenta) y el estado
+ *   `DECLINED` de una presentación hecha cuando lo declinó una persona presentada: revelarían decisiones ajenas.
+ * - Solicitudes de presentación donde es `via` o `target` (revelarían el deseo de otra persona o algo que el
+ *   `target` no ve): solo salen las que ella pidió.
+ * - Datos operativos sin contenido personal propio: cuotas y uso de IA, cursores internos y la serie semanal de
+ *   `twin_accuracy` (su valor vigente ya sale en `twin.accuracy`). Los tokens FCM ya están en la línea de tokens.
+ */
 @Serializable
 public data class ExportDto(
     val generatedAt: Instant,
@@ -94,4 +255,19 @@ public data class ExportDto(
     val notifications: List<NotificationDto> = emptyList(),
     val blocks: List<BlockedDto> = emptyList(),
     val entitlement: EntitlementDto? = null,
+    /** Resumen de su persona que escribió la IA (`twins.persona_summary`). */
+    val twinPersonaSummary: String? = null,
+    val reportsMade: List<ExportReport> = emptyList(),
+    val introductions: List<ExportIntroduction> = emptyList(),
+    val matches: List<ExportMatch> = emptyList(),
+    val queueTicket: ExportQueueTicket? = null,
+    val twinFeedback: List<ExportTwinFeedback> = emptyList(),
+    val invites: ExportInvites? = null,
+    val purchases: List<ExportPurchase> = emptyList(),
+    val connectionDecisions: List<ExportConnectionDecision> = emptyList(),
+    val introRequests: List<ExportIntroRequest> = emptyList(),
+    val communities: List<ExportCommunity> = emptyList(),
+    /** Historial de su gemelo (`twin_versions`): rasgos y resumen de persona por versión. */
+    val twinVersions: List<ExportTwinVersion> = emptyList(),
+    val reportUnlocks: List<ExportReportUnlock> = emptyList(),
 )

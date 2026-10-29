@@ -85,6 +85,7 @@ import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
 import me.santiagoreina.parcheu.api.safety.moderation.ModerationService
 import me.santiagoreina.parcheu.api.safety.moderation.attachTo
 import me.santiagoreina.parcheu.api.safety.moderation.moderationEnabled
+import me.santiagoreina.parcheu.api.safety.moderation.moderationSampleEvery
 import me.santiagoreina.parcheu.api.safety.moderation.moderationService
 import me.santiagoreina.parcheu.api.safety.safetyModule
 import me.santiagoreina.parcheu.api.scenario.ScenarioModule
@@ -294,7 +295,7 @@ class AppContainer(
                 TasksMode.INLINE -> checkNotNull(inlineQueue)
                 TasksMode.CLOUD -> CloudTasksQueue.fromEnv(config, vars)
             }
-            val twin = twinModule(config.env, database, clock, ai, tasks)
+            val twin = twinModule(config.env, database, clock, ai, tasks, quota.daily)
             val graph = GraphModule(
                 ExposedGraphRepository(database), AnonIdSigner.fromEnv(config.env), clock, ExposedFofRepository(database),
                 isPlus = { quota.service.isPlus(it) },
@@ -339,7 +340,7 @@ class AppContainer(
             )
             val safety = safetyModule(database, chat, graph, matching, clock, safetyContacts)
             // Moderación con IA (E8.6): tarea `moderate` en `ai-light` después de entregar cada mensaje (fail-open).
-            val moderation = moderationService(ai, chat, safety, tasks, clock, notifier)
+            val moderation = moderationService(ai, chat, safety, tasks, clock, notifier, quota.daily, moderationSampleEvery(vars))
             if (moderationEnabled(vars)) moderation.attachTo(chat)
             // Administración de reportes (E8.5): sobre la misma tabla `reports`; suspende por `users.suspended_until`.
             val admin = adminModule(database, identity.repo, chat, clock)

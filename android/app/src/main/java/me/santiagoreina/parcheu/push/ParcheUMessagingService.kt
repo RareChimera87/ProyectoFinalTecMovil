@@ -5,6 +5,7 @@ import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 
@@ -19,6 +20,15 @@ class ParcheUMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val payload = PushPayload.from(message.data) ?: return
         PushNotifier.show(applicationContext, payload)
+    }
+
+    /**
+     * El scope no sobrevive al servicio. Si cancela un registro en vuelo no se pierde nada: `onNewToken`
+     * ya guardó el token y `PushTokenRegistrar.sync` lo registra tras iniciar sesión o conceder el permiso.
+     */
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
     }
 
     override fun onNewToken(token: String) {

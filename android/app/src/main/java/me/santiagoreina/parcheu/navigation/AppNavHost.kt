@@ -38,6 +38,7 @@ import me.santiagoreina.parcheu.feature.scenariochat.ScenarioChatRoute
 import me.santiagoreina.parcheu.feature.simulation.SimulationRoute
 import me.santiagoreina.parcheu.feature.simulations.SimulationsRoute
 import me.santiagoreina.parcheu.feature.splash.SplashRoute
+import me.santiagoreina.parcheu.feature.suspended.SuspendedRoute
 import me.santiagoreina.parcheu.feature.traintwin.TrainTwinRoute
 import me.santiagoreina.parcheu.feature.twinquestions.TwinQuestionsRoute
 import me.santiagoreina.parcheu.feature.twinready.TwinReadyRoute
@@ -64,6 +65,7 @@ fun AppNavHost(
         composable<Onboarding> { OnboardingRoute(it.toRoute(), navigator) }
         composable<BasicProfile> { BasicProfileRoute(it.toRoute(), navigator) }
         composable<Underage> { UnderageRoute(it.toRoute(), navigator) }
+        composable<Suspended> { SuspendedRoute(it.toRoute(), navigator) }
         composable<TwinQuestions> { TwinQuestionsRoute(it.toRoute(), navigator) }
         composable<Modes> { ModesRoute(it.toRoute(), navigator) }
         composable<Consent> { ConsentRoute(it.toRoute(), navigator) }

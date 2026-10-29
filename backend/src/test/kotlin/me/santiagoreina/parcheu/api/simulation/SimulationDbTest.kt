@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.simulation
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -22,6 +23,7 @@ import me.santiagoreina.parcheu.api.graph.ExposedGraphRepository
 import me.santiagoreina.parcheu.api.graph.GraphModule
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.TestDatabase
+import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.runMigrations
 import me.santiagoreina.parcheu.api.platform.db.tables.Blocks
@@ -116,7 +118,7 @@ class SimulationDbTest : FunSpec({
         }
 
         fun start(a: UUID, b: UUID, mode: Mode = Mode.AMISTAD) = runBlocking {
-            checkNotNull(module.repository.find(UUID.fromString(module.service.start(a, StartSimulation(b.toString(), mode)).id)))
+            checkNotNull(module.repository.find(module.service.createParche(a, b, mode).id))
         }
     }
 
@@ -281,7 +283,7 @@ class SimulationDbTest : FunSpec({
             val beto = db.user("beto")
             val w = Db(db)
             w.queue.inline = null
-            val id = UUID.fromString(runBlocking { w.module.service.start(ana, StartSimulation(beto.toString(), Mode.ESTUDIO)).id })
+            val id = runBlocking { w.module.service.createParche(ana, beto, Mode.ESTUDIO).id }
             val repo = w.module.repository
             runBlocking {
                 repo.markRunning(id) shouldBe true
@@ -302,4 +304,48 @@ class SimulationDbTest : FunSpec({
             }
         }
     }
+
+    test("Postgres: POST /v1/simulations exige arista CONNECTED en el modo pedido; sin ella 404 genérico sin cobrar (B-A1)").config(enabled = TestDatabase.enabled) {
+        withDb { db ->
+            val ana = db.user("ana")
+            val beto = db.user("beto")
+            val caro = db.user("caro")
+            val dani = db.user("dani")
+            fun edge(a: UUID, b: UUID, mode: Mode, state: EdgeState = EdgeState.CONNECTED) = transaction(db) {
+                val (low, high) = Edges.orderedPair(a, b)
+                Edges.insert {
+                    it[userLow] = low
+                    it[userHigh] = high
+                    it[Edges.mode] = mode
+                    it[Edges.state] = state
+                    it[createdAt] = now
+                    it[updatedAt] = now
+                    it[connectedAt] = if (state == EdgeState.CONNECTED) now else null
+                }
+            }
+            edge(ana, beto, Mode.AMISTAD)
+            edge(ana, caro, Mode.AMISTAD, EdgeState.SIMULATED)
+            edge(ana, dani, Mode.AMISTAD)
+            transaction(db) {
+                Blocks.insert {
+                    it[blockerId] = dani
+                    it[blockedId] = ana
+                    it[createdAt] = now
+                }
+            }
+            val w = Db(db)
+            runBlocking {
+                // Pareja con quien solo es Amistad, Estudio sin arista, SIMULATED (no es conexión) y bloqueo con arista: todos 404.
+                listOf(beto to Mode.PAREJA, beto to Mode.ESTUDIO, caro to Mode.AMISTAD, dani to Mode.AMISTAD).forEach { (other, mode) ->
+                    val error = shouldThrow<NotFound> { w.module.service.start(ana, StartSimulation(other.toString(), mode)) }
+                    error.message shouldBe "Usuario no encontrado"
+                }
+                transaction(db) { UsageEvents.selectAll().count() } shouldBe 0L
+                transaction(db) { Simulations.selectAll().count() } shouldBe 0L
+                // Con la arista de Amistad funciona como antes, en cualquier sentido.
+                w.module.service.start(beto, StartSimulation(ana.toString(), Mode.AMISTAD)).origin shouldBe SimulationOrigin.PARCHE
+            }
+        }
+    }
 })
+

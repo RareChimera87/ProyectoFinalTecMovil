@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.api.simulation
 
 import me.santiagoreina.parcheu.api.platform.notifier.Notification
 import me.santiagoreina.parcheu.api.platform.notifier.Notifier
+import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NotificationKinds
 import me.santiagoreina.parcheu.contract.PersonRef
 import me.santiagoreina.parcheu.contract.Progress
@@ -113,4 +114,13 @@ class RecordingSimulationNotifier : SimulationNotifier {
  */
 fun interface PersonPresenter {
     suspend fun present(viewer: UUID, subject: UUID): PersonRef
+}
+
+/**
+ * ¿[a] tiene una arista CONNECTED con [b] en [mode]? La responde el ego-grafo de [a]
+ * (`GraphRepository.egoEdges`, que ya excluye en SQL bloqueados y borrados, ADR-0012): la misma
+ * consulta con la que `IntroductionService` comprueba amistades. Una arista de Pareja solo cuenta para Pareja.
+ */
+fun interface ConnectionCheck {
+    suspend fun connected(a: UUID, b: UUID, mode: Mode): Boolean
 }

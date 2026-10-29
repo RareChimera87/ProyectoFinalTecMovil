@@ -1,5 +1,8 @@
 package me.santiagoreina.parcheu.data.auth
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import me.santiagoreina.parcheu.core.network.TokenProvider
 import me.santiagoreina.parcheu.push.PushTokenRegistrar
 import org.koin.android.ext.koin.androidContext
@@ -25,4 +28,7 @@ val authModule =
             )
         }
         single<AuthRepository> { FirebaseAuthRepository(get(), get(), get(), get()) }
+        single {
+            BackgroundSignOut(get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
+        }
     }

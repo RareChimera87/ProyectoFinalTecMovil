@@ -10,6 +10,7 @@ printf '#!/usr/bin/env bash\necho fake-token\n' >"$TMP/bin/gcloud"
 # curl falso: responde accounts:lookup según el correo pedido y registra cada accounts:update.
 cat >"$TMP/bin/curl" <<'FAKE'
 #!/usr/bin/env bash
+echo "$*" >>"$FAKE_ARGS"
 out=""; url=""; body=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,13 +33,13 @@ esac
 printf '200'
 FAKE
 chmod +x "$TMP/bin/gcloud" "$TMP/bin/curl"
-export FAKE_LOG="$TMP/log"
+export FAKE_LOG="$TMP/log" FAKE_ARGS="$TMP/args"
 
 pass=0; failed=0
 check() { # check <descripción> <condición>
   if eval "$2"; then pass=$((pass + 1)); echo "  ✓ $1"; else failed=$((failed + 1)); echo "  ✗ $1"; echo "$out" | sed 's/^/      /'; fi
 }
-run() { : >"$FAKE_LOG"; out="$(PATH="$TMP/bin:$PATH" "$ROOT/scripts/grant-admin.sh" "$@" 2>&1)"; rc=$?; }
+run() { : >"$FAKE_LOG"; : >"$FAKE_ARGS"; out="$(PATH="$TMP/bin:$PATH" "$ROOT/scripts/grant-admin.sh" "$@" 2>&1)"; rc=$?; }
 
 echo "grant-admin.sh"
 run dev
@@ -54,10 +55,23 @@ run --dry-run prod ana@x.co
 check "dry-run no escribe y usa parcheu-prod" '! grep -q "accounts:update" "$FAKE_LOG" && grep -q "projects/parcheu-prod/accounts:lookup" "$FAKE_LOG" && grep -q "dry-run" <<<"$out" && [ "$rc" -eq 0 ]'
 
 run --revoke dev beto@x.co
-check "revoke quita admin y conserva plan" 'grep -q "accounts:update" "$FAKE_LOG" && grep -q "QUITA admin" <<<"$out" && grep -q "{\"plan\":\"y\"}" <<<"$out"'
+check "revoke quita admin y conserva plan" 'grep -q "accounts:update" "$FAKE_LOG" && grep -q "QUITA admin (y revoca sesiones) a beto@x.co" <<<"$out" && grep -q "{\"plan\":\"y\"}" <<<"$out"'
+check "revoke revoca las sesiones (validSince) en la misma llamada" 'grep -q "accounts:update.*validSince" "$FAKE_LOG"'
+check "otorgar no revoca sesiones" '! { run dev ana@x.co; grep -q validSince "$FAKE_LOG"; }'
+run dev ana@x.co
+check "el token no viaja como argumento de curl" '! grep -q fake-token "$FAKE_ARGS" && grep -q -- "-H @" "$FAKE_ARGS"'
 
 run dev nadie@x.co ana@x.co
 check "una cuenta inexistente falla (1) pero sigue con las demás" '[ "$rc" -eq 1 ] && grep -q "SIN CUENTA" <<<"$out" && grep -q "OTORGA admin a ana@x.co" <<<"$out"'
+
+# gcloud falso que falla: el script aborta sin llamar a curl.
+mkdir -p "$TMP/bin-fallo"
+cp "$TMP/bin/curl" "$TMP/bin-fallo/curl"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$TMP/bin-fallo/gcloud"
+chmod +x "$TMP/bin-fallo/gcloud"
+: >"$FAKE_LOG"; : >"$FAKE_ARGS"
+out="$(PATH="$TMP/bin-fallo:$PATH" "$ROOT/scripts/grant-admin.sh" dev ana@x.co 2>&1)"; rc=$?
+check "si gcloud falla aborta sin llamar a curl" '[ "$rc" -ne 0 ] && [ ! -s "$FAKE_ARGS" ]'
 
 echo "$pass pasaron, $failed fallaron"
 [ "$failed" -eq 0 ]

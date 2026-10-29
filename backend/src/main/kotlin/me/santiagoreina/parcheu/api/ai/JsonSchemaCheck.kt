@@ -13,6 +13,7 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import org.slf4j.LoggerFactory
 
 /**
  * Validación mínima de JSON Schema para la salida de los modelos (arquitectura.md §10.4: "salida
@@ -22,21 +23,38 @@ import kotlinx.serialization.json.longOrNull
  */
 object JsonSchemaCheck {
     private val json = Json { ignoreUnknownKeys = true }
+    private val log = LoggerFactory.getLogger(JsonSchemaCheck::class.java)
+    private val OFFSET = Regex("offset (\\d+)")
+    private const val DEBUG_MAX = 200
 
     /** Parsea [text] como objeto JSON y lo valida contra [schema]. */
     fun parseAndValidate(text: String, schema: JsonObject, usage: LlmUsage? = null): JsonObject {
         val element = try {
             json.parseToJsonElement(stripFences(text))
         } catch (e: SerializationException) {
-            throw LlmInvalidOutput("La respuesta no es JSON válido: ${e.message}", usage)
+            throw invalidJson(e, usage)
         } catch (e: IllegalArgumentException) {
-            throw LlmInvalidOutput("La respuesta no es JSON válido: ${e.message}", usage)
+            throw invalidJson(e, usage)
         }
         val obj = element as? JsonObject ?: throw LlmInvalidOutput("La respuesta no es un objeto JSON", usage)
         val errors = mutableListOf<String>()
         check(obj, schema, "$", errors)
         if (errors.isNotEmpty()) throw LlmInvalidOutput("La respuesta no cumple el esquema: ${errors.joinToString("; ")}", usage)
         return obj
+    }
+
+    /**
+     * El mensaje de kotlinx incluye un fragmento del JSON de entrada (la salida del modelo, que puede parafrasear
+     * mensajes de personas) y esta excepción se registra y se guarda en `simulations.error`: el mensaje propio solo
+     * lleva el tipo de error y el desplazamiento. El detalle completo va al log en DEBUG, truncado.
+     */
+    private fun invalidJson(e: Exception, usage: LlmUsage?): LlmInvalidOutput {
+        val offset = OFFSET.find(e.message.orEmpty())?.groupValues?.get(1)
+        log.debug("JSON del modelo ilegible: {}", e.message.orEmpty().take(DEBUG_MAX))
+        return LlmInvalidOutput(
+            "La respuesta no es JSON válido (${e::class.simpleName}${offset?.let { ", posición $it" }.orEmpty()})",
+            usage,
+        )
     }
 
     /** Errores de [value] frente a [schema]; vacío si cumple. */

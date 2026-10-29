@@ -214,6 +214,8 @@ class MatchQueueViewModel(
     }
 
     private fun onEnqueueFailed(error: AppError) {
+        // El bus global también abre la G2; F1 la pide aparte porque además sale de la pila (sin cupo no hay
+        // fila que mostrar). El manejador global no apila una segunda G2 si esta ya está abierta.
         val limitRoute =
             if (error is AppError.QuotaExceeded && error.kind == QuotaKind.RANDOM_MATCH) {
                 PlusErrorRouter.route(error, PAYWALL_SOURCE_MATCH_LIMIT)

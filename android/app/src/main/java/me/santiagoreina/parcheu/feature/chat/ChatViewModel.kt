@@ -2,8 +2,10 @@ package me.santiagoreina.parcheu.feature.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.Timestamp
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -30,7 +32,10 @@ data class ChatUiState(
     /** No se pudo cargar la cabecera (`GET /v1/chats`); los mensajes pueden seguir llegando. */
     val headerError: AppError? = null,
     /** El listener de Firestore falló (sin permiso o sin caché ni red). */
-    val liveError: AppError? = null
+    val liveError: AppError? = null,
+    /** Hay mensajes anteriores sin cargar: la pantalla pide más al llegar al primero de la lista. */
+    val canLoadOlder: Boolean = false,
+    val loadingOlder: Boolean = false
 ) {
     val canSend: Boolean get() = draft.isNotBlank() && header?.closed != true
 }
@@ -57,13 +62,16 @@ private data class Meta(
     val draft: String = "",
     val consentBannerVisible: Boolean = true,
     val headerError: AppError? = null,
-    val liveError: AppError? = null
+    val liveError: AppError? = null,
+    val olderExhausted: Boolean = false,
+    val loadingOlder: Boolean = false
 )
 
 /**
  * F9 · Chat en vivo (E5.2). Los mensajes llegan del listener de Firestore; el envío va por la API y se
  * muestra como pendiente hasta que responde. Un mensaje enviado queda visible desde la respuesta de la API
- * y se reemplaza por el del snapshot cuando este llega (mismo id). Un fallo deja el mensaje con "Reintentar",
+ * y se reemplaza por el del snapshot cuando este llega (mismo id). El listener trae solo los últimos
+ * [CHAT_PAGE_SIZE] mensajes; los anteriores se piden por páginas con [loadOlder] (A-M3). Un fallo deja el mensaje con "Reintentar",
  * que repite el envío con el mismo `clientId` (la API es idempotente).
  */
 class ChatViewModel(
@@ -72,6 +80,12 @@ class ChatViewModel(
     private val newClientId: () -> String = { UUID.randomUUID().toString() }
 ) : ViewModel() {
     private val remote = MutableStateFlow<List<RemoteMessage>>(emptyList())
+
+    /** Páginas anteriores a la ventana del listener (más viejo primero) y lo que esta fue soltando al avanzar. */
+    private val older = MutableStateFlow<List<RemoteMessage>>(emptyList())
+
+    /** Mensajes ocultados por la moderación, por id: pisan la copia de [older] o de [remote]. */
+    private val hidden = MutableStateFlow<Map<String, RemoteMessage>>(emptyMap())
     private val local = MutableStateFlow<List<LocalMessage>>(emptyList())
     private val meta = MutableStateFlow(Meta())
 
@@ -79,22 +93,60 @@ class ChatViewModel(
     val effects: Flow<ChatEffect> = _effects.receiveAsFlow()
 
     val state: StateFlow<ChatUiState> =
-        combine(remote, local, meta) { remoteMessages, localMessages, m ->
+        combine(remote, older, hidden, local, meta) {
+                remoteMessages,
+                olderMessages,
+                hiddenById,
+                localMessages,
+                m
+            ->
             ChatUiState(
                 loading = m.loading,
                 header = m.header,
-                messages = merge(remoteMessages, localMessages),
+                messages = merge(
+                    stitch(olderMessages, remoteMessages, hiddenById),
+                    localMessages
+                ),
                 draft = m.draft,
                 consentBannerVisible = m.consentBannerVisible,
                 headerError = m.headerError,
-                liveError = m.liveError
+                liveError = m.liveError,
+                canLoadOlder = !m.olderExhausted &&
+                    (olderMessages.isNotEmpty() || remoteMessages.size >= CHAT_PAGE_SIZE),
+                loadingOlder = m.loadingOlder
             )
         }.stateIn(viewModelScope, SharingStarted.Eagerly, ChatUiState())
 
     init {
         loadHeader()
         observeMessages()
+        observeHidden()
         viewModelScope.launch { repository.markRead(chatId) }
+    }
+
+    /** Escucha los mensajes ocultados para que los de [older] no conserven su texto (E8.5). */
+    private fun observeHidden() {
+        viewModelScope.launch {
+            repository
+                .observeHidden(chatId)
+                .catch { e -> if (e is CancellationException) throw e }
+                .collect { list -> hidden.value = list.associateBy { it.id } }
+        }
+    }
+
+    /**
+     * Une el historial con la ventana en vivo: gana la copia del snapshot, luego la de moderación, y el
+     * resultado va ordenado por `createdAt` (estable: los empates conservan el orden recibido).
+     */
+    private fun stitch(
+        olderMessages: List<RemoteMessage>,
+        remoteMessages: List<RemoteMessage>,
+        hiddenById: Map<String, RemoteMessage>
+    ): List<RemoteMessage> {
+        val liveIds = remoteMessages.mapTo(HashSet()) { it.id }
+        return (olderMessages.filter { it.id !in liveIds } + remoteMessages)
+            .map { hiddenById[it.id] ?: it }
+            .sortedWith(compareBy(nullsLast<Instant>()) { it.createdAt })
     }
 
     private var liveJob: Job? = null
@@ -114,9 +166,50 @@ class ChatViewModel(
                         )
                     }
                 }.collect { messages ->
+                    keepWhatSlidedOut(messages)
                     remote.value = messages
                     meta.update { it.copy(loading = false, liveError = null) }
                 }
+        }
+    }
+
+    /** Al avanzar la ventana en vivo, los mensajes que salen por arriba pasan a [older] en vez de desaparecer. */
+    private fun keepWhatSlidedOut(incoming: List<RemoteMessage>) {
+        val first = incoming.firstOrNull()?.createdAt ?: return
+        val ids = incoming.mapTo(HashSet()) { it.id }
+        val slided = remote.value.filter { it.id !in ids && (it.createdAt ?: first) < first }
+        if (slided.isNotEmpty()) older.update { (it + slided).distinctBy { m -> m.id } }
+    }
+
+    private var olderJob: Job? = null
+
+    /**
+     * La pantalla llegó al primer mensaje: trae la página anterior (`startAfter` del más viejo que se
+     * conoce). Una página corta marca el historial como agotado; un fallo deja reintentar al volver al tope.
+     */
+    fun loadOlder() {
+        if (!state.value.canLoadOlder || olderJob?.isActive == true) return
+        val oldest = (older.value + remote.value).firstNotNullOfOrNull { it.createdAt } ?: return
+        meta.update { it.copy(loadingOlder = true) }
+        olderJob = viewModelScope.launch {
+            try {
+                val page = repository.loadOlder(
+                    chatId,
+                    Timestamp(oldest.epochSeconds, oldest.nanosecondsOfSecond)
+                )
+                older.update { (page + it).distinctBy { m -> m.id } }
+                meta.update {
+                    it.copy(
+                        loadingOlder = false,
+                        olderExhausted =
+                        page.size < CHAT_PAGE_SIZE
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                meta.update { it.copy(loadingOlder = false) }
+            }
         }
     }
 
@@ -235,7 +328,7 @@ class ChatViewModel(
         val myUid = repository.currentUid
         val remoteIds = remoteMessages.mapTo(HashSet()) { it.id }
         val fromRemote =
-            remoteMessages.map {
+            remoteMessages.distinctBy { it.id }.map {
                 ChatMessageUi(
                     key = it.id,
                     text = it.text,

@@ -23,6 +23,11 @@ class TwinService(
     private val persona: PersonaBuilder,
     private val tasks: TaskQueue,
     private val clock: Clock,
+    /**
+     * Cuenta un envío de respuestas o lanza `QuotaExceeded` (B-M1): cada envío sube la versión y encola
+     * `build-persona`, una llamada al LLM. En producción es `DailyLimiter.consume(TWIN_ANSWERS)`.
+     */
+    private val chargeAnswers: (UUID) -> Unit = {},
 ) {
     private val log = LoggerFactory.getLogger(TwinService::class.java)
 
@@ -32,7 +37,8 @@ class TwinService(
     /**
      * Valida exactamente 12 respuestas (una por pregunta), calcula los rasgos, guarda y encola la
      * construcción de la persona. Si el encolado falla las respuestas igual quedan guardadas
-     * (`personaReady = false`) y [twin] reintenta el encolado en la siguiente lectura.
+     * (`personaReady = false`) y [twin] reintenta el encolado en la siguiente lectura. Un envío válido cuenta
+     * para el tope diario de reenvíos ([chargeAnswers]) antes de guardar; uno inválido no cuenta.
      */
     suspend fun submitAnswers(userId: UUID, body: Answers): TwinDto {
         val questions = repo.questions()
@@ -45,6 +51,7 @@ class TwinService(
         ids.firstOrNull { it !in known }?.let { throw ValidationFailed("La pregunta $it no existe") }
         if (known.size != TWIN_QUESTION_COUNT) error("El catálogo tiene ${known.size} preguntas y se esperaban $TWIN_QUESTION_COUNT")
 
+        chargeAnswers(userId)
         val answers = body.items.associate { it.questionId to it.answer }
         val traits = TraitEngine.compute(questions, answers)
         val saved = repo.saveAnswers(userId, answers, traits, clock.instant())

@@ -27,7 +27,7 @@ class AppModulesTest {
         ApplicationProvider.getApplicationContext<ParcheUApplication>()
         val koin = GlobalContext.get()
 
-        assertEquals(37, featureModules.size)
+        assertEquals(38, featureModules.size)
         assertNotNull(koin.get<OkHttpClient>())
         assertNotNull(koin.get<TokenProvider>())
         assertNotNull(koin.get<ApiErrorMapper>())
@@ -35,7 +35,8 @@ class AppModulesTest {
         assertNotNull(koin.get<ConnectRequestsRepository>())
         // Cerrar sesión borra la caché del grafo y el progreso de B1: el repositorio de auth recibe sus limpiadores.
         assertNotNull(koin.get<AuthRepository>())
-        assertEquals(3, koin.getAll<SessionCleaner>().size)
+        // grafo, B1, billing, JSON exportado (A-B3) y token de push (A-B3).
+        assertEquals(5, koin.getAll<SessionCleaner>().size)
         assertEquals(BuildConfig.API_URL, koin.get<Retrofit>().baseUrl().toString())
     }
 }

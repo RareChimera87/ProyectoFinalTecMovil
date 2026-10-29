@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.api.twin
 
+import me.santiagoreina.parcheu.api.quota.quotaModule
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
@@ -54,7 +55,7 @@ class TwinDbTest : FunSpec({
             runMigrations(ds)
             val db = connectExposed(ds)
             val queue = FakeTaskQueue()
-            val module = twinModule(Env.DEV, db, FIXED_CLOCK, testGateway(fake), queue)
+            val module = twinModule(Env.DEV, db, FIXED_CLOCK, testGateway(fake), queue, quotaModule(Env.DEV, db, FIXED_CLOCK).daily)
             block(module.service, module.repository, db, fake, queue)
         }
 

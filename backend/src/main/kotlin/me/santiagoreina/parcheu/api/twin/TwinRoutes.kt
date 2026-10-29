@@ -9,6 +9,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
+import me.santiagoreina.parcheu.api.platform.aiRateLimited
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
@@ -27,7 +28,10 @@ import java.util.UUID
 class TwinRoutes(private val twin: TwinModule) : DomainRoutes {
     override fun Route.v1() {
         get("/twin/questions") { call.respond(twin.service.questions()) }
-        post("/twin/answers") { call.respond(twin.service.submitAnswers(call.userId(twin.users), call.receive<Answers>())) }
+        // Cada envío encola `build-persona` (LLM): límite por persona además del tope diario (B-M1).
+        aiRateLimited {
+            post("/twin/answers") { call.respond(twin.service.submitAnswers(call.userId(twin.users), call.receive<Answers>())) }
+        }
         get("/twin") { call.respond(twin.service.twin(call.userId(twin.users))) }
         get("/twin/evolution") { call.respond(twin.service.evolution(call.userId(twin.users))) }
 

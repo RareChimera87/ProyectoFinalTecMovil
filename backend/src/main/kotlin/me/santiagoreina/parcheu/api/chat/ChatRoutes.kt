@@ -10,6 +10,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import me.santiagoreina.parcheu.api.identity.UserRecord
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
+import me.santiagoreina.parcheu.api.platform.aiRateLimited
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
@@ -30,9 +31,12 @@ class ChatRoutes(
         get("/chats") {
             call.respond(chats.list(call.user()))
         }
-        post("/chats/{id}/messages") {
-            val user = call.user()
-            call.respond(chats.send(user, call.chatId(), call.receive<SendMessage>()))
+        // Cada mensaje puede encolar una moderación con IA: límite por persona (B-M1).
+        aiRateLimited {
+            post("/chats/{id}/messages") {
+                val user = call.user()
+                call.respond(chats.send(user, call.chatId(), call.receive<SendMessage>()))
+            }
         }
         post("/chats/{id}/read") {
             chats.markRead(call.user(), call.chatId())

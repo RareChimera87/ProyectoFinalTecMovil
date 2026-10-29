@@ -10,6 +10,19 @@ import me.santiagoreina.parcheu.api.platform.db.runMigrations
 import me.santiagoreina.parcheu.api.platform.db.tables.AiUsage
 import me.santiagoreina.parcheu.api.platform.db.tables.AiUsageDaily
 import me.santiagoreina.parcheu.api.platform.errors.AiBudgetExceeded
+import me.santiagoreina.parcheu.api.platform.errors.UserAiBudgetExceeded
+import me.santiagoreina.parcheu.api.platform.db.tables.AiBudgetGlobal
+import me.santiagoreina.parcheu.api.platform.db.tables.AiBudgetUser
+import me.santiagoreina.parcheu.api.platform.db.tables.Users
+import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.longs.shouldBeLessThanOrEqual
+import io.kotest.matchers.longs.shouldBeGreaterThan as shouldBeGreaterThanLong
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import java.time.OffsetDateTime
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
@@ -65,6 +78,116 @@ class AiUsageContainerTest : FunSpec({
                 val tight = AiGateway(fake, testAiConfig(mapOf("AI_DAILY_BUDGET_USD" to "0.001")), store, AI_CLOCK)
                 shouldThrow<AiBudgetExceeded> { runBlocking { tight.text(AiCall(AiPurpose.PERSONA, "x")) } }
                 fake.calls shouldBe calls
+            }
+        }
+
+    test("Postgres: llamadas simultáneas no pasan el tope total ni el de la persona y la reserva cuadra con ai_usage")
+        .config(enabled = TestDatabase.enabled) {
+            TestDatabase.withCleanDatabase { ds ->
+                runMigrations(ds)
+                val db = connectExposed(ds)
+                val ana = transaction(db) {
+                    val now = OffsetDateTime.parse("2026-10-01T00:00:00-05:00")
+                    Users.insert {
+                        it[firebaseUid] = "ana"
+                        it[createdAt] = now
+                        it[updatedAt] = now
+                    }[Users.id]
+                }
+                val config = testAiConfig()
+                val call = AiCall(AiPurpose.SIMULATION_TURN, "x".repeat(300), maxOutputTokens = 200)
+                val estimate = config.prices.costMicros(config.models.chat, AI_DAY, call.ceilingUsage())
+                val inner = ExposedAiUsageStore(db)
+                // Gasto previo de Ana registrado antes de que existan las filas de reserva: la semilla debe contarlo.
+                runBlocking {
+                    inner.record(
+                        AiUsageEntry(AI_DAY, AiPurpose.PERSONA, AiProvider.FAKE, config.models.lite, ana, 10, 10, estimate, OffsetDateTime.now(AI_CLOCK)),
+                    )
+                }
+                val store = PeakObservingStore(inner)
+                val budget = estimate * 12
+                val userBudget = estimate * 5
+                val gateway = AiGateway(
+                    SlowLlmClient(delayMs = 40),
+                    testAiConfig(
+                        mapOf(
+                            "AI_DAILY_BUDGET_USD" to java.math.BigDecimal.valueOf(budget, 6).toPlainString(),
+                            "AI_USER_DAILY_BUDGET_USD" to java.math.BigDecimal.valueOf(userBudget, 6).toPlainString(),
+                        ),
+                    ),
+                    store,
+                    AI_CLOCK,
+                )
+                val outcomes = runBlocking(Dispatchers.IO) {
+                    (1..30).map { i ->
+                        async {
+                            try {
+                                gateway.text(call.copy(userId = if (i % 2 == 0) ana else null))
+                                "ok"
+                            } catch (e: UserAiBudgetExceeded) {
+                                "usuario"
+                            } catch (e: AiBudgetExceeded) {
+                                "total"
+                            }
+                        }
+                    }.awaitAll()
+                }
+                outcomes.count { it == "usuario" } shouldBeGreaterThan 0
+                outcomes.count { it == "total" } shouldBeGreaterThan 0
+                store.peakGlobal.get() shouldBeLessThanOrEqual budget
+                store.peakUser.get() shouldBeLessThanOrEqual userBudget
+                transaction(db) {
+                    val all = AiUsage.selectAll().sumOf { it[AiUsage.costMicros] }
+                    val anas = AiUsage.selectAll().where { AiUsage.userId eq ana }.sumOf { it[AiUsage.costMicros] }
+                    all shouldBeLessThanOrEqual budget
+                    anas shouldBeLessThanOrEqual userBudget
+                    // Sin llamadas en curso, lo reservado es exactamente lo registrado.
+                    AiBudgetGlobal.selectAll().single()[AiBudgetGlobal.micros] shouldBe all
+                    AiBudgetUser.selectAll().single()[AiBudgetUser.micros] shouldBe anas
+                }
+            }
+        }
+
+    test("Postgres: la moderación no entra en la semilla ni en el techo de la persona, pero sí en su sub-techo")
+        .config(enabled = TestDatabase.enabled) {
+            TestDatabase.withCleanDatabase { ds ->
+                runMigrations(ds)
+                val db = connectExposed(ds)
+                val ana = transaction(db) {
+                    val now = OffsetDateTime.parse("2026-10-01T00:00:00-05:00")
+                    Users.insert {
+                        it[firebaseUid] = "ana"
+                        it[createdAt] = now
+                        it[updatedAt] = now
+                    }[Users.id]
+                }
+                val config = testAiConfig()
+                val store = ExposedAiUsageStore(db)
+                // Moderación previa de Ana, registrada antes de que exista su fila de `ai_budget_user`.
+                val previous = 123_456L
+                runBlocking {
+                    store.record(
+                        AiUsageEntry(AI_DAY, AiPurpose.MODERATION, AiProvider.FAKE, config.models.lite, ana, 10, 10, previous, OffsetDateTime.now(AI_CLOCK)),
+                    )
+                }
+                val gateway = AiGateway(FakeLlmClient(textResponder = { "ok" }), config, store, AI_CLOCK)
+                runBlocking {
+                    gateway.text(AiCall(AiPurpose.SIMULATION_TURN, "hola", userId = ana))
+                    gateway.text(AiCall(AiPurpose.MODERATION, "hola", userId = ana))
+                }
+                val (simulation, moderation) = transaction(db) {
+                    val rows = AiUsage.selectAll().where { AiUsage.userId eq ana }.toList()
+                    rows.filter { it[AiUsage.purpose] == "simulation_turn" }.sumOf { it[AiUsage.costMicros] } to
+                        rows.filter { it[AiUsage.purpose] == "moderation" }.sumOf { it[AiUsage.costMicros] }
+                }
+                moderation shouldBeGreaterThanLong previous
+                transaction(db) {
+                    // La fila de la persona nace sin la moderación previa y la nueva tampoco se le suma.
+                    AiBudgetUser.selectAll().single()[AiBudgetUser.micros] shouldBe simulation
+                    // El total sí cuenta todo.
+                    AiBudgetGlobal.selectAll().single()[AiBudgetGlobal.micros] shouldBe simulation + moderation
+                }
+                runBlocking { store.userSpentMicros(AI_DAY, ana, AiPurpose.MODERATION) } shouldBe moderation
             }
         }
 })

@@ -4,6 +4,7 @@ import kotlinx.coroutines.test.runTest
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.FcmToken
 import me.santiagoreina.parcheu.core.error.ApiErrorMapper
+import me.santiagoreina.parcheu.data.auth.SignOutFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -30,6 +31,12 @@ class PushTokenRegistrarTest {
         override var lastToken: String? = null
         override var registeredToken: String? = null
         override var registeredUser: String? = null
+
+        override fun clear() {
+            lastToken = null
+            registeredToken = null
+            registeredUser = null
+        }
     }
 
     private var user: String? = "ana"
@@ -115,5 +122,26 @@ class PushTokenRegistrarTest {
         user = "ana"
         assertTrue(registrar.sync())
         assertEquals(listOf("tok-1"), api.registered)
+    }
+
+    @Test
+    fun signOutUnregistersFromTheServerAndThenLeavesNothingOnDisk() = runTest {
+        val api = FakeApi()
+        val store = MemoryStore()
+        val registrar = registrar(api, store, current = "fcm-1")
+        registrar.sync()
+        val signOut = SignOutFlow(
+            push = { registrar.unregister() },
+            cleaners = listOf(pushTokenCleaner(store)),
+            firestore = { },
+            platform = { }
+        )
+
+        signOut()
+
+        assertEquals(listOf("fcm-1"), api.unregistered)
+        assertNull(store.lastToken)
+        assertNull(store.registeredToken)
+        assertNull(store.registeredUser)
     }
 }

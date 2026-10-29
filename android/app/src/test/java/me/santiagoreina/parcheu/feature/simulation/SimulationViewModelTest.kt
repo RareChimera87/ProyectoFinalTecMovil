@@ -24,8 +24,6 @@ import me.santiagoreina.parcheu.data.simulation.SimulationSnapshot
 import me.santiagoreina.parcheu.data.simulation.snapshot
 import me.santiagoreina.parcheu.data.simulation.summary
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
-import me.santiagoreina.parcheu.feature.plus.PlusSources
-import me.santiagoreina.parcheu.navigation.Paywall
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -275,7 +273,7 @@ class SimulationViewModelTest {
     }
 
     @Test
-    fun retryQuotaExceededOpensG2WithoutLeavingF5() = runVmTest {
+    fun retryQuotaExceededStaysOnF5WithoutErrorText() = runVmTest {
         repository.getResult =
             ApiResult.Success(
                 SimulationDto(summary(status = SimulationStatus.FAILED), Progress(1, 2, 5))
@@ -285,12 +283,10 @@ class SimulationViewModelTest {
         val viewModel = viewModel()
         live.flow.emit(snapshot(status = SimulationStatus.FAILED, scenarioIndex = 1))
 
+        // La G2 la abre GlobalErrorHandler encima de F5; el ViewModel no navega.
         viewModel.effects.test {
             viewModel.onRetry()
-            assertEquals(
-                SimulationEffect.OpenPaywall(Paywall(PlusSources.limit(QuotaKind.SIMULATION))),
-                awaitItem()
-            )
+            expectNoEvents()
         }
         val state = viewModel.state.value as SimulationUiState.Failed
         assertFalse(state.retrying)

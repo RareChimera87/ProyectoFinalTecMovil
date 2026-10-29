@@ -124,21 +124,9 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
                     _effects.send(ParcheEffect.Navigate(Simulation(result.value.id)))
                 }
                 is ApiResult.Failure -> {
-                    val paywall = PlusErrorRouter.route(result.error, PAYWALL_SOURCE_PARCHE)
-                    // Un error premium (402) abre G1 o la G2 del cupo en vez de quedarse en un texto.
-                    updateSheet(sheet.node.id) {
-                        it.copy(
-                            starting = false,
-                            actionError = if (paywall ==
-                                null
-                            ) {
-                                result.error
-                            } else {
-                                null
-                            }
-                        )
-                    }
-                    paywall?.let { _effects.send(ParcheEffect.Navigate(it)) }
+                    // Un error premium (402) lo abre el bus global como G1 o la G2 del cupo: aquí no es texto.
+                    val shown = result.error.takeUnless(PlusErrorRouter::isPremium)
+                    updateSheet(sheet.node.id) { it.copy(starting = false, actionError = shown) }
                 }
             }
         }

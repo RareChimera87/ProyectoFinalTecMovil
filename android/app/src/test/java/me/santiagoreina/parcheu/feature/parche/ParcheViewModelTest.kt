@@ -9,9 +9,7 @@ import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
-import me.santiagoreina.parcheu.feature.plus.PlusSources
 import me.santiagoreina.parcheu.navigation.Chat
-import me.santiagoreina.parcheu.navigation.Paywall
 import me.santiagoreina.parcheu.navigation.Results
 import me.santiagoreina.parcheu.navigation.Simulation
 import org.junit.Assert.assertEquals
@@ -226,41 +224,28 @@ class ParcheViewModelTest {
     }
 
     @Test
-    fun simulateAgainQuotaExceededOpensG2() = runTest {
+    fun simulateAgainPremiumErrorsLeaveRoutingToTheGlobalBus() = runTest {
         val fake = repo(ApiResult.Success(ParcheSamples.content))
         val resetsAt = Instant.fromEpochSeconds(1_800_000_000)
         fake.startResult = failure(AppError.QuotaExceeded(QuotaKind.SIMULATION, resetsAt))
         val vm = ParcheViewModel(fake)
         vm.start()
         vm.onNodeClick("and")
+        // G1 y la G2 del cupo las abre GlobalErrorHandler; la hoja D2 no muestra el 402 como texto.
         vm.effects.test {
             vm.onSimulateAgain()
-            assertEquals(
-                ParcheEffect.Navigate(
-                    Paywall(PlusSources.limit(QuotaKind.SIMULATION, resetsAt))
-                ),
-                awaitItem()
-            )
+            expectNoEvents()
         }
         val sheet = loaded(vm).sheet!!
         assertNull(sheet.actionError)
         assertFalse(sheet.starting)
-    }
 
-    @Test
-    fun simulateAgainPlusRequiredOpensG1() = runTest {
-        val fake = repo(ApiResult.Success(ParcheSamples.content))
         fake.startResult = failure(AppError.PlusRequired)
-        val vm = ParcheViewModel(fake)
-        vm.start()
-        vm.onNodeClick("and")
         vm.effects.test {
             vm.onSimulateAgain()
-            assertEquals(
-                ParcheEffect.Navigate(Paywall(PAYWALL_SOURCE_PARCHE)),
-                awaitItem()
-            )
+            expectNoEvents()
         }
+        assertNull(loaded(vm).sheet!!.actionError)
     }
 
     @Test

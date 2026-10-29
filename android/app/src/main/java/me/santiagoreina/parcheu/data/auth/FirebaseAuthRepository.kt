@@ -60,9 +60,13 @@ class FirebaseAuthRepository(
     private val errorMapper: ApiErrorMapper,
     private val signOutFlow: SignOutFlow
 ) : AuthRepository {
-    override fun hasSession(): Boolean = source.authOrNull()?.currentUser != null
+    override fun hasSession(): Boolean =
+        source.authOrNull()?.currentUser != null && !signOutFlow.inProgress
 
     override suspend fun signInWithGoogle(activityContext: Context): SignInResult {
+        // Un cierre de sesión en segundo plano (401 → A4) puede seguir corriendo: su último paso cerraría la
+        // sesión nueva. Se espera antes de abrir el selector; A4 muestra Loading mientras tanto.
+        signOutFlow.awaitIdle()
         val auth = source.authOrNull() ?: return SignInResult.Failure(NOT_CONFIGURED)
         val webClientId = source.webClientId() ?: return SignInResult.Failure(NOT_CONFIGURED)
         val idToken =
@@ -100,10 +104,13 @@ class FirebaseAuthRepository(
     override suspend fun signOut() = signOutFlow()
 
     private suspend fun requestGoogleIdToken(context: Context, webClientId: String): TokenResult {
+        // A-B2: nonce por intento; ver GoogleNonce para lo que Firebase sí y no verifica.
+        val nonce = GoogleNonce.generate()
         val option =
             GetGoogleIdOption
                 .Builder()
                 .setServerClientId(webClientId)
+                .setNonce(nonce.hashed)
                 .setFilterByAuthorizedAccounts(false)
                 .setAutoSelectEnabled(false)
                 .build()
@@ -131,7 +138,14 @@ class FirebaseAuthRepository(
             )
         }
         return try {
-            TokenResult.Token(GoogleIdTokenCredential.createFrom(credential.data).idToken)
+            val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+            if (nonce.matches(idToken)) {
+                TokenResult.Token(idToken)
+            } else {
+                TokenResult.Done(
+                    SignInResult.Failure(AppError.Unknown(message = "nonce del token no coincide"))
+                )
+            }
         } catch (_: GoogleIdTokenParsingException) {
             TokenResult.Done(
                 SignInResult.Failure(AppError.Unknown(message = "token de Google ilegible"))

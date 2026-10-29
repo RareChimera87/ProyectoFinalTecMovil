@@ -74,7 +74,6 @@ fun IntroResultEntry(
                 IntroResultEffect.OpenPaywall -> navigator.navigate(
                     Paywall(PRESENTAR_PAYWALL_SOURCE)
                 )
-                is IntroResultEffect.OpenLimit -> navigator.navigate(effect.route)
                 IntroResultEffect.IntroduceAgain -> navigator.navigateReplacing(
                     Introduce,
                     IntroResult::class

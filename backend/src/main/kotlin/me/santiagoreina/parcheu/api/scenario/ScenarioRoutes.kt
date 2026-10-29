@@ -9,6 +9,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.request.receive
 import me.santiagoreina.parcheu.api.platform.DomainRoutes
+import me.santiagoreina.parcheu.api.platform.aiRateLimited
 import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
@@ -37,8 +38,11 @@ class ScenarioRoutes(
         get("/scenario-sessions/{chatId}") {
             call.respond(scenario.session(viewerId(call.firebaseUser()), call.parameters["chatId"] ?: throw NotFound()))
         }
-        post("/scenario-sessions/{chatId}/agreement") {
-            call.respond(scenario.agree(viewerId(call.firebaseUser()), call.parameters["chatId"] ?: throw NotFound()))
+        // El acuerdo dispara el juez (LLM): límite por persona (B-M1).
+        aiRateLimited {
+            post("/scenario-sessions/{chatId}/agreement") {
+                call.respond(scenario.agree(viewerId(call.firebaseUser()), call.parameters["chatId"] ?: throw NotFound()))
+            }
         }
     }
 

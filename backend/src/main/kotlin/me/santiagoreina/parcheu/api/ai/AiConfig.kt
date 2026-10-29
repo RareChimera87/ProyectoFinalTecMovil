@@ -18,6 +18,10 @@ data class AiModels(val chat: String, val judge: String, val lite: String) {
  * - `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`: IDs de modelo; por defecto los del
  *   proveedor en el archivo de propiedades.
  * - `AI_DAILY_BUDGET_USD`: presupuesto diario (> 0).
+ * - `AI_USER_DAILY_BUDGET_USD`: techo diario de gasto de IA por persona (> 0, B-M1); por defecto
+ *   `budget.user.daily.usd` del archivo (0,75 USD, un cuarto del total de 3 USD). La moderación no cuenta.
+ * - `AI_USER_DAILY_MODERATION_USD`: sub-techo diario de moderación por autor (> 0); al pasarlo se muestrea
+ *   en vez de moderar todo (ADR-0026). Por defecto `budget.user.moderation.daily.usd` (0,25 USD).
  * - `AI_VERTEX_PROJECT` (o `GCP_PROJECT`): proyecto de Vertex; obligatorio fuera de `fake`.
  * - `AI_VERTEX_LOCATION`: ubicación de Vertex (`us` por defecto, multirregión de EE. UU.).
  *
@@ -28,6 +32,10 @@ data class AiConfig(
     val provider: AiProvider,
     val models: AiModels,
     val dailyBudgetUsd: BigDecimal,
+    /** Techo diario por persona (`AI_USER_DAILY_BUDGET_USD`, B-M1). */
+    val userDailyBudgetUsd: BigDecimal,
+    /** Sub-techo diario de moderación por autor (`AI_USER_DAILY_MODERATION_USD`, B-M1). */
+    val userDailyModerationUsd: BigDecimal,
     val vertexProject: String?,
     val vertexLocation: String,
     /** Nivel de razonamiento de Gemini 3.x (`LOW`, `MEDIUM`...); null = el del modelo. */
@@ -67,6 +75,14 @@ data class AiConfig(
             val budget = rawBudget.toBigDecimalOrNull()
                 ?: throw IllegalArgumentException("AI_DAILY_BUDGET_USD inválido: '$rawBudget'")
             require(budget > BigDecimal.ZERO) { "AI_DAILY_BUDGET_USD debe ser mayor que 0" }
+            val rawUserBudget = v("AI_USER_DAILY_BUDGET_USD") ?: defaults["budget.user.daily.usd"] ?: error("Falta AI_USER_DAILY_BUDGET_USD")
+            val userBudget = rawUserBudget.toBigDecimalOrNull()
+                ?: throw IllegalArgumentException("AI_USER_DAILY_BUDGET_USD inválido: '$rawUserBudget'")
+            require(userBudget > BigDecimal.ZERO) { "AI_USER_DAILY_BUDGET_USD debe ser mayor que 0" }
+            val rawModeration = v("AI_USER_DAILY_MODERATION_USD") ?: defaults["budget.user.moderation.daily.usd"] ?: "0.25"
+            val moderationBudget = rawModeration.toBigDecimalOrNull()
+                ?: throw IllegalArgumentException("AI_USER_DAILY_MODERATION_USD inválido: '$rawModeration'")
+            require(moderationBudget > BigDecimal.ZERO) { "AI_USER_DAILY_MODERATION_USD debe ser mayor que 0" }
 
             val location = v("AI_VERTEX_LOCATION") ?: defaults["vertex.location"] ?: "us"
             val project = v("AI_VERTEX_PROJECT") ?: v("GCP_PROJECT")
@@ -82,6 +98,8 @@ data class AiConfig(
                 provider = provider,
                 models = models,
                 dailyBudgetUsd = budget,
+                userDailyBudgetUsd = userBudget,
+                userDailyModerationUsd = moderationBudget,
                 vertexProject = project,
                 vertexLocation = location,
                 geminiThinkingLevel = v("AI_GEMINI_THINKING_LEVEL") ?: defaults["gemini.thinking.level"],

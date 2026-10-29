@@ -31,9 +31,16 @@ class FirebaseTokenVerifier(
         FirebaseAuth.getInstance(app)
     }
 
-    override suspend fun verify(token: String): FirebaseUser? = withContext(Dispatchers.IO) {
+    override suspend fun verify(token: String): FirebaseUser? = verify(token, checkRevoked = false)
+
+    /**
+     * Con [checkRevoked] el SDK consulta a Firebase el `validSince` de la cuenta: una llamada de red por
+     * verificación (`verifyIdToken(token)` a secas solo valida firma y caducidad, sin red). Por eso
+     * `installAuth` lo pide solo para tokens con el claim `admin`, no para todo el tráfico.
+     */
+    override suspend fun verify(token: String, checkRevoked: Boolean): FirebaseUser? = withContext(Dispatchers.IO) {
         try {
-            val decoded = auth.verifyIdToken(token)
+            val decoded = auth.verifyIdToken(token, checkRevoked)
             FirebaseUser(
                 decoded.uid,
                 decoded.email,

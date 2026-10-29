@@ -317,7 +317,7 @@ class IntroductionService(
                     introducer = self(viewer),
                     other = presenter.present(viewer, record.userA),
                     // 'No, gracias' de una persona presentada: quien presenta tampoco se entera.
-                    status = if (base == IntroductionStatus.DECLINED && !record.declinedByIntroducer) IntroductionStatus.PROPOSED else base,
+                    status = introducerVisibleStatus(base, record.declinedByIntroducer),
                     simulationId = record.simulationId?.toString(),
                     report = report,
                     myResponse = null,
@@ -325,9 +325,7 @@ class IntroductionService(
                 )
             }
             record.isIntroduced(viewer) -> {
-                val proposed = record.status == IntroductionStatus.PROPOSED || record.status == IntroductionStatus.CONNECTED ||
-                    (record.status == IntroductionStatus.DECLINED && !record.declinedByIntroducer)
-                if (!proposed) return null
+                if (!isProposedToIntroduced(record.status, record.declinedByIntroducer)) return null
                 val blocked = graph.blockedEitherWay(viewer)
                 val otherId = record.otherThan(viewer)
                 if (record.introducerId in blocked || otherId in blocked) return null

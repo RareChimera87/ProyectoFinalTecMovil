@@ -22,6 +22,8 @@ class QuotaModule(
     /** Nulo en prod: entonces `POST /internal/dev/grant-plus` no existe (404). */
     val devPlus: DevPlusGranter?,
     val clock: Clock,
+    /** Topes diarios internos (B-M1): reenvíos del gemelo y moderaciones con IA. */
+    val daily: DailyLimiter,
 )
 
 /** `GET /v1/quota` (arquitectura.md §5.2). `POST /internal/dev/grant-plus` lo registra `BillingRoutes` (E7.1) con [QuotaModule.devPlus]. */
