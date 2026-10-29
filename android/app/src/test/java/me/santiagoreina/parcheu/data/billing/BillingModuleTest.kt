@@ -49,7 +49,8 @@ class BillingModuleTest {
     @Test
     fun closingKoinCancelsTheBillingScopes() {
         val app = koinApplication { modules(billingModule) }
-        val names = listOf("billing-provider-scope", "billing-repository-scope", "billing-reconciler-scope")
+        val names =
+            listOf("billing-provider-scope", "billing-repository-scope", "billing-reconciler-scope")
         val scopes = names.map { app.koin.get<CoroutineScope>(named(it)) }
         assertTrue(scopes.all { it.isActive })
 

@@ -12,7 +12,9 @@ val accountDataModule =
     module {
         // La exportación es lenta en el servidor: esta API usa el cliente con timeouts largos (slowClientOf).
         single<AccountApi> {
-            get<Retrofit>().newBuilder().client(slowClientOf(get())).build().create(AccountApi::class.java)
+            get<Retrofit>().newBuilder().client(
+                slowClientOf(get())
+            ).build().create(AccountApi::class.java)
         }
         single<AccountRepository> { AccountRepositoryImpl(get(), get()) }
     }

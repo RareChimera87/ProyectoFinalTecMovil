@@ -154,9 +154,18 @@ class ChatViewModel(
         meta.update { it.copy(loadingOlder = true) }
         olderJob = viewModelScope.launch {
             try {
-                val page = repository.loadOlder(chatId, Timestamp(oldest.epochSeconds, oldest.nanosecondsOfSecond))
+                val page = repository.loadOlder(
+                    chatId,
+                    Timestamp(oldest.epochSeconds, oldest.nanosecondsOfSecond)
+                )
                 older.update { (page + it).distinctBy { m -> m.id } }
-                meta.update { it.copy(loadingOlder = false, olderExhausted = page.size < CHAT_PAGE_SIZE) }
+                meta.update {
+                    it.copy(
+                        loadingOlder = false,
+                        olderExhausted =
+                        page.size < CHAT_PAGE_SIZE
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

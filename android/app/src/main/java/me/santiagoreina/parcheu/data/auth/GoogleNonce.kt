@@ -32,7 +32,10 @@ class GoogleNonce private constructor(val raw: String, val hashed: String) {
         fun generate(random: SecureRandom = SecureRandom()): GoogleNonce {
             val bytes = ByteArray(NONCE_BYTES).also(random::nextBytes)
             val raw = bytes.toHex()
-            return GoogleNonce(raw, MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).toHex())
+            return GoogleNonce(
+                raw,
+                MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).toHex()
+            )
         }
 
         private const val NONCE_BYTES = 32

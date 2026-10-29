@@ -50,7 +50,9 @@ class GoogleNonceTest {
     fun tokenFromAnotherRequestIsRejected() {
         val nonce = GoogleNonce.generate()
 
-        assertFalse(nonce.matches(jwt("""{"sub":"1","nonce":"${GoogleNonce.generate().hashed}"}""")))
+        assertFalse(
+            nonce.matches(jwt("""{"sub":"1","nonce":"${GoogleNonce.generate().hashed}"}"""))
+        )
     }
 
     @Test

@@ -138,7 +138,9 @@ class FirebaseAuthRepository(
             if (nonce.matches(idToken)) {
                 TokenResult.Token(idToken)
             } else {
-                TokenResult.Done(SignInResult.Failure(AppError.Unknown(message = "nonce del token no coincide")))
+                TokenResult.Done(
+                    SignInResult.Failure(AppError.Unknown(message = "nonce del token no coincide"))
+                )
             }
         } catch (_: GoogleIdTokenParsingException) {
             TokenResult.Done(

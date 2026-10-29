@@ -250,7 +250,9 @@ class ChatViewModelTest {
         assertEquals("chat-1", target.chatId)
     }
 
-    private fun history(count: Int) = (1..count).map { remote("h$it", "uid-2", "mensaje $it", sec = it.toLong()) }
+    private fun history(count: Int) = (1..count).map {
+        remote("h$it", "uid-2", "mensaje $it", sec = it.toLong())
+    }
 
     @Test
     fun shortLiveWindowHasNothingOlderToLoad() = runTest {
