@@ -114,9 +114,11 @@ class ParcheScreenTest {
     }
 
     @Test
-    fun simulatedSheetHasNoChatAndPendingOnlyShowsResult() {
+    fun simulatedSheetOffersOnlyViewResult() {
+        // Una arista SIMULATED no es conexión: el servidor rechazaría la simulación (B-A1).
         show(ParcheUiState.Loaded(ParcheSamples.content, sheet = sheet("dan")))
-        composeRule.onNodeWithText("Simular de nuevo").assertIsDisplayed()
+        composeRule.onNodeWithText("Ver resultado").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Simular de nuevo").assertCountEquals(0)
         composeRule.onAllNodesWithText("Chatear").assertCountEquals(0)
     }
 

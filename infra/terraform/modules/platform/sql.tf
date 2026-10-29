@@ -67,6 +67,6 @@ resource "google_sql_database" "main" {
 resource "google_sql_user" "api" {
   project  = var.project_id
   instance = google_sql_database_instance.main.name
-  name     = trimsuffix(google_service_account.api.email, ".gserviceaccount.com")
+  name     = trimsuffix(data.google_service_account.api.email, ".gserviceaccount.com")
   type     = "CLOUD_IAM_SERVICE_ACCOUNT"
 }

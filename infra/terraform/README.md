@@ -8,9 +8,10 @@ Terraform 1.15 con los providers `google` y `google-beta` 7.x (fijados en cada
 
 ```
 infra/terraform/
-├─ bootstrap/          bucket de estado, WIF para GitHub, sa-deployer, sa-terraform(-plan) y presupuesto (una vez por proyecto, ADC del usuario)
+├─ bootstrap/          bucket de estado, WIF para GitHub, sa-deployer, sa-terraform(-plan), sa-api y sa-tasks con sus roles,
+│                      y presupuesto (una vez por proyecto, ADC del usuario)
 ├─ modules/platform/   APIs, Artifact Registry, Cloud Run api + jobs, Cloud SQL, Secret Manager,
-│                      Cloud Tasks, Scheduler, Pub/Sub, Firestore, Firebase, IAM, presupuesto, uptime
+│                      Cloud Tasks, Scheduler, Pub/Sub, Firestore, Firebase, IAM de recursos, sa-play, uptime
 └─ envs/{dev,prod}/    instancia de platform por entorno (estado en gs://<proyecto>-tfstate/platform)
 ```
 
@@ -63,12 +64,27 @@ de la base al usuario IAM una vez (como `postgres`, desde Cloud SQL Studio o `gc
 
 | Cuenta | Dónde | Roles |
 |---|---|---|
-| `sa-api` | platform | `cloudsql.client`, `cloudsql.instanceUser`, `aiplatform.user`, `cloudtasks.enqueuer`, `datastore.user`, `firebaseauth.admin`, `firebasecloudmessaging.admin`, `logging.logWriter`, `monitoring.metricWriter`, `cloudtrace.agent`; `secretAccessor` solo sobre sus dos secretos; `serviceAccountUser` sobre `sa-tasks` |
-| `sa-tasks` | platform | `run.invoker` sobre `api` |
-| `sa-play` | platform (solo prod, `play_service_account_enabled`) | Ninguno de GCP: sus permisos se dan en Play Console (verificar compras para la API, E7.1; publicar para CI, E10.2). `sa-api` tiene `serviceAccountTokenCreator` sobre ella para suplantarla sin llaves |
-| `sa-deployer` | bootstrap | `run.admin`, `artifactregistry.writer`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin`, `serviceusage.serviceUsageConsumer`; `serviceAccountUser` sobre `sa-api` (platform). En prod solo la puede usar un job del environment `production` de GitHub |
-| `sa-terraform` | bootstrap (solo dev) | `apply` en CI, **solo desde la rama `dev`** (principal `attribute.ref/refs/heads/dev`): administradores de cada servicio usado (sin owner/editor). `projectIamAdmin` con condición: solo puede otorgar los roles de `sa-api`, nunca `owner`. Sin roles sobre la facturación. No existe en prod (allí aplica el usuario) |
+| `sa-api` | bootstrap (desde fix/wif-deployer-dev; la plataforma la lee con `data`) | `cloudsql.client`, `cloudsql.instanceUser`, `aiplatform.user`, `cloudtasks.enqueuer`, `datastore.user`, `firebaseauth.admin`, `firebasecloudmessaging.admin`, `logging.logWriter`, `monitoring.metricWriter`, `cloudtrace.agent` (bootstrap); `secretAccessor` solo sobre sus dos secretos (platform); `serviceAccountUser` sobre `sa-tasks` (bootstrap) |
+| `sa-tasks` | bootstrap | `run.invoker` sobre `api` (platform) |
+| `sa-play` | platform (solo prod, `play_service_account_enabled`) | Ninguno de GCP: sus permisos se dan en Play Console (verificar compras para la API, E7.1; publicar para CI, E10.2). `sa-api` tiene `serviceAccountTokenCreator` sobre ella para suplantarla sin llaves. GitHub la suplanta por WIF (`play.tf`, `attribute.env_ref`): environment `play` desde `dev`, `main` o un tag `v*`; `play-alpha` desde `main` o un tag `v*` |
+| `sa-deployer` | bootstrap | `run.admin`, `artifactregistry.writer`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin`, `serviceusage.serviceUsageConsumer`; `serviceAccountUser` sobre `sa-api`; en dev, `serviceAccountTokenCreator` sobre sí misma (smoke e2e). **Quién la usa:** en dev solo jobs de la rama `dev` (`attribute.ref/refs/heads/dev`; un PR no puede); en prod solo un job del environment `production` que corra sobre un tag `v*` (`attribute.env_ref/production@tag`) |
+| `sa-terraform` | bootstrap (solo dev) | `apply` en CI, **solo desde la rama `dev`**. Cada rol con su motivo en `bootstrap/main.tf`: `serviceUsageAdmin`, `run.admin`, `artifactregistry.admin`, `cloudsql.admin`, `cloudtasks.admin`, `cloudscheduler.admin`, `pubsub.admin`, `monitoring.admin` y el rol personalizado `parcheuTerraformApply` (contenedores de secretos, base de Firestore, proyecto de Firebase y métricas basadas en logs, **sin** `secretmanager.versions.*`, `datastore.entities.*` ni `logging.sinks/buckets/links.*`); `serviceAccountUser` solo sobre `sa-api` y `sa-tasks`. **Sin** `serviceAccountAdmin`, `serviceAccountUser` de proyecto, `projectIamAdmin`, `secretmanager.admin`, `datastore.owner` `firebase.admin` ni `logging.configWriter` (con sus sinks se exportarían todos los logs). Sin roles sobre la facturación. No existe en prod (allí aplica el usuario) |
 | `sa-terraform-plan` | bootstrap | `plan` en CI, solo metadatos: `run.viewer`, `secretmanager.viewer`, `cloudtasks.viewer`, `cloudscheduler.viewer`, `pubsub.viewer`, `monitoring.viewer`, `iam.serviceAccountViewer`, `serviceusage.*` y el rol personalizado `parcheuTerraformPlan` (solo `*.get/list` de bases, repos, instancias y proyecto). **Sin** `roles/viewer`, `securityReviewer` ni `firebase.viewer`: incluyen `datastore.entities.*` y `logging.logEntries.list`. Lee el estado (`objectViewer`; el plan de CI corre con `-lock=false`). En dev cualquier PR del repo puede usarla (no hay datos reales); en prod solo jobs de la rama `dev` (ADR-0012) |
+
+**WIF.** El pool solo acepta tokens cuyo `repository_id` y `repository_owner_id` coinciden con
+`var.github_repository_id` / `var.github_repository_owner_id` (IDs numéricos, que no se reutilizan como un
+nombre). Además de los atributos directos (`repository`, `ref`, `environment`...), el proveedor mapea el
+atributo derivado `env_ref` = `<environment>@<ref>` (`tag` en lugar de la ref si empieza por `refs/tags/v`;
+`-` si el job no tiene environment), porque un `principalSet` no admite prefijos ni combinar dos atributos.
+
+**Residuales aceptados** (revisión de #105). Todos exigen que el cambio entre a `dev` por un PR aprobado,
+porque `sa-terraform` solo acepta la rama `dev`:
+- `run.admin` + actAs sobre `sa-api` (en `sa-terraform` y en `sa-deployer` de dev): pueden ejecutar código con
+  los permisos de `sa-api`. Es inherente a desplegar Cloud Run como esa cuenta.
+- `secretmanager.secrets.setIamPolicy` (`parcheuTerraformApply`): `sa-terraform` podría darse `secretAccessor`.
+  Las condiciones de IAM no restringen el miembro de un `setIamPolicy` de secretos, y `sa-api` ya tiene ese acceso.
+- `cloudsql.admin` incluye `instances.export` y `users.update`: lectura completa de la base de dev (no hay un
+  rol predefinido que administre la instancia sin eso).
 
 `scripts/check-iam.sh plan.json` lee el JSON de `terraform show -json plan` (no consulta GCP) y sale con 1
 ante cualquier **ERROR**: `roles/owner` o `roles/editor` para cualquier principal; `allUsers` o
@@ -80,6 +96,8 @@ ante cualquier **ERROR**: `roles/owner` o `roles/editor` para cualquier principa
 `sa-terraform-plan` con roles de datos o de facturación). Las listas blancas están al inicio del script.
 Los **AVISO** de `user:` con roles distintos de `viewer`, `logging.viewer` y `monitoring.viewer` no cambian
 el código de salida (0). Solo revisa lo que está en el plan, no la política real del proyecto.
+Desde que `sa-api` nace en el bootstrap, sus roles mínimos se verifican sobre el plan del **bootstrap**
+(paso 2 de abajo).
 
 El **presupuesto de facturación** (50 % y 90 %) se crea en `bootstrap/` con el ADC del usuario, no en la
 plataforma: la cuenta de facturación se comparte con otros proyectos y ninguna identidad de CI tiene roles
@@ -102,10 +120,12 @@ BILLING_ACCOUNT=$TF_VAR_billing_account scripts/crear-proyectos.sh $ENV
 # 2. Bootstrap (importa el bucket y crea WIF, sa-deployer, sa-terraform, sa-terraform-plan y el presupuesto).
 cd infra/terraform/bootstrap
 terraform init -reconfigure -backend-config=bucket=parcheu-$ENV-tfstate -backend-config=prefix=bootstrap
-terraform apply -var environment=$ENV
+terraform plan -var environment=$ENV -out=plan.tfplan && terraform show -json plan.tfplan > plan.json
+../../../scripts/check-iam.sh plan.json   # sa-api, sa-deployer y sa-terraform(-plan)
+terraform apply plan.tfplan
 terraform output   # valores para los secretos de GitHub (abajo)
 
-# 3. Plataforma.
+# 3. Plataforma (prod exige -var 'alert_emails=["..."]'; dev trae el correo de contacto por defecto).
 cd ../envs/$ENV
 terraform init
 terraform plan -out=plan.tfplan
@@ -135,7 +155,7 @@ proyecto desde https://console.firebase.google.com (una vez) y luego
 
 ```bash
 terraform fmt -check -recursive infra/terraform
-for d in bootstrap envs/dev envs/prod; do (cd infra/terraform/$d && terraform init -backend=false && terraform validate); done
+for d in bootstrap modules/platform envs/dev envs/prod; do (cd infra/terraform/$d && terraform init -backend=false && terraform validate); done
 scripts/test/check-plan.test.sh        # check-plan.sh y check-iam.sh con fixtures y mutaciones
 scripts/test/cargar-secretos.test.sh   # cargar-secretos.sh con un gcloud falso
 ```

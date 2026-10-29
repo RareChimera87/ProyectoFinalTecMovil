@@ -28,10 +28,10 @@ import me.santiagoreina.parcheu.api.simulation.NoopSimulationNotifier
 import me.santiagoreina.parcheu.api.simulation.judgeJson
 import me.santiagoreina.parcheu.api.simulation.simulationModule
 import me.santiagoreina.parcheu.api.twin.TaskPayload
+import me.santiagoreina.parcheu.api.simulation.createRandom
 import me.santiagoreina.parcheu.contract.ContractJson
 import me.santiagoreina.parcheu.contract.Decision
 import me.santiagoreina.parcheu.contract.Mode
-import me.santiagoreina.parcheu.contract.StartSimulation
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -92,7 +92,7 @@ class ConnectRequestDbTest : FunSpec({
             val beto = db.user("beto")
             val caro = db.user("caro")
             val dani = db.user("dani")
-            fun done(a: UUID, b: UUID) = runBlocking { module.service.start(a, StartSimulation(b.toString(), Mode.AMISTAD)).id }
+            fun done(a: UUID, b: UUID) = runBlocking { module.service.createRandom(a, b).id.toString() }
             fun decide(viewer: UUID, id: String, connect: Boolean) = runBlocking { module.report.decide(viewer, id, Decision(connect)) }
 
             val withBeto = done(ana, beto)

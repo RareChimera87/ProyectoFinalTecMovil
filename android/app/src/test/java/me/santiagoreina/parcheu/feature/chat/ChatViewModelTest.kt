@@ -249,4 +249,119 @@ class ChatViewModelTest {
         assertTrue(target.anonymous)
         assertEquals("chat-1", target.chatId)
     }
+
+    private fun history(count: Int) = (1..count).map {
+        remote("h$it", "uid-2", "mensaje $it", sec = it.toLong())
+    }
+
+    @Test
+    fun shortLiveWindowHasNothingOlderToLoad() = runTest {
+        val repo = repo()
+        val vm = viewModel(repo)
+        repo.messages.value = history(CHAT_PAGE_SIZE - 1)
+
+        assertFalse(vm.state.value.canLoadOlder)
+        vm.loadOlder()
+        assertTrue(repo.loadOlderCalls.isEmpty())
+    }
+
+    @Test
+    fun loadOlderPrependsThePreviousPageStartingAtTheOldestKnownMessage() = runTest {
+        val repo = repo()
+        val all = history(CHAT_PAGE_SIZE * 2 + 10)
+        repo.history = all
+        val vm = viewModel(repo)
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+        assertTrue(vm.state.value.canLoadOlder)
+
+        vm.loadOlder()
+
+        assertEquals(listOf(61L), repo.loadOlderCalls.map { it.seconds })
+        val keys = vm.state.value.messages.map { it.key }
+        assertEquals(CHAT_PAGE_SIZE * 2, keys.size)
+        assertEquals("h11", keys.first())
+        assertEquals("h110", keys.last())
+        assertTrue(vm.state.value.canLoadOlder)
+        assertFalse(vm.state.value.loadingOlder)
+
+        vm.loadOlder()
+
+        assertEquals(listOf(61L, 11L), repo.loadOlderCalls.map { it.seconds })
+        // La última página trae solo 10 mensajes: el historial se da por agotado.
+        assertEquals(CHAT_PAGE_SIZE * 2 + 10, vm.state.value.messages.size)
+        assertFalse(vm.state.value.canLoadOlder)
+        vm.loadOlder()
+        assertEquals(2, repo.loadOlderCalls.size)
+    }
+
+    @Test
+    fun hiddenMessageInOlderPageShowsAsHiddenWithoutItsText() = runTest {
+        val repo = repo()
+        val all = history(CHAT_PAGE_SIZE + 5)
+        repo.history = all
+        val vm = viewModel(repo)
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+        vm.loadOlder()
+        assertEquals("mensaje 3", vm.state.value.messages.first { it.key == "h3" }.text)
+
+        repo.hidden.value = listOf(remote("h3", "uid-2", "", hidden = true, sec = 3))
+
+        val hidden = vm.state.value.messages.first { it.key == "h3" }
+        assertTrue(hidden.hidden)
+        assertEquals("", hidden.text)
+        assertEquals(CHAT_PAGE_SIZE + 5, vm.state.value.messages.size)
+    }
+
+    @Test
+    fun liveCopyWinsOverTheOlderOneAndMessagesStaySortedByCreatedAt() = runTest {
+        val repo = repo()
+        val vm = viewModel(repo)
+        val all = history(CHAT_PAGE_SIZE + 1)
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+        // El primero sale de la ventana y pasa a older; luego vuelve a entrar con otro texto.
+        repo.messages.value =
+            all.drop(1).takeLast(CHAT_PAGE_SIZE - 1) + remote("h999", "uid-2", "nuevo", sec = 999)
+        repo.messages.value =
+            listOf(remote("h1", "uid-2", "editado", sec = 1)) + repo.messages.value.drop(1)
+
+        val messages = vm.state.value.messages
+        assertEquals(1, messages.count { it.key == "h1" })
+        assertEquals("editado", messages.first { it.key == "h1" }.text)
+        assertEquals(messages.map { it.createdAt }, messages.map { it.createdAt }.sortedBy { it })
+    }
+
+    @Test
+    fun loadOlderFailureKeepsMessagesAndAllowsRetry() = runTest {
+        val repo = repo()
+        val all = history(CHAT_PAGE_SIZE + 5)
+        repo.history = all
+        val vm = viewModel(repo)
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+        repo.loadOlderFailure = ChatLiveException(AppError.Network)
+
+        vm.loadOlder()
+
+        assertEquals(CHAT_PAGE_SIZE, vm.state.value.messages.size)
+        assertFalse(vm.state.value.loadingOlder)
+        assertTrue(vm.state.value.canLoadOlder)
+
+        repo.loadOlderFailure = null
+        vm.loadOlder()
+        assertEquals(CHAT_PAGE_SIZE + 5, vm.state.value.messages.size)
+    }
+
+    @Test
+    fun messagesPushedOutOfTheLiveWindowStayInTheList() = runTest {
+        val repo = repo()
+        val all = history(CHAT_PAGE_SIZE + 1)
+        val vm = viewModel(repo)
+        repo.messages.value = all.take(CHAT_PAGE_SIZE)
+
+        repo.messages.value = all.takeLast(CHAT_PAGE_SIZE)
+
+        val keys = vm.state.value.messages.map { it.key }
+        assertEquals(CHAT_PAGE_SIZE + 1, keys.size)
+        assertEquals("h1", keys.first())
+        assertEquals("h${CHAT_PAGE_SIZE + 1}", keys.last())
+    }
 }
