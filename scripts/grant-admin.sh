@@ -10,6 +10,8 @@
 # - Cada cuenta debe haber iniciado sesión al menos una vez (si no, no existe en Auth).
 # - El claim viaja en el ID token: la persona debe cerrar sesión y volver a entrar (o esperar hasta
 #   una hora) para que el servidor lo vea. La página admin.html lo refresca al entrar.
+# - --revoke además revoca las sesiones de la cuenta (`validSince` = ahora, lo mismo que
+#   `revokeRefreshTokens`): el backend comprueba la revocación en los tokens admin y los corta de inmediato.
 # - --dry-run no escribe nada: solo muestra qué cuentas encontraría y qué claims dejaría.
 # - Variables opcionales: PARCHEU_PROJECT_DEV / PARCHEU_PROJECT_PROD para otro ID de proyecto.
 set -euo pipefail
@@ -43,7 +45,11 @@ for tool in curl jq gcloud; do
   command -v "$tool" >/dev/null 2>&1 || { echo "Falta $tool." >&2; exit 1; }
 done
 
-token="$(gcloud auth print-access-token)"
+# El token va en un archivo de cabeceras (`-H @archivo`), no como argumento: los argumentos de curl se ven en `ps`.
+hdrs="$(mktemp)"
+trap 'rm -f "$hdrs"' EXIT
+chmod 600 "$hdrs"
+printf 'Authorization: Bearer %s\n' "$(gcloud auth print-access-token)" >"$hdrs"
 base="https://identitytoolkit.googleapis.com/v1/projects/$project"
 
 # Llama a Identity Toolkit con el proyecto de cuota correcto y falla con el cuerpo del error.
@@ -51,7 +57,7 @@ api() {
   local path="$1" body="$2" out status
   out="$(mktemp)"
   status="$(curl -sS -o "$out" -w '%{http_code}' -X POST "$base/$path" \
-    -H "Authorization: Bearer $token" -H "x-goog-user-project: $project" \
+    -H "@$hdrs" -H "x-goog-user-project: $project" \
     -H 'Content-Type: application/json' -d "$body")"
   if [[ "$status" != 2* ]]; then
     echo "Identity Toolkit respondió $status en $path:" >&2
@@ -76,7 +82,7 @@ for email in "$@"; do
   current="$(jq -r '.users[0].customAttributes // "{}"' <<<"$found")"
   if $revoke; then
     claims="$(jq -c 'del(.admin)' <<<"$current")"
-    verb="QUITA admin"
+    verb="QUITA admin (y revoca sesiones) a"
   else
     claims="$(jq -c '.admin = true' <<<"$current")"
     verb="OTORGA admin"
@@ -85,7 +91,14 @@ for email in "$@"; do
     echo "[dry-run] $verb a $email ($uid) en $project -> claims $claims"
     continue
   fi
-  api 'accounts:update' "$(jq -n --arg u "$uid" --arg c "$claims" '{localId: $u, customAttributes: $c}')" >/dev/null
+  # Al quitar admin se revocan también las sesiones en la misma llamada: sin `validSince` el ID token que ya
+  # circula conservaría el claim hasta una hora más.
+  if $revoke; then
+    update="$(jq -nc --arg u "$uid" --arg c "$claims" --arg v "$(date +%s)" '{localId: $u, customAttributes: $c, validSince: $v}')"
+  else
+    update="$(jq -nc --arg u "$uid" --arg c "$claims" '{localId: $u, customAttributes: $c}')"
+  fi
+  api 'accounts:update' "$update" >/dev/null
   echo "$verb a $email ($uid) en $project -> claims $claims"
 done
 exit "$status"

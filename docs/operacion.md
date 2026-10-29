@@ -213,7 +213,8 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
 ## Moderación y administración
 
 - **Dar o quitar el rol de administrador** (claim `admin` de Firebase Auth): `scripts/grant-admin.sh dev <correo>`; con
-  `--revoke` lo quita y con `--dry-run` solo muestra qué haría. Necesita `gcloud` con permisos de administrador de Firebase
+  `--revoke` lo quita y además revoca sus sesiones (el backend comprueba la revocación en los tokens admin, así que
+  el acceso se corta de inmediato), y con `--dry-run` solo muestra qué haría. Necesita `gcloud` con permisos de administrador de Firebase
   Auth en `parcheu-dev`. La persona cierra sesión y vuelve a entrar para que el servidor vea el claim.
 - **Atender reportes:** `admin.html` (Firebase Hosting, [ADR-0028](adr/0028-firebase-hosting-y-admin.md)) lista los reportes y
   permite resolverlos con una acción (descartar, ocultar el mensaje, suspender 24 h o banear). Los de prioridad 2 (`SELF_HARM`, `UNDERAGE`) se atienden
