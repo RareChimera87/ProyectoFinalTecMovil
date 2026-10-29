@@ -100,10 +100,13 @@ class FirebaseAuthRepository(
     override suspend fun signOut() = signOutFlow()
 
     private suspend fun requestGoogleIdToken(context: Context, webClientId: String): TokenResult {
+        // A-B2: nonce por intento; ver GoogleNonce para lo que Firebase sí y no verifica.
+        val nonce = GoogleNonce.generate()
         val option =
             GetGoogleIdOption
                 .Builder()
                 .setServerClientId(webClientId)
+                .setNonce(nonce.hashed)
                 .setFilterByAuthorizedAccounts(false)
                 .setAutoSelectEnabled(false)
                 .build()
@@ -131,7 +134,12 @@ class FirebaseAuthRepository(
             )
         }
         return try {
-            TokenResult.Token(GoogleIdTokenCredential.createFrom(credential.data).idToken)
+            val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+            if (nonce.matches(idToken)) {
+                TokenResult.Token(idToken)
+            } else {
+                TokenResult.Done(SignInResult.Failure(AppError.Unknown(message = "nonce del token no coincide")))
+            }
         } catch (_: GoogleIdTokenParsingException) {
             TokenResult.Done(
                 SignInResult.Failure(AppError.Unknown(message = "token de Google ilegible"))
