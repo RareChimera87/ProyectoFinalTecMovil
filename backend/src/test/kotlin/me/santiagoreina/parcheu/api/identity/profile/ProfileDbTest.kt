@@ -21,6 +21,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.platform.AppContainer
@@ -67,7 +68,7 @@ class ProfileDbTest : FunSpec({
                 val identity = IdentityService(ExposedIdentityRepository(db), clock, TEST_LEGAL_VERSION)
                 val profile = ProfileService(identity, ExposedProfileRepository(db), clock)
                 val container = AppContainer(
-                    testConfig(), clock, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com"),
+                    testConfig(), clock, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com", TEST_OIDC_TOKEN),
                     identity, profile,
                 )
                 testApplication {

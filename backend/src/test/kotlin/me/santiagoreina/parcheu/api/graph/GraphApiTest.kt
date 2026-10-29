@@ -12,6 +12,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.IdentityService
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.ai.testGateway
@@ -73,7 +74,7 @@ class GraphApiTest : FunSpec({
                 config = testConfig(),
                 clock = FIXED_CLOCK,
                 tokenVerifier = FakeTokenVerifier(),
-                oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
+                oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT, TEST_OIDC_TOKEN),
                 identity = identity,
                 profile = profile,
                 quota = quota,

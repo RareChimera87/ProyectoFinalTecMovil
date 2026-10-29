@@ -47,7 +47,7 @@ class AiConfigTest : FunSpec({
         }
         e.message shouldContain "AI_PROVIDER"
         // El mismo error corta AppContainer.fromConfig, que es lo que llama Main en modo serve.
-        val appConfig = AppConfig.fromEnv(mapOf("ENV" to "local", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu"))
+        val appConfig = AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu"))
         shouldThrow<IllegalArgumentException> {
             AppContainer.fromConfig(appConfig, mapOf("ENV" to "local", "AI_PROVIDER" to "chatgpt"))
         }
@@ -56,7 +56,7 @@ class AiConfigTest : FunSpec({
     test("fake solo se admite con ENV=local y es el predeterminado ahí") {
         shouldThrow<IllegalArgumentException> { AiConfig.fromEnv(base + ("AI_PROVIDER" to "fake"), Env.PROD) }
         AiConfig.fromEnv(emptyMap(), Env.LOCAL).provider shouldBe AiProvider.FAKE
-        val container = AppContainer.fromConfig(AppConfig.fromEnv(mapOf("ENV" to "local", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu")), mapOf("ENV" to "local"))
+        val container = AppContainer.fromConfig(AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu")), mapOf("ENV" to "local"))
         container.ai.provider shouldBe AiProvider.FAKE
     }
 

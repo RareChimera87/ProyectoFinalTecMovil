@@ -64,6 +64,9 @@ import java.time.ZoneOffset
 
 const val TASKS_ACCOUNT = "sa-tasks@parcheu-test.iam.gserviceaccount.com"
 
+/** Token OIDC Fake de las pruebas: el verificador ya no tiene un valor fijo (B-A2). */
+const val TEST_OIDC_TOKEN = "oidc-tasks-test-0123456789"
+
 val FIXED_CLOCK: Clock = Clock.fixed(Instant.parse("2026-10-25T12:00:00Z"), ZoneOffset.UTC)
 
 fun testConfig() = AppConfig(
@@ -128,7 +131,7 @@ fun testContainer(
         config = config,
         clock = clock,
         tokenVerifier = FakeTokenVerifier(adminUids = setOf("admin")),
-        oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT),
+        oidcVerifier = FakeOidcVerifier(TASKS_ACCOUNT, TEST_OIDC_TOKEN),
         identity = identity,
         profile = profile,
         quota = quota,

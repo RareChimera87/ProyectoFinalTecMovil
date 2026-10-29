@@ -20,10 +20,10 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
+import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
 import me.santiagoreina.parcheu.api.identity.export.ExportRows
-import me.santiagoreina.parcheu.api.platform.auth.FakeOidcVerifier
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.platform.tasks.QueueKind
@@ -39,7 +39,7 @@ import java.util.UUID
 /** `DELETE /v1/me`, `GET /v1/me/export` y la tarea `purge-user` de punta a punta con Fakes (E8.3). */
 class AccountApiTest : FunSpec({
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")
-    fun HttpRequestBuilder.tasks() = header(HttpHeaders.Authorization, "Bearer ${FakeOidcVerifier.VALID_TOKEN}")
+    fun HttpRequestBuilder.tasks() = header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}")
 
     class Fixture {
         val repo = InMemoryIdentityRepository().also { it.seedAcceptedUser("ana", TEST_LEGAL_VERSION) }
