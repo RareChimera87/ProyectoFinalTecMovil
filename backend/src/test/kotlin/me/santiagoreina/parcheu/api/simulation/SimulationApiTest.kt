@@ -4,7 +4,6 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
-import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.HttpRequestBuilder
@@ -51,6 +50,10 @@ class SimulationApiTest : FunSpec({
         }
 
         fun id(uid: String) = ids.getValue(uid)
+
+        /** Arista CONNECTED entre los dos en [modes]: `POST /v1/simulations` la exige en el modo pedido. */
+        fun connect(a: String, b: String, vararg modes: Mode = arrayOf(Mode.AMISTAD)) =
+            modes.forEach { sim.graphRepo.putEdge(id(a), id(b), it, EdgeState.CONNECTED, 70) }
     }
 
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")
@@ -75,6 +78,7 @@ class SimulationApiTest : FunSpec({
 
     test("POST /v1/simulations responde 202 QUEUED; la tarea interna la lleva a DONE y GET la muestra con puntaje") {
         val w = World(inline = false)
+        w.connect("ana", "beto")
         testApplication {
             val client = app(w)
             val response = client.start("ana", w.id("beto").toString())
@@ -84,10 +88,10 @@ class SimulationApiTest : FunSpec({
             summary.mode shouldBe Mode.AMISTAD
             summary.origin shouldBe SimulationOrigin.PARCHE
             summary.score shouldBe null
-            // Sin conexión mutua la otra persona sale anónima.
-            summary.other.label shouldBe "Alguien de la UIS"
-            summary.other.id shouldBe null
-            summary.other.anonId!! shouldStartWith "a_"
+            // Con conexión mutua (la que exige el POST) la otra persona sale con nombre.
+            summary.other.label shouldBe "beto"
+            summary.other.id shouldBe w.id("beto").toString()
+            summary.other.anonId shouldBe null
             w.sim.queue.tasks.single().path shouldBe "/tasks/simulate"
             w.sim.queue.tasks.single().name shouldBe "simulate-${summary.id}"
 
@@ -107,14 +111,47 @@ class SimulationApiTest : FunSpec({
         }
     }
 
-    test("con conexión mutua la otra persona sale con nombre") {
+    test("sin arista CONNECTED en el modo pedido responde 404 genérico sin revelar modos, edad, bloqueo ni cobrar") {
         val w = World()
-        w.sim.graphRepo.putEdge(w.id("ana"), w.id("beto"), Mode.AMISTAD, EdgeState.CONNECTED, 70)
+        // eli tiene Pareja activo y edad confirmada: si el POST no exigiera la arista de Pareja, ana simularía con ella.
+        w.connect("ana", "eli")
+        // hugo bloqueó a ana después de conectar: el bloqueo corta la conexión y el ego-grafo lo oculta.
+        w.connect("ana", "hugo")
+        w.sim.graphRepo.block(w.id("hugo"), w.id("ana"))
+        w.sim.repo.block(w.id("hugo"), w.id("ana"))
+        w.sim.exhaustBudget()
         testApplication {
-            val summary = app(w).start("ana", w.id("beto").toString()).body<SimulationSummary>()
-            summary.other.label shouldBe "beto"
-            summary.other.id shouldBe w.id("beto").toString()
-            summary.other.anonId shouldBe null
+            val client = app(w)
+            val cases = listOf(
+                "fede" to Mode.AMISTAD, // existe, pero no está conectado con ana
+                "eli" to Mode.PAREJA, // conectado solo en Amistad
+                "eli" to Mode.ESTUDIO, // conectado solo en Amistad
+                "hugo" to Mode.AMISTAD, // bloqueado: no se distingue de no encontrado
+            )
+            val unknown = client.start("ana", UUID.randomUUID().toString())
+            val bodies = (cases.map { (uid, mode) -> client.start("ana", w.id(uid).toString(), mode) } + unknown).map { response ->
+                response.status shouldBe HttpStatusCode.NotFound
+                response.error().code shouldBe ErrorCode.NOT_FOUND
+                response.error().message
+            }
+            // El mismo mensaje para todos: ni el modo de la otra persona ni el bloqueo se cuelan en el texto.
+            bodies.toSet() shouldHaveSize 1
+            w.sim.usage.charges shouldBe emptyList()
+            w.sim.repo.all() shouldBe emptyList()
+            w.sim.queue.tasks shouldBe emptyList()
+        }
+    }
+
+    test("conectados en Pareja pueden simular en Pareja; la arista de Amistad no sirve para Estudio") {
+        val w = World()
+        w.connect("ana", "eli", Mode.AMISTAD, Mode.PAREJA)
+        testApplication {
+            val client = app(w)
+            client.start("ana", w.id("eli").toString(), Mode.PAREJA).status shouldBe HttpStatusCode.Accepted
+            client.start("ana", w.id("eli").toString(), Mode.AMISTAD).status shouldBe HttpStatusCode.Accepted
+            client.start("ana", w.id("eli").toString(), Mode.ESTUDIO).status shouldBe HttpStatusCode.NotFound
+            // La arista vale en los dos sentidos.
+            client.start("eli", w.id("ana").toString(), Mode.PAREJA).status shouldBe HttpStatusCode.Accepted
         }
     }
 
@@ -122,7 +159,11 @@ class SimulationApiTest : FunSpec({
         val w = World()
         testApplication {
             val client = app(w)
-            listOf("beto", "caro", "dani").forEach { client.start("ana", w.id(it).toString()).status shouldBe HttpStatusCode.Accepted }
+            listOf("beto", "caro", "dani").forEach {
+                w.connect("ana", it)
+                client.start("ana", w.id(it).toString()).status shouldBe HttpStatusCode.Accepted
+            }
+            w.connect("eli", "fede")
             client.start("eli", w.id("fede").toString())
             val first = client.get("/v1/simulations?limit=2") { auth("ana") }.body<Page<SimulationSummary>>()
             first.items shouldHaveSize 2
@@ -140,6 +181,7 @@ class SimulationApiTest : FunSpec({
 
     test("la transcripción es de ParcheU+ y se ve desde quien consulta (ME/OTHER)") {
         val w = World()
+        w.connect("ana", "beto")
         testApplication {
             val client = app(w)
             val id = client.start("ana", w.id("beto").toString()).body<SimulationSummary>().id
@@ -161,6 +203,12 @@ class SimulationApiTest : FunSpec({
     test("validaciones: id inválido, consigo mismo, modo inactivo, bloqueo y edad en Pareja") {
         val w = World(parejaAge = false)
         w.sim.person("caro", modes = setOf(Mode.ESTUDIO), id = w.id("caro"))
+        // La arista de Amistad sigue aunque caro haya apagado el modo (HomeSuggestions lo cuenta igual).
+        w.connect("ana", "caro")
+        w.connect("ana", "beto", Mode.PAREJA)
+        // Bloqueo que solo ve la lectura de simulación (la arista sigue): create responde BLOCKED. En producción
+        // las dos lecturas son la misma tabla y el bloqueo borra la arista, así que el POST da 404 (prueba de arriba).
+        w.connect("ana", "dani")
         w.sim.repo.block(w.id("dani"), w.id("ana"))
         testApplication {
             val client = app(w)
@@ -179,6 +227,7 @@ class SimulationApiTest : FunSpec({
 
     test("con el presupuesto de IA agotado responde 503 AI_BUDGET con retryAt y no cobra cupo") {
         val w = World()
+        w.connect("ana", "beto")
         w.sim.exhaustBudget()
         testApplication {
             val response = app(w).start("ana", w.id("beto").toString())
@@ -194,6 +243,7 @@ class SimulationApiTest : FunSpec({
         val w = World()
         testApplication {
             val client = app(w)
+            listOf("beto", "caro", "dani", "eli", "fede", "gabi").forEach { w.connect("ana", it) }
             listOf("beto", "caro", "dani", "eli", "fede").forEach { client.start("ana", w.id(it).toString()).status shouldBe HttpStatusCode.Accepted }
             val sixth = client.start("ana", w.id("gabi").toString())
             sixth.status shouldBe HttpStatusCode.PaymentRequired

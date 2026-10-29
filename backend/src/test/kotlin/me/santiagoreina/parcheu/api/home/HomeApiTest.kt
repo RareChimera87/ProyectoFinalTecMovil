@@ -87,6 +87,8 @@ class HomeApiTest : FunSpec({
     test("home refleja el cupo de QuotaService y la simulación RUNNING del usuario") {
         val w = World()
         w.unread[w.id("ana")] = 4
+        w.connect("ana", "caro")
+        w.connect("ana", "beto")
         testApplication {
             val client = app(w)
             // Una simulación terminada (resultado listo) y otra en curso: dos usos de la semana.
