@@ -27,7 +27,11 @@
 #     service_account_id o, si el plan lo deja null porque la cuenta se crea en el mismo plan,
 #     de la referencia de configuration (google_service_account.X[i]) resuelta al account_id
 #     del plan. Si no se resuelve, ERROR salvo que el actor tenga algún par esperado (AVISO);
-#   - roles/iam.serviceAccountAdmin para una cuenta fuera de SA_ADMIN_EXPECTED_NAMES;
+#   - roles/iam.serviceAccountAdmin para una cuenta fuera de SA_ADMIN_EXPECTED_NAMES (hoy ninguna);
+#   - sa-terraform con roles/resourcemanager.projectIamAdmin (con o sin condition),
+#     roles/iam.serviceAccountAdmin o roles/iam.serviceAccountUser a nivel de PROYECTO: desde #105
+#     el bootstrap crea las cuentas y sus roles, y sa-terraform solo actúa como sa-api y sa-tasks
+#     (asignaciones a nivel de cuenta, ver EXPECTED_SA_PAIRS);
 #   - roles/resourcemanager.projectIamAdmin sin condition, o con una condition que no contenga
 #     modifiedGrantsByRole o que nombre owner, editor o projectIamAdmin. La comprobación es
 #     textual (una búsqueda de subcadena en la expresión CEL), no evalúa la expresión;
@@ -55,10 +59,15 @@ PUBLIC_ALLOWED_ROLES=(roles/run.invoker)
 # Cuentas de servicio esperadas con roles/iam.serviceAccountTokenCreator,
 # roles/iam.serviceAccountOpenIdTokenCreator y roles/iam.serviceAccountUser a nivel de
 # proyecto (nombre antes de @; se compara el correo completo del proyecto del plan).
-EXPECTED_SA_NAMES=(sa-terraform sa-deployer)
-# Cuentas que pueden tener roles/iam.serviceAccountAdmin: sa-terraform crea las cuentas
-# de la plataforma en el bootstrap (ver docs/arquitectura.md §12).
-SA_ADMIN_EXPECTED_NAMES=(sa-terraform)
+# sa-terraform ya no está aquí (#105): ver TERRAFORM_FORBIDDEN_PROJECT_ROLES.
+EXPECTED_SA_NAMES=(sa-deployer)
+# Cuentas que pueden tener roles/iam.serviceAccountAdmin: ninguna. Desde #105 el bootstrap
+# (ejecutado por una persona con su ADC) crea las cuentas de servicio; sa-terraform no.
+SA_ADMIN_EXPECTED_NAMES=()
+# Roles de proyecto que sa-terraform no puede recibir, con o sin condition (#105, C-M1). Sí puede
+# tener serviceAccountUser a nivel de cuenta sobre sa-api y sa-tasks (EXPECTED_SA_PAIRS).
+TERRAFORM_FORBIDDEN_PROJECT_ROLES=(roles/resourcemanager.projectIamAdmin roles/iam.serviceAccountAdmin
+  roles/iam.serviceAccountUser)
 # Pares "cuenta_que_actúa>cuenta_objetivo" esperados para TokenCreator, OpenIdTokenCreator
 # y serviceAccountUser a nivel de cuenta (google_service_account_iam_*). Cualquier otro par es ERROR.
 EXPECTED_SA_PAIRS=(
@@ -200,6 +209,12 @@ while IFS=$'\t' read -r role member tipo estado origen addr destino; do
     else
       aviso "asignación con valores desconocidos hasta el apply ($addr): rol $role, miembro $member, destino $destino"
     fi
+    continue
+  fi
+  # sa-terraform: nada de administrar IAM de proyecto ni cuentas de servicio (#105).
+  if [ "$cuenta" = no ] && es_sa_de "$member" sa-terraform \
+     && en_lista "$role" "${TERRAFORM_FORBIDDEN_PROJECT_ROLES[@]}"; then
+    error "$member tiene $role a nivel de proyecto (sa-terraform no administra IAM ni cuentas de servicio; ver #105)"
     continue
   fi
   # Owner y editor: para cualquier principal.

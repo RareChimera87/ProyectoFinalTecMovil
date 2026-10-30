@@ -10,14 +10,14 @@ import me.santiagoreina.parcheu.contract.QuotaKind
 import retrofit2.HttpException
 
 /** Traduce errores de la API y de la red a [AppError]. */
-class ApiErrorMapper(private val json: Json = ContractJson) {
+class ApiErrorMapper(
+    private val json: Json = ContractJson,
     /**
-     * Bus al que `apiCall` reporta cada falla (sesión, términos, Plus, cupos). Lo conecta `errorModule` al
-     * arrancar Koin; queda `null` en las pruebas que crean el mapper a mano. Es una propiedad y no un
-     * parámetro porque el mapper compartido lo construye `networkModule`.
+     * Bus al que `apiCall` reporta cada falla (sesión, términos, Plus, cupos). `networkModule` lo resuelve
+     * con `getOrNull()` desde `errorModule`; queda `null` en las pruebas que no lo necesitan.
      */
-    @Volatile
-    var globalErrors: GlobalErrorBus? = null
+    val globalErrors: GlobalErrorBus? = null
+) {
 
     fun map(error: ApiError): AppError = when (error.code) {
         ErrorCode.VALIDATION -> AppError.Validation(error.message)
@@ -38,6 +38,7 @@ class ApiErrorMapper(private val json: Json = ContractJson) {
         ErrorCode.CONFLICT -> AppError.Conflict
         ErrorCode.SCENARIO_ENDED -> AppError.ScenarioEnded
         ErrorCode.AI_BUDGET -> AppError.AiBudget(error.retryAt)
+        ErrorCode.RATE_LIMITED -> AppError.RateLimited
     }
 
     /** Respuesta HTTP no exitosa: usa el `ApiError` del cuerpo y, si no se puede leer, el status. */
@@ -71,6 +72,7 @@ class ApiErrorMapper(private val json: Json = ContractJson) {
         403 -> AppError.Forbidden
         404 -> AppError.NotFound
         409 -> AppError.Conflict
+        429 -> AppError.RateLimited
         else -> AppError.Unknown(httpStatus = httpStatus)
     }
 }

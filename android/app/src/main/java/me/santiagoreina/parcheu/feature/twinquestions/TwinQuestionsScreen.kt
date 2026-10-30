@@ -56,6 +56,7 @@ import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
 import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
 import me.santiagoreina.parcheu.designsystem.theme.ParcheURadius
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.feature.plus.formatWeekdayDate
 
 /** Icono "close" 24dp; el de E1.2 reemplaza este cuando se mezcle esa rama. Se tiñe con el color del contenido. */
 private val CloseIcon: ImageVector =
@@ -165,15 +166,26 @@ private fun Centered(text: String) {
     }
 }
 
+/**
+ * Un 402 sin `kind` es el tope interno de reenvíos del gemelo (B-M1), no un cupo de ParcheU+: la pantalla
+ * dice que vuelva mañana (con la fecha de `resetsAt` si llegó) en vez de ofrecer reintentar a ciegas.
+ */
+@Composable
+private fun twinQuestionsErrorMessage(error: AppError?): String = when {
+    error is AppError.Network -> stringResource(R.string.twin_questions_error_network)
+    error is AppError.QuotaExceeded && error.kind == null ->
+        error.resetsAt?.let {
+            stringResource(R.string.twin_questions_error_daily_limit_on, formatWeekdayDate(it))
+        }
+            ?: stringResource(R.string.twin_questions_error_daily_limit)
+    error is AppError.RateLimited -> stringResource(R.string.twin_questions_error_rate_limited)
+    else -> stringResource(R.string.twin_questions_error_generic)
+}
+
 @Composable
 private fun ErrorPane(error: AppError?, onRetry: () -> Unit) {
     val colors = ParcheUTheme.colors
-    val message =
-        if (error is AppError.Network) {
-            R.string.twin_questions_error_network
-        } else {
-            R.string.twin_questions_error_generic
-        }
+    val message = twinQuestionsErrorMessage(error)
     Column(
         modifier = Modifier.fillMaxSize().padding(
             horizontal = 32.dp
@@ -191,10 +203,11 @@ private fun ErrorPane(error: AppError?, onRetry: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            stringResource(message),
+            message,
             style = MaterialTheme.typography.bodyMedium,
             color = colors.mu,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.testTag("twinQuestions:errorMessage")
         )
         Spacer(Modifier.height(24.dp))
         PrimaryButton(

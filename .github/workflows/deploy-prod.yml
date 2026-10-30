@@ -48,7 +48,7 @@ jobs:
     uses: ./.github/workflows/_desplegar-api.yml
     with:
       # El environment `production` exige la aprobación del usuario y es el único
-      # que puede usar sa-deployer de prod (attribute.environment en el bootstrap).
+      # que puede usar sa-deployer de prod, y solo sobre un tag `v*` (attribute.env_ref/production@tag en el bootstrap).
       entorno: production
       proyecto: ${{ vars.GCP_PROJECT_PROD || 'parcheu-prod' }}
     secrets:

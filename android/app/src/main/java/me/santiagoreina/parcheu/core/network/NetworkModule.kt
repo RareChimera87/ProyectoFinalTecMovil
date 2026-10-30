@@ -89,7 +89,7 @@ fun createRetrofit(baseUrl: String, client: OkHttpClient, json: Json = ContractJ
 val networkModule =
     module {
         single<Json> { ContractJson }
-        single { ApiErrorMapper(get()) }
+        single { ApiErrorMapper(get(), getOrNull()) }
         single {
             createOkHttpClient(
                 get(),

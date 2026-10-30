@@ -366,7 +366,7 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | VALIDATION | 400 | Entrada inválida |
 | UNAUTHENTICATED | 401 | Token ausente o inválido |
 | PLUS_REQUIRED | 402 | Función de ParcheU+ |
-| QUOTA_EXCEEDED | 402 | Cupo agotado; `kind` = SIMULATION, RANDOM_MATCH o FULL_REPORT; `resetsAt`. Sin `kind` para los topes internos de §7.3 (reenvíos de `POST /v1/twin/answers`), con `resetsAt` a medianoche de Bogotá |
+| QUOTA_EXCEEDED | 402 | Cupo agotado; `kind` = SIMULATION, RANDOM_MATCH o FULL_REPORT; `resetsAt`. Sin `kind` para los topes internos de §7.3 (reenvíos de `POST /v1/twin/answers`), con `resetsAt` a medianoche de Bogotá; Android lo muestra en B1 como «vuelve mañana» (sin abrir ParcheU+) |
 | TERMS_REQUIRED | 403 | Términos y política sin aceptar en la versión vigente |
 | AGE_REQUIRED | 403 | Pareja sin edad verificada o sin confirmación explícita |
 | UNDERAGE | 403 | Menor de 18 (la cuenta queda bloqueada salvo `GET/DELETE /v1/me` y `GET /v1/me/export`) |
@@ -376,8 +376,8 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | NOT_FOUND | 404 | No existe o no es visible |
 | CONFLICT | 409 | Estado inválido (fecha de nacimiento ya fijada, decisión repetida) |
 | SCENARIO_ENDED | 409 | El escenario ya terminó |
-| AI_BUDGET | 503 | Presupuesto diario de IA agotado, total o de la persona (§7.3); `retryAt` |
-| *(sin código)* | 429 | Límite por persona en las rutas que disparan IA (§7.3): cuerpo `{"message"}` como 500 y 501, y cabecera `Retry-After` en segundos. El contrato no tiene `RATE_LIMITED` todavía (seguimiento en Android) |
+| AI_BUDGET | 503 | Presupuesto diario de IA agotado, total o de la persona (§7.3); `retryAt`. El techo personal usa este mismo código a propósito (ver [ADR-0010](adr/0010-control-de-costo-ia.md)) |
+| RATE_LIMITED | 429 | Límite por minuto y persona en las rutas que disparan IA (§7.3), con cabecera `Retry-After` en segundos. Android lo mapea a `AppError.RateLimited` (basta esperar un momento); un 429 sin cuerpo legible también |
 
 ### 5.2 Rutas
 

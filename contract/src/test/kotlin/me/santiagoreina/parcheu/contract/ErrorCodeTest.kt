@@ -20,6 +20,7 @@ class ErrorCodeTest {
         ErrorCode.CONFLICT to 409,
         ErrorCode.SCENARIO_ENDED to 409,
         ErrorCode.AI_BUDGET to 503,
+        ErrorCode.RATE_LIMITED to 429,
     )
 
     @Test

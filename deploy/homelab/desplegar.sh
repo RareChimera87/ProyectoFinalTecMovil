@@ -30,6 +30,8 @@ done
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RAIZ="$(cd "$AQUI/../.." && pwd)"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
+# shellcheck source=reversion.sh
+source "$AQUI/reversion.sh"
 
 paso() { printf '\n==> %s\n' "$*"; }
 falla() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -164,6 +166,8 @@ REMOTO
 )" || falla "No se pudo cargar o levantar la imagen. Revisa los mensajes de arriba."
 NUEVA="${ETIQUETAS##*$'\n'}"; NUEVA="${NUEVA%% *}"
 ANTERIOR="$(printf '%s' "$ETIQUETAS" | tail -1 | cut -s -d' ' -f2)"
+# Antes de la comprobación de salud (si falla, se revierte a ANTERIOR): avisa si esa imagen es anterior a #103.
+aviso_reversion_anterior_a_103 "$RAIZ" "$ANTERIOR"
 
 paso "Comprobando salud en el servidor (http://127.0.0.1:$PUERTO/v1/health)"
 salud_remota() {

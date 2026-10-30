@@ -47,6 +47,7 @@ public enum class ErrorCode(public val httpStatus: Int) {
     CONFLICT(409),
     SCENARIO_ENDED(409),
     AI_BUDGET(503),
+    RATE_LIMITED(429),
 }
 
 /**

@@ -28,7 +28,7 @@ import retrofit2.Response
 /** E1 trata su 402 con su propio aviso: la llamada de presentar no abre G2 por el bus (B2 de #109). */
 class RemoteIntroductionsRepositoryTest {
     private val bus = GlobalErrorBus(hasSession = { true })
-    private val mapper = ApiErrorMapper().apply { globalErrors = bus }
+    private val mapper = ApiErrorMapper(globalErrors = bus)
 
     private fun httpError(status: Int, code: ErrorCode): HttpException {
         val body = ContractJson.encodeToString(ApiError.serializer(), ApiError(code, "x"))
