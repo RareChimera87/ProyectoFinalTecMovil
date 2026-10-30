@@ -5,34 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Moderación · ParcheU</title>
-<style>
-:root{--bg:#FFFFFF;--tx:#1A1626;--mut:#5C5670;--pr:#6D4AFF;--on:#FFFFFF;--s2:#F3F0FA;--line:#DDD8EA;--bad:#B3261E}
-@media (prefers-color-scheme:dark){:root{--bg:#0F0B1A;--tx:#F2EFFA;--mut:#A9A3BD;--pr:#A48DFF;--on:#0F0B1A;--s2:#1B1530;--line:#332B4D;--bad:#FF8A80}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:60rem;margin:0 auto;padding:1rem 1rem 3rem}
-header{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--line)}
-header h1{font-size:1.3rem;margin:0;margin-right:auto}
-button,select,input,textarea{font:inherit;color:inherit;background:var(--s2);border:1px solid var(--line);border-radius:8px;padding:.4rem .7rem}
-button{cursor:pointer;min-height:2.5rem}
-button.primary{background:var(--pr);color:var(--on);border-color:var(--pr)}
-button.danger{border-color:var(--bad);color:var(--bad)}
-button:disabled{opacity:.5;cursor:default}
-.bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:1rem 0}
-.card{border:1px solid var(--line);border-radius:12px;padding:.8rem 1rem;margin:.75rem 0}
-.card.alta{border-color:var(--bad)}
-.meta{color:var(--mut);font-size:.85rem}
-.tag{display:inline-block;background:var(--s2);border:1px solid var(--line);border-radius:999px;padding:0 .6rem;font-size:.8rem;margin-right:.3rem}
-.snap{background:var(--s2);border-radius:8px;padding:.5rem .75rem;margin:.5rem 0;max-height:14rem;overflow:auto;font-size:.9rem}
-.snap p{margin:.2rem 0;white-space:pre-wrap;word-break:break-word}
-.snap .oculto{color:var(--mut);font-style:italic}
-.snap .objetivo{outline:2px solid var(--pr);border-radius:4px}
-.acciones{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.5rem}
-.acciones input{flex:1;min-width:10rem}
-#aviso{margin:.75rem 0;padding:.6rem .9rem;border-radius:8px;background:var(--s2);border:1px solid var(--line)}
-#aviso.error{border-color:var(--bad);color:var(--bad)}
-[hidden]{display:none!important}
-</style>
+<link rel="stylesheet" href="/admin.css">
 </head>
 <body>
 <main>
@@ -53,186 +26,14 @@ button:disabled{opacity:.5;cursor:default}
       <select id="status"><option value="OPEN">Abiertos</option><option value="RESOLVED">Resueltos</option></select>
     </label>
     <button id="recargar">Recargar</button>
-    <details>
-      <summary class="meta">URL de la API</summary>
-      <input id="api" type="url" placeholder="Vacío = este mismo sitio (rewrite /v1/** a Cloud Run)" size="40">
-    </details>
   </div>
   <div id="lista"></div>
   <button id="mas" hidden>Cargar más</button>
 </section>
 </main>
 
-<script type="module">
-// Página de moderación (E8.5). Inicia sesión con Firebase Auth (Google) y exige el claim `admin`
-// (lo otorga scripts/grant-admin.sh). La configuración sale de /__/firebase/init.json, que Firebase
-// Hosting sirve solo para el proyecto donde está desplegada. Todo texto de usuario se pinta con
-// textContent: el snapshot de mensajes es contenido no confiable.
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut }
-  from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-
-const $ = (id) => document.getElementById(id);
-const ACCIONES = [
-  ["DISMISS", "Descartar", ""],
-  ["HIDE_MESSAGE", "Ocultar mensaje", ""],
-  ["SUSPEND_24H", "Suspender 24 h", "danger"],
-  ["BAN", "Banear", "danger"],
-];
-let auth;
-let user = null;
-let nextCursor = null;
-
-function aviso(texto, error = false) {
-  const el = $("aviso");
-  el.hidden = !texto;
-  el.textContent = texto || "";
-  el.className = error ? "error" : "";
-}
-
-function guardado(clave) { try { return localStorage.getItem(clave) || ""; } catch { return ""; } }
-function guardar(clave, valor) { try { localStorage.setItem(clave, valor); } catch { /* sin almacenamiento */ } }
-
-function apiBase() { return $("api").value.trim().replace(/\/+$/, ""); }
-
-async function llamar(ruta, opciones = {}) {
-  const token = await user.getIdToken();
-  const res = await fetch(apiBase() + ruta, {
-    ...opciones,
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-  });
-  const cuerpo = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`${res.status} ${cuerpo.code || ""} ${cuerpo.message || ""}`.trim());
-  return cuerpo;
-}
-
-function fecha(iso) { return iso ? new Date(iso).toLocaleString("es-CO") : ""; }
-
-function el(tag, texto, clase) {
-  const nodo = document.createElement(tag);
-  if (texto !== undefined) nodo.textContent = texto;
-  if (clase) nodo.className = clase;
-  return nodo;
-}
-
-function pintarSnapshot(reporte) {
-  const mensajes = Array.isArray(reporte.snapshot) ? reporte.snapshot : [];
-  if (!mensajes.length) return null;
-  const caja = el("div", undefined, "snap");
-  for (const m of mensajes) {
-    const p = el("p", m.hidden ? "(mensaje oculto)" : m.text, m.hidden ? "oculto" : "");
-    if (m.id === reporte.messageId) p.classList.add("objetivo");
-    const quien = reporte.kind === "AI_CONTENT" ? "IA" : m.senderId === null ? "sistema" : m.senderId === reporte.targetId ? "reportado" : "otra persona";
-    p.title = `${quien} · ${fecha(m.createdAt)}`;
-    if (!m.hidden) p.prepend(el("strong", quien + ": "));
-    caja.append(p);
-  }
-  return caja;
-}
-
-function pintarReporte(r) {
-  const tarjeta = el("article", undefined, "card" + (r.priority > 0 ? " alta" : ""));
-  const cab = el("div");
-  cab.append(el("span", r.kind, "tag"), el("span", r.reason, "tag"), el("span", r.source, "tag"));
-  if (r.priority > 0) cab.append(el("span", "prioridad " + r.priority, "tag"));
-  tarjeta.append(cab);
-  tarjeta.append(el("p", `Reporte ${r.id} · ${fecha(r.createdAt)}`, "meta"));
-  if (r.details) tarjeta.append(el("p", r.details));
-  const ids = [];
-  if (r.targetId) ids.push("reportado " + r.targetId);
-  if (r.messageId) ids.push("mensaje " + r.messageId);
-  if (r.simulationId) ids.push(`simulación ${r.simulationId} ` + (r.turnIndex === -1 ? "informe completo" : `turno ${r.turnIndex}`));
-  if (ids.length) tarjeta.append(el("p", ids.join(" · "), "meta"));
-  const snap = pintarSnapshot(r);
-  if (snap) tarjeta.append(snap);
-
-  if (r.status === "RESOLVED") {
-    tarjeta.append(el("p", `Resuelto ${fecha(r.resolvedAt)}: ${r.resolution || ""}`, "meta"));
-    return tarjeta;
-  }
-  const nota = el("input");
-  nota.placeholder = "Nota (opcional)";
-  nota.maxLength = 500;
-  const fila = el("div", undefined, "acciones");
-  fila.append(nota);
-  for (const [accion, rotulo, clase] of ACCIONES) {
-    const b = el("button", rotulo, clase);
-    b.addEventListener("click", () => resolver(r, accion, nota.value, fila));
-    fila.append(b);
-  }
-  tarjeta.append(fila);
-  return tarjeta;
-}
-
-async function resolver(reporte, accion, nota, fila) {
-  const sancion = accion === "SUSPEND_24H" || accion === "BAN";
-  if (sancion && !confirm(`${accion} al usuario reportado. ¿Continuar?`)) return;
-  fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
-  try {
-    await llamar(`/v1/admin/reports/${encodeURIComponent(reporte.id)}/resolve`, {
-      method: "POST",
-      body: JSON.stringify({ action: accion, note: nota.trim() || null }),
-    });
-    aviso(`Reporte resuelto con ${accion}.`);
-    await cargar(true);
-  } catch (e) {
-    aviso("No se pudo resolver: " + e.message, true);
-    fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
-  }
-}
-
-async function cargar(reiniciar) {
-  if (reiniciar) { nextCursor = null; $("lista").replaceChildren(); }
-  const q = new URLSearchParams({ status: $("status").value, limit: "20" });
-  if ($("kind").value) q.set("kind", $("kind").value);
-  if (nextCursor) q.set("cursor", nextCursor);
-  try {
-    const pagina = await llamar("/v1/admin/reports?" + q);
-    pagina.items.forEach((r) => $("lista").append(pintarReporte(r)));
-    nextCursor = pagina.nextCursor || null;
-    $("mas").hidden = !nextCursor;
-    if (!$("lista").children.length) $("lista").append(el("p", "No hay reportes con este filtro.", "meta"));
-  } catch (e) {
-    aviso("No se pudo cargar: " + e.message, true);
-  }
-}
-
-function mostrar(sesion, esAdmin) {
-  $("entrar").hidden = !!sesion;
-  $("salir").hidden = !sesion;
-  $("quien").textContent = sesion ? sesion.email : "";
-  $("panel").hidden = !(sesion && esAdmin);
-}
-
-async function iniciar() {
-  $("api").value = guardado("parcheu-admin-api");
-  $("api").addEventListener("change", () => guardar("parcheu-admin-api", $("api").value.trim()));
-  let config;
-  try {
-    config = await (await fetch("/__/firebase/init.json")).json();
-  } catch {
-    aviso("No se pudo leer la configuración de Firebase: abre esta página desde Firebase Hosting.", true);
-    return;
-  }
-  auth = getAuth(initializeApp(config));
-  $("entrar").addEventListener("click", () => signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => aviso(e.message, true)));
-  $("salir").addEventListener("click", () => signOut(auth));
-  $("recargar").addEventListener("click", () => cargar(true));
-  $("kind").addEventListener("change", () => cargar(true));
-  $("status").addEventListener("change", () => cargar(true));
-  $("mas").addEventListener("click", () => cargar(false));
-  onAuthStateChanged(auth, async (sesion) => {
-    user = sesion;
-    aviso("");
-    if (!sesion) return mostrar(null, false);
-    const resultado = await sesion.getIdTokenResult(true);
-    const esAdmin = resultado.claims.admin === true;
-    mostrar(sesion, esAdmin);
-    if (!esAdmin) aviso("Esta cuenta no tiene el permiso de administración (claim admin).", true);
-    else cargar(true);
-  });
-}
-iniciar();
-</script>
+<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js" integrity="sha384-MLXAVo3+OLxBxLRnO1W+QJ/sAi9fLlmIPjEmYIDbH0MFNw2uV9hB5wvQzH1CMVk4" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-auth-compat.js" integrity="sha384-6l6xcdI+PqJSf+tDkj1TfhKzjyqRCzr83SWY0Bw9KL92MXam5iB5yNC7JKPhXqpq" crossorigin="anonymous"></script>
+<script type="module" src="/admin.js"></script>
 </body>
 </html>

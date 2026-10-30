@@ -86,6 +86,7 @@ La llave ya está generada (sección 2). Pasos para el usuario:
 3. La primera vez que subas un AAB (E7.0), Play te pedirá registrar la llave de subida si no la tomó del propio AAB; el certificado se exporta con:
    `keytool -export -rfc -alias upload -keystore ~/.parcheu/upload-keystore.jks -file ~/.parcheu/upload-certificate.pem`.
 4. Ni el `.jks`, ni las contraseñas, ni `play-sa.json` se versionan jamás (gitleaks en CI, E10.2).
+5. **Variables del release (no son secretos):** `PARCHEU_API_URL_PROD` y `PARCHEU_HOSTING_URL_PROD` (URLs `https://` de la API y del Hosting de `parcheu-prod`), a nivel de repo o en los environments `play`/`play-alpha`. Sin ellas `android-release` falla antes de compilar (el AAB no puede llevar la URL de relleno de `app/build.gradle.kts`). Ver `docs/pendientes-humanos.md`, "URLs de prod del release".
 
 ## 7. Cuenta de servicio para la API de Play (CI y backend)
 
@@ -268,7 +269,10 @@ la subida. Aprobación estimada: 30-31 oct.
 5. **PR `release/0.1.0` → `main`** con el título `Release 0.1.0`. **Lo aprueba el usuario** (nadie más mezcla a `main`).
 6. **Tag** tras el merge: `git tag -a v0.1.0 -m "ParcheU 0.1.0" origin/main && git push origin v0.1.0`.
 7. **`deploy-prod`** (environment `production`, aprobación del usuario): en la 0.1 solo corre `firebase-deploy` prod
-   (reglas, índices y Hosting; la 0.1 no usa backend). Verifica que las páginas legales respondan:
+   (reglas, índices y Hosting; la 0.1 no usa backend). Usa `firebase/firebase.prod.json`, así que antes del tag hacen
+   falta la variable `PLAY_APP_SIGNING_SHA256` en el environment `production` (el job falla cerrado sin ella) y el
+   servicio Cloud Run `api` en `parcheu-prod` (destino del rewrite `/v1/**`; ver `docs/pendientes-humanos.md`, C-B9).
+   Verifica que las páginas legales respondan:
 
    ```bash
    for p in privacidad terminos borrar-cuenta; do

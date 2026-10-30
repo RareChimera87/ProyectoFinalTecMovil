@@ -295,6 +295,123 @@ class AutoMerge(unittest.TestCase):
         self.assertEqual((r.returncode, r.stdout), (1, ""))
 
 
+class AndroidReleaseUrlsProd(unittest.TestCase):
+    """A-M1: el AAB de prod no sale con la URL de relleno."""
+
+    def setUp(self):
+        self.pasos = pasos(cargar("android-release.yml"))
+        self.nombres = [p.get("name", "") for p in self.pasos]
+        self.construir = next(p for p in self.pasos if p.get("name", "").startswith("Construir el AAB prod"))
+
+    def test_pasa_las_dos_propiedades_desde_vars(self):
+        self.assertIn('-Pparcheu.apiUrl.prod="$API_URL_PROD"', self.construir["run"])
+        self.assertIn('-Pparcheu.hostingUrl.prod="$HOSTING_URL_PROD"', self.construir["run"])
+        self.assertIn("vars.PARCHEU_API_URL_PROD", self.construir["env"]["API_URL_PROD"])
+        self.assertIn("vars.PARCHEU_HOSTING_URL_PROD", self.construir["env"]["HOSTING_URL_PROD"])
+        self.assertNotIn("allowPlaceholderUrls", self.construir["run"])
+
+    def test_valida_antes_de_compilar(self):
+        i_val = next(i for i, n in enumerate(self.nombres) if n.startswith("Validar las URLs de prod"))
+        i_build = next(i for i, n in enumerate(self.nombres) if n.startswith("Construir el AAB prod"))
+        self.assertLess(i_val, i_build)
+        run = self.pasos[i_val]["run"]
+        self.assertIn("exit 1", run)
+        self.assertIn("https://*", run)
+        self.assertIn("https://*/ ]]", run)  # la URL de la API debe terminar en /
+        self.assertIn("PARCHEU_API_URL_PROD", run)
+        self.assertIn("PARCHEU_HOSTING_URL_PROD", run)
+
+    def test_gradle_rechaza_el_relleno(self):
+        gradle = (RAIZ / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+        self.assertIn("verificarUrlsProd", gradle)
+        self.assertIn('"bundleProdRelease"', gradle)
+
+    def test_hosting_sin_barra_final(self):
+        run = next(p for p in self.pasos if p.get("name", "").startswith("Validar las URLs de prod"))["run"]
+        self.assertIn('"$HOSTING_URL_PROD" != */', run)
+        gradle = (RAIZ / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+        self.assertIn("trimEnd('/')", gradle)
+        self.assertIn('hostingUrlProperty("parcheu.hostingUrl.prod"', gradle)
+        self.assertNotIn('urlProperty("parcheu.hostingUrl.prod"', gradle.replace("hostingUrlProperty", ""))
+
+    def test_validacion_de_urls_en_bash(self):
+        run = next(p for p in self.pasos if p.get("name", "").startswith("Validar las URLs de prod"))["run"]
+        casos = [
+            ("https://api.example.com/", "https://h.example.com", 0),
+            ("https://api.example.com/", "https://h.example.com/", 1),
+            ("https://api.example.com/v1", "https://h.example.com", 1),
+            ("", "https://h.example.com", 1),
+            ("https://api.example.com/", "", 1),
+        ]
+        for api, hosting, esperado in casos:
+            r = subprocess.run(["bash", "-e", "-c", run], capture_output=True, text=True,
+                               env={"API_URL_PROD": api, "HOSTING_URL_PROD": hosting, "PATH": "/usr/bin:/bin"})
+            self.assertEqual(r.returncode, esperado, (api, hosting))
+
+    def test_android_ci_y_release_coherentes_con_la_regla_de_gradle(self):
+        """verificarUrlsProd solo se exige al AAB firmado con la llave de subida: android-release pide la llave
+        (requireUploadKey=true) y pasa las URL; android-ci construye bundleProdRelease sin llave ni URL."""
+        gradle = (RAIZ / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+        self.assertIn("val exigirUrlsProd = requireUploadKey || hasUploadKey", gradle)
+        self.assertRegex(gradle, r"val exigir = exigirUrlsProd\s+onlyIf\(\"[^\"]*\"\) \{ exigir \}")
+        self.assertNotIn("allowPlaceholderUrls", gradle)
+        # android-release: todo build de prod pide la llave y lleva las dos URL.
+        self.assertIn("-Pparcheu.release.requireUploadKey=true", self.construir["run"])
+        for p in self.pasos:
+            if "bundleProdRelease" in p.get("run", "") or "assembleProdRelease" in p.get("run", ""):
+                self.assertIn("-Pparcheu.release.requireUploadKey=true", p["run"], p.get("name"))
+                self.assertIn('-Pparcheu.apiUrl.prod="$API_URL_PROD"', p["run"], p.get("name"))
+        # android-ci: el bundle de prueba no pide llave ni la recibe (si no, verificarUrlsProd lo tumbaría).
+        ci = cargar("android-ci.yml")
+        bundles = [p for p in pasos(ci) if ":app:bundleProdRelease" in p.get("run", "")]
+        self.assertTrue(bundles, "android-ci debe construir el AAB de prod (E10.5)")
+        for p in bundles:
+            self.assertNotIn("requireUploadKey", p["run"])
+            self.assertNotIn("parcheu.apiUrl.prod", p["run"])
+            self.assertFalse(any(k.startswith("UPLOAD_") for k in p.get("env", {})), p.get("name"))
+        texto_ci = (WF / "android-ci.yml").read_text(encoding="utf-8")
+        self.assertNotIn("secrets.UPLOAD_", texto_ci)
+        self.assertNotIn("UPLOAD_KEYSTORE_FILE", texto_ci)
+
+
+class FirebaseDeployProd(unittest.TestCase):
+    """C-B9/C-M4: prod despliega con firebase.prod.json y falla cerrado sin la huella de Play App Signing."""
+
+    def setUp(self):
+        self.wf = cargar("firebase-deploy.yml")
+
+    def _deploy(self, job):
+        pasos_job = self.wf["jobs"][job]["steps"]
+        return pasos_job, next(p for p in pasos_job if "firebase deploy" in p.get("run", ""))
+
+    def test_prod_usa_firebase_prod_json_con_la_huella_desde_vars(self):
+        pasos_job, deploy = self._deploy("deploy-prod")
+        self.assertIn("--config firebase.prod.json", deploy["run"])
+        self.assertEqual(deploy["env"]["PLAY_APP_SIGNING_SHA256"], "${{ vars.PLAY_APP_SIGNING_SHA256 }}")
+        i_deploy = pasos_job.index(deploy)
+        exige = [i for i, p in enumerate(pasos_job)
+                 if "PLAY_APP_SIGNING_SHA256" in p.get("env", {}) and "exit 1" in p.get("run", "")]
+        self.assertTrue(exige and exige[0] < i_deploy, "debe fallar cerrado antes del deploy")
+        run = pasos_job[exige[0]]["run"]
+        self.assertIn('-z "$PLAY_APP_SIGNING_SHA256"', run)
+        prod = (RAIZ / "firebase" / "firebase.prod.json").read_text(encoding="utf-8")
+        self.assertIn("render-assetlinks.mjs prod", prod)
+
+    def test_dev_sigue_con_firebase_json(self):
+        _, deploy = self._deploy("deploy-dev")
+        self.assertNotIn("firebase.prod.json", deploy["run"])
+        self.assertNotIn("PLAY_APP_SIGNING_SHA256", deploy.get("env", {}))
+
+    def test_la_falta_de_huella_falla_en_bash(self):
+        pasos_job = self.wf["jobs"]["deploy-prod"]["steps"]
+        run = next(p for p in pasos_job if "exit 1" in p.get("run", "")
+                   and "PLAY_APP_SIGNING_SHA256" in p.get("env", {}))["run"]
+        for valor, esperado in (("", 1), ("AB:CD", 0)):
+            r = subprocess.run(["bash", "-e", "-c", run], capture_output=True, text=True,
+                               env={"PLAY_APP_SIGNING_SHA256": valor, "PATH": "/usr/bin:/bin"})
+            self.assertEqual(r.returncode, esperado, valor)
+
+
 class PendientesHumanos(unittest.TestCase):
     def test_no_recomienda_code_owners_con_una_sola_cuenta(self):
         doc = (RAIZ / "docs" / "pendientes-humanos.md").read_text(encoding="utf-8")

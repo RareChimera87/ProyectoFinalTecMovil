@@ -14,6 +14,31 @@ Pasos que solo puede hacer el dueño del repo tras mezclar el PR `fix/gobernanza
 4. **Fijado a SHA (C-M3):** Dependabot lee `.github/dependabot.yml` de la rama por defecto, así que no empieza a actuar hasta que este cambio llegue a `main` (en el siguiente release `dev` → `main`). Sus PR van a `dev` (`target-branch`), `pr-title` los exime porque Dependabot fija el título `Actualiza: Bump ...`, y llevan la etiqueta `gobernanza`. Dependabot propondrá cada semana los PR de acciones (con la etiqueta `gobernanza`). Revisa que el SHA nuevo corresponda al tag del comentario antes de mezclar.
 5. **Plan de Terraform (C-M2):** el job `infra-plan-dev` ya no recibe token de escritura, pero sigue ejecutando HCL del PR con la identidad WIF de solo lectura (`sa-terraform-plan`). Si quieres cerrarlo del todo, restringe en el bootstrap lo que esa cuenta lee y revisa a mano los PR que toquen `infra/` o `.terraform.lock.hcl`.
 
+## Auditoría 28 oct: URLs de prod del release (A-M1)
+
+`android-release` ya no compila el AAB de prod con la URL de relleno (`api-parcheu-prod.us-central1.run.app`): lee dos
+variables de GitHub, falla antes de compilar si faltan, no son `https://`, la de la API no termina en `/` o la de Hosting
+sí, y Gradle (`verificarUrlsProd`) rechaza `assembleProdRelease`/`bundleProdRelease` si siguen siendo las de relleno.
+La verificación de Gradle aplica al AAB firmado con la llave de subida (`-Pparcheu.release.requireUploadKey=true`, que
+solo pasa `android-release`, o con las variables `UPLOAD_*` en el entorno); el `bundleProdRelease` de `android-ci`, sin
+llave, sigue construyéndose con el relleno y firmado con la de debug, que Play rechaza. Hasta que existan las
+variables, el release de prod falla a propósito.
+
+| # | Qué | Quién | Cuándo |
+|---|---|---|---|
+| 1 | Crear las variables (Settings > Secrets and variables > Actions > Variables, a nivel de repo o en los environments `play` y `play-alpha`): `PARCHEU_API_URL_PROD` (URL https del servicio `api` de `parcheu-prod`, con el número de proyecto, o el hostname público que se use) y `PARCHEU_HOSTING_URL_PROD` (p. ej. `https://parcheu-prod.web.app`, sin barra final; Gradle la quita igualmente). `gh variable set PARCHEU_API_URL_PROD -R RareChimera87/ProyectoFinalTecMovil --body <url>` | El usuario | Antes del primer release de prod |
+| 2 | Para probar R8 en local con `assembleProdRelease` sin esas URLs basta con no tener las variables `UPLOAD_*` en el entorno (se firma con la llave de debug y `verificarUrlsProd` se salta). Con la llave de subida cargada hay que pasar las dos URL. | Cada desarrollador | Si hace falta |
+
+## Auditoría 28 oct: assetlinks de prod (C-B9)
+
+El `assetlinks.json` versionado ahora es solo el de dev (paquete `.dev` con la huella de debug). El de prod
+(`firebase/assetlinks/prod.json`, solo `me.santiagoreina.parcheu`) se genera con `firebase/render-assetlinks.mjs prod`.
+
+| # | Qué | Quién | Cuándo |
+|---|---|---|---|
+| 1 | Copiar la huella SHA-256 de **Play App Signing** (Play Console > Configuración > Integridad de la app > Firma de apps) y guardarla como variable `PLAY_APP_SIGNING_SHA256` en el environment `production` de GitHub. | I3 | Tras la primera subida a Play |
+| 2 | Hecho en #113: el job `deploy-prod` de `.github/workflows/firebase-deploy.yml` usa `--config firebase.prod.json` y pasa `PLAY_APP_SIGNING_SHA256` desde `vars`; un paso previo falla cerrado si la variable no existe, y el `predeploy` de `firebase.prod.json` renderiza el assetlinks de prod (falla si la huella no es válida). Por eso **un tag `v*` no despliega Firebase a prod hasta crear la variable del paso 1** ni, por el rewrite `/v1/**` de `firebase.prod.json`, hasta que exista el servicio Cloud Run `api` en `parcheu-prod` (la API de Hosting rechaza un rewrite a un servicio inexistente; afecta a la 0.1, que no usa backend: o se despliega `api` antes del tag o se publica la 0.1 antes de mezclar #113) (`gh variable set PLAY_APP_SIGNING_SHA256 -R RareChimera87/ProyectoFinalTecMovil --env production --body <huella>`). | El usuario | Antes del primer tag `v*` |
+
 ## E0.8 · Configuración de Firebase
 
 Estado al 22 oct: en `parcheu-dev` ya está hecho (con el ADC del usuario): Firebase agregado al proyecto,
@@ -887,9 +912,9 @@ Lo automatizable ya quedó hecho: `GET /v1/admin/reports` (filtros `kind`, `stat
 
 | # | Paso | Dueño | Cuándo |
 |---|---|---|---|
-| 1 | **Rewrite de Hosting hacia Cloud Run.** `admin.html` llama a `/v1/admin/...` en su mismo origen (el backend no tiene CORS y `Application.kt` es fijo desde E0.3). Tras el `terraform apply` y el primer despliegue del servicio `api`, agregar en `firebase/firebase.json`, dentro de `hosting.rewrites` y **antes** del de `/i/**`: `{ "source": "/v1/**", "run": { "serviceId": "api", "region": "us-central1" } }`, y mezclar a `dev` (`firebase-deploy` lo despliega). No se agregó en este PR porque `firebase deploy` falla mientras el servicio `api` no exista. Alternativa sin rewrite: abrir la página y pegar la URL de Cloud Run en 'URL de la API', pero el navegador la bloqueará por CORS. | I3 | Tras el `apply` de dev |
+| 1 | **Rewrite de Hosting hacia Cloud Run.** `admin.html` llama a `/v1/admin/...` en su mismo origen (el backend no tiene CORS y `Application.kt` es fijo desde E0.3). El rewrite `/v1/**` → Cloud Run `api` está solo en `firebase/firebase.prod.json`, que usa el job `deploy-prod` (#113); en dev no hay rewrite porque el backend corre en el homeserver (ADR-0033) y `firebase deploy` falla si el servicio no existe, así que el panel solo funciona en prod. La página no tiene campo de URL (el token de admin no sale del origen). Falta que exista el servicio `api` de `parcheu-prod` antes del primer tag `v*`. | I3 | Tras el `apply` de prod y el primer despliegue de `api` |
 | 2 | **Otorgar el claim `admin` a los 3 integrantes.** Cada uno debe haber iniciado sesión en la app (dev) al menos una vez. Con `gcloud auth login` de una cuenta con rol de administrador de Firebase Auth en `parcheu-dev`: `scripts/grant-admin.sh --dry-run dev correo1 correo2 correo3` para ver el efecto y luego `scripts/grant-admin.sh dev correo1 correo2 correo3`. Repetir con `prod` antes de la 1.0. Cada persona debe cerrar sesión y volver a entrar para que su ID token traiga el claim. | I3 | Tras el primer inicio de sesión en dev |
-| 3 | **Verificación manual (criterio de la ficha).** En dev: crear dos cuentas de prueba, chatear, reportar a una desde la app (`POST /v1/reports` o la pantalla de E8.7) con un mensaje, abrir `https://parcheu-dev.web.app/admin`, entrar con una cuenta admin, comprobar que el reporte aparece con su snapshot y resolverlo con 'Ocultar mensaje' (el mensaje debe verse vacío en la app) y con 'Suspender 24 h' (la persona debe recibir 403 `SUSPENDED` al escribir y al entrar a la fila). | I3 | Con el despliegue de dev |
+| 3 | **Verificación manual (criterio de la ficha).** En prod, tras el primer `deploy-prod` (en `parcheu-dev.web.app/admin` la página carga pero `/v1/**` responde 404 porque dev no tiene rewrite): crear dos cuentas de prueba, chatear, reportar a una desde la app (`POST /v1/reports` o la pantalla de E8.7) con un mensaje, abrir `https://parcheu-prod.web.app/admin`, entrar con una cuenta con el claim `admin` de prod (`scripts/grant-admin.sh prod ...`), comprobar que el reporte aparece con su snapshot y resolverlo con 'Ocultar mensaje' (el mensaje debe verse vacío en la app) y con 'Suspender 24 h' (la persona debe recibir 403 `SUSPENDED` al escribir y al entrar a la fila). | I3 | Con el primer despliegue de prod |
 | 4 | **Aprobación de la parte de `backend/`.** La ficha pide que I1 apruebe los cambios en `backend/` (este PR toca además `ChatRepository`, `IdentityRepository`, `MatchingService` y `FirebaseUser` por la suspensión, el ocultamiento y el claim). | I1 | En la revisión del PR |
 ## Backend de pruebas en el homeserver (ADR-0033)
 

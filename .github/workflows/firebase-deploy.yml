@@ -106,8 +106,20 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER_PROD }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT_PROD }}
+      # C-B9: prod usa firebase.prod.json (rewrite /v1/** a Cloud Run y predeploy que renderiza el assetlinks de
+      # prod con la huella de Play App Signing). Falla cerrado si falta la variable PLAY_APP_SIGNING_SHA256.
+      - name: Exige la huella de Play App Signing (variable PLAY_APP_SIGNING_SHA256)
+        env:
+          PLAY_APP_SIGNING_SHA256: ${{ vars.PLAY_APP_SIGNING_SHA256 }}
+        run: |
+          if [[ -z "$PLAY_APP_SIGNING_SHA256" ]]; then
+            echo "::error::Falta la variable PLAY_APP_SIGNING_SHA256 (huella SHA-256 de Play App Signing, docs/pendientes-humanos.md). Sin ella el assetlinks de prod saldría sin la huella."
+            exit 1
+          fi
       - name: Despliega reglas, índices y Hosting a prod
-        run: npx firebase deploy --only firestore:rules,firestore:indexes,hosting --project "$FIREBASE_PROJECT" --non-interactive
+        env:
+          PLAY_APP_SIGNING_SHA256: ${{ vars.PLAY_APP_SIGNING_SHA256 }}
+        run: npx firebase deploy --config firebase.prod.json --only firestore:rules,firestore:indexes,hosting --project "$FIREBASE_PROJECT" --non-interactive
       - name: Humo del Hosting
         run: |
           code=$(curl -s -o /dev/null -w '%{http_code}' "https://${FIREBASE_PROJECT}.web.app/")
