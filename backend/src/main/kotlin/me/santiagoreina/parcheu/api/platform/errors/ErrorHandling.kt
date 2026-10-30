@@ -100,10 +100,10 @@ fun Application.installErrorHandling() {
             }
         }
         status(HttpStatusCode.TooManyRequests) { _ ->
-            // Límite por persona de las rutas de IA (B-M1). El contrato no tiene un código para 429: como 500 y 501,
-            // cuerpo `{"message"}` simple; el plugin `RateLimit` ya puso `Retry-After` en segundos.
+            // Límite por persona de las rutas de IA (B-M1): ApiError RATE_LIMITED; el plugin `RateLimit` ya puso
+            // `Retry-After` en segundos.
             if (content is OutgoingContent.NoContent) {
-                call.respond(HttpStatusCode.TooManyRequests, buildJsonObject { put("message", "Demasiadas solicitudes seguidas; espera un momento") })
+                call.respond(HttpStatusCode.TooManyRequests, ApiError(ErrorCode.RATE_LIMITED, "Demasiadas solicitudes seguidas; espera un momento"))
             }
         }
         status(HttpStatusCode.NotFound) { _ ->

@@ -20,7 +20,7 @@ import retrofit2.Response
 /** `apiCall` es el punto único que alimenta el bus global (arquitectura.md §2.3). */
 class ApiCallTest {
     private val bus = GlobalErrorBus(hasSession = { true })
-    private val mapper = ApiErrorMapper().apply { globalErrors = bus }
+    private val mapper = ApiErrorMapper(globalErrors = bus)
 
     private fun httpError(status: Int, code: ErrorCode): HttpException {
         val body = ContractJson.encodeToString(ApiError.serializer(), ApiError(code, "x"))

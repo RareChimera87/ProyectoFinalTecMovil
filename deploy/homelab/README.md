@@ -33,6 +33,10 @@ Los respaldos viven en el mismo servidor: copia `~/parcheu/backups` fuera de él
 
 Datos de demostración: `ssh user@homelab 'cd ~/parcheu && docker compose run --rm parcheu-migrate seed-demo'` (la misma imagen, modo `seed-demo`; en `local` o `dev`).
 
+### Reversión (`PARCHEU_PREV_TAG`)
+
+Si la salud falla, `desplegar.sh` vuelve a la imagen guardada en `PARCHEU_PREV_TAG`. Las imágenes construidas **antes de #103** no exigen `ALLOW_FAKE_AUTH=true` para `ENV=local`, así que revertir a una de ellas puede arrancar la autenticación Fake sin la bandera. Por eso, mientras la imagen de reversión sea anterior a #103 (`76aa9c5`), el script imprime un `AVISO` antes de comprobar la salud (lo calcula `reversion.sh` con el historial git local: no avisa si la imagen es la de #103 o posterior, y avisa que no puede saberlo si la etiqueta es `-dirty` o no está en el repo). **Tras el primer despliegue con #103 la reversión ya es segura**: la imagen anterior pasa a ser esa, que ya exige la bandera, y el aviso desaparece. Antes de ese primer despliegue, comprueba que el `.env` del servidor tenga `PARCHEU_ENV=dev` (el valor por defecto). Prueba del aviso: `scripts/test/desplegar-reversion.test.sh`.
+
 ### Tareas en proceso (`TASKS_MODE=inline`)
 
 Sin Cloud Tasks ni Cloud Scheduler, la API ejecuta las tareas asíncronas dentro del proceso (`InProcessTaskQueue`): `build-persona`, `simulate`, `purge-user`, `extract-memories`, `name-community`, `judge-scenario`, `moderate` y `moderate-help` (todas llaman a la IA salvo `purge-user`: cuentan para `AI_DAILY_BUDGET_USD`), con hasta 5 intentos (10/30/90/270 s con jitter), concurrencia por cola (simulaciones 2, IA ligera 4, mantenimiento 1) y deduplicación por nombre durante 1 h. Un programador interno corre los jobs `match-sweep` (cada 60 s), `scenario-sweep` (cada 60 s), `communities` (cada hora; `runIfDue` calcula las comunidades y llama a `name-community`), `retention` (diario a las 03:30; retención y purga de datos), `purge-sweep` (cada hora), `simulation-recovery` (cada 15 min; reencola las simulaciones QUEUED/RUNNING de entre 10 min y 24 h, p. ej. tras un reinicio) y `memories` (diario a las 02:00 de Bogotá, como en Cloud Scheduler; encola `extract-memories-<uuid>-<fecha>` por usuario con mensajes aprendibles nuevos; el nombre por día solo deduplica dentro del mismo proceso, porque la deduplicación de `InProcessTaskQueue` vive en memoria y se pierde al reiniciar: lo que evita el trabajo doble es el cursor de aprendizaje, que avanza junto con las memorias guardadas. Tras un reinicio el job no corre hasta las 02:00 siguientes; si el servidor está caído a esa hora, se recupera la noche siguiente, con un tope de 200 mensajes por usuario y ejecución). `twin-accuracy` (E9.3) corre los domingos a las 23:00 de Bogotá y guarda un punto semanal por usuario con datos (upsert por semana: repetirlo no duplica; si el servidor está caído esa noche, esa semana queda sin punto). `inline` se rechaza con `ENV=prod` y dentro de Cloud Run.
@@ -135,7 +139,7 @@ Fuera de alcance por ahora: no hay testers ni publicación en Play. Para publica
 
 ## Probar la app de debug en el teléfono
 
-Ver «Backend en el homeserver» en [docs/desarrollo-local.md](../../docs/desarrollo-local.md): `parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/` en `android/local.properties`. Ya no hay respaldo HTTP por la LAN (el 8090 solo escucha en loopback); el permiso HTTP del `devDebug` hacia 192.168.0.10 queda sin uso, y el de 10.0.2.2 sirve para el backend local del emulador.
+Ver «Backend en el homeserver» en [docs/desarrollo-local.md](../../docs/desarrollo-local.md): `parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/` en `android/local.properties`. Ya no hay respaldo HTTP por la LAN (el 8090 solo escucha en loopback); el `devDebug` ya no permite HTTP hacia 192.168.0.10 (#108 lo quitó) y solo conserva 10.0.2.2 para el backend local del emulador.
 
 ## Volver a Cloud SQL y Cloud Run
 

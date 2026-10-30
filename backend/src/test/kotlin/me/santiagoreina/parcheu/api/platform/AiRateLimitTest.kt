@@ -53,6 +53,7 @@ class AiRateLimitTest : FunSpec({
             val limited = client.postAs("ana", "/v1/twin/answers")
             limited.status shouldBe HttpStatusCode.TooManyRequests
             limited.headers[HttpHeaders.RetryAfter]!!.toInt() shouldBeGreaterThan 0
+            limited.bodyAsText() shouldContain "\"code\":\"RATE_LIMITED\""
             limited.bodyAsText() shouldContain "\"message\""
             // El límite es compartido entre las rutas que disparan IA de la misma persona.
             client.postAs("ana", "/v1/chats/${UUID.randomUUID()}/messages").status shouldBe HttpStatusCode.TooManyRequests

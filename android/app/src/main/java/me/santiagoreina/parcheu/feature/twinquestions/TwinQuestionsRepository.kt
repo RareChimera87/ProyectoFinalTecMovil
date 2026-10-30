@@ -22,7 +22,8 @@ class TwinQuestionsRepositoryImpl(
         api.questions()
     }
 
-    override suspend fun submit(answers: Answers): ApiResult<TwinDto> = apiCall(mapper) {
-        api.submit(answers)
-    }
+    override suspend fun submit(answers: Answers): ApiResult<TwinDto> =
+        apiCall(mapper, routesPremium = false) {
+            api.submit(answers)
+        }
 }

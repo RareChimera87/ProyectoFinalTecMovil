@@ -76,7 +76,8 @@ class ApiErrorMapperTest {
                 ErrorCode.NOT_FOUND to AppError.NotFound,
                 ErrorCode.CONFLICT to AppError.Conflict,
                 ErrorCode.SCENARIO_ENDED to AppError.ScenarioEnded,
-                ErrorCode.AI_BUDGET to AppError.AiBudget(null)
+                ErrorCode.AI_BUDGET to AppError.AiBudget(null),
+                ErrorCode.RATE_LIMITED to AppError.RateLimited
             )
         assertEquals(ErrorCode.entries.toSet(), expected.keys)
         expected.forEach { (code, appError) ->
@@ -86,6 +87,24 @@ class ApiErrorMapperTest {
                 mapper.map(code.httpStatus, body(ApiError(code, "m")))
             )
         }
+    }
+
+    @Test
+    fun rateLimited429MapsToRateLimitedWithAndWithoutCode() {
+        assertEquals(
+            AppError.RateLimited,
+            mapper.map(429, body(ApiError(ErrorCode.RATE_LIMITED, "Demasiadas solicitudes")))
+        )
+        // Un backend anterior responde 429 con {"message"} y sin código.
+        assertEquals(AppError.RateLimited, mapper.map(429, """{"message":"espera"}"""))
+        assertEquals(AppError.RateLimited, mapper.map(429, null))
+    }
+
+    @Test
+    fun mapperExposesTheBusItWasBuiltWith() {
+        val bus = GlobalErrorBus(hasSession = { true })
+        assertEquals(bus, ApiErrorMapper(globalErrors = bus).globalErrors)
+        assertEquals(null, ApiErrorMapper().globalErrors)
     }
 
     @Test

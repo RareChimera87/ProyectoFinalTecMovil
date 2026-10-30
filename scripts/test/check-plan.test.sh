@@ -87,8 +87,19 @@ expect fail "rol de plan con logging.logEntries.list" "$ROOT/scripts/check-iam.s
   "$(mutate plan-bootstrap-dev.json 'if .type=="google_project_iam_custom_role" then .values.permissions += ["logging.logEntries.list"] else . end')"
 expect fail "sa-terraform con costsManager en la facturación" "$ROOT/scripts/check-iam.sh" \
   "$(add plan-bootstrap-dev.json '{"address":"x","type":"google_billing_account_iam_member","name":"x","values":{"role":"roles/billing.costsManager","member":"serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com"}}')"
-expect fail "projectIamAdmin sin condición" "$ROOT/scripts/check-iam.sh" \
-  "$(mutate plan-bootstrap-dev.json 'if .values.role=="roles/resourcemanager.projectIamAdmin" then .values.condition=[] else . end')"
+# #105: sa-terraform no recibe estos roles de proyecto, ni siquiera con la condición de sa-api.
+SAT='serviceAccount:sa-terraform@parcheu-dev.iam.gserviceaccount.com'
+EXPR_API="api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly(['roles/cloudsql.client'])"
+expect fail "sa-terraform con projectIamAdmin sin condición" "$ROOT/scripts/check-iam.sh" \
+  "$(add plan-bootstrap-dev.json "{\"address\":\"x\",\"type\":\"google_project_iam_member\",\"name\":\"x\",\"values\":{\"role\":\"roles/resourcemanager.projectIamAdmin\",\"member\":\"$SAT\",\"condition\":[]}}")"
+expect fail "sa-terraform con projectIamAdmin condicionado" "$ROOT/scripts/check-iam.sh" \
+  "$(add plan-bootstrap-dev.json "{\"address\":\"x\",\"type\":\"google_project_iam_member\",\"name\":\"x\",\"values\":{\"role\":\"roles/resourcemanager.projectIamAdmin\",\"member\":\"$SAT\",\"condition\":[{\"title\":\"t\",\"expression\":\"$EXPR_API\"}]}}")"
+expect fail "sa-terraform con serviceAccountAdmin de proyecto" "$ROOT/scripts/check-iam.sh" \
+  "$(add plan-bootstrap-dev.json "{\"address\":\"x\",\"type\":\"google_project_iam_member\",\"name\":\"x\",\"values\":{\"role\":\"roles/iam.serviceAccountAdmin\",\"member\":\"$SAT\"}}")"
+expect fail "sa-terraform con serviceAccountUser de proyecto" "$ROOT/scripts/check-iam.sh" \
+  "$(add plan-bootstrap-dev.json "{\"address\":\"x\",\"type\":\"google_project_iam_member\",\"name\":\"x\",\"values\":{\"role\":\"roles/iam.serviceAccountUser\",\"member\":\"$SAT\"}}")"
+expect fail "sa-terraform con serviceAccountAdmin vía binding" "$ROOT/scripts/check-iam.sh" \
+  "$(add plan-bootstrap-dev.json "{\"address\":\"x\",\"type\":\"google_project_iam_binding\",\"name\":\"x\",\"values\":{\"role\":\"roles/iam.serviceAccountAdmin\",\"members\":[\"$SAT\"]}}")"
 
 echo "check-plan.sh (bootstrap y presupuesto)"
 expect ok   "bootstrap con presupuesto al 50 % y 90 %" "$ROOT/scripts/check-plan.sh" "$FIX/plan-bootstrap-dev.json"

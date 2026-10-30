@@ -14,5 +14,8 @@
     <string name="twin_questions_error_title">No pudimos continuar</string>
     <string name="twin_questions_error_network">Revisa tu conexión e inténtalo de nuevo. Tus respuestas están guardadas.</string>
     <string name="twin_questions_error_generic">Algo salió mal. Tus respuestas están guardadas; inténtalo de nuevo.</string>
+    <string name="twin_questions_error_daily_limit">Llegaste al límite de envíos de hoy. Tus respuestas están guardadas; vuelve mañana.</string>
+    <string name="twin_questions_error_daily_limit_on">Llegaste al límite de envíos de hoy. Tus respuestas están guardadas; vuelve mañana (se renueva el %1$s).</string>
+    <string name="twin_questions_error_rate_limited">Estás enviando muy rápido. Espera un momento e inténtalo de nuevo.</string>
     <string name="twin_questions_retry">Reintentar</string>
 </resources>

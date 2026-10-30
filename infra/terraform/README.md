@@ -91,8 +91,9 @@ ante cualquier **ERROR**: `roles/owner` o `roles/editor` para cualquier principa
 `allAuthenticatedUsers` con cualquier rol, salvo `roles/run.invoker` para `allUsers` (lista blanca
 `PUBLIC_ALLOWED_ROLES`); `serviceAccountKeyAdmin` o `securityAdmin`; `serviceAccountTokenCreator` y
 `serviceAccountUser` a nivel de proyecto fuera de las cuentas esperadas (`EXPECTED_SA_NAMES`:
-`sa-terraform`, `sa-deployer`); `serviceAccountAdmin` fuera de `SA_ADMIN_EXPECTED_NAMES` (`sa-terraform`);
-`projectIamAdmin` sin condición; y los chequeos de bootstrap (`sa-api`/`sa-deployer` sin sus roles,
+`sa-deployer`); `serviceAccountAdmin` fuera de `SA_ADMIN_EXPECTED_NAMES` (hoy ninguna);
+`projectIamAdmin` sin condición; `sa-terraform` con `projectIamAdmin` (con o sin condición),
+`serviceAccountAdmin` o `serviceAccountUser` de proyecto (`TERRAFORM_FORBIDDEN_PROJECT_ROLES`, #105); y los chequeos de bootstrap (`sa-api`/`sa-deployer` sin sus roles,
 `sa-terraform-plan` con roles de datos o de facturación). Las listas blancas están al inicio del script.
 Los **AVISO** de `user:` con roles distintos de `viewer`, `logging.viewer` y `monitoring.viewer` no cambian
 el código de salida (0). Solo revisa lo que está en el plan, no la política real del proyecto.

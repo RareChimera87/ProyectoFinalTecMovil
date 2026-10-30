@@ -43,6 +43,9 @@ sealed interface AppError {
     /** 503 AI_BUDGET: presupuesto diario de IA agotado; reintentar después de [retryAt]. */
     data class AiBudget(val retryAt: Instant?) : AppError
 
+    /** 429 RATE_LIMITED: demasiadas peticiones seguidas a una ruta con IA; basta esperar un momento. */
+    data object RateLimited : AppError
+
     data class Validation(val message: String) : AppError
 
     /** Cualquier otra cosa (5xx sin cuerpo, código desconocido). */

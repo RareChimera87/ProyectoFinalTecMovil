@@ -49,8 +49,11 @@ internal val ExportContents =
     listOf(
         "Tu perfil, tus respuestas y tu gemelo, con sus memorias.",
         "Tus autorizaciones, con fecha y versión del texto.",
-        "Tus simulaciones, conexiones, bloqueos y tu suscripción.",
-        "Los mensajes que tú escribiste en tus chats."
+        "Tus simulaciones, conexiones, bloqueos, tu suscripción y tus compras.",
+        "Tus presentaciones, matches e invitaciones.",
+        "Tus notificaciones y tu feedback sobre lo que dijo tu gemelo.",
+        "Los mensajes que tú escribiste en tus chats.",
+        "Tus denuncias, comunidades, solicitudes de conexión y el resto de tu actividad."
     )
 
 /** 'Descargar mis datos' (pantalla nueva, E8.3). */
