@@ -1,0 +1,74 @@
+name: revision-agente
+
+# PLAN.md §5. La revisión en busca de errores la hace un agente revisor del workflow de
+# implementación ANTES de mezclar (lee el diff, corre los tests, publica el veredicto como
+# comentario del PR). Cuando el veredicto es favorable, el integrador pone la etiqueta
+# `revisado-agente`. Este check verifica que esa etiqueta exista y, con el `github.token` de solo
+# lectura, que un PR que toque los gates lleve la etiqueta `gobernanza`; no usa más secretos.
+# Sin la etiqueta, el PR no se considera revisado y el check falla.
+# Corre con `pull_request_target` (como auto-merge.yml): el YAML es el de la rama base y un PR no
+# puede editarlo para aprobarse a sí mismo. No hace checkout: nunca ejecuta código del PR.
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: revision-agente-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  revision-agente:
+    name: revision-agente
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Exige la etiqueta revisado-agente
+        env:
+          ETIQUETAS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          if [[ ",$ETIQUETAS," == *",revisado-agente,"* ]]; then
+            echo "El PR tiene la etiqueta revisado-agente: revisión registrada."
+          else
+            echo "::error::Falta la etiqueta revisado-agente: el agente revisor del workflow debe revisar el PR y el integrador poner la etiqueta (PLAN.md §5)."
+            exit 1
+          fi
+
+      # Un PR que edite los propios gates, la protección de ramas o el CODEOWNERS no puede dejar en
+      # verde su check: este YAML corre desde la base (pull_request_target), así que el PR no lo
+      # reescribe, y además el PR debe llevar la etiqueta `gobernanza` para que una persona lo mire.
+      - name: Exige la etiqueta gobernanza si el PR toca los gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ETIQUETAS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR: ${{ github.event.pull_request.number }}
+          CAMBIADOS: ${{ github.event.pull_request.changed_files }}
+        shell: bash
+        run: |
+          # Cualquier workflow o acción compuesta puede publicar un check con el nombre del gate y el
+          # mismo app_id de Actions, así que se vigila todo .github/workflows y .github/actions.
+          sensibles='^(\.github/(workflows|actions)/|\.github/(CODEOWNERS|dependabot\.ya?ml)$|scripts/(proteger-ramas\.sh|commit-lint\.sh|verbos-imperativo\.txt)$)'
+          # Se guarda la lista antes de filtrar: si gh falla, el paso falla (fallar cerrado).
+          # `F` = ruta actual, `P` = ruta anterior de un renombrado (equivale a borrar la vieja).
+          lista="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+            --jq '.[] | "F " + .filename, (select(.previous_filename != null) | "P " + .previous_filename)')"
+          listados="$(grep -c '^F ' <<<"$lista" || true)"
+          # La API devuelve como máximo 3000 archivos: si faltan, no se puede descartar nada (falla cerrado).
+          if (( listados < CAMBIADOS )); then
+            echo "::error::La API listó $listados de $CAMBIADOS archivos del PR: no se puede verificar que no toque los gates."
+            exit 1
+          fi
+          archivos="$(sed -E 's/^[FP] //' <<<"$lista")"
+          tocados="$(grep -E "$sensibles" <<<"$archivos" || true)"
+          if [[ -z "$tocados" ]]; then
+            echo "El PR no toca los gates ni la protección de ramas."
+          elif [[ ",$ETIQUETAS," == *",gobernanza,"* ]]; then
+            echo "El PR toca los gates y lleva la etiqueta gobernanza (revisión humana):"
+            echo "$tocados"
+          else
+            echo "::error::El PR modifica los gates de revisión o la protección de ramas y no lleva la etiqueta gobernanza:"
+            echo "$tocados"
+            exit 1
+          fi
