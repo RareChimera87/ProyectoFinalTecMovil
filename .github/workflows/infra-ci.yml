@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ env.TF_VERSION }}
       - name: terraform fmt
@@ -126,7 +126,7 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           # Identidad de solo lectura de metadatos: cualquier PR puede usarla en dev.
           service_account: ${{ secrets.TF_PLAN_SERVICE_ACCOUNT_DEV }}
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
@@ -253,7 +253,7 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           # sa-terraform solo acepta tokens de la rama dev (attribute.ref en el bootstrap).
           service_account: ${{ secrets.TF_SERVICE_ACCOUNT_DEV }}
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
