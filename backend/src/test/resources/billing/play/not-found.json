@@ -1,0 +1,15 @@
+{
+  "error": {
+    "code": 404,
+    "message": "The purchase token was not found.",
+    "errors": [
+      {
+        "message": "The purchase token was not found.",
+        "domain": "androidpublisher",
+        "reason": "purchaseTokenNotFound",
+        "location": "token",
+        "locationType": "parameter"
+      }
+    ]
+  }
+}

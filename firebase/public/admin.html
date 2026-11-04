@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Moderación · ParcheU</title>
+<link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+<main>
+<header>
+  <h1>ParcheU · Moderación</h1>
+  <span id="quien" class="meta"></span>
+  <button id="entrar" class="primary" hidden>Entrar con Google</button>
+  <button id="salir" hidden>Salir</button>
+</header>
+<p id="aviso" hidden role="status"></p>
+
+<section id="panel" hidden>
+  <div class="bar">
+    <label>Tipo
+      <select id="kind"><option value="">Todos</option><option value="USER">Personas (USER)</option><option value="AI_CONTENT">Contenido de IA</option></select>
+    </label>
+    <label>Estado
+      <select id="status"><option value="OPEN">Abiertos</option><option value="RESOLVED">Resueltos</option></select>
+    </label>
+    <button id="recargar">Recargar</button>
+  </div>
+  <div id="lista"></div>
+  <button id="mas" hidden>Cargar más</button>
+</section>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js" integrity="sha384-MLXAVo3+OLxBxLRnO1W+QJ/sAi9fLlmIPjEmYIDbH0MFNw2uV9hB5wvQzH1CMVk4" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-auth-compat.js" integrity="sha384-6l6xcdI+PqJSf+tDkj1TfhKzjyqRCzr83SWY0Bw9KL92MXam5iB5yNC7JKPhXqpq" crossorigin="anonymous"></script>
+<script type="module" src="/admin.js"></script>
+</body>
+</html>

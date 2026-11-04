@@ -267,7 +267,7 @@ Monorepo, contrato, backend base, esquema, infraestructura, CI/CD, esqueleto And
 - [ ] Un PR que rompe un test de Android queda bloqueado.
 - [ ] Tras mezclar a dev, `/v1/health` de dev responde con el SHA del commit.
 - [ ] El job `migrate` corre **antes** del despliegue de la API; si falla, la API no se despliega.
-- [ ] No hay llaves JSON en secretos de GitHub para GCP: solo `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_DEV` y `WIF_SERVICE_ACCOUNT_PROD` (mismos nombres que arquitectura.md §12).
+- [ ] No hay llaves JSON en secretos de GitHub para GCP: solo identificadores de WIF, sin credenciales: `WIF_PROVIDER`, `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_DEV`, `WIF_SERVICE_ACCOUNT_PROD`, `TF_PLAN_SERVICE_ACCOUNT_DEV` y `TF_SERVICE_ACCOUNT_DEV` (mismos nombres que arquitectura.md §12; hay un pool WIF por proyecto, ADR-0014).
 - [ ] Un PR con etiqueta `major` y CI verde **no** se mezcla hasta que un revisor distinto del autor lo aprueba; uno sin la etiqueta se mezcla con CI y `revision-agente` en verde.
 - [ ] Tras mezclar 3 PR no major, `review-counter` abre exactamente un issue de revisión (probado con un fixture de `docs/revisiones.md`).
 
@@ -466,6 +466,8 @@ Sesión, términos y política, onboarding con Google, perfil básico y edad, pr
 
 **Descripción.** A1 Splash (sin sesión → A2; con sesión y gemelo → C1; con sesión sin gemelo → B1), A2-A4 en pager con 'Saltar' que lleva a A4, Credential Manager + `googleid` → `FirebaseAuth.signInWithCredential` → `POST /v1/session`, estados de cargando y error (no están en los mockups) y regreso a A4 tras cerrar sesión. A4 agrega bajo el botón el texto 'Al continuar aceptas los Términos y la Política de privacidad (Ley 1581 de 2012). Tus respuestas y mensajes se procesan con IA de Google Cloud en EE. UU.' con enlaces a Hosting; tras el login, si el estado es `NEEDS_TERMS`, la app llama `POST /v1/me/terms` antes de seguir (una hoja de confirmación lo pide de nuevo si cambió la versión). Destinos tras el login: `NEEDS_PROFILE` → B0 (E2.6), `NEEDS_TWIN` → B1.
 
+**Contrato con E5.3.** El `FirebaseTokenProvider` debe implementar `currentUserId()` (abstracto en `TokenProvider`) devolviendo `FirebaseAuth.currentUser?.uid`; de lo contrario el registro del token FCM no ocurre.
+
 **Criterios de aceptación (verificables):**
 
 - [ ] ViewModel con `FakeAuthRepository`: éxito navega según `onboarding`; cancelación vuelve a A4 sin error; error de red muestra mensaje y botón reintentar.
@@ -625,6 +627,8 @@ API del grafo, layout radial, componente G0, pantalla D1-D5 y suite de invariant
 
 **Descripción.** D1 con grafo, chips de filtro funcionales (modo, afinidad 70 %+, comunidad), StatCards, banner bloqueado para gratis, D2 bottom sheet con variantes conectados, simularon y pendiente ('Simular de nuevo' → F4, 'Chatear' → F9), D3 vacío, D4 skeleton, D5 error con reintentar, I2 claro. Pinta al instante el último grafo guardado en DataStore.
 
+**Hueco de contrato (E3.3, ronda 2).** `GraphFof.parentId` (la conexión por la que se llega al amigo de amigo) es nulo porque `FofCandidate` y la consulta de arquitectura §6.2 no lo devuelven. Sin él, el fof conserva la posición radial y no dibuja la línea punteada. Coordinar con E3.1/E6.3 un campo `viaId` (uno de los mutuals) en `FofCandidate` y en la consulta SQL; mientras tanto, mapear `parentId = null`. **Cerrado en E6.3:** `FofCandidate.viaId` (opcional) sale de `FofService.viaOf` sobre las aristas de la misma fila y D6 mapea `parentId = viaId`. `viaId` debe salir de la misma fila `e.me` de la consulta §6.2, que ya filtra `e.mode <> 'PAREJA'` y `e.state = 'CONNECTED'`, y nunca de una subconsulta aparte: 'mine' solo excluye la arista Pareja entre el observador y X, no las aristas Pareja de X con el candidato, y una subconsulta sin ese filtro revelaría una arista de Pareja que no involucra al observador (regla 1 de `GraphVisibilityPolicy`).
+
 **Criterios de aceptación (verificables):**
 
 - [ ] ViewModel con `FakeGraphRepository`: Loading → Loaded, Empty y Error; reintentar vuelve a Loading.
@@ -649,6 +653,7 @@ API del grafo, layout radial, componente G0, pantalla D1-D5 y suite de invariant
 - [ ] `scripts/demo-mutacion-privacidad.sh` termina con código ≠ 0 con la mutación y 0 sin ella, y deja el árbol limpio.
 - [ ] El test de registro falla si se agrega una clase `ThirdPartyView` sin registrarla (probado con una clase de prueba).
 - [ ] La propiedad de memorias por modo corre ≥ 1.000 casos y falla si `TwinPromptBuilder` deja de filtrar por modo (variante de la demo de mutación).
+- [ ] Propiedad `viaId`: cuando `FofCandidate` incluya `viaId`, nunca es un usuario cuya arista con el candidato sea de Pareja (ni no CONNECTED).
 
 ### E4 · Conocer (épica mayor)
 
@@ -707,7 +712,7 @@ Cuotas, fila de match, motor de simulación, resultados, decisión mutua, inicio
 - **Pantallas del inventario:** -
 - **Archivos y módulos:** backend/.../simulation/**
 
-**Descripción.** `POST /v1/simulations` (valida modo común, bloqueos y cupo, responde 202) → Cloud Task `/internal/tasks/simulate`. Elige 3 escenarios del modo (solo básicos si es gratis). Por escenario, hasta 8 turnos alternados entre dos `TwinAgent` independientes (cada uno solo ve su persona, sus memorias aceptadas **del mismo modo de la simulación** y la transcripción del escenario; ≤ 120 tokens por turno). `TwinPromptBuilder` es el único lugar que arma el prompt y filtra memorias por modo (ADR-0032). La tarea va a la cola `simulations`. Juez con salida JSON y la rúbrica del modo (`scenarios.rubric`). Puntaje = round(.35·similitud de rasgos + .65·promedio del juez). Caché 7 días por (par, modo, versiónA, versiónB). Estados QUEUED → RUNNING → DONE/FAILED, progreso en Firestore `simulations/{id}`, devolución del cupo si falla, idempotencia por id, arista SIMULATED, aviso al terminar. `GET /v1/simulations`, `GET /v1/simulations/{id}`, `GET .../transcript`.
+**Descripción.** `POST /v1/simulations` (valida modo común, bloqueos y cupo, responde 202) → Cloud Task `/internal/tasks/simulate`. Elige 3 escenarios del modo (solo básicos si es gratis). Por escenario, hasta 8 turnos alternados entre dos `TwinAgent` independientes (cada uno solo ve su persona, sus memorias aceptadas **del mismo modo de la simulación** y la transcripción del escenario; ≤ 120 tokens por turno). `TwinPromptBuilder` es el único lugar que arma el prompt; su `memoriesFor` DEBE delegar en `MemorySelection.select` (solo aceptadas del modo) y `MemorySelection.sanitize`, sin filtrar por su cuenta (ADR-0032). El test de arquitectura `TwinPromptBuilderDelegationTest` (E3.5) falla si el `.class` del builder no referencia `MemorySelection`; al entrar E4.3 hay que mover el ancla de la mutación `memorias` al builder real. La tarea va a la cola `simulations`. Juez con salida JSON y la rúbrica del modo (`scenarios.rubric`). Puntaje = round(.35·similitud de rasgos + .65·promedio del juez). Caché 7 días por (par, modo, versiónA, versiónB). Estados QUEUED → RUNNING → DONE/FAILED, progreso en Firestore `simulations/{id}`, devolución del cupo si falla, idempotencia por id, arista SIMULATED, aviso al terminar. `GET /v1/simulations`, `GET /v1/simulations/{id}`, `GET .../transcript`.
 
 **Criterios de aceptación (verificables):**
 
@@ -716,6 +721,7 @@ Cuotas, fila de match, motor de simulación, resultados, decisión mutua, inicio
 - [ ] Test: reintentar la misma tarea no duplica turnos ni cobros.
 - [ ] Test: un acierto de caché devuelve el resultado sin llamar al LLM (contador del Fake = 0).
 - [ ] Test: el prompt del gemelo A no contiene la persona ni las memorias de B.
+- [ ] `TwinPromptBuilderDelegationTest` (privacy/) en verde: `TwinPromptBuilder` delega en `MemorySelection.select` y `sanitize`.
 - [ ] Test (captura del prompt con FakeLlm): un usuario con memorias aceptadas de Pareja, Amistad y Estudio; en una simulación de Amistad el prompt contiene solo las de Amistad, y ninguna de Pareja aparece en el transcript ni en el informe guardados.
 - [ ] Test: un usuario gratis solo recibe escenarios básicos; en Pareja el prompt incluye las reglas de contenido.
 - [ ] Test: con el presupuesto agotado → 503 AI_BUDGET y no se consume cupo.
@@ -794,6 +800,7 @@ Cuotas, fila de match, motor de simulación, resultados, decisión mutua, inicio
 
 - [ ] Test API: `home` refleja el cupo de `QuotaService` y la simulación RUNNING del usuario.
 - [ ] Test: para gratis las sugerencias no incluyen `mutualCount`.
+- [x] Test: con `DEMO_USERS_ENABLED=false` las sugerencias excluyen a los usuarios demo aunque haya arista con ellos (filtrar con `DemoVisibility.withoutDisabledDemos` de E4.9; traspaso del criterio de sugerencias de E4.9, ADR-0027).
 - [ ] Roborazzi de C1 (3 de 5, en curso, resultado listo, vacío, 0 restantes, Plus) e I1.
 
 #### E4.8 · Modo escenario
@@ -830,7 +837,7 @@ Cuotas, fila de match, motor de simulación, resultados, decisión mutua, inicio
 **Criterios de aceptación (verificables):**
 
 - [ ] Test: tras `purge-demo` ninguna tabla referencia a un usuario `is_demo` (consulta sobre todas las columnas de usuario).
-- [ ] Test: con la bandera en false los demo no entran a la fila ni aparecen en sugerencias.
+- [ ] Test: con la bandera en false los demo no entran a la fila ni aparecen en sugerencias. (La fila se prueba en E4.9; las sugerencias de `GET /v1/home` no existen aún y su test queda como criterio de E4.7, que debe usar `DemoVisibility.withoutDisabledDemos`.)
 - [ ] Test: `seed-demo` es idempotente (dos ejecuciones → 20 usuarios) y ningún demo tiene Pareja activo.
 - [ ] Test: `MatchDto`, `NodeDto` y `ChatSummary` de un demo traen `isDemo=true`; `POST /v1/chats/{id}/messages` nunca se genera desde un demo.
 
@@ -980,6 +987,10 @@ QR y código, presentar a dos amigos, amigos de amigos, comunidades, evolución 
 - [ ] Test: tras un bloqueo en cualquier sentido, el bloqueado desaparece de fof del observador (criterio trasladado desde E8.1).
 - [ ] Roborazzi de D6 y D7.
 
+**Cerrado en E6.3: hueco `viaId` de E3.4.** `FofCandidate.viaId?` es el amigo en común por el que se llega (su `users.id`, el mismo `NodeDto.id` del ego-grafo). Sale solo de las aristas de la fila `e.me` de §6.2 que además pasaron `canSeeEdge` (prefiere una del modo del candidato y desempata por id); D6 lo usa como `GraphFof.parentId` (línea punteada prt "2 4") y como "Amigo de Valentina" en la tarjeta. La propiedad `viaId` de E3.5 la cubre `FofViaIdPropertyTest` (1.000 mundos) y `FofDbTest` lo prueba en SQL.
+
+**Hueco de contrato: 'Simular' desde D6 (E6.3, ronda 1).** ADR-0023, el mockup 09a y el flujo 11 del inventario (D6 → F4) piden un botón 'Simular' en cada candidato, pero `POST /v1/simulations` solo acepta `otherUserId` = `users.id` y un `anonId` da 404 (arquitectura §7.2, E4.3); el `anonId` es una HMAC no invertible y fof nunca entrega el uuid de alguien sin conexión mutua (ADR-0012). Por eso D6 sale sin 'Simular': la única acción es 'Pedir presentación' (E6.2), cuya simulación calcula la afinidad real, y la nota al pie lo dice así. **Dueño: I1 (API, decide antes de la ventana de E7.4, 18 nov) + I3 (UI).** Opciones: (a) `SimulationRequest{otherUserId?, anonId?}` con exactamente uno, resuelto en el servidor contra los candidatos fof del observador (`FofService.candidates` y comparar `anonId`), con cupo normal y la otra persona enmascarada en F4/F5 hasta la conexión mutua; o (b) enmendar ADR-0023 para quitar 'Simular' de D6 y dejar la presentación como único camino. Con (a), D6 agrega 'Simular' → F4 y E7.4 lo audita. **Tras B-A1 (#104, 28 oct), (a) queda descartada en `POST /v1/simulations`:** ese endpoint (origen PARCHE) solo simula con una arista CONNECTED en el modo pedido, y un candidato fof por definición no la tiene; aceptarlo exigiría otro origen y endpoint con su propia regla de privacidad. La opción viva es (b).
+
 #### E6.4 · Comunidades
 
 - **Rama:** `feature/communities`
@@ -994,10 +1005,10 @@ QR y código, presentar a dos amigos, amigos de amigos, comunidades, evolución 
 
 **Criterios de aceptación (verificables):**
 
-- [ ] Test: dos cliques unidos por una arista débil producen dos comunidades.
-- [ ] Test: misma entrada y semilla → mismas comunidades; una arista de Pareja no cambia el resultado.
-- [ ] Test: el prompt de nombre no contiene nombres ni correos (FakeLlm).
-- [ ] Roborazzi de D8 en sus 3 estados.
+- [x] Test: dos cliques unidos por una arista débil producen dos comunidades.
+- [x] Test: misma entrada y semilla → mismas comunidades; una arista de Pareja no cambia el resultado.
+- [x] Test: el prompt de nombre no contiene nombres ni correos (FakeLlm).
+- [x] Roborazzi de D8 en sus 3 estados.
 
 #### E6.5 · Evolución de la red
 
@@ -1190,6 +1201,7 @@ Reportar y bloquear desde todas partes (incluido contenido de IA), ajustes de pr
 - **Depende de:** E5.1, E3.1
 - **En paralelo con:** E4.9
 - **Pantallas del inventario:** H3 (borrado y descarga de datos; pantallas nuevas)
+- Mockup: H4 Exportar mis datos y H5 Borrar cuenta (inventario §1.1)
 - **Archivos y módulos:** backend/.../identity/deletion/**, backend/.../identity/export/**, android/app/.../feature/settings/delete/**, android/app/.../feature/settings/export/**
 
 **Descripción.** `DELETE /v1/me`: borrado lógico inmediato (`deleted_at`, invisible en todo) y tarea `purge-user` (cola `maintenance`) que sigue la tabla de arquitectura.md §10.2: filas personales en Postgres; mensajes en chats compartidos anonimizados ('Usuario eliminado') en Postgres y Firestore; **simulaciones compartidas**: se conserva para el otro solo el puntaje y la fecha, con `transcript` y `report` puestos en `null` y el participante como 'Usuario eliminado'; documentos Firestore `simulations/{id}` y `matchTickets/{uid}` borrados; datos personales en **jsonb** limpiados según el registro `PersonalJsonPaths` (`reports.snapshot`, `simulations.transcript/report`, `notifications.payload`, `purchase_events.payload`); tokens FCM y usuario de Firebase Auth. Se conserva lo que exige la ley (consentimientos y eventos de compra sin datos de contacto, ADR-0025). Aviso de que la suscripción se cancela en Play. `GET /v1/me/export` (JSON con perfil, respuestas, memorias, consentimientos, conexiones y mensajes propios). En la app: confirmación de borrado y **'Descargar mis datos'** (descarga el JSON y lo guarda con `ACTION_CREATE_DOCUMENT` o lo comparte con la hoja del sistema).
@@ -1202,6 +1214,13 @@ Reportar y bloquear desde todas partes (incluido contenido de IA), ajustes de pr
 - [ ] Test: la exportación no incluye datos privados de otros usuarios (solo su id anónimo).
 - [ ] Test UI (Fakes): 'Descargar mis datos' pide el JSON y lanza el intent de crear documento con nombre `parcheu-datos-<fecha>.json`.
 - [ ] Roborazzi de la confirmación de borrado y de 'Descargar mis datos'.
+
+**Implementación futura (decisión 2026-10-23):** lo vigente para E8.3 es lo implementado en #59 y #62 (exportación como JSON local guardado con `ACTION_CREATE_DOCUMENT` o compartido con la hoja del sistema; borrado lógico inmediato con purga en cola, confirmado con una casilla). Los criterios de aceptación de arriba no cambian. El mockup H4 'Exportar mis datos' y H5 'Borrar cuenta' (inventario §1.1 y §6.3) queda como pendiente post-1.0:
+
+- (a) Exportación por correo con enlace válido 7 días (requiere un servicio de envío de correo que hoy no existe en la arquitectura) y formato PDF legible además de JSON.
+- (b) Selección de categorías a exportar: perfil y modos, gemelo, parche, simulaciones y chats (chats desmarcado por defecto).
+- (c) Confirmación del borrado escribiendo "BORRAR" y botón destructivo coral pleno (#FF5C7A con texto #14111F) con lista de consecuencias (`DestructiveButton`, `ConsequenceList` y `DestructiveHeroIcon` del inventario).
+- (d) Periodo de gracia de 14 días recuperable al iniciar sesión (hoy el borrado es inmediato; cambiarlo implica revisar la purga de arquitectura.md §10.2 y la declaración de Play).
 
 #### E8.4 · Páginas web legales
 
@@ -1249,12 +1268,12 @@ Reportar y bloquear desde todas partes (incluido contenido de IA), ajustes de pr
 - **Pantallas del inventario:** -
 - **Archivos y módulos:** backend/.../safety/moderation/**
 
-**Descripción.** Moderación asíncrona por la cola `ai-light` con el modelo lite: categorías acoso, sexual, odio, amenaza, autolesión, spam, datos personales y posible menor. Severidad alta → mensaje oculto (Postgres y Firestore) y reporte automático. Autolesión → mensaje del sistema al autor con recursos de ayuda. 'Posible menor' → reporte automático de prioridad alta (la app es 18+; un admin decide si suspende). Decisión fail-open en ADR-0026. Si el LLM falla, el mensaje queda visible y se registra (fail-open). Recortable si el presupuesto de IA se aprieta (no es una de las 17 funciones).
+**Descripción.** Moderación asíncrona por la cola `ai-light` con el modelo lite: categorías acoso, sexual, odio, amenaza, autolesión, spam, datos personales y posible menor. Severidad alta → mensaje oculto (Postgres y Firestore) y reporte automático. Autolesión → aviso de la cuenta (centro de notificaciones C2 + push) solo al autor con recursos de ayuda; no entra al chat (ADR-0026). 'Posible menor' → reporte automático de prioridad alta (la app es 18+; un admin decide si suspende). Decisión fail-open en ADR-0026. Si el LLM falla, el mensaje queda visible y se registra (fail-open). Recortable si el presupuesto de IA se aprieta (no es una de las 17 funciones).
 
 **Criterios de aceptación (verificables):**
 
 - [ ] Test con FakeLlm: severidad alta oculta el mensaje y crea un reporte AUTO.
-- [ ] Test: autolesión inserta el mensaje de recursos; severidad baja no hace nada.
+- [ ] Test: autolesión avisa solo al autor con los recursos (aviso ACCOUNT + push); severidad baja no hace nada.
 - [ ] Test: error del LLM → mensaje visible y log `moderation_failed`.
 
 #### E8.7 · Reportar y bloquear desde todas partes
@@ -1407,7 +1426,7 @@ Play Console, pipeline de release, prueba cerrada temprana, tema claro y accesib
 - **Pantallas del inventario:** -
 - **Archivos y módulos:** docs/play-console.md
 
-**Descripción.** Enviar la versión 0.1 a **revisión en la prueba cerrada el 29 oct**. Contenido: esqueleto navegable de E0.7, enlaces a Términos y Política en A4, y Play Billing de E7.0 (la suscripción `parcheu_plus` ya existe desde el 28 oct). **No incluye login** (E2.2 llega en la ola 6); por eso la 0.1 no trata datos personales. Declaraciones de contenido (URL de privacidad, sin anuncios, clasificación de contenido, público 18+, borrador de Data safety, instrucciones para testers que dicen que es una versión temprana y que habrá perfiles de demostración). Registrar en Firebase prod el SHA-1 y SHA-256 de Play App Signing. **El reloj de 14 días corre desde que Play aprueba la versión y los testers se inscriben (opt-in), no desde la subida:** I3 envía el enlace de inscripción apenas llegue la aprobación (estimada 30-31 oct) y registra la fecha real. El proceso de release es el de PLAN.md §5 ('Releases intermedios'): `release/0.1.0` → `main` (aprueba el usuario) → tag `v0.1.0` → `firebase-deploy` prod (Hosting) → AAB.
+**Descripción.** Enviar la versión 0.1 a **revisión en la prueba cerrada el 29 oct**. Contenido: esqueleto navegable de E0.7, enlaces a Términos y Política en A4, y Play Billing de E7.0 (la suscripción `parcheu_plus` ya existe desde el 28 oct). **No incluye login** (E2.2 llega en la ola 6); por eso la 0.1 no trata datos personales. Declaraciones de contenido (URL de privacidad, sin anuncios, clasificación de contenido, público 18+, borrador de Data safety, instrucciones para testers que dicen que es una versión temprana y que habrá perfiles de demostración). Registrar en Firebase prod el SHA-1 y SHA-256 de Play App Signing. **El reloj de 14 días corre desde que Play aprueba la versión y los testers se inscriben (opt-in), no desde la subida:** I3 envía el enlace de inscripción apenas llegue la aprobación (estimada 30-31 oct) y registra la fecha real. **Base de la rama de release:** como la 0.1 no lleva login ni backend, `release/0.1.0` se corta desde `d7989af` (E1.1, anterior a E2.2/#28) y no desde `dev`: con E2.2 en `dev` el Splash real manda a A4 y el tester no podría salir sin un login que en prod aún no funciona (y el borrador de Data safety 'no trata datos personales' sería falso). Alternativa: una bandera de release 0.1 que conserve el Splash con el catálogo de rutas. El proceso de release es el de PLAN.md §5 ('Releases intermedios'): `release/0.1.0` → `main` (aprueba el usuario) → tag `v0.1.0` → `firebase-deploy` prod (Hosting) → AAB.
 
 **Criterios de aceptación (verificables):**
 

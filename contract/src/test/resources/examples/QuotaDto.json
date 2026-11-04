@@ -1,0 +1,18 @@
+{
+  "simulations": {
+    "used": 3,
+    "limit": 5,
+    "resetsAt": "2026-10-27T05:00:00Z"
+  },
+  "randomMatch": {
+    "used": 0,
+    "limit": 1,
+    "resetsAt": "2026-10-24T05:00:00Z"
+  },
+  "fullReport": {
+    "used": 1,
+    "limit": 1,
+    "resetsAt": "2026-10-27T05:00:00Z"
+  },
+  "plus": false
+}

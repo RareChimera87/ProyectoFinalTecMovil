@@ -1,0 +1,163 @@
+package me.santiagoreina.parcheu.api.platform.config
+
+/**
+ * Entorno de ejecución. `LOCAL` es el único que admite tokens Fake y nunca se asume por defecto: además exige
+ * `ALLOW_FAKE_AUTH=true` y una base de datos local (ver [AppConfig.fromEnv]).
+ */
+enum class Env { LOCAL, DEV, PROD }
+
+/** Datos de conexión a Postgres. En Cloud Run se usa [cloudSqlInstance] (conector IAM, sin VPC). */
+data class DbConfig(
+    val name: String,
+    val user: String,
+    val password: String?,
+    /** `proyecto:region:instancia`. Si es nulo se usa [jdbcUrl] tal cual. */
+    val cloudSqlInstance: String?,
+    val jdbcUrl: String?,
+)
+
+/**
+ * Configuración del servicio, leída solo de variables de entorno (nunca de archivos del repo).
+ *
+ * - `ENV` (local|dev|prod, obligatorio y sin valor por defecto: si falta, el arranque falla), `PORT` (8080), `APP_VERSION` (SHA del commit).
+ * - `ALLOW_FAKE_AUTH=true`: obligatoria con `ENV=local` en todos los modos, porque `local` cablea la autenticación
+ *   Fake (cualquier `fake-<uid>` entra como ese usuario). Solo vale el texto exacto `true`. Con `ENV=local` la base
+ *   además debe ser local (ver [isLocalJdbcUrl]); en dev y prod la variable se ignora.
+ * - `LOCAL_DB_HOSTS`: hosts extra (separados por comas) que `ENV=local` admite en `DB_URL`, además de
+ *   [DEFAULT_LOCAL_DB_HOSTS].
+ * - `INTERNAL_OIDC_AUDIENCE`: audiencia de los tokens OIDC internos (la custom audience que fija E0.5,
+ *   `https://api.parcheu-<env>.internal`). Si falta se usa `SERVICE_URL` como respaldo.
+ * - `TASKS_SERVICE_ACCOUNT`: correo de `sa-tasks`, única identidad válida en las rutas `/internal`.
+ * - `FIREBASE_PROJECT_ID`: proyecto de Firebase Auth; si falta se usa `GCP_PROJECT` (lo define E0.5).
+ * - `LEGAL_TEXT_VERSION`: versión vigente de los Términos y la Política de privacidad (E2.1, ADR-0017). Debe coincidir
+ *   con la de las páginas web (E8.4); al subirla, todos los usuarios vuelven a `NEEDS_TERMS`.
+ *
+ * Obligatorias según el modo (solo `serve` valida Firebase y OIDC; `migrate`, `seed-demo` y `purge-demo` no los usan):
+ * - todos: `ENV`.
+ * - `serve` en dev/prod: proyecto de Firebase (`FIREBASE_PROJECT_ID` o `GCP_PROJECT`), audiencia
+ *   (`INTERNAL_OIDC_AUDIENCE` o `SERVICE_URL`, https) y `TASKS_SERVICE_ACCOUNT`.
+ * - `migrate`: `DB_NAME` y `CLOUD_SQL_INSTANCE` o `DB_URL`.
+ * - `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `CLOUD_SQL_INSTANCE` o `DB_URL` (JDBC directo).
+ */
+data class AppConfig(
+    val env: Env,
+    val port: Int,
+    val version: String,
+    /** Audiencia esperada en los tokens OIDC de `/internal`. */
+    val oidcAudience: String,
+    val tasksServiceAccount: String,
+    val firebaseProjectId: String?,
+    val db: DbConfig?,
+    /** Versión vigente del texto legal; se guarda en `consents.text_version` al aceptar. */
+    val legalTextVersion: String = DEFAULT_LEGAL_TEXT_VERSION,
+    /**
+     * Consentimiento explícito a la autenticación Fake (`ALLOW_FAKE_AUTH=true`). `AppContainer.fromConfig` lo vuelve a
+     * exigir al cablear los Fakes, aunque la configuración no venga de [fromEnv] (defensa en profundidad).
+     */
+    val fakeAuthAllowed: Boolean = false,
+) {
+    companion object {
+        /**
+         * [serving] es verdadero solo en el modo `serve`: los jobs no necesitan Firebase ni OIDC,
+         * así que no se les exige esa configuración.
+         */
+        fun fromEnv(vars: Map<String, String> = System.getenv(), serving: Boolean = true): AppConfig {
+            // Modo cerrado por defecto: sin ENV nunca se cablean tokens Fake.
+            val raw = vars["ENV"]?.takeIf { it.isNotBlank() }
+                ?: error("ENV es obligatorio (local, dev o prod); sin él no se arranca para no abrir la autenticación")
+            val env = Env.entries.firstOrNull { it.name.equals(raw.trim(), ignoreCase = true) }
+                ?: error("ENV inválido: '$raw' (se espera local, dev o prod)")
+            // Cloud Run define K_SERVICE (servicios) y CLOUD_RUN_JOB (jobs): ahí LOCAL está prohibido.
+            require(env != Env.LOCAL || (vars["K_SERVICE"].isNullOrBlank() && vars["CLOUD_RUN_JOB"].isNullOrBlank())) {
+                "ENV=local no se admite en Cloud Run (K_SERVICE/CLOUD_RUN_JOB definidos): usa dev o prod"
+            }
+            if (env == Env.LOCAL) {
+                // El homeserver (ADR-0033) no es Cloud Run: sin esta bandera, un `.env` sin ENV=dev abriría la
+                // suplantación de cualquier usuario sobre datos reales.
+                // Solo `true` exacto, como LOCAL_FAKE_ADMIN y desplegar.sh: nada de mayúsculas ni espacios.
+                require(vars["ALLOW_FAKE_AUTH"] == "true") {
+                    "ENV=local abre la autenticación falsa; exige ALLOW_FAKE_AUTH=true y una base de datos local"
+                }
+            }
+            val db = vars["DB_NAME"]?.let { name ->
+                DbConfig(
+                    name = name,
+                    user = vars["DB_USER"] ?: "postgres",
+                    password = vars["DB_PASSWORD"],
+                    cloudSqlInstance = vars["CLOUD_SQL_INSTANCE"],
+                    jdbcUrl = vars["DB_URL"],
+                )
+            }
+            if (env == Env.LOCAL && db != null) {
+                val hosts = DEFAULT_LOCAL_DB_HOSTS +
+                    vars["LOCAL_DB_HOSTS"].orEmpty().split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+                require(db.cloudSqlInstance == null && (db.jdbcUrl == null || isLocalJdbcUrl(db.jdbcUrl, hosts))) {
+                    "ENV=local solo admite una base de datos local: DB_URL jdbc:postgresql://<host>[:puerto]/<base> sin " +
+                        "parámetros, usuario ni varios hosts, con host en ${hosts.sorted()} (agrega otros con " +
+                        "LOCAL_DB_HOSTS); nunca CLOUD_SQL_INSTANCE. Recibido: '${db.jdbcUrl}'"
+                }
+            }
+            val config = AppConfig(
+                env = env,
+                port = vars["PORT"]?.toIntOrNull() ?: 8080,
+                version = vars["APP_VERSION"]?.takeIf { it.isNotBlank() } ?: "dev",
+                oidcAudience = vars["INTERNAL_OIDC_AUDIENCE"].orNull() ?: vars["SERVICE_URL"].orNull() ?: "http://localhost:8080",
+                tasksServiceAccount = vars["TASKS_SERVICE_ACCOUNT"].orNull() ?: LOCAL_TASKS_ACCOUNT,
+                firebaseProjectId = vars["FIREBASE_PROJECT_ID"].orNull() ?: vars["GCP_PROJECT"].orNull(),
+                db = db,
+                legalTextVersion = vars["LEGAL_TEXT_VERSION"].orNull() ?: DEFAULT_LEGAL_TEXT_VERSION,
+                fakeAuthAllowed = env == Env.LOCAL,
+            )
+            if (serving) config.validateForServe(explicitTasksAccount = !vars["TASKS_SERVICE_ACCOUNT"].isNullOrBlank())
+            return config
+        }
+
+        /** Versión del texto legal publicada con la prueba cerrada (E8.4 usa la misma). */
+        const val DEFAULT_LEGAL_TEXT_VERSION = "2026-10-29"
+
+        private const val LOCAL_TASKS_ACCOUNT = "sa-tasks@parcheu-local.iam.gserviceaccount.com"
+
+        private fun String?.orNull(): String? = this?.takeIf { it.isNotBlank() }
+
+        /** Hosts que `ENV=local` admite en `DB_URL`: la máquina propia y el Postgres del compose del homeserver. */
+        val DEFAULT_LOCAL_DB_HOSTS: Set<String> = setOf("localhost", "127.0.0.1", "::1", "parcheu-db")
+
+        /**
+         * Verdadero si [jdbcUrl] es exactamente `jdbc:postgresql://<host>[:puerto][/base]` con el host en [allowedHosts].
+         * Se rechaza cualquier `?` (pgjdbc deja que `host=`, `PGHOST=`, `service=` o `socketFactory=` de Cloud SQL
+         * redirijan la conexión), `@` y `,` (varios hosts). No hay heurística por nombre: `homelab` o `db` no pasan.
+         */
+        internal fun isLocalJdbcUrl(jdbcUrl: String, allowedHosts: Set<String> = DEFAULT_LOCAL_DB_HOSTS): Boolean {
+            val prefix = "jdbc:postgresql://"
+            if (!jdbcUrl.startsWith(prefix)) return false
+            if (jdbcUrl.any { it == '?' || it == '@' || it == ',' || it == '#' || it.isWhitespace() }) return false
+            val authority = jdbcUrl.removePrefix(prefix).substringBefore('/')
+            val host: String
+            val rest: String
+            if (authority.startsWith("[")) {
+                val end = authority.indexOf(']')
+                if (end < 0) return false
+                host = authority.substring(1, end)
+                rest = authority.substring(end + 1)
+            } else {
+                host = authority.substringBefore(':')
+                rest = authority.removePrefix(host)
+            }
+            // Lo que sigue al host solo puede ser `:<puerto>`.
+            if (rest.isNotEmpty() && !(rest.length > 1 && rest[0] == ':' && rest.drop(1).all { it.isDigit() })) return false
+            return host.lowercase() in allowedHosts
+        }
+    }
+
+    /** Falla al arrancar el servicio, no en la primera petición, si falta algo que el entorno exige. */
+    fun validateForServe(explicitTasksAccount: Boolean = true) {
+        if (env != Env.LOCAL) {
+            require(!firebaseProjectId.isNullOrBlank()) { "FIREBASE_PROJECT_ID (o GCP_PROJECT) es obligatorio en $env" }
+            require(oidcAudience.startsWith("https://")) { "INTERNAL_OIDC_AUDIENCE (o SERVICE_URL) debe ser https en $env" }
+            require(explicitTasksAccount) { "TASKS_SERVICE_ACCOUNT es obligatorio en $env" }
+            require(tasksServiceAccount.endsWith(".iam.gserviceaccount.com")) {
+                "TASKS_SERVICE_ACCOUNT debe ser un correo de cuenta de servicio en $env"
+            }
+        }
+    }
+}

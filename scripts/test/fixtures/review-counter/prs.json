@@ -1,0 +1,7 @@
+[
+  {"number": 2, "title": "E0.1 Agrega monorepo y git flow", "mergedAt": "2026-10-23T14:00:00Z", "labels": [], "headRefName": "feature/monorepo-gitflow", "baseRefName": "dev"},
+  {"number": 4, "title": "E0.2 Módulo de contrato compartido", "mergedAt": "2026-10-25T15:00:00Z", "labels": [{"name": "major"}], "headRefName": "feature/contract-module", "baseRefName": "dev"},
+  {"number": 9, "title": "Corrige el filtro de gitleaks", "mergedAt": "2026-10-26T10:00:00Z", "labels": [], "headRefName": "fix/gitleaks-filtro", "baseRefName": "dev"},
+  {"number": 7, "title": "E0.3 Agrega el esqueleto del backend", "mergedAt": "2026-10-27T16:00:00Z", "labels": [], "headRefName": "feature/backend-skeleton", "baseRefName": "dev"},
+  {"number": 6, "title": "E0.8 Configuración de Firebase", "mergedAt": "2026-10-27T18:30:00Z", "labels": [{"name": "documentation"}], "headRefName": "feature/firebase-setup", "baseRefName": "dev"}
+]

@@ -1,0 +1,16 @@
+{
+  "code": "ABCD-1234",
+  "redemptions": [
+    {
+      "role": "OWNER",
+      "otherAnonId": "h7Kq2xP9",
+      "mode": "AMISTAD",
+      "status": "CONNECTED",
+      "createdAt": "2026-10-23T15:30:00Z",
+      "acceptedAt": "2026-10-23T16:00:00Z"
+    }
+  ],
+  "redeemAttempts": [
+    "2026-10-23T15:29:00Z"
+  ]
+}

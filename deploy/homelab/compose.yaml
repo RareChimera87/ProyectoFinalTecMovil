@@ -1,0 +1,125 @@
+# ParcheU en el homeserver (ADR-0033): Postgres + migraciones + API Ktor.
+# Se despliega con deploy/homelab/desplegar.sh; las variables salen de ~/parcheu/.env (ver .env.example).
+# La imagen se etiqueta con el SHA del commit (PARCHEU_TAG, lo fija desplegar.sh) y la anterior queda en PARCHEU_PREV_TAG para revertir.
+# Solo la API publica un puerto (8090) y solo en loopback (127.0.0.1): ni en la LAN, ni en Tailscale, ni en 0.0.0.0.
+# Desde fuera se entra únicamente por Nginx Proxy Manager, que alcanza la API por la red parcheu-proxy
+# (destino parcheu-api:8080) o, si corre con network_mode: host, por 127.0.0.1:8090 (README). Postgres no publica
+# nada (el 5432 del host ya está ocupado). La dirección se puede cambiar con PARCHEU_BIND_LOCAL en .env.
+# ENV vale dev por defecto: local (autenticación Fake) exige además ALLOW_FAKE_AUTH=true en .env.
+name: parcheu
+
+services:
+  parcheu-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: parcheu
+      POSTGRES_USER: parcheu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+    volumes:
+      - parcheu-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parcheu -d parcheu"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    mem_limit: 384m
+
+  # Una sola ejecución (ADR-0011): aplica Flyway y termina. La API espera a que acabe bien.
+  parcheu-migrate:
+    image: parcheu-api:${PARCHEU_TAG:-latest}
+    pull_policy: never
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      ENV: ${PARCHEU_ENV:-dev}
+      ALLOW_FAKE_AUTH: ${ALLOW_FAKE_AUTH:-}
+      DB_NAME: parcheu
+      DB_URL: jdbc:postgresql://parcheu-db:5432/parcheu
+      DB_USER: parcheu
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JAVA_TOOL_OPTIONS: -Xmx256m
+      # seed-demo y purge-demo respetan la bandera de los demos (ADR-0027). Vacía es inocua.
+      DEMO_USERS_ENABLED: ${DEMO_USERS_ENABLED:-}
+    depends_on:
+      parcheu-db:
+        condition: service_healthy
+    mem_limit: 512m
+
+  parcheu-api:
+    image: parcheu-api:${PARCHEU_TAG:-latest}
+    pull_policy: never
+    command: ["serve"]
+    restart: unless-stopped
+    ports:
+      - "${PARCHEU_BIND_LOCAL:-127.0.0.1:8090}:8080"
+    networks:
+      - default
+      # Red compartida con NPM (docker network connect parcheu-proxy <contenedor de NPM>, README). Postgres no está en ella.
+      - parcheu-proxy
+    environment:
+      ENV: ${PARCHEU_ENV:-dev}
+      ALLOW_FAKE_AUTH: ${ALLOW_FAKE_AUTH:-}
+      PORT: "8080"
+      DB_NAME: parcheu
+      DB_URL: jdbc:postgresql://parcheu-db:5432/parcheu
+      DB_USER: parcheu
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      HMAC_ANON_KEY: ${HMAC_ANON_KEY:-}
+      JAVA_TOOL_OPTIONS: -Xmx384m -XX:+ExitOnOutOfMemoryError
+      # Solo se usan con PARCHEU_ENV=dev y la llave de Google (README). Vacías son inocuas.
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      INTERNAL_OIDC_AUDIENCE: ${INTERNAL_OIDC_AUDIENCE:-}
+      TASKS_SERVICE_ACCOUNT: ${TASKS_SERVICE_ACCOUNT:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_VERTEX_PROJECT: ${AI_VERTEX_PROJECT:-}
+      AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-}
+      AI_MODEL_CHAT: ${AI_MODEL_CHAT:-}
+      AI_MODEL_JUDGE: ${AI_MODEL_JUDGE:-}
+      AI_MODEL_LITE: ${AI_MODEL_LITE:-}
+      # Banderas y uso justo de Plus; vacías se comportan como si no existieran (valen los valores por defecto).
+      DEMO_USERS_ENABLED: ${DEMO_USERS_ENABLED:-}
+      SCENARIO_MODE_ENABLED: ${SCENARIO_MODE_ENABLED:-}
+      MODERATION_ENABLED: ${MODERATION_ENABLED:-}
+      QUOTA_PLUS_DAILY_SIMULATIONS: ${QUOTA_PLUS_DAILY_SIMULATIONS:-}
+      QUOTA_PLUS_DAILY_RANDOM_MATCHES: ${QUOTA_PLUS_DAILY_RANDOM_MATCHES:-}
+      QUOTA_PLUS_DAILY_FULL_REPORTS: ${QUOTA_PLUS_DAILY_FULL_REPORTS:-}
+      # Topes de IA por persona (B-M1); vacías = valores por defecto.
+      AI_USER_DAILY_BUDGET_USD: ${AI_USER_DAILY_BUDGET_USD:-}
+      AI_USER_DAILY_MODERATION_USD: ${AI_USER_DAILY_MODERATION_USD:-}
+      QUOTA_FREE_DAILY_TWIN_ANSWERS: ${QUOTA_FREE_DAILY_TWIN_ANSWERS:-}
+      QUOTA_PLUS_DAILY_TWIN_ANSWERS: ${QUOTA_PLUS_DAILY_TWIN_ANSWERS:-}
+      MODERATION_DAILY_PER_USER: ${MODERATION_DAILY_PER_USER:-}
+      MODERATION_SAMPLE_EVERY: ${MODERATION_SAMPLE_EVERY:-}
+      MODERATION_SAMPLED_DAILY_PER_USER: ${MODERATION_SAMPLED_DAILY_PER_USER:-}
+      AI_RATE_LIMIT_PER_MINUTE: ${AI_RATE_LIMIT_PER_MINUTE:-}
+      # Cola de tareas y jobs dentro del proceso (sin Cloud Tasks ni Cloud Scheduler; ADR-0033).
+      TASKS_MODE: ${TASKS_MODE:-inline}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/sa.json
+    volumes:
+      # Opcional: ~/parcheu/secrets/sa.json (llave de la cuenta de servicio). Se monta el directorio
+      # para que el archivo pueda faltar sin romper el arranque.
+      - ./secrets:/secrets:ro
+    depends_on:
+      parcheu-db:
+        condition: service_healthy
+      parcheu-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    mem_limit: 640m
+
+networks:
+  default:
+  parcheu-proxy:
+    # Externa y con nombre fijo: la crea desplegar.sh si falta y `docker compose down` no la borra (NPM queda conectado).
+    name: parcheu-proxy
+    external: true
+
+volumes:
+  parcheu-pgdata:

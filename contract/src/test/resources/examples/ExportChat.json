@@ -1,0 +1,12 @@
+{
+  "id": "c1a2b3c4-d5e6-4f70-8192-a3b4c5d6e7f8",
+  "type": "DIRECT",
+  "mode": "AMISTAD",
+  "messages": [
+    {
+      "id": "m-02",
+      "text": "Nos vemos en la biblioteca a las 3",
+      "createdAt": "2026-10-23T15:31:00Z"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo devDebug: HTTP únicamente hacia el emulador (10.0.2.2); AuthInterceptor tampoco envía el token a otros hosts por HTTP. El resto exige HTTPS. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

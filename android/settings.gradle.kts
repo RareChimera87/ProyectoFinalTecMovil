@@ -24,4 +24,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "ParcheU"
 include(":app")
- 
+include(":designsystem")
+
+// Contrato compartido con el backend (DTOs y enums de la API v1, E0.2).
+includeBuild("../contract")

@@ -1,0 +1,84 @@
+name: rules-ci
+
+# E0.6. Pruebas de las reglas de Firestore en el emulador (firebase/test). Siempre reporta el
+# check `rules-ci`; las pruebas solo corren si el PR toca firebase/.
+# Nota: firebase-deploy.yml (E0.8) trae su propio job `rules-ci` para PR con filtro de ruta;
+# cuando ambos estén en dev, quitar el disparador pull_request de firebase-deploy (ver PR de E0.6).
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rules-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cambios:
+    name: rules-cambios
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      existe: ${{ steps.existe.outputs.existe }}
+      firebase: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filtro.outputs.firebase }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        id: filtro
+        with:
+          filters: |
+            firebase:
+              - 'firebase/**'
+              - '.github/workflows/rules-ci.yml'
+      - name: Comprueba que existe firebase/
+        id: existe
+        run: |
+          if [[ -f "firebase/package.json" ]]; then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No existe firebase/package.json en esta rama (solo un README o nada): se omite la verificación hasta que lleguen los cimientos."
+          fi
+
+  verificar:
+    name: rules-verificar
+    needs: cambios
+    if: needs.cambios.outputs.firebase == 'true' && needs.cambios.outputs.existe == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: firebase
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: firebase/package-lock.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm ci
+      - name: Pruebas de reglas en el emulador de Firestore
+        run: npm test
+
+  rules-ci:
+    name: rules-ci
+    needs: [cambios, verificar]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resultado
+        env:
+          CAMBIOS: ${{ needs.cambios.result }}
+          VERIFICAR: ${{ needs.verificar.result }}
+        run: |
+          echo "cambios=$CAMBIOS verificar=$VERIFICAR"
+          [[ "$CAMBIOS" == success ]] || exit 1
+          [[ "$VERIFICAR" == success || "$VERIFICAR" == skipped ]] || exit 1

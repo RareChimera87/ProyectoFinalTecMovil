@@ -1,12 +1,42 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
-#
-# For more details, see
-#   https://d.android.com/r/tools/r8/keep-rules
+# Reglas de R8 del módulo :app (AGP combina todos los archivos de src/main/keepRules).
+# kotlinx.serialization ya trae reglas en su jar; estas cubren los DTOs del contrato y las rutas
+# @Serializable de Navigation, que se buscan por su serializer() generado.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault,InnerClasses,Signature
+
+# Serializers generados (companion.serializer() y la clase $$serializer) de las clases @Serializable.
+-if @kotlinx.serialization.Serializable class **
+-keepclassmembers class <1> {
+    static <1>$Companion Companion;
+}
+-if @kotlinx.serialization.Serializable class ** {
+    static **$* *;
+}
+-keepclassmembers class <2>$<3> {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-if @kotlinx.serialization.Serializable class ** {
+    public static ** INSTANCE;
+}
+-keepclassmembers class <1> {
+    public static <1> INSTANCE;
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# DTOs y enums del contrato: se serializan por nombre y se comparten con el backend.
+-keep,includedescriptorclasses class me.santiagoreina.parcheu.contract.**$$serializer { *; }
+-keepclassmembers class me.santiagoreina.parcheu.contract.** {
+    *** Companion;
+}
+-keepclasseswithmembers class me.santiagoreina.parcheu.contract.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Rutas tipadas de Navigation Compose.
+-keep,includedescriptorclasses class me.santiagoreina.parcheu.navigation.**$$serializer { *; }
+-keepclassmembers class me.santiagoreina.parcheu.navigation.** {
+    *** Companion;
+}
+-keepclasseswithmembers class me.santiagoreina.parcheu.navigation.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}

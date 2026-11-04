@@ -1,0 +1,104 @@
+name: android-ci
+
+# E0.6. ktlint (Spotless), lint de Android, tests JVM (Robolectric) y verificación de Roborazzi.
+# Corre en todo PR para que el check `android-ci` siempre reporte (es obligatorio en dev); el
+# trabajo pesado solo corre si el PR toca android/ o contract/ (filtro por ruta en `cambios`).
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cambios:
+    name: android-cambios
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      android: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filtro.outputs.android }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+        id: filtro
+        with:
+          filters: |
+            android:
+              - 'android/**'
+              - 'contract/**'
+              - '.github/workflows/android-ci.yml'
+
+  verificar:
+    name: android-verificar
+    needs: cambios
+    if: needs.cambios.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          # 21 para el contrato y el daemon; 17 es el toolchain de la app (queda como JAVA_HOME).
+          java-version: |
+            21
+            17
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+      - name: google-services.json de dev (secreto, nunca versionado)
+        env:
+          GOOGLE_SERVICES_JSON_DEV: ${{ secrets.GOOGLE_SERVICES_JSON_DEV }}
+        run: |
+          if [[ -n "$GOOGLE_SERVICES_JSON_DEV" ]]; then
+            mkdir -p android/app/src/dev
+            base64 -d <<<"$GOOGLE_SERVICES_JSON_DEV" > android/app/src/dev/google-services.json
+          else
+            echo "::notice::Sin GOOGLE_SERVICES_JSON_DEV: el build sigue sin Firebase (missingGoogleServicesStrategy=WARN)."
+          fi
+      - name: ktlint, lint, tests JVM, Roborazzi y permiso BILLING de prodRelease (E7.0)
+        working-directory: android
+        run: >-
+          ./gradlew --stacktrace
+          spotlessCheck
+          :app:lintDevDebug :app:testDevDebugUnitTest
+          :app:verifyProdReleaseBillingPermission
+          :designsystem:lintDebug :designsystem:testDebugUnitTest
+          -Proborazzi.test.verify=true
+      - name: bundleProdRelease sin google-services.json de prod (E10.5)
+        # Crashlytics no debe romper el AAB de prod mientras falte el secreto de prod: el pipeline
+        # android-release admite construir sin él. Solo corre si el archivo no existe (CI no lo escribe).
+        working-directory: android
+        run: |
+          if [[ ! -f app/src/prod/google-services.json ]]; then
+            ./gradlew --stacktrace :app:bundleProdRelease
+          fi
+      - name: Reportes y diferencias de capturas
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: android-reportes
+          path: |
+            android/*/build/reports/
+            android/*/build/outputs/roborazzi/
+            android/*/build/test-results/
+          retention-days: 7
+
+  android-ci:
+    name: android-ci
+    needs: [cambios, verificar]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resultado
+        env:
+          CAMBIOS: ${{ needs.cambios.result }}
+          VERIFICAR: ${{ needs.verificar.result }}
+        run: |
+          echo "cambios=$CAMBIOS verificar=$VERIFICAR"
+          [[ "$CAMBIOS" == success ]] || exit 1
+          [[ "$VERIFICAR" == success || "$VERIFICAR" == skipped ]] || exit 1

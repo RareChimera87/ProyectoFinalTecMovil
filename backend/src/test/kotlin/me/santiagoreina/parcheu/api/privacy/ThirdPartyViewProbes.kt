@@ -1,0 +1,226 @@
+package me.santiagoreina.parcheu.api.privacy
+
+import me.santiagoreina.parcheu.api.graph.AnonIdSigner
+import me.santiagoreina.parcheu.api.graph.GraphFilter
+import me.santiagoreina.parcheu.api.graph.GraphService
+import me.santiagoreina.parcheu.api.graph.GraphVisibilityPolicy
+import me.santiagoreina.parcheu.api.graph.ThirdPartyView
+import me.santiagoreina.parcheu.api.graph.ViewContext
+import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.ai.testGateway
+import me.santiagoreina.parcheu.api.graph.communities.CommunitiesView
+import me.santiagoreina.parcheu.api.graph.communities.CommunityNamer
+import me.santiagoreina.parcheu.api.graph.communities.CommunityService
+import me.santiagoreina.parcheu.api.graph.communities.InMemoryCommunityRepository
+import me.santiagoreina.parcheu.api.graph.fof.FofService
+import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
+import me.santiagoreina.parcheu.api.graph.fof.InMemoryFofRepository
+import me.santiagoreina.parcheu.api.home.HomeSuggestions
+import me.santiagoreina.parcheu.api.social.introductions.IntroductionPeople
+import me.santiagoreina.parcheu.api.social.requests.ConnectRequestRepository
+import me.santiagoreina.parcheu.api.social.requests.ConnectRequestService
+import me.santiagoreina.parcheu.api.social.requests.PendingConnect
+import me.santiagoreina.parcheu.contract.Mode
+import java.util.UUID
+import kotlin.reflect.KClass
+
+/**
+ * Adaptador de la suite para una vista: carga un [PrivacyWorld] en los repositorios en memoria
+ * que la vista usa, la invoca como [viewer] y traduce su respuesta (DTOs) a una [Exposure].
+ */
+interface ThirdPartyViewProbe {
+    val name: String
+    val context: ViewContext
+
+    suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure
+}
+
+/**
+ * Sondas de la suite.
+ *
+ * Cada clase de [me.santiagoreina.parcheu.api.graph.ThirdPartyViews.registered] necesita su sonda
+ * en [byView] (fof E6.3, comunidades E6.4, presentaciones E6.2, sugerencias de inicio E4.7): el
+ * test de registro falla si falta. [reference] se verifica siempre, haya o no vistas registradas.
+ */
+object ThirdPartyViewProbes {
+    val byView: Map<KClass<out ThirdPartyView>, ThirdPartyViewProbe> = mapOf(
+        HomeSuggestions::class to HomeSuggestionsProbe,
+        IntroductionPeople::class to IntroductionsProbe,
+        FofService::class to FofProbe,
+        CommunitiesView::class to CommunitiesProbe,
+        ConnectRequestService::class to ConnectRequestsProbe,
+    )
+
+    val reference: List<ThirdPartyViewProbe> = listOf(ThirdPartyNodesProbe, EgoGraphProbe)
+
+    fun all(): List<ThirdPartyViewProbe> = reference + byView.values
+}
+
+private val signer = AnonIdSigner.forTests()
+
+/**
+ * "Nodos de terceros" en el peor caso: la vista toma como candidatos a **todo** el mundo y a
+ * **todas** las aristas, y solo [GraphVisibilityPolicy] la separa de una fuga. Así se prueba que la
+ * policy, por sí sola, basta como segunda barrera para cualquier vista de segundo grado (fof,
+ * comunidades, presentaciones, sugerencias), aunque su SQL dejara pasar algo. Es el patrón que
+ * deben seguir las vistas reales: candidatos → `canSee` → `canSeeEdge` → `present`.
+ */
+object ThirdPartyNodesProbe : ThirdPartyViewProbe {
+    override val name = "nodos de terceros (solo la policy)"
+    override val context = ViewContext.THIRD_PARTY
+
+    private val policy = GraphVisibilityPolicy(signer)
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val blocked = world.blockedEitherWay(viewer)
+        val visible = world.people
+            .filter { it.id != viewer && policy.canSee(viewer, it, ViewContext.THIRD_PARTY, blocked) }
+            .associate { it.id to policy.present(viewer, it, world.connected(viewer, it.id), ViewContext.THIRD_PARTY).id }
+        fun publicId(id: UUID): String? = if (id == viewer) viewer.toString() else visible[id]
+        val edges = world.edges
+            .filter { policy.canSeeEdge(viewer, it.a, it.b, it.mode) }
+            .mapNotNull { edge ->
+                val a = publicId(edge.a) ?: return@mapNotNull null
+                val b = publicId(edge.b) ?: return@mapNotNull null
+                ExposedEdge(a, b, edge.mode)
+            }
+        return Exposure(visible.values.toList(), edges)
+    }
+}
+
+/**
+ * Ego-grafo (`GET /v1/graph` y el detalle de cada nodo, E3.1) con el repositorio en memoria. No es
+ * una vista de terceros (HIDDEN sí se ve en conexiones directas), pero comparte las reglas de
+ * Pareja ajena, bloqueados y borrados.
+ */
+object EgoGraphProbe : ThirdPartyViewProbe {
+    override val name = "ego-grafo"
+    override val context = ViewContext.EGO
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val service = GraphService(world.toGraphRepository(), GraphVisibilityPolicy(signer))
+        val graph = service.graph(viewer, GraphFilter())
+        val me = graph.me.id
+        val details = graph.nodes.map { service.node(viewer, it.id) }
+        return Exposure(
+            personIds = graph.nodes.map { it.id } +
+                details.mapNotNull { detail -> detail.lastSimulation?.other?.let { it.id ?: it.anonId } },
+            edges = graph.edges.map { ExposedEdge(me, it.otherId, it.mode) } +
+                details.flatMap { detail -> detail.sharedModes.map { ExposedEdge(me, detail.node.id, it) } },
+        )
+    }
+}
+
+/**
+ * Sugerencias de Inicio (E4.7) con ParcheU+ (el caso que calcula amigos en común). Lo que se expone a
+ * terceros son las aristas candidato–amigo que entran en `mutualCount`: se traducen a [ExposedEdge]
+ * y se verifican en segundo grado (nunca Pareja ajena, HIDDEN, bloqueados ni borrados). Las personas
+ * sugeridas son conexiones directas (contexto EGO) y se prueban en `HomeSuggestionsTest`.
+ */
+object HomeSuggestionsProbe : ThirdPartyViewProbe {
+    override val name = "sugerencias de inicio (amigos en común)"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val view = HomeSuggestions(world.toGraphRepository(), GraphVisibilityPolicy(signer)) { Mode.entries.toSet() }
+        val edges = view.candidates(viewer, withMutuals = true)
+            .flatMap { it.mutuals.orEmpty() }
+            .map { ExposedEdge(it.candidateId, it.mutualId, it.mode) }
+        return Exposure(personIds = edges.map { it.bId }, edges = edges)
+    }
+}
+
+/**
+ * Presentaciones (E6.2): cómo ve una persona presentada a la otra en E3 (se prueba con **todas** las
+ * personas del mundo que no son conexiones directas del observador, el peor caso) y los amigos de
+ * amigos que 'Pedir presentación' puede resolver por `anonId`. Las conexiones directas son contexto EGO.
+ */
+object IntroductionsProbe : ThirdPartyViewProbe {
+    override val name = "presentaciones (la otra persona y amigos de amigos)"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val graph = world.toGraphRepository()
+        val policy = GraphVisibilityPolicy(signer)
+        val view = IntroductionPeople(graph, policy, FofService(InMemoryFofRepository(graph), graph, policy, isPlus = { true }))
+        val others = world.people
+            .filter { it.id != viewer && !world.connected(viewer, it.id) }
+            .mapNotNull { view.presentOther(viewer, it.id) }
+            .map { checkNotNull(it.id ?: it.anonId) { "Una persona presentada sin id público" } }
+        val fof = view.friendsOfFriends(viewer).map { it.person.id }
+        return Exposure(personIds = others + fof, edges = emptyList())
+    }
+}
+
+/**
+ * Amigos de amigos (E6.3) con ParcheU+ (el caso que entrega la lista). Expone a cada candidato por su
+ * id público, las aristas amigo en común–candidato que entran en `mutuals` y la arista `viaId`–candidato
+ * que la UI dibuja, en segundo grado: nunca Pareja ajena, HIDDEN, bloqueados ni borrados, y el
+ * candidato siempre con su `anonId` (nunca hay conexión mutua con él). Que `viaId` además salga de
+ * una arista CONNECTED que no es de Pareja lo prueba `FofViaIdPropertyTest`.
+ */
+object FofProbe : ThirdPartyViewProbe {
+    override val name = "amigos de amigos"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val graph = world.toGraphRepository()
+        val view = FofService(InMemoryFofRepository(graph), graph, GraphVisibilityPolicy(signer), isPlus = { true })
+        val candidates = view.candidates(viewer)
+        val dto = view.fof(viewer)
+        val edges = candidates.flatMap { it.edges }.map { ExposedEdge(it.candidateId, it.mutualId, it.mode) }
+        val byId = candidates.associateBy { it.person.id }
+        val viaEdges = dto.items.orEmpty().mapNotNull { item ->
+            val via = item.viaId ?: return@mapNotNull null
+            // El DTO no lleva el modo de la arista viaId–candidato: se expone con el modo del candidato.
+            ExposedEdge(item.anonId, via, byId[item.anonId]?.mode ?: item.mode)
+        }
+        return Exposure(
+            personIds = candidates.map { it.person.id } + dto.items.orEmpty().map { it.anonId },
+            edges = edges + viaEdges,
+        )
+    }
+}
+
+/**
+ * Comunidades (E6.4) con ParcheU+ (el caso que entrega la lista): corre el job semanal sobre el mundo y
+ * expone a los miembros de cada comunidad del observador por su id público, en segundo grado: nunca
+ * HIDDEN, bloqueados ni borrados, y el `users.id` real solo con conexión mutua. La Pareja no entra en
+ * ninguna comunidad ni se expone: las comunidades no muestran aristas.
+ */
+object CommunitiesProbe : ThirdPartyViewProbe {
+    override val name = "comunidades"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val graph = world.toGraphRepository()
+        val repo = InMemoryCommunityRepository(graph)
+        CommunityService(repo, FakeTaskQueue(), CommunityNamer(testGateway()), FIXED_CLOCK).runWeekly()
+        val view = CommunitiesView(repo, graph, GraphVisibilityPolicy(signer), isPlus = { true })
+        val communities = view.communities(viewer)
+        val dto = view.communitiesDto(viewer)
+        val ids = communities.flatMap { community -> community.members.map { it.id } } +
+            dto.items.orEmpty().flatMap { item -> item.members.map { checkNotNull(it.id ?: it.anonId) } }
+        return Exposure(personIds = ids, edges = emptyList())
+    }
+}
+
+/**
+ * Quién quiere conectar contigo (E6.6) con ParcheU+ (el caso que entrega la lista). Peor caso: el
+ * repositorio devuelve una solicitud de **todas** las personas del mundo, así que solo la policy separa
+ * una fuga. Cada solicitante se expone por su id público: nunca HIDDEN, bloqueados ni borrados, y siempre
+ * con su `anonId` (aún no hay conexión mutua).
+ */
+object ConnectRequestsProbe : ThirdPartyViewProbe {
+    override val name = "quién quiere conectar contigo"
+    override val context = ViewContext.THIRD_PARTY
+
+    override suspend fun expose(world: PrivacyWorld, viewer: UUID): Exposure {
+        val everyone = ConnectRequestRepository { _, _ ->
+            world.people.filter { it.id != viewer }.map { PendingConnect(UUID.randomUUID(), it.id, Mode.AMISTAD, 50, java.time.Instant.EPOCH) }
+        }
+        val view = ConnectRequestService(everyone, world.toGraphRepository(), GraphVisibilityPolicy(signer), isPlus = { true })
+        val dto = view.requests(viewer)
+        return Exposure(personIds = dto.items.orEmpty().map { checkNotNull(it.other.id ?: it.other.anonId) }, edges = emptyList())
+    }
+}

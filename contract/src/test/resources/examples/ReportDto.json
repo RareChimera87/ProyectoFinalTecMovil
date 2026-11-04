@@ -1,0 +1,27 @@
+{
+  "score": 82,
+  "summary": "Tienen un ritmo parecido y planes compatibles.",
+  "reasons": [
+    "Mismo humor",
+    "Planes de fin de semana",
+    "Valoran la puntualidad"
+  ],
+  "frictions": [
+    "Uno es más madrugador"
+  ],
+  "dimensions": [
+    {
+      "name": "Humor",
+      "score": 88,
+      "note": "Se ríen de lo mismo"
+    }
+  ],
+  "locked": false,
+  "unlockAvailable": false,
+  "myDecision": true,
+  "otherDecided": true,
+  "otherName": "Laura",
+  "reasonsCount": 3,
+  "frictionsCount": 1,
+  "chatId": "7b0d6f6e-2f5d-4c1a-9a51-3c0f7c3d9e21"
+}

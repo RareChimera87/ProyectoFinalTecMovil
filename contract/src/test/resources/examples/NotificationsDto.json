@@ -1,0 +1,22 @@
+{
+  "today": [
+    {
+      "id": "notif-1",
+      "kind": "SIMULATION_READY",
+      "title": "Tu simulación está lista",
+      "body": "Mira qué tal te fue con Alguien de la UIS",
+      "route": "parcheu://results/5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+      "actor": {
+        "anonId": "h7Kq2xP9",
+        "label": "Alguien de la UIS",
+        "initials": "A",
+        "isDemo": false
+      },
+      "locked": false,
+      "read": false,
+      "createdAt": "2026-10-23T15:30:00Z"
+    }
+  ],
+  "week": [],
+  "older": []
+}

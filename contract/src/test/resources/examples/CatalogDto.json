@@ -1,0 +1,16 @@
+{
+  "universities": [
+    {
+      "id": 1,
+      "shortName": "UIS",
+      "name": "Universidad Industrial de Santander"
+    }
+  ],
+  "interests": [
+    {
+      "slug": "musica",
+      "label": "Música",
+      "icon": "music_note"
+    }
+  ]
+}

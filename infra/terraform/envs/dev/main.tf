@@ -1,0 +1,152 @@
+# Entorno dev (parcheu-dev). `apply` lo hace I1 o CI (sa-terraform vía WIF, solo desde la rama dev).
+
+terraform {
+  required_version = ">= 1.15.0, < 2.0.0"
+
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 7.0"
+    }
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = "~> 7.0"
+    }
+  }
+
+  backend "gcs" {
+    bucket = "parcheu-dev-tfstate"
+    prefix = "platform"
+  }
+}
+
+locals {
+  project_id = "parcheu-dev"
+  region     = "us-central1"
+}
+
+provider "google" {
+  project               = local.project_id
+  region                = local.region
+  billing_project       = local.project_id
+  user_project_override = true
+}
+
+provider "google-beta" {
+  project               = local.project_id
+  region                = local.region
+  billing_project       = local.project_id
+  user_project_override = true
+}
+
+variable "simulations_max_dispatches_per_second" {
+  description = "Techo de gasto de IA: simulaciones despachadas por segundo."
+  type        = number
+  default     = 2
+}
+
+variable "simulations_max_concurrent_dispatches" {
+  description = "Techo de gasto de IA: simulaciones en paralelo."
+  type        = number
+  default     = 10
+}
+
+# Sin correo, las políticas de alerta se crean sin canal y nadie se entera. En dev el valor por
+# defecto es el correo de contacto público del proyecto (el de firebase/public/*.html), para que
+# el `apply` de CI (que no pasa -var) siempre tenga destinatario; los demás se agregan con -var.
+variable "alert_emails" {
+  description = "Correos que reciben las alertas de monitoring.tf (E10.5). Al menos uno."
+  type        = list(string)
+  default     = ["sanctireinadiaz@gmail.com"]
+
+  validation {
+    condition     = length(var.alert_emails) > 0 && alltrue([for e in var.alert_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", e))])
+    error_message = "alert_emails necesita al menos un correo válido: sin canal, las alertas no avisan a nadie."
+  }
+}
+
+module "platform" {
+  source = "../../modules/platform"
+
+  project_id   = local.project_id
+  environment  = "dev"
+  region       = local.region
+  alert_emails = var.alert_emails
+
+  api_min_instances   = 0
+  api_max_instances   = 3
+  deletion_protection = false
+
+  sql_tier            = "db-f1-micro"
+  sql_backups_enabled = false
+  sql_pitr_enabled    = false
+
+  queue_limits = {
+    "simulations" = {
+      max_dispatches_per_second = var.simulations_max_dispatches_per_second
+      max_concurrent_dispatches = var.simulations_max_concurrent_dispatches
+    }
+    "ai-light"    = { max_dispatches_per_second = 5, max_concurrent_dispatches = 10 }
+    "maintenance" = { max_dispatches_per_second = 1, max_concurrent_dispatches = 2 }
+  }
+
+  rtdn_push_enabled = false
+
+  # Usuarios demo siempre disponibles en dev (ADR-0027).
+  demo_users_enabled = true
+}
+
+output "api_url" {
+  value = module.platform.api_url
+}
+
+output "artifact_registry" {
+  value = module.platform.artifact_registry
+}
+
+output "sql_connection_name" {
+  value = module.platform.sql_connection_name
+}
+
+output "internal_oidc_audience" {
+  value = module.platform.internal_oidc_audience
+}
+
+# fix/wif-deployer-dev: sa-api, sa-tasks, los roles de proyecto de sa-api y los enlaces
+# entre cuentas pasaron a bootstrap/. Si este estado ya los tenía, se olvidan sin
+# destruirlos (el bootstrap los importa; ver docs/pendientes-humanos.md). Sin ellos en el
+# estado, estos bloques no hacen nada.
+removed {
+  from = module.platform.google_service_account.api
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_service_account.tasks
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_project_iam_member.api
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_service_account_iam_member.api_acts_as_tasks
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.platform.google_service_account_iam_member.deployer_acts_as_api
+  lifecycle {
+    destroy = false
+  }
+}

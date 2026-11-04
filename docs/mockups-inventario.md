@@ -2,6 +2,8 @@
 
 Fuente: 12 archivos de Claude Design (`ParcheU Mockups`, `PU NavBar`, `PU Grafo`, `PU Seccion A` a `I`). Resolución objetivo: Android 360x800, Material 3, oscuro principal, claro al final. Los ids de pantalla son estables: **sección + número**. La columna "ID mockup" conserva la numeración original del diseño (01, 02a, 08a...). Las secciones del archivo maestro son: A Arranque, B Creación del gemelo, C Inicio/Perfil, D Tu parche, E Presentar, F Conocer, G ParcheU+, H Seguridad/Privacidad, I Modo claro.
 
+**Actualización 2026-10-23.** Fuente: `PU Seccion H.dc.html` y `ParcheU Mockups.dc.html` (proyecto de Claude Design 5d7b35fb). La sección H pasa de 3 a 5 pantallas: se agregan **H4 Exportar mis datos (24a)** y **H5 Borrar cuenta (24b)**, y se modifica **H3 Ajustes de privacidad (23)** (nuevo enlace 'Exportar mis datos' y destinos 24a/24b). El maestro sigue importando las mismas 9 secciones; el `hint-size` de la sección H es 2184px (cinco teléfonos). Las demás secciones, `PU Grafo`, `PU NavBar` y `support.js` no cambiaron desde la versión del 2026-10-22 (mismas etags). Detalle en la sección 1.1.
+
 ## 1. Tabla de pantallas
 
 Leyenda premium: **No** = gratis; **Sí** = solo ParcheU+; **Bloqueo** = pantalla gratis que muestra el candado/upsell.
@@ -94,7 +96,47 @@ Leyenda premium: **No** = gratis; **Sí** = solo ParcheU+; **Bloqueo** = pantall
 |---|---|---|---|---|---|
 | H1 | 22a | Reportar o bloquear (bottom sheet sobre chat) | No (gratis siempre) | único; falta confirmación de bloqueo | H2, confirmación de bloqueo (sin diseñar), F9 |
 | H2 | 22b | Reportar, motivos | No | motivo 1 + ambos checkbox marcados (estático) | confirmación (sin diseñar), close |
-| H3 | 23 | Ajustes de privacidad | No | toggles de modos, visibilidad a/b/c, aprender de chats | B3 (activar Pareja), borrado (sin diseñar) |
+| H3 | 23 | Ajustes de privacidad (modificada 2026-10-23) | No | toggles de modos, visibilidad a/b/c, aprender de chats | B3 (activar Pareja), H4 (Exportar mis datos), H5 (Borrar mi gemelo y mis datos) |
+| H4 | 24a | Exportar mis datos (nueva 2026-10-23) | No | 4 de 5 categorías marcadas (Chats sin marcar), formato JSON seleccionado; faltan enviando, enviado y error | atrás H3; 'Exportar mis datos' -> enlace al correo (confirmación sin diseñar); la anotación dice 'Borrar mi cuenta -> 24b' pero la pantalla no tiene ese botón |
+| H5 | 24b | Borrar cuenta (nueva 2026-10-23) | No | campo de confirmación lleno con 'BORRAR' (botón habilitado); faltan vacío/deshabilitado, borrando y error | atrás H3; 'Exportar' -> H4; 'Borrar mi cuenta' -> cierra sesión -> A1 |
+
+### 1.1 Detalle de la sección H actualizada (2026-10-23)
+
+Las tres pantallas usan el tema oscuro de la sección (bg #14111F, s1 #1F1B2E, s2 #2B2641, ln #3A3354, tx #F5F2FB, mu #B0A9C6, prt #B6A6FF, prc #2E2566, onprc #E0D9FF, coralt #FF8DA2). Ninguna tiene variante en modo claro (Sección I no las incluye): en claro se aplican los tokens de 3.2 (coralt #C42C4A, prt #5533E8, prc #ECE7FF, onprc #2E1A8C). Ninguna muestra NavBar (pantallas hijas con back).
+
+**H3 · Ajustes de privacidad (23), modificada.** Feature: E8.2 (enlaces a H4/H5 de E8.3).
+- Anotación: "Modos activos, visibilidad en el grafo y aprendizaje. Todo funciona." · "Activar Pareja → 03c · Exportar → 24a · Borrar → 24b".
+- TopAppBar hija: arrow_back + "Privacidad" (Sora 19/600).
+- SectionHeader "MODOS ACTIVOS" + Card s1 radio 20 con 3 filas de Switch (52x32): caja de icono 36 radio 12 en color pleno del modo (diversity_3 #2EC4A6, favorite #FF5C7A, school #3A86FF; icono #14111F) + nombre 15/500. Estado del mockup: los tres ON.
+- SectionHeader "VISIBILIDAD EN EL GRAFO DE OTROS" + Card con 3 RadioRow: "Visible con mi nombre" / "Los amigos de tus amigos ven tu nombre y foto"; "Aparecer como «Alguien»" / "Solo ven tu % de afinidad" (seleccionada por defecto, `vis: 'b'`); "Oculto" / "Solo tus contactos directos te ven".
+- InfoBanner tonal prc/onprc radio 16, icono lock: "Tus vínculos de Pareja nunca aparecen en el grafo de otras personas."
+- Fila con Switch "Aprender de mis chats" / "Tu gemelo aprende de cómo conversas" (ON).
+- Enlaces de texto al final: "Borrar mi gemelo y mis datos" (14/600 coralt) → H5 y, **nuevo**, "Exportar mis datos" (14/600 prt) → H4.
+- Cambio respecto a la versión del 2026-10-22: solo el enlace "Exportar mis datos" y la anotación de navegación (antes el borrado iba a una pantalla sin diseñar). Sigue sin las filas 'Personas bloqueadas', 'Cerrar sesión' ni enlaces a Términos/Política que pide E8.2.
+- Estados: sin vacío, cargando ni error.
+
+**H4 · Exportar mis datos (24a), nueva.** Feature: E8.3 (entrada desde H3, E8.2).
+- Anotación: "Descarga una copia de tu información. Se llega desde Privacidad (23)." · "Exportar → enlace al correo · Borrar mi cuenta → 24b".
+- TopAppBar hija: arrow_back + "Exportar mis datos".
+- Texto de introducción 14 mu: "Elige qué incluir. Te mandamos un enlace de descarga al correo en unos minutos."
+- Card s1 radio 20 con 5 filas seleccionables (min 58, gap 14): caja de icono 40 radio 12 fondo s2 con icono 22 prt + título 15/500 + subtítulo 12.5 mu + Checkbox 22 radio 7. Filas: person "Perfil y modos" / "Respuestas de personalidad" (marcada); smart_toy "Tu gemelo" / "Nivel 6 · 24 aprendizajes" (marcada); hub "Tu parche" / "9 conexiones y comunidades" (marcada); insights "Simulaciones" / "14 resultados" (marcada); chat_bubble "Chats" / "Solo tus mensajes" (sin marcar: borde 2 mu).
+- SectionHeader "FORMATO" + selector de 2 opciones en grid 1fr 1fr gap 10, alto 48 radio 14: "JSON" seleccionado (borde 2 #6D4AFF, fondo prc, texto onprc 14/600) y "PDF legible" (borde 1.5 ln).
+- InfoNote s1 radio 16 con icono mail prt: "Va a mariana.gomez@correo.uis.edu.co · el enlace dura 7 días." (correo y vigencia vienen del backend).
+- Footer: PrimaryButton 52 con icono download "Exportar mis datos".
+- Estados: solo el estático; faltan enviando, confirmación 'te enviamos el enlace', error, y validación de 0 categorías.
+
+**H5 · Borrar cuenta (24b), nueva.** Feature: E8.3 (entrada desde H3, E8.2; también la pantalla de bloqueo por menor de edad de E2.6 ofrece 'Borrar mi cuenta').
+- Anotación: "Borra la cuenta, el gemelo y todos los datos. Pide confirmación escrita." · "Borrar → cierra sesión → 01 · Exportar antes → 24a".
+- TopAppBar hija: arrow_back + "Borrar cuenta".
+- Icono hero: caja 64 radio 20 fondo s1 con delete_forever 34 coralt, centrada.
+- Título Sora 24/700 ls -.4: "¿Borrar tu cuenta para siempre?"; cuerpo 14 mu: "Esto no se puede deshacer. Se borra:".
+- Card s1 radio 20 (lista, filas 42, icono 20 coralt): smart_toy "Tu gemelo y todo lo que aprendió"; hub "Tu parche y tus 9 conexiones"; insights "14 simulaciones y sus informes"; chat_bubble "Tus chats".
+- Fila outline (borde 1.5 ln, radio 16) con icono download prt: "¿Quieres una copia antes?" + acción de texto "Exportar" 13/600 prt → H4.
+- InfoNote s1 radio 16 con icono info mu: "Si tienes ParcheU+, cancélalo en Google Play; borrar la cuenta no cancela el cobro."
+- Confirmación escrita: "Escribe **BORRAR** para confirmar" (13 mu, palabra en tx 600) + campo 52 radio 14 con borde 2 coralt, texto Sora 16/600 ls 1 (valor del mockup: "BORRAR").
+- Footer: botón destructivo 52 radio 16 fondo #FF5C7A (coral pleno) texto #14111F 15/600 "Borrar mi cuenta" + nota 12 mu centrada "Tienes 14 días para arrepentirte iniciando sesión."
+- Navegación: Borrar → cierra sesión → A1 (sin sesión → A2/A4).
+- Estados: solo el habilitado; faltan campo vacío con botón deshabilitado, borrando, error y la pantalla de 'cuenta en periodo de arrepentimiento' al volver a iniciar sesión.
 
 ### I. Modo claro (mismas pantallas sobre Hueso)
 
@@ -114,7 +156,8 @@ Sección I no agrega flujos nuevos: solo exige un segundo `lightColorScheme`.
 | PhoneFrame / StatusBar / HomeIndicator | Solo mockup (376x816, borde 8, radio 36). No implementar; en Compose usar Scaffold con insets del sistema | todas |
 | TopAppBar | 56dp; icon buttons 48x48; título Sora 19/600. Variantes: Inicio (wordmark + campana + avatar 34), raíz (título + hasta 2 iconos), hija (back/close + título + acción de texto o badge), chat (avatar + nombre + subtítulo + more_vert/flag) | A2-A4 (solo wordmark + Saltar), B1-B4, C1-C5, D1-D9, E1-E3, F1-F9, G4, H1-H3, I1-I3 |
 | NavBar (PU NavBar) | 76dp, fondo s1, borde superior 1 ln, 5 ítems (home, hub, shuffle, chat_bubble, person). Activo: píldora 56x30 radio 15 prc, icono relleno onprc, label 11/600. Inactivo: mu, 11/500 | C1, C3, D1, D3, D4, D5, D7, D8, G2 (fondo), I1, I2 |
-| PrimaryButton | 52dp, radio 16, #6D4AFF, texto blanco 15/600, icono 20 opcional. Variante 36dp radio 12 | A2, A3, B2-B5, C4, C5, D2-D5, E1-E3, F1-F8, G1-G3, H2, I1, I3 |
+| PrimaryButton | 52dp, radio 16, #6D4AFF, texto blanco 15/600, icono 20 opcional. Variante 36dp radio 12 | A2, A3, B2-B5, C4, C5, D2-D5, E1-E3, F1-F8, G1-G3, H2, H4, I1, I3 |
+| DestructiveButton | 52dp, radio 16, fondo #FF5C7A (coral pleno), texto #14111F 15/600; nota 12 mu centrada debajo | H5 |
 | TonalButton | prc / onprc, 52 / 40 / 36dp | C1, C3, C5, D2, D7, F4, F7, I1 |
 | OutlineButton | borde 1.5 ln, texto tx | C4, F1, F7, F8, I3 |
 | TextButton | prt, 52dp, 15/600; acción de texto 13/600 | A2, A3, B3, B5, D3, E2, E3, F5, F6, G2, G3, C1-C4 |
@@ -133,7 +176,7 @@ Sección I no agrega flujos nuevos: solo exige un segundo `lightColorScheme`.
 | LockedFeatureBanner | Borde dashed ln, radio 16, candado + texto + badge | D1, I2 |
 | LockedOverlay (borroso) | blur 6px, opacity .55, círculo 44 con lock, título 15/600, botón tonal "Ver ParcheU+" | D7, F7 |
 | Card (superficie) | s1, radio 20, padding 16, gap 10. Variantes: stat (radio 16, 12x14), sugerencia (14), plan activo (radio 24, borde degradado) | casi todas |
-| SectionHeader | 12/600, uppercase, ls .6, mu; acción opcional 13/600 prt | B4, C1-C4, E1, E2, F2, F8, H3, I1, I3 |
+| SectionHeader | 12/600, uppercase, ls .6, mu; acción opcional 13/600 prt | B4, C1-C4, E1, E2, F2, F8, H3, H4, I1, I3 |
 | AvatarInitials | Círculo; fondo rgba(109,74,255, alpha de afinidad); tamaños 26/32/34/36/40/48/56/60/64/72; anónimo: s2 + borde dashed prt + icono person | C1-C4, D2, D6, D8, E1-E3, F9, H1, I1 |
 | StackedAvatars | Solape -10 (-12 en E3), borde 2-3 | D8, E3 |
 | AffinityBubble / escala | Violeta con alpha por afinidad; "nunca rojo/verde"; etiquetas por descubrir / media / alta | S0, G0, avatares |
@@ -144,12 +187,15 @@ Sección I no agrega flujos nuevos: solo exige un segundo `lightColorScheme`.
 | BottomSheet genérico | Igual; padding 10 20 30 | D2, G2, H1 |
 | ModalDialog + Scrim | s1 radio 28, margen lateral 24, scrim rgba(5,3,12,.62) | B3 |
 | Switch | 52x32 radio 16. ON: #6D4AFF + thumb blanco 24 con check. OFF: s2, borde 2 mu, thumb 16 mu | B2, B4, H3 |
-| Checkbox | 22x22 radio 7, #6D4AFF + check blanco; off: borde 2 mu | B3, E1, H2 |
+| Checkbox | 22x22 radio 7, #6D4AFF + check blanco; off: borde 2 mu | B3, E1, H2, H4 |
+| DataCategoryRow | min 58, caja de icono 40 radio 12 fondo s2 con icono 22 prt, título 15/500 + subtítulo 12.5 mu, Checkbox a la derecha; dentro de Card s1 con divisores ln | H4 |
+| FormatSelector | Grid 2 columnas gap 10, celdas 48dp radio 14, 14/600; seleccionada borde 2 #6D4AFF + prc/onprc, otra borde 1.5 ln | H4 |
+| ConsequenceList | Card s1 radio 20, filas 42 con icono 20 coralt + texto 14 (qué se borra) | H5 |
 | RadioRow | 22, borde 2 (#6D4AFF / mu), punto 10 | G1, H2, H3 |
-| OutlinedTextField | 56dp radio 14 (fecha), 52dp radio 16 (código), TextArea 96dp | B3, C5, H2 |
+| OutlinedTextField | 56dp radio 14 (fecha), 52dp radio 16 (código), TextArea 96dp; variante de confirmación destructiva 52dp radio 14 borde 2 coralt, Sora 16/600 ls 1 | B3, C5, H2, H5 |
 | LinearProgress / SegmentedQuota | 6dp radio 3 (track s2, fill #6D4AFF); cuota: 5 píldoras 8dp radio 4 | B1, C1, C3, F3, F4, G2 |
 | QuestionCardStack + OptionCard + SwipeHintBar | Pila de 3 tarjetas (rot -3 / +2), opción con borde 2 | B1 |
-| InfoBanner / InfoNote / ConsentBanner | Tonal prc/onprc radio 16, o s2 radio 12, o s1 radio 12 | B2, B3, B4, E1, E2, F9, H1, H3 |
+| InfoBanner / InfoNote / ConsentBanner | Tonal prc/onprc radio 16, o s2 radio 12, o s1 radio 12 (s1 radio 16 en H4/H5); variante outline borde 1.5 ln radio 16 con acción de texto prt (H5 'Exportar') | B2, B3, B4, E1, E2, F9, H1, H3, H4, H5 |
 | InfoListCard | Encabezado + filas con icono prt/mu | B4, E2, E3, F8 |
 | ChatBubble + ChatInputBar | Ajena s2 radio 20 20 20 6; propia #6D4AFF radio 20 20 6 20; gemelo prc/onprc radio 18 18 6 18; input pill 48 + FAB send 48 | A3, C4, E2, F3, F4, F9, H1 |
 | ScenarioPinnedCard | prc/onprc, temporizador, barra de presupuesto | F3 |
@@ -159,10 +205,11 @@ Sección I no agrega flujos nuevos: solo exige un segundo `lightColorScheme`.
 | FriendSelectRow, PairPreview | Fila 60dp con checkbox; vista del par con handshake | E1 |
 | FriendOfFriendCard, CommunityCard, MonthSnapshotCard, MomentsTimeline | Ver pantallas D6, D8, D9 | D6, D8, D9 |
 | EmptyState / ErrorState / GraphSkeleton | Centrado, Sora 22/700, CTA 52dp | D3-D5, F5, F6 |
+| DestructiveHeroIcon | Caja 64 radio 20 fondo s1, icono 34 coralt (delete_forever) | H5 |
 | NotificationRow, IconCircle | Fila 12 gap, punto no leído 8 | C2, C1 |
 | LineChart (precisión del gemelo) | SVG 296x96 | C3 |
 | QRCard | Tarjeta blanca radio 24, QR 200 con logo | C5 |
-| SettingsRow | min 56, caja icono 40 radio 12; destructiva en coralt | G4, H1, H3 |
+| SettingsRow | min 56, caja icono 40 radio 12; destructiva en coralt; enlace de texto 14/600 (coralt para borrar, prt para exportar) | G4, H1, H3 |
 | PlanCard, ComparisonTable, PaywallHeroHeader | Ver G1 | G1, I4 |
 | GradientBorderCard | radio 24, borde 1.5 degradado | G4 |
 | CelebrationBackground + Confetti | radial naranja/violeta, 6 piezas | B5, G3 |
@@ -235,7 +282,7 @@ Anillos dashed `2 5`, 1px ln, radios 62/102/140 (con fof 48/80/108 + 140), k = s
 | "prt" claro vs oscuro | #B6A6FF (oscuro) frente a #5533E8 (claro) | No es error: es el mismo rol por tema |
 | Wordmark | "Parche" blanco en oscuro y #6D4AFF en claro | Por tema |
 | Interpolación de afinidad en avatar | Avatares de 40px usan alpha fijo (.71/.72/.95) sin fórmula | Derivar de la fórmula |
-| Pareja coral vs error | #FF8DA2 (coralt) es color de modo Pareja y color de acciones destructivas (Reportar, Bloquear, Cancelar suscripción, Borrar) | Decidir si se separa un token `error` |
+| Pareja coral vs error | #FF8DA2 (coralt) es color de modo Pareja y color de acciones destructivas (Reportar, Bloquear, Cancelar suscripción, Borrar). Desde 2026-10-23 H5 usa además el coral **pleno** #FF5C7A como fondo del botón 'Borrar mi cuenta' y borde coralt en el campo de confirmación | Decidir si se separa un token `error`/`errorContainer`; si no, documentar que `destructive` = coral pleno con texto #14111F |
 | Color de texto en botón/mascota del paywall | Mascota blanca solo en header | Token puntual, no global |
 | Padding de footer | 12 16 28 frente a 12 24 32 en B5 y G3 (pantallas de celebración) | Mantener la variante 24/32 solo en celebración |
 | Dimensión de mascota | 26 a 120 sin escala única | Usar proporción 1:1.125 y tamaños S 30, M 52-64, L 72-84, XL 112-120 |
@@ -258,7 +305,9 @@ Anillos dashed `2 5`, 1px ln, radios 62/102/140 (con fof 48/80/108 + 140), k = s
 14. **Entrenar al gemelo:** C3 -> C4 (aceptar/rechazar memorias, calificar respuesta) -> Listo -> C3.
 15. **Notificaciones:** C1 campana -> C2 -> resultado (F7/F8), presentación (E3), bloqueado (G1), aviso del gemelo (C4).
 16. **Reportar/bloquear:** F9 menú -> H1 -> H2 -> envío -> confirmación (sin diseñar). F3 tiene bandera directa a H1.
-17. **Privacidad:** C3 engranaje -> H3 (modos, visibilidad nombre / "Alguien" / oculto, aprender de chats, borrar gemelo). Activar Pareja pasa por B3.
+17. **Privacidad:** C3 engranaje -> H3 (modos, visibilidad nombre / "Alguien" / oculto, aprender de chats, borrar gemelo, exportar datos). Activar Pareja pasa por B3.
+18. **Exportar datos (2026-10-23):** H3 "Exportar mis datos" -> H4 (categorías + formato JSON / PDF) -> "Exportar mis datos" -> enlace de descarga al correo (7 días); confirmación sin diseñar.
+19. **Borrar cuenta (2026-10-23):** H3 "Borrar mi gemelo y mis datos" -> H5 -> (opcional "Exportar" -> H4) -> escribir BORRAR -> "Borrar mi cuenta" -> cierra sesión -> A1. Nota: 14 días para arrepentirse iniciando sesión (pantalla de reactivación sin diseñar).
 
 ## 6. Diferencias con los requisitos
 
@@ -281,7 +330,8 @@ Basado en las notas de cada inventario parcial (el texto íntegro de los requisi
 - Botón compartir en resultados (F7, F8).
 - Banner de consentimiento dentro del chat (F9); "Silenciar" en el sheet de bloqueo (H1).
 - Pantallas de suscripción: Historial de pagos, Cambiar a mensual (solo anual a mensual) (G4); tabla comparativa con "Reportar y bloquear: gratis siempre"; badge "2 meses gratis".
-- "Borrar mi gemelo y mis datos" (H3), útil para Google Play.
+- "Borrar mi gemelo y mis datos" (H3), útil para Google Play; desde 2026-10-23 tiene pantalla propia (H5) con confirmación escrita 'BORRAR', lista de lo que se borra, aviso de ParcheU+ y periodo de arrepentimiento de 14 días.
+- Exportar mis datos (H4, 2026-10-23): selección por categorías (perfil y modos, gemelo, parche, simulaciones, chats), formato JSON o "PDF legible" y envío de un enlace al correo que dura 7 días.
 - Tokens nuevos no pedidos: degradado ParcheU+, tints de texto por modo, escala de superficies s1/s2, tema claro completo, fuentes Sora/Inter.
 - Etiquetas de afinidad "por descubrir / media / alta".
 
@@ -293,7 +343,8 @@ Basado en las notas de cada inventario parcial (el texto íntegro de los requisi
 - Estados vacío, cargando y error en casi todas las pantallas (solo D3-D5, F5, F6 los tienen).
 - Bloqueado de Comunidades y Evolución (solo existe D7 para amigos de amigos); D1 para ParcheU+; contadores a 0 y estado ParcheU+ en Inicio.
 - Informe completo "1 vez al mes" gratis: F7 solo muestra el estado ya consumido; falta el estado disponible. Límites de match diario e informe mensual sin hoja propia (G2 cubre solo simulaciones).
-- Confirmaciones de bloqueo y de reporte enviado, confirmación de cancelar suscripción, resultado de restaurar compras, error de compra, borrar datos.
+- Confirmaciones de bloqueo y de reporte enviado, confirmación de cancelar suscripción, resultado de restaurar compras, error de compra. Borrar datos ya tiene pantalla (H5), pero faltan sus estados borrando/error y la confirmación de exportación enviada (H4).
+- H3 sigue sin 'Personas bloqueadas', 'Cerrar sesión' ni enlaces a Términos y Política (los pide E8.2).
 - Botón "Ahora no" en B4 (la anotación lo menciona pero la pantalla solo tiene "Acepto"); error de menor de 18 en B3; validación de 0 modos en B2.
 - Cámara de "Escanear"; acción tras "Pedir presentación"; sheet para vínculos "simularon" y "pendiente".
 - Pareja ya excluido en E1 por nota, no por segmento deshabilitado (consistente con el requisito 9).
@@ -316,8 +367,12 @@ Basado en las notas de cada inventario parcial (el texto íntegro de los requisi
 - **Promesa operativa:** "Lo revisa una persona del equipo en menos de 24 h" (H2) debe ser sostenible con un equipo de 3.
 - **Cuenta de autenticación:** no hay pantalla de login tras cerrar sesión; A4 debe ser alcanzable luego de un logout. La sesión de Firebase evita repetir el paso si ya hay sesión (A1 va directo a C1).
 - **Typos de copy:** "Para qué quieres tu parche?" y "Qué más, Mari?" sin signo de apertura (el texto de otras secciones sí lo trae).
-- **Fechas y precios hardcodeados** ("lunes 26 de octubre", "21 de octubre de 2027", $45.000, $5.000, $3.750/mes) deben venir del backend y de Play Billing.
+- **Exportación (H4) frente a E8.3:** el mockup envía un **enlace al correo** (7 días) con formato JSON o **PDF**; E8.3 especifica `GET /v1/me/export` en JSON descargado en el teléfono con `ACTION_CREATE_DOCUMENT` o la hoja de compartir, y así quedó implementado (#59). El PDF y el envío por correo no están en el alcance; tampoco la selección por categorías (la API exporta todo). La categoría "Chats" desmarcada por defecto choca con E8.3, que incluye los mensajes propios.
+- **Borrado (H5) frente a E8.3:** el mockup promete "Tienes 14 días para arrepentirte iniciando sesión"; E8.3 hace borrado lógico inmediato y purga con `purge-user` sin periodo de gracia. La confirmación del mockup es escribir 'BORRAR'; la implementación de #59 usa la casilla 'Entiendo que no se puede deshacer'. Decidir cuál manda antes de cambiar el código.
+- **Anotación de H4:** dice "Borrar mi cuenta → 24b" pero la pantalla no tiene ese botón.
+- **Resolución (2026-10-23):** la diferencia de H4/H5 con E8.3 se resolvió a favor del código (#59 y #62). El mockup H4/H5 queda como implementación futura post-1.0; ver la ficha [E8.3](backlog.md#e83--borrado-y-exportación-de-cuenta).
+- **Fechas y precios hardcodeados** ("lunes 26 de octubre", "21 de octubre de 2027", $45.000, $5.000, $3.750/mes; en H4/H5: correo, "Nivel 6 · 24 aprendizajes", "9 conexiones", "14 simulaciones") deben venir del backend y de Play Billing.
 
 ### 6.4 Pantallas referenciadas en los mockups que no existen
 
-Lista de chats, lista completa de aprendizajes (Ver 24), Ver todas las simulaciones, cámara de escaneo, historial de pagos, confirmaciones (bloqueo, reporte enviado, cancelar suscripción, borrar datos), estado "esperando a la otra persona" tras Conectar o Me interesa, hoja de límite para match diario e informe mensual, variante mensual de G3 y G4.
+Lista de chats, lista completa de aprendizajes (Ver 24), Ver todas las simulaciones, cámara de escaneo, historial de pagos, confirmaciones (bloqueo, reporte enviado, cancelar suscripción, exportación enviada; borrar datos ya existe como H5), reactivación de cuenta durante los 14 días de arrepentimiento (H5), estado "esperando a la otra persona" tras Conectar o Me interesa, hoja de límite para match diario e informe mensual, variante mensual de G3 y G4.

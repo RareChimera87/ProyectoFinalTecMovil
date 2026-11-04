@@ -1,47 +1,33 @@
 package me.santiagoreina.parcheu
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import me.santiagoreina.parcheu.ui.theme.ParcheUTheme
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import me.santiagoreina.parcheu.push.DeepLinks
+import me.santiagoreina.parcheu.push.PendingDeepLink
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (savedInstanceState == null) offerDeepLink(intent)
         setContent {
-            ParcheUTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
-            }
+            ParcheUApp()
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        offerDeepLink(intent)
+    }
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    ParcheUTheme {
-        Greeting("Android")
+    /** Un toque en una notificación o un enlace `parcheu://` deja su ruta pendiente hasta pasar el Splash. */
+    private fun offerDeepLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        PendingDeepLink.offer(DeepLinks.fromUri(intent.dataString))
     }
 }

@@ -4,6 +4,7 @@ android/build/
 android/*/build/
 android/.kotlin/
 android/local.properties
+backend/local.properties
 android/captures/
 android/.cxx/
 **/google-services.json
@@ -15,6 +16,13 @@ backend/build/
 backend/*/build/
 contract/.gradle/
 contract/build/
+# Salidas de compilación y cachés
+**/build/
+**/.gradle/
+**/.kotlin/
+**/node_modules/
+__pycache__/
+*.pyc
 # IDE
 **/.idea/
 *.iml
@@ -25,10 +33,28 @@ contract/build/
 *.tfstate.*
 *.tfvars
 !*.example.tfvars
+# Planes de terraform (contienen valores del proyecto; nunca se suben)
+*.tfplan
+infra/terraform/**/plan.json
+# El módulo no fija providers: su lock lo genera `terraform validate` y no se versiona
+infra/terraform/modules/**/.terraform.lock.hcl
 # Secretos y entorno
 .env
 .env.*
 !.env.example
+!**/.env.example
+sa.json
+*-sa.json
+**/secrets/
+*.p12
+*.pem
+*.key
 # SO
 .DS_Store
 Thumbs.db
+# Firebase
+firebase/node_modules/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+firebase/.firebase/

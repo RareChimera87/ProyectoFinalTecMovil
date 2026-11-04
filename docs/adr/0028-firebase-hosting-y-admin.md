@@ -7,7 +7,7 @@
 Play exige URL de política de privacidad y de borrado de cuenta; los App Links necesitan `/.well-known/assetlinks.json`; el equipo necesita una herramienta mínima para resolver reportes.
 
 ## Decisión
-- **Firebase Hosting** por proyecto sirve `/privacidad`, `/terminos`, `/borrar-cuenta`, `/i/{codigo}` (respaldo web de invitaciones), `assetlinks.json` y `admin.html` (estática, Firebase Auth JS, llama a `/v1/admin/*` con el claim `admin`).
+- **Firebase Hosting** por proyecto sirve `/privacidad`, `/terminos`, `/borrar-cuenta`, `/i/{codigo}` (respaldo web de invitaciones), `assetlinks.json` y `admin.html` (estática, Firebase Auth JS, llama a `/v1/admin/*` con el claim `admin` en el mismo origen: rewrite `/v1/**` → Cloud Run `api`; CSP estricta y SRI en el SDK).
 - Lo despliega el workflow `firebase-deploy` (E0.8): dev en cada push a `dev` que toca `firebase/**`; prod con el tag `v*` y la aprobación del environment `production`.
 - El claim `admin` solo se asigna con `scripts/grant-admin.sh`.
 

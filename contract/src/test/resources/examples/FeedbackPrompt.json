@@ -1,0 +1,9 @@
+{
+  "id": "fp-1",
+  "kind": "CONTROL",
+  "text": "¿Qué harías si tu equipo no entrega su parte?",
+  "options": [
+    "Lo hago yo",
+    "Hablo con ellos"
+  ]
+}

@@ -16,7 +16,7 @@
 - **Privacidad:** una sola `GraphVisibilityPolicy` más filtros en SQL y una **suite de pruebas por propiedades** que garantiza que Pareja, ocultos, bloqueados y borrados nunca aparecen a terceros (con demo de mutación para la sustentación).
 - **Riesgo n.º 1, no técnico:** la regla de Play de **12 testers durante 14 días** en prueba cerrada, que corre desde que Play **aprueba** la versión y los testers se **inscriben**, no desde la subida. Por eso: el **28 oct** sube a mano a la pista interna un AAB con Play Billing (permite crear `parcheu_plus`); el **29 oct** la 0.1 se envía a revisión en la prueba cerrada (aprobación estimada 30-31 oct); la 0.2 con el ciclo principal sale el **9 nov** (fecha de la materia); la 0.3 con billing de punta a punta el **13 nov**; se pide acceso a producción cuando se cumplen los 14 días (**≈14 nov**); la 0.9 se envía a revisión de producción **apenas llega el acceso** y la 1.0 entra como actualización el **24-25 nov**.
 - **Ley 1581 desde el primer usuario:** aceptación expresa de términos y política en A4 (versionada), aviso de IA y transferencia a EE. UU., edad pedida a todos, retención definida y exportación y borrado completos.
-- **Backlog:** 11 épicas y 69 features pequeñas en 13 olas paralelizables, 28 de ellas major (con revisión obligatoria y revisor par humano), con medio día de revisión al final de cada ola.
+- **Backlog:** 11 épicas y 69 features pequeñas en 13 olas paralelizables, 28 de ellas major (con revisión obligatoria del agente y revisor par humano a posteriori), con medio día de revisión al final de cada ola.
 
 ---
 
@@ -101,7 +101,7 @@ ParcheU/                                  (git: github.com/RareChimera87/Proyect
 │  │     ├─ navigation/  AppNavHost.kt, Routes.kt     (se fijan en E0.7)
 │  │     ├─ di/          AppModules.kt                (se fija en E0.7)
 │  │     ├─ feature/<nombre>/  XRoute.kt, XScreen.kt, XViewModel.kt, XModule.kt
-│  │     ├─ data/<dominio>/    XRepository.kt, XRepositoryImpl.kt (+ Fake en src/test y src/debug)
+│  │     ├─ data/<dominio>/    XRepository (interfaz) + impl. Retrofit (RemoteX, XRepositoryImpl o ApiX) + XApi; tambien en feature/<nombre>/; Fake solo en src/test
 │  │     └─ push/, core/  (red, errores, sesión)
 │  ├─ designsystem/                       tokens, componentes, mascota, grafo (layout + Canvas)
 │  └─ gradle/libs.versions.toml
@@ -111,6 +111,7 @@ ParcheU/                                  (git: github.com/RareChimera87/Proyect
 ├─ contract/                              DTOs @Serializable compartidos (includeBuild desde android y backend)
 ├─ infra/terraform/{bootstrap, modules/platform, envs/dev, envs/prod}
 ├─ firebase/                              firestore.rules, índices, tests de reglas, hosting/
+├─ deploy/homelab/                        Docker Compose del backend en el homeserver (ADR-0033): compose.yaml, desplegar.sh, respaldar.sh
 ├─ scripts/                               commit-lint (+ verbos-imperativo.txt), check-migration-order, demo-mutacion-privacidad,
 │                                         grant-admin, crear-proyectos, cargar-secretos, fetch-google-services, lado-a-lado
 ├─ docs/                                  PLAN, arquitectura, backlog, equipo, adr/, mockups-inventario, mockups/png, revisiones,
@@ -126,10 +127,14 @@ ParcheU/                                  (git: github.com/RareChimera87/Proyect
 
 ### Ramas
 - `main`: solo recibe PR desde `release/*` o `fix/*` urgentes; **lo aprueba el usuario**. Cada merge lleva tag `vX.Y.Z`.
-- `dev`: integración. Los PR `feature/*` → `dev` se mezclan solos (squash) cuando pasan **CI** y la **revisión automática del agente** (check `revision-agente`); si el PR es de una feature major (etiqueta `major`), además hace falta la **aprobación de un revisor par humano** distinto del dueño (check `major-gate`). Así 'se mezclan cuando pasa CI y la revisión' es literal y verificable.
+- `dev`: integración. Los PR `feature/*` → `dev` los mezcla (squash) el **agente integrador del workflow** cuando pasan **CI** y la **revisión adversarial del agente revisor** (veredicto como comentario del PR; el integrador pone la etiqueta `revisado-agente`, que exigen los checks `revision-agente` y `major-gate`). No hay revisor humano obligatorio en feature→dev: el repo tiene una sola cuenta de GitHub y la revisión por pares del equipo (equipo.md) es una práctica, no un check. Así 'se mezclan cuando pasa CI y la revisión' es literal y verificable. *(Corregido el 22 oct: la versión inicial exigía la aprobación de otro usuario de GitHub y dejó 40 PR sin mezclar.)*
 - `feature/<kebab>`: una por feature del backlog (el nombre está en cada ficha).
 - `fix/<kebab>`: correcciones. `release/<versión>`: estabilización antes de `main`.
 - El repositorio remoto tiene historial viejo; reemplazarlo (force push) **solo con la aprobación explícita del usuario** en E0.1.
+
+### Límites del check `revision-agente` y pasos humanos (auditoría del 28 oct, C-A1/C-A2)
+- `revision-agente` y `major-gate` solo comprueban una **etiqueta**; con una sola cuenta de GitHub, quien abre el PR puede ponérsela. Mitigaciones en código: ambos corren con `pull_request_target` (el YAML sale de `dev`, un PR no puede reescribirlo para aprobarse; no hacen checkout), los checks requeridos de `dev` se fijan al `app_id` de GitHub Actions (`scripts/proteger-ramas.sh`) y un PR que toque **cualquier workflow o acción compuesta** (`.github/workflows/`, `.github/actions/`; cualquiera podría publicar un job con el nombre del gate y el mismo `app_id`), `CODEOWNERS`, `dependabot.yml`, `proteger-ramas.sh`, `commit-lint.sh` o `verbos-imperativo.txt` (también si lo renombra) falla sin la etiqueta `gobernanza`, que revisa una persona. Si la API lista menos archivos que `changed_files` (tope de 3000), el gate falla.
+- **Pendiente humano (C-A2, no es código):** usar una cuenta o GitHub App aparte para los agentes (que no sea administradora) y, cuando exista, activar en la protección de `dev` *Require approvals* con *Prevent self-review* (hoy `required_approving_review_count: 0` por la cuenta única). Pasos en [pendientes-humanos.md](pendientes-humanos.md#gobernanza-de-ci-c-a1c-a2-c-m3).
 
 ### Commits y PR
 - Commits en **español e imperativo**: "Agrega motor de simulación", "Corrige cálculo de cuota semanal". `pr-title`/`commit-lint` valida el formato y que el verbo inicial esté en una lista blanca de imperativos (`scripts/verbos-imperativo.txt`); no pretende analizar el español en general, así que el revisor par también lo mira.
@@ -144,7 +149,7 @@ lint + tests de la parte tocada (filtros por ruta): `android-ci`, `backend-ci` (
 - Tag `v*` en `main` → `deploy-prod` con el environment `production` (aprobación del usuario). El `terraform apply` de prod lo ejecuta **solo el usuario**.
 
 ### Revisiones obligatorias
-1. **Antes del merge, en todo PR:** revisión automática del agente (`revision-agente`). En features major, además, aprobación del revisor par humano (tabla en [equipo.md](equipo.md#revisores-par)).
+1. **Antes del merge, en todo PR:** revisión adversarial del agente revisor (hasta 2 rondas de corrección), registrada con la etiqueta `revisado-agente`. En features major, el revisor par humano de [equipo.md](equipo.md#revisores-par) la mira después del merge, en la ventana de revisión de la ola.
 2. **Tras cada feature major** (28, listadas en backlog.md §5): revisión en busca de errores sobre `dev` con el diff mezclado, antes de que arranque cualquier feature que dependa de ella.
 3. **Cada 3 features pequeñas** (no major) mezcladas: el workflow `review-counter` lleva la cuenta en `docs/revisiones.md` y, al llegar a 3, abre un issue de revisión asignado al dueño de la ola; se hace en la ventana de revisión de esa ola.
 4. **Al cerrar cada épica mayor** (E0, E1, E2, E3, E4, E7, E8, E10): revisión de la épica completa.

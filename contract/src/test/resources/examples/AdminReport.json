@@ -1,0 +1,23 @@
+{
+  "id": "rep-1",
+  "kind": "AI_CONTENT",
+  "status": "RESOLVED",
+  "source": "USER",
+  "reason": "AI_HARMFUL",
+  "details": "El gemelo dijo algo fuera de lugar",
+  "priority": 1,
+  "reporterId": "6f1c2a9e-3b7d-4c55-9a10-2f8e4d6b1c01",
+  "simulationId": "5e8d7c6b-4a39-4281-b0f1-e2d3c4b5a697",
+  "turnIndex": 4,
+  "snapshot": {
+    "turns": [
+      {
+        "speaker": "ME",
+        "text": "¿Y si mejor vamos al Parque del Agua?"
+      }
+    ]
+  },
+  "resolution": "DISMISS",
+  "createdAt": "2026-10-23T15:30:00Z",
+  "resolvedAt": "2026-10-24T10:00:00Z"
+}

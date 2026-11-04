@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "kind": "TERMS",
+      "granted": true,
+      "textVersion": "2026-10-01",
+      "updatedAt": "2026-10-23T15:30:00Z"
+    },
+    {
+      "kind": "CHAT_LEARNING_AMISTAD",
+      "granted": false,
+      "textVersion": "2026-10-01",
+      "updatedAt": "2026-10-23T15:30:00Z"
+    }
+  ]
+}
