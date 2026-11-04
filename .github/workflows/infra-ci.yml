@@ -121,7 +121,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false   # el GITHUB_TOKEN no queda en .git/config donde el HCL lo leería
-      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           # Identidad de solo lectura de metadatos: cualquier PR puede usarla en dev.
@@ -248,7 +248,7 @@ jobs:
           echo "::error::Falta el secreto TF_SERVICE_ACCOUNT_DEV (salida terraform_service_account del bootstrap de dev)."
           exit 1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           # sa-terraform solo acepta tokens de la rama dev (attribute.ref en el bootstrap).
