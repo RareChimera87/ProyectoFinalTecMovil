@@ -14,6 +14,9 @@ locals {
     INTERNAL_OIDC_AUDIENCE = local.internal_audience
     SERVICE_URL            = local.service_url
     DEMO_USERS_ENABLED     = tostring(var.demo_users_enabled)
+    # Topes diarios de gasto de IA (AiConfig.kt): total y por persona, en USD.
+    AI_DAILY_BUDGET_USD      = var.ai_daily_budget_usd
+    AI_USER_DAILY_BUDGET_USD = var.ai_user_daily_budget_usd
     # Nombres completos de los secretos; la API lee la versión `latest` con la
     # API de Secret Manager (no se montan para que Cloud Run no falle mientras
     # el secreto no tenga versión).

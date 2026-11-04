@@ -45,8 +45,22 @@ variable "api_min_instances" {
 }
 
 variable "api_max_instances" {
-  description = "Instancias máximas de la API (dev 3, prod 3; 5 con usuarios reales)."
+  description = "Instancias máximas de la API (dev 3, prod 2 en el MVP; 5 con usuarios reales)."
   type        = number
+}
+
+# Topes diarios de gasto de IA en USD, como texto: el backend los lee de AI_DAILY_BUDGET_USD y
+# AI_USER_DAILY_BUDGET_USD con toBigDecimalOrNull (> 0, punto decimal). Los defaults son los de modelos.properties.
+variable "ai_daily_budget_usd" {
+  description = "Presupuesto diario total de IA en USD (AI_DAILY_BUDGET_USD). Decimal con punto, mayor que 0."
+  type        = string
+  default     = "3"
+}
+
+variable "ai_user_daily_budget_usd" {
+  description = "Techo diario de IA por persona en USD (AI_USER_DAILY_BUDGET_USD). Decimal con punto, mayor que 0."
+  type        = string
+  default     = "0.75"
 }
 
 variable "api_cpu" {
@@ -155,7 +169,7 @@ variable "scheduler_time_zone" {
 # --- Observabilidad (E10.5) ----------------------------------------------------
 
 variable "alert_policies_enabled" {
-  description = "Crea las seis políticas de alerta de monitoring.tf (cada condición cuesta ~0,10 USD/mes). false en el MVP de prod: el presupuesto de facturación del bootstrap sigue avisando."
+  description = "Crea cinco de las seis políticas de alerta de monitoring.tf (cada condición cuesta ~0,10 USD/mes); la de report_created (reporte de seguridad de un usuario) se crea siempre. false en el MVP de prod: el presupuesto de facturación del bootstrap sigue avisando."
   type        = bool
   default     = true
 }

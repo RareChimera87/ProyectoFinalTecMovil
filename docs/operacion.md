@@ -14,8 +14,9 @@ Qué hacer cuando suena una alerta de ParcheU (E10.5). Las alertas, métricas y 
 (`alert_emails`). Cada correo trae el enlace a este documento. Las alertas solo cubren entornos desplegados
 en GCP; el backend de dev en el homelab (ADR-0033) no queda cubierto (allí: `docker compose logs parcheu-api`). Diseño: `arquitectura.md` §11.
 
-**MVP de prod (4 nov 2026):** las seis políticas están apagadas (`alert_policies_enabled = false` en
-`envs/prod/main.tf`, cada condición cuesta); solo avisa el presupuesto de facturación (ver
+**MVP de prod (4 nov 2026):** cinco de las seis políticas están apagadas (`alert_policies_enabled = false` en
+`envs/prod/main.tf`, cada condición cuesta); la de seguridad `report-created-prod` (reporte de un usuario) se crea
+siempre (+0,10 USD/mes). Además avisa el presupuesto de facturación (ver
 [costo fijo](#costo-fijo-y-presupuesto)). El uptime check, las métricas y el dashboard sí existen: revísalos a mano
 antes de cada demostración. Con usuarios reales, pon `alert_policies_enabled = true` y aplica.
 
@@ -83,8 +84,7 @@ medianoche de Bogotá y las simulaciones nuevas quedan FAILED con su cupo devuel
    `simulations_max_concurrent_dispatches`, variables de `envs/dev`) y aplica; revisa cuotas por usuario.
    Una sola cuenta no debería poder llegar aquí: tiene su techo `AI_USER_DAILY_BUDGET_USD` (log
    `AiUserBudgetExceeded`) y el gasto por persona está en `select user_id, sum(cost_micros) from ai_usage where day = current_date group by 1 order by 2 desc`.
-3. Si es crecimiento legítimo: sube `AI_DAILY_BUDGET_USD` del servicio (Cloud Run > `api` > Variables) o su
-   valor en Terraform, y despliega. Recuerda que el presupuesto de facturación de bootstrap (50 % y 90 %)
+3. Si es crecimiento legítimo: sube `ai_daily_budget_usd` en `envs/<entorno>/main.tf` (variable `AI_DAILY_BUDGET_USD` del servicio) y aplica. Recuerda que el presupuesto de facturación de bootstrap (50 % y 90 %)
    es independiente y no corta nada.
 4. A partir del 70 % ya se degradó a modelo lite: es la señal previa; no genera alerta.
 5. Las simulaciones FAILED por presupuesto no se reintentan solas; las personas pueden volver a pedirlas.
@@ -256,7 +256,7 @@ gcloud secrets versions disable <versión-anterior> --secret hmac-anon-key --pro
 
 ### Alertas que existen
 
-Las de [Alertas de GCP](#alertas-de-gcp) (`monitoring.tf`), **apagadas en el MVP** (`alert_policies_enabled = false`);
+Las de [Alertas de GCP](#alertas-de-gcp) (`monitoring.tf`), **apagadas en el MVP** (`alert_policies_enabled = false`), salvo `report-created` que queda siempre activa;
 el uptime check de `/v1/health`, las métricas basadas en logs y el dashboard `ParcheU prod` siguen activos. Además, el
 presupuesto de facturación del bootstrap avisa por correo al 50 %, 90 % y 100 % pronosticado de 10 USD, y existe el
 presupuesto manual `parcheu-10usd` sobre dev y prod (ver [costo fijo](#costo-fijo-y-presupuesto)).
@@ -272,27 +272,28 @@ del usuario rondan 20 USD). Dev no cuesta en GCP: no está desplegado allí.
 | Disco de Cloud SQL | 10 GB HDD | ~0,9 | SSD (~1,7; recrea la instancia) |
 | Backups de Cloud SQL | diarios, 7 copias, sin PITR | < 0,1 | PITR activado |
 | Cloud Run `api` y jobs | min 0, máx 2, `cpu_idle` | ~0 (capa gratuita) | min 1 (~7-8) |
-| Cloud Scheduler | 5 trabajos (3 gratis por cuenta de facturación) | ~0,2 | igual |
+| Cloud Scheduler | 8 trabajos (3 gratis por cuenta de facturación; 5 × ~0,10) | ~0,5 | igual |
 | Artifact Registry | ~10 imágenes de la API | ~0,1-0,3 | igual |
 | Cloud Tasks, Pub/Sub, Secret Manager, Firestore, Hosting, Logging | volumen de demostración | 0 (capa gratuita) | según uso |
-| Monitoring | uptime y métricas en la capa gratuita; sin políticas de alerta | 0 | ~0,6 con las seis alertas |
-| **Total fijo** | | **~9** | ~35 |
+| Monitoring | uptime y métricas en la capa gratuita; solo la alerta `report-created` | ~0,1 | ~0,6 con las seis alertas |
+| **Total fijo** | | **~9,5** | ~35 |
 | Vertex AI (variable) | tope `AI_DAILY_BUDGET_USD` | hasta el tope × 30 | |
 
 **El tope de IA manda sobre el presupuesto.** El valor por defecto es 3 USD/día (`modelos.properties`), hasta 90 USD
-al mes: con 10 USD de presupuesto hay que bajarlo. Hoy Terraform no lo fija (el `run_env` de `cloud_run.tf` no lo
-incluye), así que tras cada `apply` de prod se ajusta en el servicio:
+al mes: con 10 USD de presupuesto hay que bajarlo. Terraform lo fija: `envs/prod/main.tf` pasa
+`ai_daily_budget_usd = "1"` y `ai_user_daily_budget_usd = "0.25"` al `run_env` de la `api` (`AI_DAILY_BUDGET_USD` y
+`AI_USER_DAILY_BUDGET_USD`); `envs/dev` deja los valores por defecto (3 y 0.75). Un `apply` los mantiene, sin paso
+manual. Solo como emergencia (bajarlo ya, sin esperar un `apply`; el siguiente `apply` lo revierte al valor de
+Terraform):
 
 ```bash
 gcloud run services update api --region $R --project $P \
-  --update-env-vars AI_DAILY_BUDGET_USD=1,AI_USER_DAILY_BUDGET_USD=0.25
+  --update-env-vars AI_DAILY_BUDGET_USD=0.25
 ```
 
-Valores del MVP: 1 USD/día en total y 0,25 USD/día por persona. Ojo: el peor mes con 1 USD/día son ~30 USD, más que el
+Valores del MVP: 1 USD/día en total y 0,25 USD/día por persona (costo máximo de Vertex AI: 1 × 30 = 30 USD al mes). Ojo: el peor mes con 1 USD/día son ~30 USD, más que el
 presupuesto; entre demostraciones bájalo a `AI_DAILY_BUDGET_USD=0.25` (~7,5 USD el peor mes) o pausa la cola
-`simulations`. Un `terraform
-apply` posterior borra estas variables (vuelve a 3 USD/día): repite el comando después de cada `apply` hasta que
-`cloud_run.tf` las tome de variables de Terraform.
+`simulations`.
 
 **Apagar Cloud SQL entre demostraciones** ahorra ~7,7 USD/mes (solo se paga el disco):
 `gcloud sql instances patch parcheu-prod --activation-policy=NEVER --project $P` y, para volver,

@@ -85,7 +85,7 @@ module "platform" {
   # petición tras un rato sin tráfico. Con usuarios reales súbelo a 1 (~7-8 USD/mes con cpu_idle).
   api_min_instances = 0
   # Techo de escalado (y de gasto) de la API: con min 0 y cpu_idle solo se paga mientras atiende (MVP: centavos).
-  # Súbelo a 5 si el p95 o la concurrencia lo piden.
+  # Súbelo (hasta 5 con usuarios reales) si el p95 o la concurrencia lo piden.
   api_max_instances   = 2
   deletion_protection = true
 
@@ -113,9 +113,15 @@ module "platform" {
 
   rtdn_push_enabled = true
 
-  # MVP: sin políticas de alerta (~0,60 USD/mes las seis). Avisa el presupuesto de 10 USD del bootstrap y se revisa a
-  # mano el dashboard. Con usuarios reales: true (las alertas llegan a alert_emails).
+  # MVP: solo la alerta de seguridad report_created (+0,10 USD/mes; se crea siempre). Las otras cinco (~0,50 USD/mes)
+  # quedan apagadas: avisa el presupuesto de 10 USD del bootstrap y se revisa a mano el dashboard. Con usuarios
+  # reales: true (las alertas llegan a alert_emails).
   alert_policies_enabled = false
+
+  # Topes de IA del MVP: 1 USD/día en total y 0,25 USD/día por persona. Costo máximo de Vertex AI: 1 x 30 = 30 USD en
+  # el peor mes (más que el presupuesto de 10 USD; en la práctica son centavos por simulación, ver docs/operacion.md).
+  ai_daily_budget_usd      = "1"
+  ai_user_daily_budget_usd = "0.25"
 
   # sa-play: verify/RTDN del backend (E7.1) y publicación desde CI (E10.2).
   play_service_account_enabled = true

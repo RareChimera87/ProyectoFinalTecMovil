@@ -632,6 +632,16 @@
                         "name": "TASKS_SERVICE_ACCOUNT",
                         "value": "sa-tasks@parcheu-prod.iam.gserviceaccount.com",
                         "value_source": []
+                      },
+                      {
+                        "name": "AI_DAILY_BUDGET_USD",
+                        "value": "1",
+                        "value_source": []
+                      },
+                      {
+                        "name": "AI_USER_DAILY_BUDGET_USD",
+                        "value": "0.25",
+                        "value_source": []
                       }
                     ],
                     "image": "us-docker.pkg.dev/cloudrun/container/hello",
@@ -664,7 +674,7 @@
                 "sandboxes": [],
                 "scaling": [
                   {
-                    "max_instance_count": 3,
+                    "max_instance_count": 2,
                     "min_instance_count": 0
                   }
                 ],

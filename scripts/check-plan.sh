@@ -111,6 +111,17 @@ else
   else
     fail "SERVICE_URL debe ser https://api-<número de proyecto>.$region.run.app (es '$service_url')"
   fi
+  # Topes de IA (AiConfig.kt los lee con toBigDecimalOrNull y exige > 0): decimal con punto; en prod, el tope del MVP.
+  for v in AI_DAILY_BUDGET_USD AI_USER_DAILY_BUDGET_USD; do
+    val="$(jq -r --arg n "$v" '[.values.template[0].containers[0].env[]? | select(.name==$n) | .value] | first // empty' <<<"$api")"
+    if [[ "$val" =~ ^[0-9]+(\.[0-9]+)?$ ]] && awk -v x="$val" 'BEGIN{exit !(x>0)}'; then
+      ok "$v=$val"
+      [ "$env" != "prod" ] || [ "$(awk -v x="$val" -v m="$([ "$v" = AI_DAILY_BUDGET_USD ] && echo 1 || echo 0.25)" 'BEGIN{print (x<=m)}')" = 1 ] \
+        || fail "$v en prod no puede pasar del tope del MVP (es $val)"
+    else
+      fail "$v debe ser un decimal mayor que 0 en el run_env de la api (es '$val')"
+    fi
+  done
 fi
 
 # --- Resto de la plataforma -------------------------------------------------------
@@ -128,11 +139,13 @@ bad_uri="$(q --arg u "${service_url:-}" '[.[] | select(.type=="google_cloud_sche
   || fail "el presupuesto no debe estar en la plataforma: CI no tiene roles de facturación (va en bootstrap)"
 [ "$(q '[.[] | select(.type=="google_monitoring_uptime_check_config")] | length')" -ge 1 ] && ok "uptime check" || fail "falta el uptime check"
 # E10.5: alertas (5xx, p95, AiBudgetExceeded, report_created, simulaciones FAILED, uptime) y dashboard.
-# Con alert_policies_enabled=false (MVP de prod, cada condición cuesta) no hay ninguna: se aceptan 0 o 6 y más.
+# Con alert_policies_enabled=false (MVP de prod, cada condición cuesta) queda exactamente una, la de seguridad
+# report_created (aviso de un reporte de usuario, siempre activa): se aceptan esa sola o 6 y más.
 alertas="$(q '[.[] | select(.type=="google_monitoring_alert_policy")] | length')"
+solo_report="$(q '[.[] | select(.type=="google_monitoring_alert_policy" and (.address | test("events\\[\"report_created\"\\]")))] | length')"
 if [ "$alertas" -ge 6 ]; then ok "políticas de alerta ($alertas)"
-elif [ "$alertas" = "0" ]; then ok "sin políticas de alerta (alert_policies_enabled=false)"
-else fail "políticas de alerta incompletas ($alertas; se esperan 6 o más, o 0 si están desactivadas)"; fi
+elif [ "$alertas" = "1" ] && [ "$solo_report" = "1" ]; then ok "solo la alerta de seguridad report_created (alert_policies_enabled=false)"
+else fail "políticas de alerta incompletas ($alertas; se esperan 6 o más, o solo report_created si están desactivadas)"; fi
 [ "$(q '[.[] | select(.type=="google_monitoring_dashboard")] | length')" -ge 1 ] && ok "dashboard" || fail "falta el dashboard"
 sql="$(q '[.[] | select(.type=="google_sql_database_instance") | .values.database_version] | first')"
 [ "$sql" = "POSTGRES_16" ] && ok "Cloud SQL Postgres 16" || fail "Cloud SQL debe ser POSTGRES_16 (es '$sql')"

@@ -67,10 +67,20 @@ expect ok   "prod con min 1 y máx 5 (con usuarios reales)" "$ROOT/scripts/check
   "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].scaling[0].min_instance_count=1 | .values.template[0].scaling[0].max_instance_count=5 else . end')"
 expect fail "prod con min 2" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].scaling[0].min_instance_count=2 else . end')"
-expect ok   "prod sin políticas de alerta (alert_policies_enabled=false)" "$ROOT/scripts/check-plan.sh" \
+expect ok   "prod solo con report_created (alert_policies_enabled=false)" "$ROOT/scripts/check-plan.sh" \
+  "$(drop plan-prod.json '.type=="google_monitoring_alert_policy" and (.address | test("report_created") | not)')"
+expect fail "prod sin ninguna política de alerta (falta la de seguridad)" "$ROOT/scripts/check-plan.sh" \
   "$(drop plan-prod.json '.type=="google_monitoring_alert_policy"')"
-expect fail "prod con una sola política de alerta" "$ROOT/scripts/check-plan.sh" \
+expect fail "prod con una sola política que no es report_created" "$ROOT/scripts/check-plan.sh" \
   "$(drop plan-prod.json '.type=="google_monitoring_alert_policy" and .name!="uptime"')"
+expect fail "prod con dos políticas de alerta" "$ROOT/scripts/check-plan.sh" \
+  "$(drop plan-prod.json '.type=="google_monitoring_alert_policy" and (.address | test("report_created|uptime") | not)')"
+expect fail "falta AI_DAILY_BUDGET_USD en la api" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(select(.name!="AI_DAILY_BUDGET_USD")) else . end')"
+expect fail "AI_USER_DAILY_BUDGET_USD con coma decimal" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(if .name=="AI_USER_DAILY_BUDGET_USD" then .value="0,75" else . end) else . end')"
+expect fail "prod con el tope de IA por defecto (3)" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(if .name=="AI_DAILY_BUDGET_USD" then .value="3" else . end) else . end')"
 expect fail "Firestore fuera de nam5" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-dev.json 'if .type=="google_firestore_database" then .values.location_id="us-east1" else . end')"
 cp "$ROOT/infra/terraform/README.md" "$TMP/README.md"

@@ -155,10 +155,12 @@ resource "google_logging_metric" "http_latency" {
 }
 
 # --- Alertas -----------------------------------------------------------------------
-# Las seis políticas dependen de var.alert_policies_enabled: Cloud Monitoring cobra cada condición de alerta
-# (~0,10 USD/mes por condición, ~0,60 USD/mes las seis; verificar en cloud.google.com/stackdriver/pricing). El uptime
-# check, las métricas basadas en logs, los canales y el dashboard quedan siempre: con este volumen están dentro de
-# la capa gratuita.
+# Cinco de las seis políticas dependen de var.alert_policies_enabled: Cloud Monitoring cobra cada condición de
+# alerta (~0,10 USD/mes por condición, ~0,60 USD/mes las seis; verificar en cloud.google.com/stackdriver/pricing).
+# La de report_created (aviso de un reporte de seguridad de usuario) se crea siempre, incluso con
+# alert_policies_enabled = false (+0,10 USD/mes): un reporte no puede esperar a que alguien mire el dashboard. El
+# uptime check, las métricas basadas en logs, los canales y el dashboard quedan siempre: con este volumen están
+# dentro de la capa gratuita.
 # 5xx > 2 % de las peticiones de usuario en 5 min (sin /internal/, ver user_requests_filter).
 resource "google_monitoring_alert_policy" "error_rate" {
   count        = var.alert_policies_enabled ? 1 : 0
@@ -252,7 +254,7 @@ locals {
 }
 
 resource "google_monitoring_alert_policy" "events" {
-  for_each     = var.alert_policies_enabled ? local.event_alerts : {}
+  for_each     = { for k, v in local.event_alerts : k => v if var.alert_policies_enabled || k == "report_created" }
   project      = var.project_id
   display_name = "${each.value.name}-${var.environment}"
   combiner     = "OR"
