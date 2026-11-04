@@ -55,10 +55,14 @@ Trabajos de Cloud Scheduler (hora de Bogotá) → `POST /internal/jobs/<nombre>`
 `memories` (diario 02:00), `twin-accuracy` (domingos 23:00), `retention` (diario 03:30), `purge-sweep` (cada hora, minuto 15; E8.3).
 Pub/Sub `play-rtdn`: en prod, suscripción push OIDC a `/internal/billing/rtdn`; en dev solo el tema.
 
-**Nota para E0.4 (migraciones):** `sa-api` entra a Postgres como usuario IAM. En Postgres 16 el esquema
-`public` no da permiso de creación a todos, así que antes del primer `migrate` hay que darle la propiedad
-de la base al usuario IAM una vez (como `postgres`, desde Cloud SQL Studio o `gcloud sql connect`):
-`ALTER DATABASE parcheu OWNER TO "sa-api@<proyecto>.iam"; ALTER SCHEMA public OWNER TO "sa-api@<proyecto>.iam";`
+**Nota para E0.4 (migraciones):** `sa-api` entra a Postgres como usuario IAM, que nace sin privilegios. En
+Postgres 16 el esquema `public` no da permiso de creación a todos, así que antes del primer `migrate` hay que
+darle permisos una vez, como `postgres` y conectado a la base `parcheu` (Cloud SQL Studio; la contraseña de
+`postgres` se fija con `gcloud sql users set-password postgres --instance=parcheu-<env> --project=parcheu-<env> --prompt-for-password`):
+`GRANT CONNECT, TEMPORARY ON DATABASE parcheu TO "sa-api@<proyecto>.iam"; GRANT USAGE, CREATE ON SCHEMA public TO "sa-api@<proyecto>.iam";`
+No uses `ALTER DATABASE ... OWNER TO` ni `ALTER SCHEMA ... OWNER TO`: en Postgres 16 exigen que `postgres` pueda
+hacer `SET ROLE` al usuario IAM (y `CREATEDB`), y fallan. Sin estos permisos el job `migrate` falla con
+*permission denied for schema public* y `deploy-prod` se detiene antes de desplegar la API.
 
 ## Cuentas de servicio
 
@@ -129,7 +133,7 @@ terraform output   # valores para los secretos de GitHub (abajo)
 # 3. Plataforma (prod exige -var 'alert_emails=["..."]'; dev trae el correo de contacto por defecto).
 cd ../envs/$ENV
 terraform init
-terraform plan -out=plan.tfplan
+terraform plan -out=plan.tfplan   # prod: terraform plan -var 'alert_emails=["sanctireinadiaz@gmail.com"]' -out=plan.tfplan
 terraform show -json plan.tfplan > plan.json
 ../../../../scripts/check-plan.sh plan.json && ../../../../scripts/check-iam.sh plan.json
 terraform apply plan.tfplan
@@ -151,6 +155,29 @@ proyecto desde https://console.firebase.google.com (una vez) y luego
 | `WIF_SERVICE_ACCOUNT_DEV` / `_PROD` | `deployer_service_account` |
 | `TF_PLAN_SERVICE_ACCOUNT_DEV` / `_PROD` | `terraform_plan_service_account` (el `plan` de CI) |
 | `TF_SERVICE_ACCOUNT_DEV` | `terraform_service_account` (el `apply` de dev, E0.6; no hay en prod) |
+
+### Presupuesto y costo (4 nov 2026)
+
+El bootstrap crea un presupuesto de **10 USD/mes por proyecto** (`google_billing_budget.project`) con avisos al 50 %
+y 90 % del gasto real y al 100 % del **pronosticado**. El bootstrap por sí mismo no cuesta nada (WIF, cuentas de
+servicio, IAM y presupuestos son gratis; el bucket de estado pesa unos KB, dentro de la capa gratuita). El costo
+fijo de prod (MVP, unos 9 USD/mes, casi todo Cloud SQL) está desglosado en
+[docs/operacion.md](../../docs/operacion.md#costo-fijo-y-presupuesto).
+
+Ya existe un presupuesto **manual** `parcheu-10usd` (id `a1f02f9b-806f-401f-8a70-4322f3014283`) sobre `parcheu-dev` y
+`parcheu-prod` juntos. No choca con el de Terraform (son recursos distintos; solo llegan dos correos). Tras el
+`apply` del bootstrap de prod, elige una opción:
+
+```bash
+source ~/.parcheu/terraform.env
+# a) Conservarlo (recomendado mientras dev no esté en Terraform: es el único que vigila parcheu-dev). Nada que hacer.
+# b) Borrarlo y quedarse solo con el de Terraform (vigila solo prod):
+gcloud billing budgets delete a1f02f9b-806f-401f-8a70-4322f3014283 --billing-account="$TF_VAR_billing_account"
+# c) Adoptarlo en Terraform en lugar de crear otro (ANTES del primer apply del bootstrap; el plan lo reduce a
+#    parcheu-prod y le cambia el nombre a parcheu-prod, así que dev queda sin presupuesto):
+terraform import -var environment=prod google_billing_budget.project \
+  "billingAccounts/$TF_VAR_billing_account/budgets/a1f02f9b-806f-401f-8a70-4322f3014283"
+```
 
 ## Verificaciones
 

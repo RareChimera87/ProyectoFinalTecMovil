@@ -10,7 +10,7 @@ resource "google_sql_database_instance" "main" {
     edition           = "ENTERPRISE"
     tier              = var.sql_tier
     availability_type = "ZONAL"
-    disk_type         = "PD_SSD"
+    disk_type         = var.sql_disk_type
     disk_size         = 10
     disk_autoresize   = true
     user_labels       = local.labels

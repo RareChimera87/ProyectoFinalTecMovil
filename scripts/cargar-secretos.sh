@@ -7,8 +7,9 @@
 #   scripts/cargar-secretos.sh <dev|prod> [--rotar]
 #
 #   hmac-anon-key  openssl rand -base64 32 (solo si aún no tiene versión, salvo --rotar).
-#   play-sa        JSON de la cuenta de servicio de Play, si Play no admite WIF (verificar
-#                  en E7.1). Se toma de PLAY_SA_JSON=<ruta>; si no se da, se omite.
+#   play-sa        Opcional. En prod la API suplanta a sa-play sin llaves (PLAY_SERVICE_ACCOUNT, E7.1), así que
+#                  normalmente queda sin valor. Solo si la suplantación fallara: JSON de la llave de sa-play
+#                  tomado de PLAY_SA_JSON=<ruta>; si no se da, se omite.
 #
 # Variables opcionales: PROJECT_ID (por defecto el de ~/.parcheu/proyectos.env o parcheu-<env>).
 set -euo pipefail
@@ -65,5 +66,5 @@ if [ -n "${PLAY_SA_JSON:-}" ]; then
 elif has_version play-sa; then
   echo "play-sa ya tiene valor."
 else
-  echo "play-sa sin valor (opcional: solo si Play no admite la identidad de sa-api; ver E7.1)."
+  echo "play-sa sin valor (normal: en prod la API suplanta a sa-play con PLAY_SERVICE_ACCOUNT; ver E7.1)."
 fi

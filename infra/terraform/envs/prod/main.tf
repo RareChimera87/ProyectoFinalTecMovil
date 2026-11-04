@@ -78,13 +78,29 @@ module "platform" {
   region       = local.region
   alert_emails = var.alert_emails
 
-  api_min_instances   = 1
-  api_max_instances   = 5
+  # Costo fijo mínimo viable (4 nov 2026: ~20 USD de créditos y presupuesto de 10 USD/mes). Precios aproximados de
+  # us-central1; el detalle y cuándo subir cada valor están en docs/operacion.md ("Costo fijo y presupuesto").
+  #
+  # Sin instancia mínima: 0 USD en reposo; el costo es el arranque en frío (~5-10 s de la JVM) en la primera
+  # petición tras un rato sin tráfico. Con usuarios reales súbelo a 1 (~7-8 USD/mes con cpu_idle).
+  api_min_instances = 0
+  # Techo de escalado (y de gasto) de la API: con min 0 y cpu_idle solo se paga mientras atiende (MVP: centavos).
+  # Súbelo a 5 si el p95 o la concurrencia lo piden.
+  api_max_instances   = 2
   deletion_protection = true
 
-  sql_tier            = "db-g1-small"
+  # db-f1-micro (núcleo compartido, 0,6 GB): ~7,7 USD/mes encendida todo el mes; con el disco de abajo, ~8,6 USD/mes,
+  # casi todo el costo fijo del entorno. Con usuarios reales: db-g1-small (~25 USD/mes) cambiando este valor y aplicando (reinicia la
+  # instancia unos minutos).
+  sql_tier = "db-f1-micro"
+  # 10 GB de HDD (~0,9 USD/mes) en lugar de SSD (~1,7 USD/mes): la base del MVP es pequeña. Cambiar el tipo de disco
+  # recrea la instancia, así que con usuarios reales migra con un backup a una instancia nueva en PD_SSD.
+  sql_disk_type = "PD_HDD"
+  # Backups diarios con 7 copias: centavos al mes con una base pequeña.
   sql_backups_enabled = true
-  sql_pitr_enabled    = true
+  # PITR apagado: guarda los registros de transacciones (más almacenamiento). Actívalo (true) cuando haya datos de
+  # personas reales que no se puedan perder entre dos backups diarios.
+  sql_pitr_enabled = false
 
   queue_limits = {
     "simulations" = {
@@ -96,6 +112,10 @@ module "platform" {
   }
 
   rtdn_push_enabled = true
+
+  # MVP: sin políticas de alerta (~0,60 USD/mes las seis). Avisa el presupuesto de 10 USD del bootstrap y se revisa a
+  # mano el dashboard. Con usuarios reales: true (las alertas llegan a alert_emails).
+  alert_policies_enabled = false
 
   # sa-play: verify/RTDN del backend (E7.1) y publicación desde CI (E10.2).
   play_service_account_enabled = true

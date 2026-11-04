@@ -40,12 +40,12 @@ variable "job_placeholder_image" {
 }
 
 variable "api_min_instances" {
-  description = "Instancias mínimas de la API (dev 0, prod 1)."
+  description = "Instancias mínimas de la API (dev 0; prod 0 mientras dure el presupuesto de 10 USD/mes, 1 con usuarios reales)."
   type        = number
 }
 
 variable "api_max_instances" {
-  description = "Instancias máximas de la API (dev 3, prod 5)."
+  description = "Instancias máximas de la API (dev 3, prod 3; 5 con usuarios reales)."
   type        = number
 }
 
@@ -77,8 +77,19 @@ variable "deletion_protection" {
 # --- Cloud SQL ---------------------------------------------------------------
 
 variable "sql_tier" {
-  description = "Máquina de Cloud SQL (dev db-f1-micro, prod db-g1-small)."
+  description = "Máquina de Cloud SQL (db-f1-micro en dev y, mientras dure el presupuesto de 10 USD/mes, en prod; db-g1-small con usuarios reales)."
   type        = string
+}
+
+variable "sql_disk_type" {
+  description = "Disco de Cloud SQL: PD_SSD (~0,17 USD/GB-mes) o PD_HDD (~0,09 USD/GB-mes). Cambiarlo recrea la instancia: decídelo antes del primer apply."
+  type        = string
+  default     = "PD_SSD"
+
+  validation {
+    condition     = contains(["PD_SSD", "PD_HDD"], var.sql_disk_type)
+    error_message = "sql_disk_type debe ser PD_SSD o PD_HDD."
+  }
 }
 
 variable "sql_backups_enabled" {
@@ -142,6 +153,12 @@ variable "scheduler_time_zone" {
 }
 
 # --- Observabilidad (E10.5) ----------------------------------------------------
+
+variable "alert_policies_enabled" {
+  description = "Crea las seis políticas de alerta de monitoring.tf (cada condición cuesta ~0,10 USD/mes). false en el MVP de prod: el presupuesto de facturación del bootstrap sigue avisando."
+  type        = bool
+  default     = true
+}
 
 variable "alert_emails" {
   description = "Correos que reciben las alertas de monitoring.tf (los 3 del equipo). Vacío = las políticas se crean sin canal de notificación."

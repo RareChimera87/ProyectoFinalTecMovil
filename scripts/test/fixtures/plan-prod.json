@@ -644,8 +644,8 @@
                 "sandboxes": [],
                 "scaling": [
                   {
-                    "max_instance_count": 5,
-                    "min_instance_count": 1
+                    "max_instance_count": 3,
+                    "min_instance_count": 0
                   }
                 ],
                 "service_account": "sa-api@parcheu-prod.iam.gserviceaccount.com",

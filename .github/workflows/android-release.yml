@@ -27,7 +27,8 @@ name: android-release
 # desplegado) y el aprobador revisa antes de que salga. Un environment, no el repo, guarda los secretos: una rama cualquiera
 # no puede leerlos aunque edite este archivo.
 # Variables obligatorias PARCHEU_API_URL_PROD y PARCHEU_HOSTING_URL_PROD (https): el paso "Validar las URLs de prod"
-# falla antes de compilar si faltan y Gradle (verificarUrlsProd) rechaza las URLs de relleno.
+# falla antes de compilar si faltan y Gradle (verificarUrlsProd) rechaza la URL de relleno de la API (la de Hosting por
+# defecto, https://parcheu-prod.web.app, es la real y se acepta).
 # Variable opcional UPLOAD_CERT_SHA256: huella esperada del certificado de subida (por defecto, la de
 # docs/play-console.md).
 on:

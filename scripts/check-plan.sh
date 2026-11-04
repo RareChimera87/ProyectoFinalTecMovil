@@ -9,9 +9,9 @@
 #   - las tres colas con max_dispatches_per_second y max_concurrent_dispatches;
 #   - el mapa de tareas → colas documentado en el README;
 #   - los secretos hmac-anon-key y play-sa sin valor (ninguna secret_version ni secret_data);
-#   - escalado de la API: dev min 0; prod min 1 y máx 5;
+#   - escalado de la API: dev min 0; prod min 0 o 1 y máx entre 1 y 5 (4 nov: min 0 y máx 3 por costo);
 #   - Firestore nativo en nam5, Firebase, Pub/Sub play-rtdn, 5 trabajos de Scheduler (con purge-sweep de E8.3),
-#     uptime check. El presupuesto (50 % y 90 %) lo crea el bootstrap, no la
+#     uptime check. El presupuesto (50 %, 90 % y 100 % pronosticado) lo crea el bootstrap, no la
 #     plataforma; para un plan de bootstrap solo se verifica eso.
 set -euo pipefail
 
@@ -30,9 +30,9 @@ q() { jq -r "$1" <<<"$RES"; }
 
 # --- Plan de bootstrap: solo presupuesto ---------------------------------------
 if [ "$(q '[.[] | select(.type=="google_service_account" and .values.account_id=="sa-deployer")] | length')" != "0" ]; then
-  thr="$(q '[.[] | select(.type=="google_billing_budget") | .values.threshold_rules[].threshold_percent] | sort | map(tostring) | join(",")')"
-  if [ "$thr" = "0.5,0.9" ]; then echo "check-plan (bootstrap): presupuesto al 50 % y 90 %: OK"; exit 0; fi
-  echo "FALLA: el presupuesto debe avisar al 50 % y 90 % (tiene '$thr')" >&2; exit 1
+  thr="$(q '[.[] | select(.type=="google_billing_budget") | .values.threshold_rules[] | "\(.threshold_percent * 100 | round)\(if .spend_basis == "FORECASTED_SPEND" then "p" else "" end)"] | sort | join(",")')"
+  if [ "$thr" = "100p,50,90" ]; then echo "check-plan (bootstrap): presupuesto al 50 %, 90 % y 100 % pronosticado: OK"; exit 0; fi
+  echo "FALLA: el presupuesto debe avisar al 50 %, 90 % y 100 % pronosticado (tiene '$thr')" >&2; exit 1
 fi
 
 # --- Cloud Run Jobs --------------------------------------------------------
@@ -98,7 +98,7 @@ else
   max="$(jq -r '.values.template[0].scaling[0].max_instance_count' <<<"$api")"
   case "$env" in
     dev)  [ "$min" = "0" ] && ok "api dev: min $min, máx $max" || fail "api dev debe tener min 0 (tiene $min)" ;;
-    prod) { [ "$min" = "1" ] && [ "$max" = "5" ]; } && ok "api prod: min $min, máx $max" || fail "api prod debe tener min 1 y máx 5 (tiene $min/$max)" ;;
+    prod) { [[ "$min" =~ ^[01]$ && "$max" =~ ^[1-5]$ ]]; } && ok "api prod: min $min, máx $max" || fail "api prod debe tener min 0 o 1 y máx entre 1 y 5 (tiene $min/$max)" ;;
     *)    fail "la api no tiene la etiqueta env (dev/prod)" ;;
   esac
 fi
@@ -115,7 +115,11 @@ sched="$(q '[.[] | select(.type=="google_cloud_scheduler_job") | .values.name] |
   || fail "el presupuesto no debe estar en la plataforma: CI no tiene roles de facturación (va en bootstrap)"
 [ "$(q '[.[] | select(.type=="google_monitoring_uptime_check_config")] | length')" -ge 1 ] && ok "uptime check" || fail "falta el uptime check"
 # E10.5: alertas (5xx, p95, AiBudgetExceeded, report_created, simulaciones FAILED, uptime) y dashboard.
-[ "$(q '[.[] | select(.type=="google_monitoring_alert_policy")] | length')" -ge 6 ] && ok "políticas de alerta" || fail "faltan políticas de alerta (se esperan 6 o más)"
+# Con alert_policies_enabled=false (MVP de prod, cada condición cuesta) no hay ninguna: se aceptan 0 o 6 y más.
+alertas="$(q '[.[] | select(.type=="google_monitoring_alert_policy")] | length')"
+if [ "$alertas" -ge 6 ]; then ok "políticas de alerta ($alertas)"
+elif [ "$alertas" = "0" ]; then ok "sin políticas de alerta (alert_policies_enabled=false)"
+else fail "políticas de alerta incompletas ($alertas; se esperan 6 o más, o 0 si están desactivadas)"; fi
 [ "$(q '[.[] | select(.type=="google_monitoring_dashboard")] | length')" -ge 1 ] && ok "dashboard" || fail "falta el dashboard"
 sql="$(q '[.[] | select(.type=="google_sql_database_instance") | .values.database_version] | first')"
 [ "$sql" = "POSTGRES_16" ] && ok "Cloud SQL Postgres 16" || fail "Cloud SQL debe ser POSTGRES_16 (es '$sql')"

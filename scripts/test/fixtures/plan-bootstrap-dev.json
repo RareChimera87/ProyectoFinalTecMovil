@@ -77,6 +77,10 @@
               {
                 "spend_basis": "CURRENT_SPEND",
                 "threshold_percent": 0.9
+              },
+              {
+                "threshold_percent": 1.0,
+                "spend_basis": "FORECASTED_SPEND"
               }
             ],
             "timeouts": null

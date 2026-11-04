@@ -53,6 +53,14 @@ expect fail "dev con min_instance_count=1" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].scaling[0].min_instance_count=1 else . end')"
 expect fail "prod con máximo 10" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].scaling[0].max_instance_count=10 else . end')"
+expect ok   "prod con min 1 y máx 5 (con usuarios reales)" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].scaling[0].min_instance_count=1 | .values.template[0].scaling[0].max_instance_count=5 else . end')"
+expect fail "prod con min 2" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].scaling[0].min_instance_count=2 else . end')"
+expect ok   "prod sin políticas de alerta (alert_policies_enabled=false)" "$ROOT/scripts/check-plan.sh" \
+  "$(drop plan-prod.json '.type=="google_monitoring_alert_policy"')"
+expect fail "prod con una sola política de alerta" "$ROOT/scripts/check-plan.sh" \
+  "$(drop plan-prod.json '.type=="google_monitoring_alert_policy" and .name!="uptime"')"
 expect fail "Firestore fuera de nam5" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-dev.json 'if .type=="google_firestore_database" then .values.location_id="us-east1" else . end')"
 cp "$ROOT/infra/terraform/README.md" "$TMP/README.md"
@@ -102,9 +110,11 @@ expect fail "sa-terraform con serviceAccountAdmin vía binding" "$ROOT/scripts/c
   "$(add plan-bootstrap-dev.json "{\"address\":\"x\",\"type\":\"google_project_iam_binding\",\"name\":\"x\",\"values\":{\"role\":\"roles/iam.serviceAccountAdmin\",\"members\":[\"$SAT\"]}}")"
 
 echo "check-plan.sh (bootstrap y presupuesto)"
-expect ok   "bootstrap con presupuesto al 50 % y 90 %" "$ROOT/scripts/check-plan.sh" "$FIX/plan-bootstrap-dev.json"
+expect ok   "bootstrap con presupuesto al 50 %, 90 % y 100 % pronosticado" "$ROOT/scripts/check-plan.sh" "$FIX/plan-bootstrap-dev.json"
 expect fail "bootstrap sin presupuesto" "$ROOT/scripts/check-plan.sh" \
   "$(drop plan-bootstrap-dev.json '.type=="google_billing_budget"')"
+expect fail "bootstrap sin el umbral de 100 % pronosticado" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-bootstrap-dev.json 'if .type=="google_billing_budget" then .values.threshold_rules |= map(select(.spend_basis != "FORECASTED_SPEND")) else . end')"
 expect fail "plataforma con presupuesto (CI sin roles de facturación)" "$ROOT/scripts/check-plan.sh" \
   "$(add plan-dev.json '{"address":"x","type":"google_billing_budget","name":"x","values":{"threshold_rules":[{"threshold_percent":0.5},{"threshold_percent":0.9}]}}')"
 
