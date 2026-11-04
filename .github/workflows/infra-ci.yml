@@ -3,7 +3,8 @@ name: infra-ci
 # Terraform (E0.5, ampliado en E0.6). Autenticación con WIF: sin llaves JSON.
 #  - PR: fmt, validate y pruebas de los scripts; si el PR toca infra/, `plan` de dev con
 #    sa-terraform-plan, check-plan/check-iam y el plan comentado en el PR.
-#  - push a dev que toca infra/: `apply` de dev con sa-terraform (solo la rama dev puede usarla).
+#  - push a dev que toca infra/: `apply` de dev con sa-terraform (solo la rama dev puede usarla), únicamente si la
+#    variable de repositorio GCP_DEV_ENABLED es 'true' (ADR-0033); si no, se omite con un ::notice.
 #  - El `apply` de prod NO corre en CI: lo ejecuta el usuario (infra/terraform/README.md).
 # El check obligatorio es `infra-ci` (siempre reporta; los jobs pesados solo si cambia infra/).
 on:
@@ -217,11 +218,21 @@ jobs:
             gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file comentario.md
           fi
 
+  # Sin GCP_DEV_ENABLED (ADR-0033) no hay bootstrap ni WIF en parcheu-dev: el apply se omite con un aviso en vez de fallar.
+  # fmt, validate y las pruebas de scripts (job static) siguen corriendo en cada push.
+  apply-dev-omitido:
+    name: infra-apply-dev-omitido
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.GCP_DEV_ENABLED != 'true'
+    steps:
+      - run: |
+          echo "::notice::infra-apply-dev omitido: la variable de repositorio GCP_DEV_ENABLED no es 'true' (parcheu-dev no se aplica por ahora, ADR-0033)."
+
   apply-dev:
     name: infra-apply-dev
     runs-on: ubuntu-latest
     needs: static
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.GCP_DEV_ENABLED == 'true'
     concurrency:
       group: infra-apply-dev
       cancel-in-progress: false

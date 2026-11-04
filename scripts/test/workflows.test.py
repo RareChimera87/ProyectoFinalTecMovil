@@ -412,6 +412,20 @@ class FirebaseDeployProd(unittest.TestCase):
             self.assertEqual(r.returncode, esperado, valor)
 
 
+class GateGcpDev(unittest.TestCase):
+    """ADR-0033: sin GCP_DEV_ENABLED los despliegues a dev con WIF se omiten con un aviso y no fallan."""
+
+    def test_firebase_e_infra_se_omiten_sin_la_variable(self):
+        for archivo, job, omitido in (("firebase-deploy.yml", "deploy-dev", "deploy-dev-omitido"),
+                                      ("infra-ci.yml", "apply-dev", "apply-dev-omitido")):
+            with self.subTest(archivo):
+                jobs = cargar(archivo)["jobs"]
+                self.assertIn("vars.GCP_DEV_ENABLED == 'true'", jobs[job]["if"])
+                self.assertIn("refs/heads/dev", jobs[job]["if"])
+                self.assertIn("vars.GCP_DEV_ENABLED != 'true'", jobs[omitido]["if"])
+                self.assertIn("::notice::", str(jobs[omitido]["steps"]))
+
+
 class PendientesHumanos(unittest.TestCase):
     def test_no_recomienda_code_owners_con_una_sola_cuenta(self):
         doc = (RAIZ / "docs" / "pendientes-humanos.md").read_text(encoding="utf-8")

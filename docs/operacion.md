@@ -123,7 +123,7 @@ Un error del backend en dev debe aparecer en Error Reporting (requiere `parcheu-
 **Alcance (ADR-0033):** mientras el backend de dev corra en el homelab, esta verificación no es ejecutable ni
 las alertas cubren ese backend: sus logs van a `docker compose logs parcheu-api` y nada llega a Cloud Logging ni a
 Error Reporting. Allí se mira `docker compose logs parcheu-api` en el homelab. Este procedimiento vale cuando se vuelva a
-Terraform en dev (`GCP_DEV_ENABLED=true`) o, cambiando el proyecto por `parcheu-prod`, tras el primer apply de prod.
+Terraform en dev (`GCP_DEV_ENABLED=true`, la variable que también activa `deploy-dev`, el despliegue de Firebase a dev y el `apply` de `infra-ci`) o, cambiando el proyecto por `parcheu-prod`, tras el primer apply de prod.
 
 **Verificación principal: un error real del backend.** Provoca un `log.error` con traza a través del propio
 servicio, por ejemplo una petición que llegue al handler de `Throwable` de `ErrorHandling.kt` (un 500 real,

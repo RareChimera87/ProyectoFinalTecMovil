@@ -2,7 +2,8 @@ name: firebase-deploy
 
 # E0.8. Reglas, índices y Hosting de Firebase.
 #  - PR que toca firebase/**: prueba las reglas en el emulador (rules-ci; E0.6 puede absorber este job).
-#  - push a dev que toca firebase/**: despliega a parcheu-dev.
+#  - push a dev que toca firebase/**: despliega a parcheu-dev solo si la variable GCP_DEV_ENABLED es 'true' (ADR-0033);
+#    si no, avisa con un ::notice y lo omite.
 #  - tag v*: despliega a prod con la aprobación del environment `production`.
 # Autenticación con WIF (sa-deployer): sin llaves JSON.
 on:
@@ -46,9 +47,18 @@ jobs:
       - name: Pruebas de reglas en el emulador de Firestore
         run: npm test
 
+  # Sin GCP_DEV_ENABLED (ADR-0033) no hay WIF ni parcheu-dev: el despliegue se omite con un aviso en vez de fallar.
+  deploy-dev-omitido:
+    name: deploy-dev-omitido
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.GCP_DEV_ENABLED != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::notice::deploy-dev omitido: la variable de repositorio GCP_DEV_ENABLED no es 'true' (backend de dev en el homeserver, ADR-0033). Defínela cuando exista parcheu-dev con WIF."
+
   deploy-dev:
     name: deploy-dev
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.GCP_DEV_ENABLED == 'true'
     needs: rules-test
     runs-on: ubuntu-latest
     permissions:
