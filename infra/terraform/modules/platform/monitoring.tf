@@ -280,9 +280,9 @@ resource "google_monitoring_alert_policy" "events" {
     content   = "${each.value.title}. ${local.alert_runbook}"
     mime_type = "text/markdown"
   }
-  alert_strategy {
-    notification_rate_limit { period = "3600s" }
-  }
+  # Sin notification_rate_limit: la API de Monitoring solo lo admite en alertas
+  # basadas en logs (condition_matched_log), no en umbrales de métricas; con él el
+  # apply de prod falló el 4 nov. La ventana de agregación ya limita la frecuencia.
 }
 
 # Uptime de /v1/health: falla en 2 comprobaciones seguidas.
