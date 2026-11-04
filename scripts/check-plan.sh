@@ -10,7 +10,9 @@
 #   - el mapa de tareas → colas documentado en el README;
 #   - los secretos hmac-anon-key y play-sa sin valor (ninguna secret_version ni secret_data);
 #   - escalado de la API: dev min 0; prod min 1 y máx 5;
-#   - Firestore nativo en nam5, Firebase, Pub/Sub play-rtdn, 5 trabajos de Scheduler (con purge-sweep de E8.3),
+#   - SERVICE_URL de la API = URL determinista de Cloud Run (https://api-<número>.<región>.run.app);
+#   - Firestore nativo en nam5, Firebase, Pub/Sub play-rtdn, 8 trabajos de Scheduler (con purge-sweep de E8.3
+#     y los barridos match-sweep, scenario-sweep y simulation-recovery) que apuntan a SERVICE_URL,
 #     uptime check. El presupuesto (50 % y 90 %) lo crea el bootstrap, no la
 #     plataforma; para un plan de bootstrap solo se verifica eso.
 set -euo pipefail
@@ -26,7 +28,7 @@ ok() { echo "ok: $*"; }
 
 # Recursos planeados (raíz y módulos) como un arreglo plano.
 RES="$(jq -c '[.planned_values.root_module | recurse(.child_modules[]?) | .resources[]?]' "$PLAN")"
-q() { jq -r "$1" <<<"$RES"; }
+q() { jq -r "$@" <<<"$RES"; }
 
 # --- Plan de bootstrap: solo presupuesto ---------------------------------------
 if [ "$(q '[.[] | select(.type=="google_service_account" and .values.account_id=="sa-deployer")] | length')" != "0" ]; then
@@ -101,6 +103,14 @@ else
     prod) { [ "$min" = "1" ] && [ "$max" = "5" ]; } && ok "api prod: min $min, máx $max" || fail "api prod debe tener min 1 y máx 5 (tiene $min/$max)" ;;
     *)    fail "la api no tiene la etiqueta env (dev/prod)" ;;
   esac
+  # Cloud Tasks arma el destino con SERVICE_URL (CloudTasksQueue.fromEnv); sin ella no encola.
+  region="$(jq -r '[.values.template[0].containers[0].env[]? | select(.name=="GCP_REGION") | .value] | first // empty' <<<"$api")"
+  service_url="$(jq -r '[.values.template[0].containers[0].env[]? | select(.name=="SERVICE_URL") | .value] | first // empty' <<<"$api")"
+  if [[ "$service_url" =~ ^https://api-[0-9]+\.${region}\.run\.app$ ]]; then
+    ok "SERVICE_URL $service_url"
+  else
+    fail "SERVICE_URL debe ser https://api-<número de proyecto>.$region.run.app (es '$service_url')"
+  fi
 fi
 
 # --- Resto de la plataforma -------------------------------------------------------
@@ -109,7 +119,10 @@ fs="$(q '[.[] | select(.type=="google_firestore_database") | "\(.values.type) \(
 [ "$(q '[.[] | select(.type=="google_firebase_project")] | length')" = "1" ] && ok "google_firebase_project" || fail "falta google_firebase_project"
 [ "$(q '[.[] | select(.type=="google_pubsub_topic" and .values.name=="play-rtdn")] | length')" = "1" ] && ok "Pub/Sub play-rtdn" || fail "falta el tema play-rtdn"
 sched="$(q '[.[] | select(.type=="google_cloud_scheduler_job") | .values.name] | sort | join(",")')"
-[ "$sched" = "communities,memories,purge-sweep,retention,twin-accuracy" ] && ok "Scheduler: $sched" || fail "Scheduler esperado communities,memories,purge-sweep,retention,twin-accuracy (es '$sched')"
+want_sched="communities,match-sweep,memories,purge-sweep,retention,scenario-sweep,simulation-recovery,twin-accuracy"
+[ "$sched" = "$want_sched" ] && ok "Scheduler: $sched" || fail "Scheduler esperado $want_sched (es '$sched')"
+bad_uri="$(q --arg u "${service_url:-}" '[.[] | select(.type=="google_cloud_scheduler_job") | select(.values.http_target[0].uri != null and .values.http_target[0].uri != ($u + "/internal/jobs/" + .values.name)) | .values.name] | join(",")')"
+[ -z "$bad_uri" ] && ok "Scheduler apunta a SERVICE_URL/internal/jobs/<nombre>" || fail "Scheduler con URI distinta de SERVICE_URL/internal/jobs/<nombre>: $bad_uri"
 [ "$(q '[.[] | select(.type=="google_billing_budget")] | length')" = "0" ] \
   && ok "sin presupuesto en la plataforma (vive en bootstrap)" \
   || fail "el presupuesto no debe estar en la plataforma: CI no tiene roles de facturación (va en bootstrap)"

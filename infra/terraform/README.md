@@ -47,12 +47,27 @@ ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de 
 | `TASKS_SERVICE_ACCOUNT` | email de `sa-tasks` (va en el token OIDC de cada tarea) |
 | `TASKS_QUEUE_SIM`, `TASKS_QUEUE_AI_LIGHT`, `TASKS_QUEUE_MAINT` | nombre completo de cada cola |
 | `INTERNAL_OIDC_AUDIENCE` | `https://api.parcheu-<env>.internal`: audiencia fija (custom audience de Cloud Run) de los tokens de Tasks, Scheduler y Pub/Sub; `/internal/*` la verifica junto con el email de `sa-tasks` |
+| `SERVICE_URL` | `https://api-<número de proyecto>.us-central1.run.app`: URL determinista de Cloud Run del servicio `api` (`local.service_url`). Es el destino de las tareas (`SERVICE_URL + /internal/tasks/<tarea>`, `CloudTasksQueue`) y de los trabajos de Scheduler; sin ella la API arranca pero no encola (`UnconfiguredTaskQueue`). Ver "SERVICE_URL" abajo |
 | `DEMO_USERS_ENABLED` | `var.demo_users_enabled`: `true` en dev; en prod `false` salvo durante la prueba cerrada (`-var demo_users_enabled=true`, ADR-0027, E4.9) |
 | `SECRET_HMAC_ANON_KEY`, `SECRET_PLAY_SA` | nombre del secreto; la API lee la versión `latest` con la API de Secret Manager (no se montan, para que Cloud Run no falle mientras el secreto no tenga valor) |
 | `PLAY_SERVICE_ACCOUNT` | solo prod (`play_service_account_enabled`): correo de `sa-play`, que la API suplanta para la API de Google Play Developer (E7.1); sin ella usa la llave de `SECRET_PLAY_SA` |
 
-Trabajos de Cloud Scheduler (hora de Bogotá) → `POST /internal/jobs/<nombre>`: `communities` (lunes 03:00),
-`memories` (diario 02:00), `twin-accuracy` (domingos 23:00), `retention` (diario 03:30), `purge-sweep` (cada hora, minuto 15; E8.3).
+Trabajos de Cloud Scheduler (hora de Bogotá) → `POST <SERVICE_URL>/internal/jobs/<nombre>` con OIDC de `sa-tasks`
+y audiencia `INTERNAL_OIDC_AUDIENCE`: `communities` (lunes 03:00), `memories` (diario 02:00), `twin-accuracy`
+(domingos 23:00), `retention` (diario 03:30), `purge-sweep` (cada hora, minuto 15; E8.3), `match-sweep` y
+`scenario-sweep` (cada minuto) y `simulation-recovery` (cada 15 min). Son los mismos jobs que programa el
+`InProcessScheduler` del homeserver (`AppContainer.inlineBackground`, ADR-0019); allí los dos barridos corren
+cada 60 s, que en Cloud Scheduler (mínimo un minuto) es `* * * * *`. `scripts/check-plan.sh` fija esta lista.
+**SERVICE_URL (decisión).** La URL del servicio la necesita el propio servicio en su entorno, pero
+`google_cloud_run_v2_service.api.uri` solo se conoce después de crearlo (ciclo). Cloud Run da a cada
+servicio, además de la URL con hash, una **URL determinista** `https://<servicio>-<número de proyecto>.<región>.run.app`
+que se conoce de antemano: `local.service_url` la arma con `data.google_project.this.number` y la región. Se
+descartaron leer `uri` con un data source aparte (exige dos `apply`), un dominio propio (DNS y certificado
+fuera de alcance) y resolverla en la API por metadata (el servidor de metadata no da la URL del servicio y
+la API tendría que repetir esta misma regla). La audiencia OIDC no cambia: sigue siendo la custom audience
+fija `INTERNAL_OIDC_AUDIENCE`, así que la URL solo decide a dónde llega el POST. Una poscondición en
+`google_cloud_run_v2_service.api` hace fallar el `apply` si Cloud Run no lista esa URL en `urls`. Scheduler
+usa la misma `local.service_url`.
 Pub/Sub `play-rtdn`: en prod, suscripción push OIDC a `/internal/billing/rtdn`; en dev solo el tema.
 
 **Nota para E0.4 (migraciones):** `sa-api` entra a Postgres como usuario IAM. En Postgres 16 el esquema
