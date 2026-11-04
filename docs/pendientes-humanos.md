@@ -2,6 +2,49 @@
 
 Pasos que solo puede hacer una persona (consolas, pagos, términos, identidad). Cada feature agrega su sección.
 
+## Ruta crítica al 3 nov 2026
+
+Lo que solo puede hacer el usuario para llegar a producción, en orden. Los pasos marcados **(facturación)** implican pagos o vincular facturación. Cada paso dice de qué depende y dónde está el detalle.
+
+**Estado verificado hoy (3 nov 2026):** `parcheu-prod` no existe. En `parcheu-dev` no se aplicó ni el bootstrap ni la plataforma de Terraform (no existen `sa-deployer` ni `sa-api`, y la API de Cloud Run no está habilitada). En GitHub solo hay los secretos `BILLING_ACCOUNT_ID` y `GOOGLE_SERVICES_JSON_DEV`, y ninguna variable. No hay tags ni ramas `release/*`. La tabla de Play Console (`docs/play-console.md` §1) sigue en _pendiente_. `https://parcheu-dev.web.app` servía solo el índice de relleno y el hosting de dev se está redesplegando.
+
+### GCP dev
+1. **Decidir si E0.5 en dev sigue en pausa.** ADR-0033 (27 oct) pausa el `apply` de `parcheu-dev`; mientras siga en pausa, los pasos 2 a 6 se posponen. Detalle: `docs/pendientes-humanos.md` § "Backend de pruebas en el homeserver (ADR-0033)", paso 1.
+2. **(facturación) Aplicar el bootstrap de dev** (WIF, `sa-deployer`, `sa-terraform`, `sa-terraform-plan`, presupuesto). Depende de 1 y de la ADC del usuario. Detalle: `infra/terraform/README.md` "Puesta en marcha" paso 2; `docs/pendientes-humanos.md` § "Aplicar Terraform tras fix/wif-deployer-dev", paso 1.
+3. **(facturación) Importar Firebase y Firestore en dev y aplicar la plataforma.** Depende de 2. Detalle: `infra/terraform/README.md` paso 3; `docs/pendientes-humanos.md` § "E0.8", paso 1, y § "Aplicar Terraform tras fix/wif-deployer-dev", paso 3.
+4. **Verificar la expresión `env_ref` en la primera corrida real** (si falla para todos los workflows, rollback según el paso). Depende de 2. Detalle: § "Aplicar Terraform tras fix/wif-deployer-dev", paso 8.
+5. **Cargar los secretos de WIF de dev:** `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT_DEV`, `TF_PLAN_SERVICE_ACCOUNT_DEV` y `TF_SERVICE_ACCOUNT_DEV`, con `terraform output`. Depende de 2. Detalle: `infra/terraform/README.md` "Secretos de GitHub que salen del bootstrap"; § "E0.8", paso 4.
+6. **Crear la variable de repo `GCP_DEV_ENABLED=true`** cuando exista la infraestructura de dev. Depende de 3 y 5. Detalle: cabecera de `.github/workflows/deploy-dev.yml`; ADR-0033, paso 1.
+
+### GCP prod
+7. **(facturación) Resolver el cupo de facturación lleno** (`Cloud billing quota exceeded` bloquea crear prod): desvincular un proyecto no usado o pedir más cupo. Depende de tener la cuenta de facturación (`~/.parcheu/terraform.env`). Detalle: `docs/pendientes-humanos.md` § "E0.6", paso 4.
+8. **(facturación) Crear `parcheu-prod` con facturación:** `BILLING_ACCOUNT=<cuenta> scripts/crear-proyectos.sh prod`. Depende de 7. Detalle: `infra/terraform/README.md` paso 1; § "E0.6", paso 5.
+9. **(facturación) Aplicar el bootstrap de prod** con `environment=production` (ata `sa-deployer` a tags `v*`). Depende de 8. Detalle: README paso 2; § "Aplicar Terraform tras fix/wif-deployer-dev", paso 4.
+10. **(facturación) Aplicar la plataforma de prod** con `-var 'alert_emails=[...]'` (crea `sa-play`, `play-rtdn` y los servicios de Cloud Run). Depende de 9. Detalle: README paso 3; § "E7.0", paso 6; § "E7.1", paso 1.
+11. **Firebase prod:** registrar la app Android `me.santiagoreina.parcheu`, las huellas de la llave de subida y el secreto `GOOGLE_SERVICES_JSON_PROD`. Depende de 10. Detalle: § "E0.8", paso 5; `docs/play-console.md` §12.4.
+12. **Cargar los secretos `_PROD`:** `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_PROD` y `TF_PLAN_SERVICE_ACCOUNT_PROD`. Depende de 9. Detalle: README "Secretos de GitHub que salen del bootstrap"; § "E0.6", pasos de secretos.
+13. **Cargar las variables:** `DESPLEGAR_API_PROD=true` (desde la 0.2), `PARCHEU_API_URL_PROD` y `PARCHEU_HOSTING_URL_PROD`; y en el environment `production`, `PLAY_APP_SIGNING_SHA256` tras la primera subida. Depende de 10 (el servicio `api` debe existir). Detalle: § "URLs de prod del release (A-M1)", paso 1; § "assetlinks de prod (C-B9)", paso 1; `.github/workflows/deploy-prod.yml`.
+
+### Play Console
+14. **(facturación) Cuenta de desarrollador** (cuota única de USD 25): confirmar tipo de cuenta y fecha de creación y registrarlos. Detalle: `docs/play-console.md` §3 y §1.
+15. **Verificación de identidad** (y de dispositivo si Play la pide); puede tardar días. Depende de 14. Detalle: `docs/play-console.md` §3, paso 4; § "E10.1", paso 2.
+16. **(facturación) Perfil de pagos** creado y verificado (datos fiscales y cuenta bancaria). Depende de 14. Detalle: `docs/play-console.md` §5; § "E10.1", paso 4.
+17. **Crear la app** `me.santiagoreina.parcheu` (es-419, Social, gratis con compras) con Play App Signing. Depende de 15. Detalle: `docs/play-console.md` §4; § "E10.1", paso 3.
+18. **Cargar la llave de subida:** los 4 secretos `UPLOAD_*` en GitHub y respaldo de `~/.parcheu/upload-keystore.jks`. Sin dependencias (la llave ya existe). Detalle: `docs/play-console.md` §6.
+19. **Invitar `sa-play` en Play Console** (Usuarios y permisos) con publicación y permisos de pedidos y datos financieros; propaga hasta en 24 h. Depende de 10 y 17. Detalle: `docs/play-console.md` §7; § "E7.1", paso 2.
+20. **Primer AAB 0.0.1 a mano** en Pruebas internas con Play App Signing (la API no lo permite). Depende de 15, 16, 17 y 18. Detalle: `docs/play-console.md` §4.1 y §11.2; § "E7.0", paso 2.
+21. **(facturación) Suscripción `parcheu_plus`:** planes `mensual` (COP 5.000) y `anual` (COP 45.000), activados. Depende de 16 y 20. Detalle: § "E7.0", paso 4.
+22. **Configurar RTDN** con el tema `projects/parcheu-prod/topics/play-rtdn` en Monetización y enviar la notificación de prueba. Depende de 10 y 21. Detalle: § "E7.0", paso 6; § "E7.1", paso 3.
+23. **Testers:** grupo de Google con ≥ 15 correos confirmados y ≥ 3 license testers; registrar solo cantidades. Sin dependencias. Detalle: `docs/play-console.md` §8 y §1; § "E10.1", pasos 7-8.
+24. **Prueba cerrada 0.1:** enviar a revisión, enlace de inscripción el día de la aprobación y ≥ 12 inscritos durante 14 días seguidos; después, solicitud de acceso a producción. Depende de 27 y 23. Detalle: `docs/play-console.md` §12.9; § "E10.3", pasos 4 y 8; `docs/PLAN.md` §9 "Producción".
+
+### Release
+25. **Preparar `release/0.1.0`** desde `dev` (con `fix/version-0.1.0`: `versionName` 0.1.0 y `versionCode` > 1) y las notas es-419. Depende de 17 y de la ficha de `docs/play-console.md` §12.5-§12.8. Detalle: `docs/PLAN.md` §5 "Releases intermedios"; § "E10.3", pasos 3-4.
+26. **(facturación) Aprobar el PR `release/0.1.0` → `main`, crear el tag `v0.1.0` y aprobar `deploy-prod`.** Depende de 9-13 (secretos, variables y `PLAY_APP_SIGNING_SHA256`) y de 25. Detalle: `docs/PLAN.md` §5 "Despliegue"; § "E10.3", paso 5.
+27. **Subir la 0.1 a la pista cerrada** (`android-release` con `sa-play`, o el plan B manual de `docs/play-console.md` §12.3 paso 8) y enviarla a revisión a mano. Depende de 19, 20 y 26. Detalle: § "E10.3", pasos 5-6; `docs/play-console.md` §12.11.
+28. **Huellas de App Signing en Firebase prod** (SHA-1 y SHA-256) y recarga de `GOOGLE_SERVICES_JSON_PROD`. Depende de 20 y 11. Detalle: `docs/play-console.md` §12.4; § "E10.3", paso 7.
+29. **Verificación de compra de punta a punta con license tester en la 0.3** (13-14 nov). Depende de 12, 13, 21, 22 y de la 0.3 publicada. Detalle: § "E7.1", pasos 4-5.
+
 ## Gobernanza de CI (C-A1/C-A2, C-M3)
 
 Pasos que solo puede hacer el dueño del repo tras mezclar el PR `fix/gobernanza-ci`:
