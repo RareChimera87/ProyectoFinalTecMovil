@@ -6,7 +6,7 @@ Pasos que solo puede hacer una persona (consolas, pagos, términos, identidad). 
 
 Lo que solo puede hacer el usuario para llegar a producción, en orden. Los pasos marcados **(facturación)** implican pagos o vincular facturación. Cada paso dice de qué depende y dónde está el detalle.
 
-**Estado verificado hoy (3 nov 2026):** `parcheu-prod` no existe. En `parcheu-dev` no se aplicó ni el bootstrap ni la plataforma de Terraform (no existen `sa-deployer` ni `sa-api`, y la API de Cloud Run no está habilitada). En GitHub solo hay los secretos `BILLING_ACCOUNT_ID` y `GOOGLE_SERVICES_JSON_DEV`, y ninguna variable. No hay tags ni ramas `release/*`. La tabla de Play Console (`docs/play-console.md` §1) sigue en _pendiente_. `https://parcheu-dev.web.app` servía solo el índice de relleno y el hosting de dev se está redesplegando.
+**Estado verificado hoy (3 nov 2026):** `parcheu-prod` no existe. En `parcheu-dev` no se aplicó ni el bootstrap ni la plataforma de Terraform (no existen `sa-deployer` ni `sa-api`, y la API de Cloud Run no está habilitada). En GitHub solo hay los secretos `BILLING_ACCOUNT_ID` y `GOOGLE_SERVICES_JSON_DEV`, y ninguna variable. No hay tags ni ramas `release/*`. La tabla de Play Console (`docs/play-console.md` §1) sigue en _pendiente_. El hosting de dev se redesplegó hoy (`/privacidad`, `/terminos`, `/borrar-cuenta` y `assetlinks.json` responden 200) y el homelab corre la API de `e0e57ca` (auditoría incluida).
 
 ### GCP dev
 1. **Decidir si E0.5 en dev sigue en pausa.** ADR-0033 (27 oct) pausa el `apply` de `parcheu-dev`; mientras siga en pausa, los pasos 2 a 6 se posponen. Detalle: `docs/pendientes-humanos.md` § "Backend de pruebas en el homeserver (ADR-0033)", paso 1.
