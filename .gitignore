@@ -33,6 +33,11 @@ __pycache__/
 *.tfstate.*
 *.tfvars
 !*.example.tfvars
+# Planes de terraform (contienen valores del proyecto; nunca se suben)
+*.tfplan
+infra/terraform/**/plan.json
+# El módulo no fija providers: su lock lo genera `terraform validate` y no se versiona
+infra/terraform/modules/**/.terraform.lock.hcl
 # Secretos y entorno
 .env
 .env.*
