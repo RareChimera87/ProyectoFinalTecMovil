@@ -38,6 +38,13 @@ locals {
   # fijo (custom audience de Cloud Run) para no depender de la URL del servicio;
   # el backend la recibe en INTERNAL_OIDC_AUDIENCE y la verifica en /internal/*.
   internal_audience = "https://api.parcheu-${var.environment}.internal"
+
+  # URL del servicio `api` (SERVICE_URL): destino de Cloud Tasks y Cloud Scheduler.
+  # Es la URL determinista de Cloud Run (`https://<servicio>-<número de proyecto>.<región>.run.app`),
+  # que se conoce antes de crear el servicio; así el servicio puede recibirla en su propio
+  # entorno sin ciclo. La poscondición de `google_cloud_run_v2_service.api` comprueba que Cloud
+  # Run la sirve (`urls`). La audiencia OIDC sigue siendo `internal_audience`.
+  service_url = "https://api-${data.google_project.this.number}.${var.region}.run.app"
 }
 
 data "google_project" "this" {

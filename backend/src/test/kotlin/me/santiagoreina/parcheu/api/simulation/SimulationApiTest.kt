@@ -18,6 +18,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.InMemoryIdentityRepository
@@ -36,6 +37,7 @@ import me.santiagoreina.parcheu.contract.SimulationSummary
 import me.santiagoreina.parcheu.contract.Speaker
 import me.santiagoreina.parcheu.contract.StartSimulation
 import me.santiagoreina.parcheu.contract.TranscriptDto
+import java.time.Duration
 import java.util.UUID
 
 class SimulationApiTest : FunSpec({
@@ -250,6 +252,28 @@ class SimulationApiTest : FunSpec({
             sixth.status shouldBe HttpStatusCode.PaymentRequired
             sixth.error().code shouldBe ErrorCode.QUOTA_EXCEEDED
             sixth.error().kind shouldBe "SIMULATION"
+        }
+    }
+
+    test("/internal/jobs/simulation-recovery exige OIDC, responde 204 y reencola las simulaciones atascadas") {
+        val w = World(inline = false)
+        val stuck = UUID.fromString("00000000-0000-0000-0000-0000000000aa")
+        w.sim.repo.create(
+            SimulationRecord(
+                id = stuck, mode = Mode.AMISTAD, userA = w.id("ana"), userB = w.id("beto"), requestedBy = null,
+                origin = SimulationOrigin.PARCHE, status = SimulationStatus.QUEUED, progress = initialProgress(), score = null,
+                report = null, transcript = StoredTranscript(emptyList()), twinVersionA = 1, twinVersionB = 1, cachedFrom = null,
+                provider = null, usage = UsageTotals(), error = null, createdAt = FIXED_CLOCK.instant().minus(Duration.ofMinutes(30)),
+                finishedAt = null,
+            ),
+        )
+        testApplication {
+            val client = app(w)
+            client.post("/internal/jobs/simulation-recovery").status shouldBe HttpStatusCode.Forbidden
+            w.sim.queue.tasks shouldHaveSize 0
+            client.post("/internal/jobs/simulation-recovery") { header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}") }
+                .status shouldBe HttpStatusCode.NoContent
+            w.sim.queue.tasks.map { it.name } shouldBe listOf("simulate-$stuck")
         }
     }
 })

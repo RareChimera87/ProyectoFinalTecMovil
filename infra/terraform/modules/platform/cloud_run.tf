@@ -12,6 +12,7 @@ locals {
     TASKS_QUEUE_AI_LIGHT   = google_cloud_tasks_queue.this["ai-light"].name
     TASKS_QUEUE_MAINT      = google_cloud_tasks_queue.this["maintenance"].name
     INTERNAL_OIDC_AUDIENCE = local.internal_audience
+    SERVICE_URL            = local.service_url
     DEMO_USERS_ENABLED     = tostring(var.demo_users_enabled)
     # Nombres completos de los secretos; la API lee la versión `latest` con la
     # API de Secret Manager (no se montan para que Cloud Run no falle mientras
@@ -75,6 +76,13 @@ resource "google_cloud_run_v2_service" "api" {
   }
 
   lifecycle {
+    # SERVICE_URL usa la URL determinista; si Cloud Run no la sirve (p. ej. un nombre
+    # demasiado largo), las tareas fallarían al encolar: mejor que falle el apply.
+    postcondition {
+      condition     = contains(self.urls, local.service_url)
+      error_message = "Cloud Run no sirve ${local.service_url} (SERVICE_URL); revisa la URL determinista del servicio api."
+    }
+
     # La imagen y la revisión las cambia deploy-dev/deploy-prod (E0.6).
     ignore_changes = [
       template[0].containers[0].image,

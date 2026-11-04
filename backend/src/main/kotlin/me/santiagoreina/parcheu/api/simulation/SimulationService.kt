@@ -261,6 +261,8 @@ class SimulationService(
     /**
      * Vuelve a encolar las simulaciones QUEUED o RUNNING creadas hace entre 10 min y 24 h (la cola en
      * proceso no sobrevive a un reinicio). El motor es idempotente y reanuda por pasos. Devuelve cuántas.
+     * En GCP lo dispara Cloud Scheduler con `POST /internal/jobs/simulation-recovery` ([RECOVERY_PATH]);
+     * Cloud Tasks deduplica por nombre (`simulate-<id>`), así que solo reencola las que ya no tienen tarea viva.
      */
     suspend fun requeueUnfinished(): Int {
         val now = clock.instant()
@@ -274,6 +276,9 @@ class SimulationService(
 
     companion object {
         const val SIMULATE_PATH = "/tasks/simulate"
+
+        /** Barrido de recuperación (cada 15 min, como el `InProcessScheduler` del homeserver). */
+        const val RECOVERY_PATH = "/jobs/simulation-recovery"
 
         /** Prefijo del error de una simulación que nunca llegó a la cola: es la única FAILED que [resume] recupera. */
         const val ENQUEUE_FAILED_PREFIX = "No se pudo encolar:"
