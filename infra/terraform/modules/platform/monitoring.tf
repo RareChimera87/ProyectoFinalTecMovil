@@ -155,8 +155,15 @@ resource "google_logging_metric" "http_latency" {
 }
 
 # --- Alertas -----------------------------------------------------------------------
+# Cinco de las seis políticas dependen de var.alert_policies_enabled: Cloud Monitoring cobra cada condición de
+# alerta (~0,10 USD/mes por condición, ~0,60 USD/mes las seis; verificar en cloud.google.com/stackdriver/pricing).
+# La de report_created (aviso de un reporte de seguridad de usuario) se crea siempre, incluso con
+# alert_policies_enabled = false (+0,10 USD/mes): un reporte no puede esperar a que alguien mire el dashboard. El
+# uptime check, las métricas basadas en logs, los canales y el dashboard quedan siempre: con este volumen están
+# dentro de la capa gratuita.
 # 5xx > 2 % de las peticiones de usuario en 5 min (sin /internal/, ver user_requests_filter).
 resource "google_monitoring_alert_policy" "error_rate" {
+  count        = var.alert_policies_enabled ? 1 : 0
   project      = var.project_id
   display_name = "api-5xx-mayor-2pct-${var.environment}"
   combiner     = "OR"
@@ -194,6 +201,7 @@ resource "google_monitoring_alert_policy" "error_rate" {
 
 # Latencia p95 > 2 s en 5 min, solo peticiones de usuario (métrica de logs, sin /internal/).
 resource "google_monitoring_alert_policy" "latency" {
+  count        = var.alert_policies_enabled ? 1 : 0
   project      = var.project_id
   display_name = "api-p95-mayor-2s-${var.environment}"
   combiner     = "OR"
@@ -246,7 +254,7 @@ locals {
 }
 
 resource "google_monitoring_alert_policy" "events" {
-  for_each     = local.event_alerts
+  for_each     = { for k, v in local.event_alerts : k => v if var.alert_policies_enabled || k == "report_created" }
   project      = var.project_id
   display_name = "${each.value.name}-${var.environment}"
   combiner     = "OR"
@@ -279,6 +287,7 @@ resource "google_monitoring_alert_policy" "events" {
 
 # Uptime de /v1/health: falla en 2 comprobaciones seguidas.
 resource "google_monitoring_alert_policy" "uptime" {
+  count        = var.alert_policies_enabled ? 1 : 0
   project      = var.project_id
   display_name = "api-health-caido-${var.environment}"
   combiner     = "OR"

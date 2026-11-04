@@ -1,11 +1,16 @@
-# Trabajos periódicos (arquitectura.md §12), hora de Bogotá.
+# Trabajos periódicos (arquitectura.md §12), hora de Bogotá. Son los mismos que programa el
+# InProcessScheduler del homeserver (AppContainer.inlineBackground, ADR-0019): todo job nuevo va
+# en los dos lados. Cloud Scheduler no baja de un minuto; los barridos de 60 s quedan cada minuto.
 locals {
   scheduled_jobs = {
-    "communities"   = { schedule = "0 3 * * 1", description = "Recalcula comunidades (lunes 03:00)" }
-    "memories"      = { schedule = "0 2 * * *", description = "Extrae memorias pendientes (diario 02:00)" }
-    "twin-accuracy" = { schedule = "0 23 * * 0", description = "Precisión del gemelo (domingos 23:00)" }
-    "retention"     = { schedule = "30 3 * * *", description = "Aplica la retención de datos (diario 03:30)" }
-    "purge-sweep"   = { schedule = "15 * * * *", description = "Reencola las purgas de cuentas atascadas (cada hora)" }
+    "communities"         = { schedule = "0 3 * * 1", description = "Recalcula comunidades (lunes 03:00)" }
+    "memories"            = { schedule = "0 2 * * *", description = "Extrae memorias pendientes (diario 02:00)" }
+    "twin-accuracy"       = { schedule = "0 23 * * 0", description = "Precisión del gemelo (domingos 23:00)" }
+    "retention"           = { schedule = "30 3 * * *", description = "Aplica la retención de datos (diario 03:30)" }
+    "purge-sweep"         = { schedule = "15 * * * *", description = "Reencola las purgas de cuentas atascadas (cada hora)" }
+    "match-sweep"         = { schedule = "* * * * *", description = "Vence tickets y matches y reintenta simulaciones del match (cada minuto)" }
+    "scenario-sweep"      = { schedule = "* * * * *", description = "Cierra escenarios vencidos y reencola evaluaciones (cada minuto)" }
+    "simulation-recovery" = { schedule = "*/15 * * * *", description = "Reencola simulaciones QUEUED/RUNNING atascadas (cada 15 min)" }
   }
 }
 
@@ -25,7 +30,7 @@ resource "google_cloud_scheduler_job" "this" {
 
   http_target {
     http_method = "POST"
-    uri         = "${google_cloud_run_v2_service.api.uri}/internal/jobs/${each.key}"
+    uri         = "${local.service_url}/internal/jobs/${each.key}"
 
     oidc_token {
       service_account_email = data.google_service_account.tasks.email
@@ -33,5 +38,5 @@ resource "google_cloud_scheduler_job" "this" {
     }
   }
 
-  depends_on = [google_project_service.apis]
+  depends_on = [google_project_service.apis, google_cloud_run_v2_service.api]
 }

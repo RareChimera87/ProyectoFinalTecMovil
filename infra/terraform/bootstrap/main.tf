@@ -33,7 +33,9 @@ locals {
   # reales); en prod solo la rama dev, porque cualquier PR podría usarla (ADR-0012).
   plan_principal = local.is_prod ? local.dev_branch_principal : local.repo_principal
 
-  budget_usd = local.is_prod ? 60 : 30
+  # 10 USD/mes por proyecto (4 nov 2026: el usuario solo tiene ~20 USD de créditos). Súbelo cuando haya usuarios
+  # reales y el costo fijo crezca (docs/operacion.md, "Costo fijo y presupuesto").
+  budget_usd = 10
 
   bootstrap_apis = [
     "cloudresourcemanager.googleapis.com",
@@ -443,6 +445,12 @@ resource "google_billing_budget" "project" {
 
   threshold_rules {
     threshold_percent = 0.9
+  }
+
+  # Aviso anticipado: el pronóstico del mes ya supera el 100 % aunque el gasto real aún no llegue.
+  threshold_rules {
+    threshold_percent = 1.0
+    spend_basis       = "FORECASTED_SPEND"
   }
 
   depends_on = [google_project_service.bootstrap]

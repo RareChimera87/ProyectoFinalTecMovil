@@ -326,6 +326,14 @@ class AndroidReleaseUrlsProd(unittest.TestCase):
         self.assertIn("verificarUrlsProd", gradle)
         self.assertIn('"bundleProdRelease"', gradle)
 
+    def test_hosting_real_de_prod_no_es_relleno(self):
+        """La URL real de Hosting de prod (https://parcheu-prod.web.app) no puede tratarse como relleno: si
+        verificarUrlsProd la rechazara, la variable PARCHEU_HOSTING_URL_PROD correcta tumbaría el release."""
+        gradle = (RAIZ / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+        self.assertNotIn('Relleno = "https://parcheu-prod.web.app"', gradle)
+        self.assertNotIn("hostingRelleno", gradle)
+        self.assertIn('prodApiRelleno = "https://api-parcheu-prod.us-central1.run.app/"', gradle)
+
     def test_hosting_sin_barra_final(self):
         run = next(p for p in self.pasos if p.get("name", "").startswith("Validar las URLs de prod"))["run"]
         self.assertIn('"$HOSTING_URL_PROD" != */', run)
@@ -396,6 +404,13 @@ class FirebaseDeployProd(unittest.TestCase):
         self.assertIn('-z "$PLAY_APP_SIGNING_SHA256"', run)
         prod = (RAIZ / "firebase" / "firebase.prod.json").read_text(encoding="utf-8")
         self.assertIn("render-assetlinks.mjs prod", prod)
+
+    def test_prod_exige_tag_sobre_main_antes_del_deploy(self):
+        pasos_job, deploy = self._deploy("deploy-prod")
+        i = next(i for i, p in enumerate(pasos_job) if "merge-base --is-ancestor HEAD origin/main" in p.get("run", ""))
+        self.assertLess(i, pasos_job.index(deploy))
+        self.assertEqual(pasos_job[0]["with"]["fetch-depth"], 0)
+        self.assertIn("GCP_PROJECT_PROD", self.wf["jobs"]["deploy-prod"]["env"]["FIREBASE_PROJECT"])
 
     def test_dev_sigue_con_firebase_json(self):
         _, deploy = self._deploy("deploy-dev")

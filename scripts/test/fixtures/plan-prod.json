@@ -155,6 +155,11 @@
                             "value_source": []
                           },
                           {
+                            "name": "SERVICE_URL",
+                            "value": "https://api-123456789012.us-central1.run.app",
+                            "value_source": []
+                          },
+                          {
                             "name": "TASKS_QUEUE_AI_LIGHT",
                             "value": "ai-light",
                             "value_source": []
@@ -300,6 +305,11 @@
                             "value_source": []
                           },
                           {
+                            "name": "SERVICE_URL",
+                            "value": "https://api-123456789012.us-central1.run.app",
+                            "value_source": []
+                          },
+                          {
                             "name": "TASKS_QUEUE_AI_LIGHT",
                             "value": "ai-light",
                             "value_source": []
@@ -442,6 +452,11 @@
                           },
                           {
                             "name": "SECRET_PLAY_SA",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SERVICE_URL",
+                            "value": "https://api-123456789012.us-central1.run.app",
                             "value_source": []
                           },
                           {
@@ -594,6 +609,11 @@
                         "value_source": []
                       },
                       {
+                        "name": "SERVICE_URL",
+                        "value": "https://api-123456789012.us-central1.run.app",
+                        "value_source": []
+                      },
+                      {
                         "name": "TASKS_QUEUE_AI_LIGHT",
                         "value": "ai-light",
                         "value_source": []
@@ -611,6 +631,16 @@
                       {
                         "name": "TASKS_SERVICE_ACCOUNT",
                         "value": "sa-tasks@parcheu-prod.iam.gserviceaccount.com",
+                        "value_source": []
+                      },
+                      {
+                        "name": "AI_DAILY_BUDGET_USD",
+                        "value": "1",
+                        "value_source": []
+                      },
+                      {
+                        "name": "AI_USER_DAILY_BUDGET_USD",
+                        "value": "0.25",
                         "value_source": []
                       }
                     ],
@@ -644,8 +674,8 @@
                 "sandboxes": [],
                 "scaling": [
                   {
-                    "max_instance_count": 5,
-                    "min_instance_count": 1
+                    "max_instance_count": 2,
+                    "min_instance_count": 0
                   }
                 ],
                 "service_account": "sa-api@parcheu-prod.iam.gserviceaccount.com",
@@ -709,7 +739,8 @@
                     "audience": "https://api.parcheu-prod.internal",
                     "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
                   }
-                ]
+                ],
+                "uri": "https://api-123456789012.us-central1.run.app/internal/jobs/communities"
               }
             ],
             "name": "communities",
@@ -746,7 +777,8 @@
                     "audience": "https://api.parcheu-prod.internal",
                     "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
                   }
-                ]
+                ],
+                "uri": "https://api-123456789012.us-central1.run.app/internal/jobs/memories"
               }
             ],
             "name": "memories",
@@ -783,7 +815,8 @@
                     "audience": "https://api.parcheu-prod.internal",
                     "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
                   }
-                ]
+                ],
+                "uri": "https://api-123456789012.us-central1.run.app/internal/jobs/retention"
               }
             ],
             "name": "retention",
@@ -820,7 +853,8 @@
                     "audience": "https://api.parcheu-prod.internal",
                     "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
                   }
-                ]
+                ],
+                "uri": "https://api-123456789012.us-central1.run.app/internal/jobs/twin-accuracy"
               }
             ],
             "name": "twin-accuracy",
@@ -1826,7 +1860,8 @@
                     "audience": "https://api.parcheu-prod.internal",
                     "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
                   }
-                ]
+                ],
+                "uri": "https://api-123456789012.us-central1.run.app/internal/jobs/purge-sweep"
               }
             ],
             "name": "purge-sweep",
@@ -1896,6 +1931,120 @@
           "name": "api",
           "type": "google_monitoring_dashboard",
           "values": {}
+        },
+        {
+          "address": "module.platform.google_cloud_scheduler_job.this[\"match-sweep\"]",
+          "name": "this",
+          "type": "google_cloud_scheduler_job",
+          "values": {
+            "app_engine_http_target": [],
+            "attempt_deadline": "320s",
+            "deletion_policy": "DELETE",
+            "description": "Vence tickets y matches y reintenta simulaciones del match (cada minuto)",
+            "http_target": [
+              {
+                "body": null,
+                "headers": null,
+                "http_method": "POST",
+                "oauth_token": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ],
+                "uri": "https://api-123456789012.us-central1.run.app/internal/jobs/match-sweep"
+              }
+            ],
+            "name": "match-sweep",
+            "project": "parcheu-prod",
+            "pubsub_target": [],
+            "region": "us-central1",
+            "retry_config": [
+              {
+                "retry_count": 1
+              }
+            ],
+            "schedule": "* * * * *",
+            "time_zone": "America/Bogota",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_scheduler_job.this[\"scenario-sweep\"]",
+          "name": "this",
+          "type": "google_cloud_scheduler_job",
+          "values": {
+            "app_engine_http_target": [],
+            "attempt_deadline": "320s",
+            "deletion_policy": "DELETE",
+            "description": "Cierra escenarios vencidos y reencola evaluaciones (cada minuto)",
+            "http_target": [
+              {
+                "body": null,
+                "headers": null,
+                "http_method": "POST",
+                "oauth_token": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ],
+                "uri": "https://api-123456789012.us-central1.run.app/internal/jobs/scenario-sweep"
+              }
+            ],
+            "name": "scenario-sweep",
+            "project": "parcheu-prod",
+            "pubsub_target": [],
+            "region": "us-central1",
+            "retry_config": [
+              {
+                "retry_count": 1
+              }
+            ],
+            "schedule": "* * * * *",
+            "time_zone": "America/Bogota",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_scheduler_job.this[\"simulation-recovery\"]",
+          "name": "this",
+          "type": "google_cloud_scheduler_job",
+          "values": {
+            "app_engine_http_target": [],
+            "attempt_deadline": "320s",
+            "deletion_policy": "DELETE",
+            "description": "Reencola simulaciones QUEUED/RUNNING atascadas (cada 15 min)",
+            "http_target": [
+              {
+                "body": null,
+                "headers": null,
+                "http_method": "POST",
+                "oauth_token": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ],
+                "uri": "https://api-123456789012.us-central1.run.app/internal/jobs/simulation-recovery"
+              }
+            ],
+            "name": "simulation-recovery",
+            "project": "parcheu-prod",
+            "pubsub_target": [],
+            "region": "us-central1",
+            "retry_config": [
+              {
+                "retry_count": 1
+              }
+            ],
+            "schedule": "*/15 * * * *",
+            "time_zone": "America/Bogota",
+            "timeouts": null
+          }
         }
       ]
     }

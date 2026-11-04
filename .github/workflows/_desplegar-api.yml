@@ -73,6 +73,11 @@ jobs:
           # GITHUB_SHA queda como APP_VERSION dentro de la imagen (build.gradle.kts).
           ./gradlew --stacktrace jib -Pimagen="$IMAGEN:$GITHUB_SHA" \
             -Djib.to.auth.username=oauth2accesstoken -Djib.to.auth.password="$TOKEN"
+      - name: Etiqueta la imagen con el tag de la versión
+        if: github.ref_type == 'tag'
+        run: |
+          # Permite revertir por versión (`$IMAGEN:v0.2.0`) además de por SHA (docs/operacion.md, producción en GCP).
+          gcloud artifacts docker tags add "$IMAGEN:$GITHUB_SHA" "$IMAGEN:$GITHUB_REF_NAME" --quiet
       - name: Job migrate (antes de la API)
         run: |
           gcloud run jobs update migrate --project "$PROYECTO" --region "$REGION" --image "$IMAGEN:$GITHUB_SHA" --quiet
@@ -87,6 +92,9 @@ jobs:
         run: |
           # Variables, cuenta de servicio y escalado vienen de Terraform; aquí solo cambia la imagen.
           gcloud run deploy api --project "$PROYECTO" --region "$REGION" --image "$IMAGEN:$GITHUB_SHA" --quiet
+          # Si alguien fijó el tráfico en una revisión anterior (reversión manual), la nueva no recibiría tráfico
+          # y el humo fallaría: el despliegue de una versión corregida vuelve a enrutar todo a la última.
+          gcloud run services update-traffic api --project "$PROYECTO" --region "$REGION" --to-latest --quiet
       - name: Humo de /v1/health
         run: |
           url="$(gcloud run services describe api --project "$PROYECTO" --region "$REGION" --format 'value(status.url)')"

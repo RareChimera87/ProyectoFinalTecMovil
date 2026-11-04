@@ -100,12 +100,27 @@ jobs:
       contents: read
       id-token: write
     env:
-      FIREBASE_PROJECT: parcheu-prod
+      # Mismo proyecto que deploy-prod (variable GCP_PROJECT_PROD si parcheu-prod terminó con sufijo).
+      FIREBASE_PROJECT: ${{ vars.GCP_PROJECT_PROD || 'parcheu-prod' }}
     defaults:
       run:
         working-directory: firebase
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      # Misma regla que deploy-prod: solo un tag vX.Y.Z que apunte a un commit de main despliega reglas y Hosting
+      # a prod. WIF solo exige environment `production` y un tag `v*` (env_ref), no que el tag esté en main.
+      - name: Exige un tag vX.Y.Z sobre main
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Tag inválido: $TAG"; exit 1; }
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::El tag $TAG no apunta a un commit de main."
+            exit 1
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
@@ -130,8 +145,17 @@ jobs:
         env:
           PLAY_APP_SIGNING_SHA256: ${{ vars.PLAY_APP_SIGNING_SHA256 }}
         run: npx firebase deploy --config firebase.prod.json --only firestore:rules,firestore:indexes,hosting --project "$FIREBASE_PROJECT" --non-interactive
-      - name: Humo del Hosting
+      - name: Humo del Hosting (páginas legales y assetlinks de prod)
+        env:
+          HUELLA: ${{ vars.PLAY_APP_SIGNING_SHA256 }}
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' "https://${FIREBASE_PROJECT}.web.app/")
-          echo "Hosting respondió $code"
-          test "$code" = "200"
+          base="https://${FIREBASE_PROJECT}.web.app"
+          for p in "" privacidad terminos borrar-cuenta; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$base/$p")
+            echo "/$p respondió $code"
+            test "$code" = "200"
+          done
+          # El assetlinks servido debe ser el de prod (paquete sin .dev) con la huella de Play App Signing.
+          links="$(curl -fsS "$base/.well-known/assetlinks.json")"
+          jq -e '.[0].target.package_name == "me.santiagoreina.parcheu"' <<<"$links" >/dev/null
+          jq -e --arg h "${HUELLA^^}" '.[0].target.sha256_cert_fingerprints | index($h) != null' <<<"$links" >/dev/null

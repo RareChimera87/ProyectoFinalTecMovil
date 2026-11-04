@@ -47,18 +47,38 @@ ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de 
 | `TASKS_SERVICE_ACCOUNT` | email de `sa-tasks` (va en el token OIDC de cada tarea) |
 | `TASKS_QUEUE_SIM`, `TASKS_QUEUE_AI_LIGHT`, `TASKS_QUEUE_MAINT` | nombre completo de cada cola |
 | `INTERNAL_OIDC_AUDIENCE` | `https://api.parcheu-<env>.internal`: audiencia fija (custom audience de Cloud Run) de los tokens de Tasks, Scheduler y Pub/Sub; `/internal/*` la verifica junto con el email de `sa-tasks` |
+| `SERVICE_URL` | `https://api-<número de proyecto>.us-central1.run.app`: URL determinista de Cloud Run del servicio `api` (`local.service_url`). Es el destino de las tareas (`SERVICE_URL + /internal/tasks/<tarea>`, `CloudTasksQueue`) y de los trabajos de Scheduler; sin ella la API arranca pero no encola (`UnconfiguredTaskQueue`). Ver "SERVICE_URL" abajo |
+| `AI_DAILY_BUDGET_USD`, `AI_USER_DAILY_BUDGET_USD` | `var.ai_daily_budget_usd` y `var.ai_user_daily_budget_usd` (texto decimal con punto, > 0; `AiConfig.kt` los lee con `toBigDecimalOrNull`): tope diario de IA total y por persona en USD. Por defecto `3` y `0.75` (dev); prod del MVP, `1` y `0.25` |
 | `DEMO_USERS_ENABLED` | `var.demo_users_enabled`: `true` en dev; en prod `false` salvo durante la prueba cerrada (`-var demo_users_enabled=true`, ADR-0027, E4.9) |
 | `SECRET_HMAC_ANON_KEY`, `SECRET_PLAY_SA` | nombre del secreto; la API lee la versión `latest` con la API de Secret Manager (no se montan, para que Cloud Run no falle mientras el secreto no tenga valor) |
 | `PLAY_SERVICE_ACCOUNT` | solo prod (`play_service_account_enabled`): correo de `sa-play`, que la API suplanta para la API de Google Play Developer (E7.1); sin ella usa la llave de `SECRET_PLAY_SA` |
 
-Trabajos de Cloud Scheduler (hora de Bogotá) → `POST /internal/jobs/<nombre>`: `communities` (lunes 03:00),
-`memories` (diario 02:00), `twin-accuracy` (domingos 23:00), `retention` (diario 03:30), `purge-sweep` (cada hora, minuto 15; E8.3).
+Trabajos de Cloud Scheduler (hora de Bogotá) → `POST <SERVICE_URL>/internal/jobs/<nombre>` con OIDC de `sa-tasks`
+y audiencia `INTERNAL_OIDC_AUDIENCE`: `communities` (lunes 03:00), `memories` (diario 02:00), `twin-accuracy`
+(domingos 23:00), `retention` (diario 03:30), `purge-sweep` (cada hora, minuto 15; E8.3), `match-sweep` y
+`scenario-sweep` (cada minuto) y `simulation-recovery` (cada 15 min). Son los mismos jobs que programa el
+`InProcessScheduler` del homeserver (`AppContainer.inlineBackground`, ADR-0019); allí los dos barridos corren
+cada 60 s, que en Cloud Scheduler (mínimo un minuto) es `* * * * *`. `scripts/check-plan.sh` fija esta lista.
+**SERVICE_URL (decisión).** La URL del servicio la necesita el propio servicio en su entorno, pero
+`google_cloud_run_v2_service.api.uri` solo se conoce después de crearlo (ciclo). Cloud Run da a cada
+servicio, además de la URL con hash, una **URL determinista** `https://<servicio>-<número de proyecto>.<región>.run.app`
+que se conoce de antemano: `local.service_url` la arma con `data.google_project.this.number` y la región. Se
+descartaron leer `uri` con un data source aparte (exige dos `apply`), un dominio propio (DNS y certificado
+fuera de alcance) y resolverla en la API por metadata (el servidor de metadata no da la URL del servicio y
+la API tendría que repetir esta misma regla). La audiencia OIDC no cambia: sigue siendo la custom audience
+fija `INTERNAL_OIDC_AUDIENCE`, así que la URL solo decide a dónde llega el POST. Una poscondición en
+`google_cloud_run_v2_service.api` hace fallar el `apply` si Cloud Run no lista esa URL en `urls`. Scheduler
+usa la misma `local.service_url`.
 Pub/Sub `play-rtdn`: en prod, suscripción push OIDC a `/internal/billing/rtdn`; en dev solo el tema.
 
-**Nota para E0.4 (migraciones):** `sa-api` entra a Postgres como usuario IAM. En Postgres 16 el esquema
-`public` no da permiso de creación a todos, así que antes del primer `migrate` hay que darle la propiedad
-de la base al usuario IAM una vez (como `postgres`, desde Cloud SQL Studio o `gcloud sql connect`):
-`ALTER DATABASE parcheu OWNER TO "sa-api@<proyecto>.iam"; ALTER SCHEMA public OWNER TO "sa-api@<proyecto>.iam";`
+**Nota para E0.4 (migraciones):** `sa-api` entra a Postgres como usuario IAM, que nace sin privilegios. En
+Postgres 16 el esquema `public` no da permiso de creación a todos, así que antes del primer `migrate` hay que
+darle permisos una vez, como `postgres` y conectado a la base `parcheu` (Cloud SQL Studio; la contraseña de
+`postgres` se fija con `gcloud sql users set-password postgres --instance=parcheu-<env> --project=parcheu-<env> --prompt-for-password`):
+`GRANT CONNECT, TEMPORARY ON DATABASE parcheu TO "sa-api@<proyecto>.iam"; GRANT USAGE, CREATE ON SCHEMA public TO "sa-api@<proyecto>.iam";`
+No uses `ALTER DATABASE ... OWNER TO` ni `ALTER SCHEMA ... OWNER TO`: en Postgres 16 exigen que `postgres` pueda
+hacer `SET ROLE` al usuario IAM (y `CREATEDB`), y fallan. Sin estos permisos el job `migrate` falla con
+*permission denied for schema public* y `deploy-prod` se detiene antes de desplegar la API.
 
 ## Cuentas de servicio
 
@@ -129,7 +149,7 @@ terraform output   # valores para los secretos de GitHub (abajo)
 # 3. Plataforma (prod exige -var 'alert_emails=["..."]'; dev trae el correo de contacto por defecto).
 cd ../envs/$ENV
 terraform init
-terraform plan -out=plan.tfplan
+terraform plan -out=plan.tfplan   # prod: terraform plan -var 'alert_emails=["sanctireinadiaz@gmail.com"]' -out=plan.tfplan
 terraform show -json plan.tfplan > plan.json
 ../../../../scripts/check-plan.sh plan.json && ../../../../scripts/check-iam.sh plan.json
 terraform apply plan.tfplan
@@ -151,6 +171,29 @@ proyecto desde https://console.firebase.google.com (una vez) y luego
 | `WIF_SERVICE_ACCOUNT_DEV` / `_PROD` | `deployer_service_account` |
 | `TF_PLAN_SERVICE_ACCOUNT_DEV` / `_PROD` | `terraform_plan_service_account` (el `plan` de CI) |
 | `TF_SERVICE_ACCOUNT_DEV` | `terraform_service_account` (el `apply` de dev, E0.6; no hay en prod) |
+
+### Presupuesto y costo (4 nov 2026)
+
+El bootstrap crea un presupuesto de **10 USD/mes por proyecto** (`google_billing_budget.project`) con avisos al 50 %
+y 90 % del gasto real y al 100 % del **pronosticado**. El bootstrap por sí mismo no cuesta nada (WIF, cuentas de
+servicio, IAM y presupuestos son gratis; el bucket de estado pesa unos KB, dentro de la capa gratuita). El costo
+fijo de prod (MVP, unos 9 USD/mes, casi todo Cloud SQL) está desglosado en
+[docs/operacion.md](../../docs/operacion.md#costo-fijo-y-presupuesto).
+
+Ya existe un presupuesto **manual** `parcheu-10usd` (id `a1f02f9b-806f-401f-8a70-4322f3014283`) sobre `parcheu-dev` y
+`parcheu-prod` juntos. No choca con el de Terraform (son recursos distintos; solo llegan dos correos). Tras el
+`apply` del bootstrap de prod, elige una opción:
+
+```bash
+source ~/.parcheu/terraform.env
+# a) Conservarlo (recomendado mientras dev no esté en Terraform: es el único que vigila parcheu-dev). Nada que hacer.
+# b) Borrarlo y quedarse solo con el de Terraform (vigila solo prod):
+gcloud billing budgets delete a1f02f9b-806f-401f-8a70-4322f3014283 --billing-account="$TF_VAR_billing_account"
+# c) Adoptarlo en Terraform en lugar de crear otro (ANTES del primer apply del bootstrap; el plan lo reduce a
+#    parcheu-prod y le cambia el nombre a parcheu-prod, así que dev queda sin presupuesto):
+terraform import -var environment=prod google_billing_budget.project \
+  "billingAccounts/$TF_VAR_billing_account/budgets/a1f02f9b-806f-401f-8a70-4322f3014283"
+```
 
 ## Verificaciones
 

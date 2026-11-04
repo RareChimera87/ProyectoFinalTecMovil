@@ -46,7 +46,8 @@ private val v1Routes: Map<String, List<Pair<HttpMethod, String>>> = mapOf(
 // `/internal/jobs/memories`, E9.2 (MemoryApiTest); `/internal/jobs/retention`, E8.8 (RetentionApiTest).
 // `/internal/tasks/judge-scenario` y `/internal/jobs/scenario-sweep` los implementa E4.8 (ScenarioApiTest);
 // `/internal/tasks/name-community` y `/internal/jobs/communities`, E6.4 (CommunityApiTest);
-// `/internal/tasks/moderate`, E8.6 (ModerationServiceTest) y `/internal/jobs/twin-accuracy`, E9.3 (FeedbackApiTest).
+// `/internal/tasks/moderate`, E8.6 (ModerationServiceTest) y `/internal/jobs/twin-accuracy`, E9.3 (FeedbackApiTest);
+// `/internal/jobs/simulation-recovery`, barrido de recuperación en GCP (SimulationApiTest).
 // Ya no queda ningún stub /internal: la lista vacía se conserva por si aparece una ruta nueva.
 private val internalRoutes = emptyList<String>()
 

@@ -22,6 +22,8 @@ import java.util.UUID
 /**
  * Rutas del dominio simulation. E4.3 implementa crear, listar, consultar, transcripción y la tarea
  * `simulate`; E4.6 el informe, su desbloqueo y la decisión; `judge-scenario` es del dominio scenario (E4.8).
+ * `POST /internal/jobs/simulation-recovery` es el barrido de recuperación (Cloud Scheduler en GCP; el
+ * `InProcessScheduler` del homeserver llama directo a [SimulationService.requeueUnfinished]).
  *
  * [viewerId] traduce el usuario de Firebase a `users.id` (lo resuelve identity).
  */
@@ -63,6 +65,10 @@ class SimulationRoutes(
     override fun Route.internal() {
         post(SimulationService.SIMULATE_PATH) {
             simulation.engine.run(call.receive<TaskPayload>().uuid())
+            call.respond(HttpStatusCode.NoContent)
+        }
+        post(SimulationService.RECOVERY_PATH) {
+            simulation.service.requeueUnfinished()
             call.respond(HttpStatusCode.NoContent)
         }
     }

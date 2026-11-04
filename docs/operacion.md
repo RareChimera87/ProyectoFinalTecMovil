@@ -3,7 +3,8 @@
 Cómo operar ParcheU: qué hacer cuando suena una alerta (E10.5, entornos en GCP) y el día a día del backend de dev
 en el homeserver (E10.7). Contenido: [alertas](#alertas-de-gcp) · [backend de dev en el homeserver](#backend-de-dev-en-el-homeserver) ·
 [moderación y administración](#moderación-y-administración) · [datos: respaldo, purga y borrado](#datos-respaldo-purga-y-borrado) ·
-[cambios de configuración y secretos](#cambios-de-configuración-y-secretos) · [incidentes frecuentes](#incidentes-frecuentes-por-síntoma).
+[cambios de configuración y secretos](#cambios-de-configuración-y-secretos) · [incidentes frecuentes](#incidentes-frecuentes-por-síntoma) ·
+[producción en GCP](#producción-en-gcp) · [costo fijo y presupuesto](#costo-fijo-y-presupuesto).
 Diagramas en [c4.md](c4.md).
 
 ## Alertas de GCP
@@ -12,6 +13,12 @@ Qué hacer cuando suena una alerta de ParcheU (E10.5). Las alertas, métricas y 
 `infra/terraform/modules/platform/monitoring.tf` y llegan por correo a los tres del equipo
 (`alert_emails`). Cada correo trae el enlace a este documento. Las alertas solo cubren entornos desplegados
 en GCP; el backend de dev en el homelab (ADR-0033) no queda cubierto (allí: `docker compose logs parcheu-api`). Diseño: `arquitectura.md` §11.
+
+**MVP de prod (4 nov 2026):** cinco de las seis políticas están apagadas (`alert_policies_enabled = false` en
+`envs/prod/main.tf`, cada condición cuesta); la de seguridad `report-created-prod` (reporte de un usuario) se crea
+siempre (+0,10 USD/mes). Además avisa el presupuesto de facturación (ver
+[costo fijo](#costo-fijo-y-presupuesto)). El uptime check, las métricas y el dashboard sí existen: revísalos a mano
+antes de cada demostración. Con usuarios reales, pon `alert_policies_enabled = true` y aplica.
 
 Nombres en Cloud Monitoring (sufijo `-dev` o `-prod`):
 
@@ -58,8 +65,8 @@ Si alguien renombra esos mensajes en el backend, las alertas dejan de disparar; 
 ## api-p95-mayor-2s
 
 1. Dashboard > latencia: ¿es toda la API o una ruta? En Logs Explorer filtra por `jsonPayload.route`.
-2. Arranque en frío (dev tiene `min_instances = 0`): un p95 alto aislado en dev es esperable. En prod
-   (`min 1`) no lo es.
+2. Arranque en frío (`min_instances = 0`, en dev y en el MVP de prod): un p95 alto aislado tras un rato sin
+   tráfico es esperable. Con usuarios reales prod pasa a `min 1` y entonces no lo es.
 3. Rutas con IA (`/internal/tasks/*` no cuentan para el usuario, pero `POST /v1/simulations` y los endpoints del
    gemelo sí llaman a Vertex): revisa si Vertex responde lento (`ai_call` en logs) o si hay degradación de
    modelo por presupuesto (≥ 70 %, ver abajo).
@@ -77,8 +84,7 @@ medianoche de Bogotá y las simulaciones nuevas quedan FAILED con su cupo devuel
    `simulations_max_concurrent_dispatches`, variables de `envs/dev`) y aplica; revisa cuotas por usuario.
    Una sola cuenta no debería poder llegar aquí: tiene su techo `AI_USER_DAILY_BUDGET_USD` (log
    `AiUserBudgetExceeded`) y el gasto por persona está en `select user_id, sum(cost_micros) from ai_usage where day = current_date group by 1 order by 2 desc`.
-3. Si es crecimiento legítimo: sube `AI_DAILY_BUDGET_USD` del servicio (Cloud Run > `api` > Variables) o su
-   valor en Terraform, y despliega. Recuerda que el presupuesto de facturación de bootstrap (50 % y 90 %)
+3. Si es crecimiento legítimo: sube `ai_daily_budget_usd` en `envs/<entorno>/main.tf` (variable `AI_DAILY_BUDGET_USD` del servicio) y aplica. Recuerda que el presupuesto de facturación de bootstrap (50 % y 90 %)
    es independiente y no corta nada.
 4. A partir del 70 % ya se degradó a modelo lite: es la señal previa; no genera alerta.
 5. Las simulaciones FAILED por presupuesto no se reintentan solas; las personas pueden volver a pedirlas.
@@ -154,6 +160,156 @@ llega con las claves `route` y `flavor=dev` en unos minutos.
 
 Para silenciar una alerta mientras se atiende, usa Monitoring > Alerting > Snoozes (no la borres: Terraform la
 recrearía). Para cambiar a quién llega, edita `alert_emails` (en `terraform.tfvars` local o `-var`) y aplica.
+
+## Producción en GCP
+
+Operación de `parcheu-prod` (Cloud Run `api`, jobs, Cloud SQL, Cloud Tasks). **Dev no está en GCP**: su backend corre
+en el homeserver ([ADR-0033](adr/0033-backend-en-homeserver.md), sección siguiente) y `GCP_DEV_ENABLED` no está definida,
+así que todo lo de aquí es de prod. Variables de los comandos:
+
+```bash
+P=parcheu-prod; R=us-central1; REPO=RareChimera87/ProyectoFinalTecMovil
+```
+
+**Flujo de un release** (tag `vX.Y.Z` sobre `main`): en paralelo corren `deploy-prod` (si `DESPLEGAR_API_PROD=true`:
+Jib → job `migrate` → jobs demo → servicio `api` → humo de `/v1/health` con el SHA) y `firebase-deploy` (`deploy-prod`:
+reglas, índices y Hosting con `firebase.prod.json`, cuyo rewrite `/v1/**` apunta al servicio `api`). Cada uno pide
+la aprobación del environment `production`. El rewrite va por nombre de servicio, así que el orden no importa
+mientras `api` exista (lo crea Terraform con una imagen de relleno). Cuando `deploy-prod` termina bien,
+`android-release` sube el AAB a la pista cerrada (pide la aprobación de `play-alpha`).
+
+### Logs
+
+```bash
+# API (últimas 2 h, solo errores)
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="api" AND severity>=ERROR' \
+  --project $P --freshness 2h --limit 50 --format 'value(timestamp,jsonPayload.message,jsonPayload.traceId)'
+# Un job (migrate, seed-demo o purge-demo)
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="migrate"' --project $P --freshness 1d --limit 100
+gcloud run jobs executions list --job migrate --region $R --project $P
+```
+
+En la consola: Cloud Run > `api` > Registros, o Logging > Logs Explorer con el filtro base de [Dónde mirar](#dónde-mirar).
+
+### Correr un job a mano
+
+```bash
+gcloud run jobs execute migrate --region $R --project $P --wait      # migraciones (Flyway, solo hacia adelante)
+gcloud run jobs execute purge-demo --region $R --project $P --wait   # borra los usuarios demo (antes de la 1.0)
+gcloud run jobs execute seed-demo --region $R --project $P --wait    # solo con DEMO_USERS_ENABLED=true
+```
+
+Los jobs usan la imagen del último despliegue. Antes del **primer** `migrate`, el usuario IAM de `sa-api` necesita
+permisos sobre el esquema `public` (`GRANT`, ver [infra/terraform/README.md](../infra/terraform/README.md)). Para
+encender o apagar los demo cambia `demo_users_enabled` en Terraform (`terraform apply -var demo_users_enabled=true`
+en `envs/prod`): una variable puesta con `gcloud run services update --update-env-vars` la borra el siguiente `apply`.
+
+### Reintentar un despliegue
+
+```bash
+gh run list -R $REPO --workflow deploy-prod --limit 5
+gh run rerun <id> -R $REPO --failed     # repite la corrida del tag (vuelve a pedir la aprobación de production)
+```
+
+Lo mismo con `firebase-deploy` y `android-release`. No crees otro tag para reintentar: un tag nuevo es otra versión.
+
+### Revertir a la revisión anterior
+
+```bash
+gcloud run revisions list --service api --region $R --project $P --limit 5
+gcloud run services update-traffic api --to-revisions <revisión-anterior>=100 --region $R --project $P
+```
+
+Cada imagen queda en Artifact Registry con el SHA y, desde un tag, con la versión
+(`us-central1-docker.pkg.dev/parcheu-prod/parcheu/api:v0.2.0`). Las migraciones no se deshacen: el código anterior
+corre contra el esquema nuevo (por eso las migraciones son aditivas). Para un esquema o datos dañados, restaura un
+backup en una instancia nueva y compara antes de tocar la original:
+`gcloud sql backups list --instance parcheu-prod --project $P` y
+`gcloud sql backups restore <id> --restore-instance=<instancia-nueva> --backup-instance=parcheu-prod --project $P`
+(el MVP no tiene PITR). El siguiente despliegue de una versión corregida vuelve a mandar todo el tráfico a la última
+revisión (`_desplegar-api.yml` hace `update-traffic --to-latest`).
+
+### Pausar una cola o un trabajo programado
+
+```bash
+gcloud tasks queues pause simulations --location $R --project $P     # deja de despachar (las tareas esperan)
+gcloud tasks queues resume simulations --location $R --project $P
+gcloud tasks queues describe simulations --location $R --project $P  # estado y límites
+gcloud scheduler jobs pause memories --location $R --project $P      # y resume
+```
+
+`simulations` es la cola que gasta IA: pausarla es el freno de mano ante un gasto anómalo. Terraform no reanuda una
+cola pausada.
+
+### Rotar `hmac-anon-key`
+
+Rotarla cambia **todos** los `anonId` (invitaciones, reportes y bloqueos pendientes que los citan dejan de
+resolverse): hazlo solo si la llave se filtró o antes de tener usuarios.
+
+```bash
+scripts/cargar-secretos.sh prod --rotar                              # nueva versión, el valor no se imprime
+# La API la guarda en memoria al primer uso: fuerza una revisión nueva para que la lea.
+gcloud run services update api --region $R --project $P --revision-suffix "hmac-$(date +%Y%m%d%H%M)"
+gcloud secrets versions list hmac-anon-key --project $P
+gcloud secrets versions disable <versión-anterior> --secret hmac-anon-key --project $P
+```
+
+### Alertas que existen
+
+Las de [Alertas de GCP](#alertas-de-gcp) (`monitoring.tf`), **apagadas en el MVP** (`alert_policies_enabled = false`), salvo `report-created` que queda siempre activa;
+el uptime check de `/v1/health`, las métricas basadas en logs y el dashboard `ParcheU prod` siguen activos. Además, el
+presupuesto de facturación del bootstrap avisa por correo al 50 %, 90 % y 100 % pronosticado de 10 USD, y existe el
+presupuesto manual `parcheu-10usd` sobre dev y prod (ver [costo fijo](#costo-fijo-y-presupuesto)).
+
+## Costo fijo y presupuesto
+
+Estimación mensual del **MVP de prod** (us-central1, precios de lista de noviembre de 2026, aproximados; los créditos
+del usuario rondan 20 USD). Dev no cuesta en GCP: no está desplegado allí.
+
+| Recurso | Configuración MVP | USD/mes aprox. | Con usuarios reales |
+|---|---|---|---|
+| Cloud SQL | `db-f1-micro` encendida todo el mes | ~7,7 | `db-g1-small` (~25) |
+| Disco de Cloud SQL | 10 GB HDD | ~0,9 | SSD (~1,7; recrea la instancia) |
+| Backups de Cloud SQL | diarios, 7 copias, sin PITR | < 0,1 | PITR activado |
+| Cloud Run `api` y jobs | min 0, máx 2, `cpu_idle` | ~0 (capa gratuita) | min 1 (~7-8) |
+| Cloud Scheduler | 8 trabajos (3 gratis por cuenta de facturación; 5 × ~0,10) | ~0,5 | igual |
+| Artifact Registry | ~10 imágenes de la API | ~0,1-0,3 | igual |
+| Cloud Tasks, Pub/Sub, Secret Manager, Firestore, Hosting, Logging | volumen de demostración | 0 (capa gratuita) | según uso |
+| Monitoring | uptime y métricas en la capa gratuita; solo la alerta `report-created` | ~0,1 | ~0,6 con las seis alertas |
+| **Total fijo** | | **~9,5** | ~35 |
+| Vertex AI (variable) | tope `AI_DAILY_BUDGET_USD` | hasta el tope × 30 | |
+
+**El tope de IA manda sobre el presupuesto.** El valor por defecto es 3 USD/día (`modelos.properties`), hasta 90 USD
+al mes: con 10 USD de presupuesto hay que bajarlo. Terraform lo fija: `envs/prod/main.tf` pasa
+`ai_daily_budget_usd = "1"` y `ai_user_daily_budget_usd = "0.25"` al `run_env` de la `api` (`AI_DAILY_BUDGET_USD` y
+`AI_USER_DAILY_BUDGET_USD`); `envs/dev` deja los valores por defecto (3 y 0.75). Un `apply` los mantiene, sin paso
+manual. Solo como emergencia (bajarlo ya, sin esperar un `apply`; el siguiente `apply` lo revierte al valor de
+Terraform):
+
+```bash
+gcloud run services update api --region $R --project $P \
+  --update-env-vars AI_DAILY_BUDGET_USD=0.25
+```
+
+Valores del MVP: 1 USD/día en total y 0,25 USD/día por persona (costo máximo de Vertex AI: 1 × 30 = 30 USD al mes). Ojo: el peor mes con 1 USD/día son ~30 USD, más que el
+presupuesto; entre demostraciones bájalo a `AI_DAILY_BUDGET_USD=0.25` (~7,5 USD el peor mes) o pausa la cola
+`simulations`.
+
+**Apagar Cloud SQL entre demostraciones** ahorra ~7,7 USD/mes (solo se paga el disco):
+`gcloud sql instances patch parcheu-prod --activation-policy=NEVER --project $P` y, para volver,
+`--activation-policy=ALWAYS` (tarda unos minutos). Mientras está apagada la API responde 5xx. Un `terraform apply` la
+vuelve a encender.
+
+**Si llega el aviso del 90 % (o el del 100 % pronosticado):**
+
+1. Consola > Facturación > Informes, agrupado por servicio y filtrado por proyecto: ¿qué creció?
+2. Vertex AI: pausa la cola `simulations` y baja `AI_DAILY_BUDGET_USD` (arriba); revisa `ai_usage_daily`
+   ([ai-budget-exceeded](#ai-budget-exceeded)).
+3. Cloud SQL: apágala si no hay demostración cercana (arriba).
+4. Cloud Run: confirma que `min_instance_count` sigue en 0 (`gcloud run services describe api --region $R --project $P`).
+5. Si el gasto no se explica y los créditos se acaban, último recurso: desvincular la facturación
+   (`gcloud billing projects unlink parcheu-prod`) detiene todo; los recursos quedan suspendidos y pueden
+   borrarse si siguen así semanas. Antes, exporta la base (`gcloud sql export sql parcheu-prod gs://parcheu-prod-tfstate/respaldo.sql.gz --database=parcheu --project $P`).
 
 ## Backend de dev en el homeserver
 

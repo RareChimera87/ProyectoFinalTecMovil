@@ -27,9 +27,12 @@ fun urlProperty(name: String, default: String): String = providers.gradlePropert
     .orElse(localProperties.map { it.getProperty(name) ?: "" }.map { it.ifBlank { default } })
     .getOrElse(default)
 
-// URLs de relleno de prod (el proyecto parcheu-prod aún no existe). Un AAB que las lleve no debe llegar a Play.
+// URL de relleno de la API de prod (la de Cloud Run lleva el número de proyecto). Un AAB que la lleve no debe llegar a Play.
 val prodApiRelleno = "https://api-parcheu-prod.us-central1.run.app/"
-val prodHostingRelleno = "https://parcheu-prod.web.app"
+// Hosting de prod: el sitio por defecto de parcheu-prod. NO es de relleno: es la URL real si el proyecto no lleva sufijo,
+// así que verificarUrlsProd no la rechaza (antes la rechazaba y PARCHEU_HOSTING_URL_PROD=https://parcheu-prod.web.app,
+// la URL correcta, tumbaba el release).
+val prodHostingDefecto = "https://parcheu-prod.web.app"
 
 // La URL de Hosting se usa como prefijo ("$hosting/terminos"): sin barra final para no generar "//terminos".
 fun hostingUrlProperty(name: String, default: String): String =
@@ -130,10 +133,10 @@ android {
             dimension = "env"
             // Pendiente humano (docs/pendientes-humanos.md, E0.7): cuando exista parcheu-prod y su servicio api,
             // pasar la URL real con -Pparcheu.apiUrl.prod (el pipeline la lee de la variable PARCHEU_API_URL_PROD).
-            // Los valores de abajo son de relleno: verificarUrlsProd hace fallar el assemble/bundle de prodRelease
-            // firmado con la llave de subida si se quedan así.
+            // La URL de la API de abajo es de relleno: verificarUrlsProd hace fallar el assemble/bundle de prodRelease
+            // firmado con la llave de subida si se queda así. La de Hosting es el sitio por defecto de parcheu-prod.
             val api = urlProperty("parcheu.apiUrl.prod", prodApiRelleno)
-            val hosting = hostingUrlProperty("parcheu.hostingUrl.prod", prodHostingRelleno)
+            val hosting = hostingUrlProperty("parcheu.hostingUrl.prod", prodHostingDefecto)
             buildConfigField("String", "API_URL", "\"$api\"")
             buildConfigField("String", "HOSTING_URL", "\"$hosting\"")
             buildConfigField("String", "TERMS_URL", "\"$hosting/terminos\"")
@@ -266,22 +269,22 @@ roborazzi {
     outputDir.set(file("src/test/screenshots"))
 }
 
-// A-M1: el AAB de prod que puede llegar a Play (firmado con la llave de subida) no puede salir con las URLs de
+// A-M1: el AAB de prod que puede llegar a Play (firmado con la llave de subida) no puede salir con la URL de API de
 // relleno. Se exige cuando el pipeline pide la llave (-Pparcheu.release.requireUploadKey=true, solo android-release)
 // o cuando hay llave de subida en el entorno (un AAB firmado a mano). android-ci construye bundleProdRelease sin
 // llave y con relleno para probar R8 y Crashlytics; ese AAB va firmado con la de debug y Play lo rechaza.
 // workflows.test.py (AndroidReleaseUrlsProd) mantiene coherentes esta regla, android-ci.yml y android-release.yml.
 val prodApiUrl = urlProperty("parcheu.apiUrl.prod", prodApiRelleno)
-val prodHostingUrl = hostingUrlProperty("parcheu.hostingUrl.prod", prodHostingRelleno)
+val prodHostingUrl = hostingUrlProperty("parcheu.hostingUrl.prod", prodHostingDefecto)
 val exigirUrlsProd = requireUploadKey || hasUploadKey
 val verificarUrlsProd = tasks.register("verificarUrlsProd") {
     group = "verification"
-    description = "Falla si la API_URL o la HOSTING_URL de prod son las de relleno o están vacías."
+    description =
+        "Falla si la API_URL de prod es de relleno o una URL de prod está vacía o sin https."
     // Copias locales: doLast no puede capturar el objeto del script (configuration cache).
     val apiUrl = prodApiUrl
     val hostingUrl = prodHostingUrl
     val apiRelleno = prodApiRelleno
-    val hostingRelleno = prodHostingRelleno
     val exigir = exigirUrlsProd
     onlyIf("solo el AAB firmado con la llave de subida (requireUploadKey o UPLOAD_*)") { exigir }
     doLast {
@@ -294,7 +297,8 @@ val verificarUrlsProd = tasks.register("verificarUrlsProd") {
             if (invalida(apiUrl, apiRelleno) || sinBarra(apiUrl)) {
                 add("API_URL: pasa -Pparcheu.apiUrl.prod=<url https que termine en />")
             }
-            if (invalida(hostingUrl, hostingRelleno)) {
+            // Hosting: basta con https; su valor por defecto es la URL real de parcheu-prod (no un relleno).
+            if (hostingUrl.isBlank() || !hostingUrl.startsWith("https://")) {
                 add("HOSTING_URL: pasa -Pparcheu.hostingUrl.prod=<url https>")
             }
         }
