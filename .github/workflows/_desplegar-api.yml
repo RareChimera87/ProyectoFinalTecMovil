@@ -50,7 +50,7 @@ jobs:
         run: |
           echo "::error::Faltan los secretos de WIF de $PROYECTO (WIF_PROVIDER*/WIF_SERVICE_ACCOUNT_*): ver docs/pendientes-humanos.md."
           exit 1
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
         id: auth
         with:
