@@ -77,6 +77,10 @@ module "platform" {
   api_max_instances   = 3
   deletion_protection = false
 
+  # db-f1-micro (max_connections 25, aprox.): 3 instancias × 4 + jobs 3 × 2 = 18 ≤ 20 (80 %). Con el valor por
+  # defecto (10) eran 30 + jobs, por encima del límite. Cuenta completa en envs/prod/main.tf.
+  db_max_pool_size = 4
+
   sql_tier            = "db-f1-micro"
   sql_backups_enabled = false
   sql_pitr_enabled    = false

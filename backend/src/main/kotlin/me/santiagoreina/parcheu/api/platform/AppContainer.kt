@@ -73,6 +73,7 @@ import me.santiagoreina.parcheu.api.platform.auth.TokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
+import me.santiagoreina.parcheu.api.platform.db.JOB_POOL_SIZE
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
 import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
@@ -449,7 +450,7 @@ class AppContainer(
             val db = config.db
             val usage = when {
                 database != null -> ExposedAiUsageStore(database)
-                db != null -> ExposedAiUsageStore { connectExposed(createDataSource(db, maxPoolSize = 2)) }
+                db != null -> ExposedAiUsageStore { connectExposed(createDataSource(db, maxPoolSize = minOf(JOB_POOL_SIZE, db.maxPoolSize))) }
                 config.env == Env.LOCAL -> InMemoryAiUsageStore()
                 else -> error("La pasarela de IA necesita DB_NAME y la conexión a la base en ${config.env}")
             }

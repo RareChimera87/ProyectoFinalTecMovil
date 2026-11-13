@@ -8,11 +8,38 @@ import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
 import javax.sql.DataSource
 
+/** Conexiones de los jobs (`migrate`, `seed-demo`, `purge-demo`): trabajan en serie, con dos sobra. */
+const val JOB_POOL_SIZE = 2
+
+/** Conexiones que el pool mantiene abiertas sin uso: pocas, para no acaparar el límite de Cloud SQL (db-f1-micro). */
+private const val MIN_IDLE = 1
+
+/** Una conexión ociosa por encima de [MIN_IDLE] se cierra a los 2 min; Hikari exige ≥ 10 s. */
+private const val IDLE_TIMEOUT_MS = 120_000L
+
+/**
+ * Vida máxima de una conexión: 10 min, muy por debajo de los cortes del servidor y del conector de Cloud SQL, para
+ * que Hikari la recicle antes de que la cierren por debajo (avisos `Failed to validate connection … This connection
+ * has been closed` en prod tras ratos sin tráfico).
+ */
+private const val MAX_LIFETIME_MS = 600_000L
+
+/**
+ * Ping a las conexiones ociosas cada 2 min (menor que [MAX_LIFETIME_MS], mínimo de Hikari 30 s). Con `cpu_idle` de
+ * Cloud Run la CPU se estrangula sin peticiones y el ping puede no correr; ahí [MAX_LIFETIME_MS] y la validación al
+ * prestar la conexión siguen evitando que una petición reciba una conexión muerta.
+ */
+private const val KEEPALIVE_TIME_MS = 120_000L
+
 /**
  * Pool Hikari hacia Postgres. En Cloud Run usa el conector de Cloud SQL (autenticación IAM, sin
  * VPC connector); en local/CI usa `DB_URL` JDBC directo.
+ *
+ * El pool crece bajo demanda hasta [maxPoolSize] (por defecto `DB_MAX_POOL_SIZE`) y vuelve a [MIN_IDLE] tras
+ * [IDLE_TIMEOUT_MS]: con el `minimumIdle` de Hikari por defecto (= máximo) cada instancia abría todas sus
+ * conexiones al arrancar y las retenía, y con varias instancias se agotaba `max_connections` de Cloud SQL.
  */
-fun createDataSource(config: DbConfig, maxPoolSize: Int = 10, failFast: Boolean = true): HikariDataSource {
+fun createDataSource(config: DbConfig, maxPoolSize: Int = config.maxPoolSize, failFast: Boolean = true): HikariDataSource {
     val hikari = HikariConfig().apply {
         jdbcUrl = when {
             config.cloudSqlInstance != null -> "jdbc:postgresql:///${config.name}"
@@ -22,6 +49,10 @@ fun createDataSource(config: DbConfig, maxPoolSize: Int = 10, failFast: Boolean 
         username = config.user
         password = config.password
         maximumPoolSize = maxPoolSize
+        minimumIdle = minOf(MIN_IDLE, maxPoolSize)
+        idleTimeout = IDLE_TIMEOUT_MS
+        maxLifetime = MAX_LIFETIME_MS
+        keepaliveTime = KEEPALIVE_TIME_MS
         // El servicio no debe caerse al arrancar si Cloud SQL tarda: Hikari reintenta al pedir la conexión.
         if (!failFast) initializationFailTimeout = -1
         if (config.cloudSqlInstance != null) {
