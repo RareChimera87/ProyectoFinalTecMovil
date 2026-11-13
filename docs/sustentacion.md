@@ -146,8 +146,12 @@ cualquier cambio sobre el servicio `api` o sobre `DEMO_USERS_ENABLED`, **no apli
   "Sin simular". Despliega la 0.3.0 (paso 3) antes de instalar el APK.
 - **No abras "Gestionar suscripción" (G4)** con el Plus manual: describe una suscripción de Google Play cancelada
   (detalle en [ParcheU+ en la demo](#parcheu-en-la-demo-entorno-b)).
-- **No cambies de cuenta en el mismo dispositivo durante la demo** (cerrar sesión e iniciar con otra), mientras la
-  corrección de navegación no esté en el APK instalado: usa un teléfono por cuenta (teléfono y emulador).
+- **Una cuenta por dispositivo (prudencia).** El APK 0.3.0 ya incluye la corrección de las pilas de navegación al
+  cambiar de cuenta, pero en la demo conviene no cerrar sesión e iniciar con otra: usa un teléfono por cuenta
+  (teléfono y emulador) y así no hay que repetir el login en vivo.
+- **Android Studio ejecuta `prodDebug` por defecto** (contra la API y el Firebase de prod, mismo paquete que el APK de
+  demo). Un Run desde el IDE en el teléfono de la demo reemplaza el APK 0.3.0 por un build local (`versionCode`
+  900000); para volver al de demo hace falta `adb install -r -d` (ver [desarrollo-local.md](desarrollo-local.md#ejecutar-desde-android-studio-contra-producción-por-defecto)).
 
 **Preparación la víspera (entorno B)**, después de los pasos 1 a 5 del [orden de arriba](#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento):
 
@@ -177,7 +181,7 @@ scripts/fetch-google-services.sh prod          # desde la raíz del repo; necesi
 
 # 2. Llave de subida por variables de ENTORNO (no son propiedades de Gradle)
 export UPLOAD_KEYSTORE_FILE=~/.parcheu/upload-keystore.jks
-export UPLOAD_KEYSTORE_PASSWORD=...  UPLOAD_KEY_ALIAS=...  UPLOAD_KEY_PASSWORD=...   # ~/.parcheu/upload-key.env
+set -a; . ~/.parcheu/upload-key.env; set +a   # UPLOAD_KEYSTORE_PASSWORD, UPLOAD_KEY_ALIAS, UPLOAD_KEY_PASSWORD (sin imprimirlas)
 
 # 3. APK de prod. La URL real de la API ya es el valor por defecto; pasarla explícita no hace daño.
 #    -Pparcheu.release.minify=false construye un APK sin R8 (solo para depurar o como respaldo de la demo).
@@ -185,9 +189,13 @@ cd android
 ./gradlew :app:assembleProdRelease -Pparcheu.apiUrl.prod=https://api-n3yxvjziqq-uc.a.run.app/ \
   -Pparcheu.versionName=0.3.0 -Pparcheu.versionCode=31
 
-# 4. Instalar en cada teléfono
-adb install -r app/build/outputs/apk/prod/release/app-prod-release.apk
+# 4. Instalar en cada teléfono. -d permite instalarlo encima de un build local (prodDebug, versionCode 900000);
+#    sobre una versión anterior de demo (23, 30...) no hace falta pero tampoco estorba.
+adb install -r -d app/build/outputs/apk/prod/release/app-prod-release.apk
 ```
+
+Si el teléfono tiene un build local firmado con otra llave (sin `~/.parcheu/upload-key.env`), la instalación falla con
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`: desinstala antes (`adb uninstall me.santiagoreina.parcheu`, se pierde la sesión).
 
 La URL debe ser `https` y terminar en `/`; `verificarUrlsProd` falla si no (y si es la URL de relleno antigua). La huella registrada en Firebase prod es la
 de la llave de subida, no la de debug: por eso el APK debe ir firmado con ella o el login con Google falla.
