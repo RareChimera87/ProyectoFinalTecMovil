@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import me.santiagoreina.parcheu.core.error.AI_BUDGET_MESSAGE
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChatTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUIconButton
@@ -214,5 +215,6 @@ internal fun errorMessage(error: AppError): String = when (error) {
     AppError.Suspended -> "Tu cuenta está suspendida."
     AppError.ScenarioEnded -> "El escenario terminó."
     AppError.NotFound -> "No encontramos este chat."
+    is AppError.AiBudget -> AI_BUDGET_MESSAGE
     else -> "Algo salió mal. Inténtalo de nuevo."
 }

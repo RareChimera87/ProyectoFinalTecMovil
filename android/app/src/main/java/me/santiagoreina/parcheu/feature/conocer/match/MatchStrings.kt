@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.feature.conocer.match
 
 import androidx.compose.runtime.Composable
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.Usage
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.theme.ModeColors
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
@@ -11,7 +12,7 @@ internal object MatchStrings {
     const val QUEUE_TITLE = "Match al azar"
     const val COMPARING = "Comparando gustos con tu gemelo…"
     const val TODAY = "Este es tu match al azar de hoy"
-    const val TODAY_COUNT = "1 de 1"
+    const val TODAY_UNLIMITED = "Sin límite diario"
     const val CANCEL_SEARCH = "Cancelar búsqueda"
     const val CANCEL_NOTE = "Si cancelas no se descuenta."
     const val CLOSE = "Cerrar"
@@ -35,6 +36,12 @@ internal object MatchStrings {
     const val MATCH_EXPIRED_TITLE = "El match venció"
     const val MATCH_EXPIRED_MESSAGE = "Nadie eligió a tiempo. Puedes buscar a alguien más."
     const val LOADING = "Cargando match…"
+
+    /** "1 de 1" para quien tiene límite diario (este match cuenta al encontrarse); "Sin límite diario" en Plus. */
+    fun todayCount(usage: Usage): String {
+        val limit = usage.limit ?: return TODAY_UNLIMITED
+        return "${(usage.used + 1).coerceAtMost(limit)} de $limit"
+    }
 
     fun searching(modeName: String) = "Buscando a alguien con $modeName activo…"
 

@@ -46,6 +46,7 @@ import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.R
 import me.santiagoreina.parcheu.contract.QuestionDto
 import me.santiagoreina.parcheu.contract.TwinAnswer
+import me.santiagoreina.parcheu.core.error.AI_BUDGET_MESSAGE
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
@@ -179,6 +180,7 @@ private fun twinQuestionsErrorMessage(error: AppError?): String = when {
         }
             ?: stringResource(R.string.twin_questions_error_daily_limit)
     error is AppError.RateLimited -> stringResource(R.string.twin_questions_error_rate_limited)
+    error is AppError.AiBudget -> AI_BUDGET_MESSAGE
     else -> stringResource(R.string.twin_questions_error_generic)
 }
 
