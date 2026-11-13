@@ -8,7 +8,8 @@
 #   - los tres Cloud Run Jobs (migrate, seed-demo, purge-demo) con su argumento;
 #   - las tres colas con max_dispatches_per_second y max_concurrent_dispatches;
 #   - el mapa de tareas → colas documentado en el README;
-#   - los secretos hmac-anon-key y play-sa sin valor (ninguna secret_version ni secret_data);
+#   - los secretos hmac-anon-key, play-sa y anthropic-api-key sin valor (ninguna secret_version ni secret_data);
+#   - AI_PROVIDER de la API en gemini|claude|anthropic y SECRET_ANTHROPIC_API_KEY en su run_env;
 #   - escalado de la API: dev min 0; prod min 0 o 1 y máx entre 1 y 5 (4 nov: min 0 y máx 2 por costo);
 #   - SERVICE_URL de la API = URL determinista de Cloud Run (https://api-<número>.<región>.run.app);
 #   - DB_MAX_POOL_SIZE entero 1..50, igual en los jobs, y máx instancias × pool + 6 ≤ 80 % de max_connections
@@ -80,7 +81,7 @@ else
 fi
 
 # --- Secretos sin valor ------------------------------------------------------
-for secret in hmac-anon-key play-sa; do
+for secret in hmac-anon-key play-sa anthropic-api-key; do
   n="$(q "[.[] | select(.type==\"google_secret_manager_secret\" and .values.secret_id==\"$secret\")] | length")"
   [ "$n" = "1" ] && ok "secreto $secret (contenedor)" || fail "falta el secreto $secret"
 done
@@ -124,6 +125,17 @@ else
       fail "$v debe ser un decimal mayor que 0 en el run_env de la api (es '$val')"
     fi
   done
+  # Proveedor de IA (AiConfig.kt: un AI_PROVIDER inválido o fake hace fallar el arranque; anthropic exige la clave).
+  provider="$(jq -r '[.values.template[0].containers[0].env[]? | select(.name=="AI_PROVIDER") | .value] | first // empty' <<<"$api")"
+  case "$provider" in
+    gemini|claude|anthropic) ok "AI_PROVIDER=$provider" ;;
+    *) fail "AI_PROVIDER debe ser gemini, claude o anthropic en el run_env de la api (es '$provider')" ;;
+  esac
+  if [ "$(jq '[.values.template[0].containers[0].env[]? | select(.name=="SECRET_ANTHROPIC_API_KEY")] | length' <<<"$api")" = "1" ]; then
+    ok "SECRET_ANTHROPIC_API_KEY en el run_env de la api"
+  else
+    fail "falta SECRET_ANTHROPIC_API_KEY en el run_env de la api (AI_PROVIDER=anthropic no arrancaría)"
+  fi
   # Pool de Postgres por instancia (AppConfig.kt: DB_MAX_POOL_SIZE, entero 1..50). Con un tier conocido:
   # máx instancias × pool + 3 jobs × 2 ≤ 80 % de max_connections de Cloud SQL.
   pool="$(jq -r '[.values.template[0].containers[0].env[]? | select(.name=="DB_MAX_POOL_SIZE") | .value] | first // empty' <<<"$api")"

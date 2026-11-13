@@ -183,6 +183,15 @@
                             "name": "TASKS_SERVICE_ACCOUNT",
                             "value": "sa-tasks@parcheu-dev.iam.gserviceaccount.com",
                             "value_source": []
+                          },
+                          {
+                            "name": "AI_PROVIDER",
+                            "value": "gemini",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_ANTHROPIC_API_KEY",
+                            "value_source": []
                           }
                         ],
                         "image": "us-docker.pkg.dev/cloudrun/container/job",
@@ -338,6 +347,15 @@
                             "name": "TASKS_SERVICE_ACCOUNT",
                             "value": "sa-tasks@parcheu-dev.iam.gserviceaccount.com",
                             "value_source": []
+                          },
+                          {
+                            "name": "AI_PROVIDER",
+                            "value": "gemini",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_ANTHROPIC_API_KEY",
+                            "value_source": []
                           }
                         ],
                         "image": "us-docker.pkg.dev/cloudrun/container/job",
@@ -492,6 +510,15 @@
                           {
                             "name": "TASKS_SERVICE_ACCOUNT",
                             "value": "sa-tasks@parcheu-dev.iam.gserviceaccount.com",
+                            "value_source": []
+                          },
+                          {
+                            "name": "AI_PROVIDER",
+                            "value": "gemini",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_ANTHROPIC_API_KEY",
                             "value_source": []
                           }
                         ],
@@ -661,6 +688,15 @@
                       {
                         "name": "AI_USER_DAILY_BUDGET_USD",
                         "value": "0.75",
+                        "value_source": []
+                      },
+                      {
+                        "name": "AI_PROVIDER",
+                        "value": "gemini",
+                        "value_source": []
+                      },
+                      {
+                        "name": "SECRET_ANTHROPIC_API_KEY",
                         "value_source": []
                       }
                     ],
@@ -2036,6 +2072,61 @@
             "schedule": "*/15 * * * *",
             "time_zone": "America/Bogota",
             "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_secret_manager_secret.this[\"anthropic-api-key\"]",
+          "name": "this",
+          "type": "google_secret_manager_secret",
+          "values": {
+            "annotations": null,
+            "deletion_policy": "DELETE",
+            "deletion_protection": false,
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "dev",
+              "goog-terraform-provisioned": "true"
+            },
+            "labels": {
+              "app": "parcheu",
+              "env": "dev"
+            },
+            "project": "parcheu-dev",
+            "replication": [
+              {
+                "auto": [
+                  {
+                    "customer_managed_encryption": []
+                  }
+                ],
+                "user_managed": []
+              }
+            ],
+            "rotation": [],
+            "secret_id": "anthropic-api-key",
+            "tags": null,
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "dev",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null,
+            "topics": [],
+            "ttl": null,
+            "version_aliases": null,
+            "version_destroy_ttl": null
+          }
+        },
+        {
+          "address": "module.platform.google_secret_manager_secret_iam_member.api_accessor[\"anthropic-api-key\"]",
+          "name": "api_accessor",
+          "type": "google_secret_manager_secret_iam_member",
+          "values": {
+            "condition": [],
+            "member": "serviceAccount:sa-api@parcheu-dev.iam.gserviceaccount.com",
+            "project": "parcheu-dev",
+            "role": "roles/secretmanager.secretAccessor",
+            "secret_id": "anthropic-api-key"
           }
         }
       ]
