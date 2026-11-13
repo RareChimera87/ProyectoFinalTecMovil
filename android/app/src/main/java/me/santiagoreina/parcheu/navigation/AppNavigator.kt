@@ -1,6 +1,5 @@
 package me.santiagoreina.parcheu.navigation
 
-import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import kotlin.reflect.KClass
 
@@ -80,10 +79,15 @@ class NavControllerNavigator(private val navController: NavHostController) : App
      */
     private fun toTopLevel(route: AppRoute, restore: Boolean) {
         val target = route::class
-        val currentTab = navController.currentBackStack.value.lastOrNull { entry ->
-            TopLevelDestination.entries.any { entry.destination.hasRoute(it.routeClass) }
-        }
-        if (currentTab?.destination?.hasRoute(target) == true) {
+        // Las raíces se abren siempre encima de Home, así que en la pila hay a lo sumo una raíz distinta de
+        // Home: esa es la pestaña activa (o Home si no hay ninguna). currentBackStack es API restringida.
+        val currentTab = TopLevelDestination.entries
+            .filter { it.routeClass != Home::class }
+            .firstOrNull {
+                runCatching { navController.getBackStackEntry(it.routeClass) }.isSuccess
+            }
+            ?.routeClass ?: Home::class
+        if (currentTab == target) {
             if (restore) {
                 // Volver a tocar la pestaña activa: queda solo su raíz.
                 navController.popBackStack(target, inclusive = false)
