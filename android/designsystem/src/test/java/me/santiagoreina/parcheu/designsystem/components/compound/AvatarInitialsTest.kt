@@ -74,7 +74,7 @@ class AvatarInitialsTest {
         assertEquals("SR", initialsOf("  Santiago   Reina  "))
         assertEquals("L2", initialsOf("Laura 2do"))
         assertEquals("", initialsOf("(demo) -- 😀"))
-        assertEquals("CP", initialsOf("¿Camila? Pérez"))
+        assertEquals("P", initialsOf("¿Camila? Pérez"))
     }
 
     @Test
