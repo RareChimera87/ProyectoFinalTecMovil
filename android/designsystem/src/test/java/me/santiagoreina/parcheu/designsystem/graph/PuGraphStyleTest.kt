@@ -128,6 +128,55 @@ class PuGraphStyleTest {
     }
 
     @Test
+    fun `en Parche Vivo las iniciales sobre el relleno del modo cumplen AA`() {
+        val failures = mutableListOf<String>()
+        for ((theme, colors) in listOf(
+            "oscuro" to DarkParcheUColors,
+            "claro" to LightParcheUColors
+        )) {
+            for (mode in GraphMode.entries) {
+                for (state in GraphEdgeState.entries) {
+                    for (affinity in 0..100) {
+                        val node = GraphNode("x", "Ana", "A", affinity, mode, state)
+                        val paint = nodePaint(node, colors, PuGraphStyle.ParcheVivo)
+                        val layer = if (state ==
+                            GraphEdgeState.PENDING
+                        ) {
+                            GraphAlpha.NODE_PENDING
+                        } else {
+                            1f
+                        }
+                        val composed = paint.fill.copy(alpha = paint.fill.alpha * layer)
+                        val ratio = contrastRatio(paint.content, composed, backdrop = colors.bg)
+                        if (ratio < Wcag.AA_NORMAL_TEXT) {
+                            failures += "$theme $mode $state $affinity: $ratio"
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test
+    fun `sin simular es un nodo hueco distinto de una afinidad baja en ambos estilos`() {
+        val unmeasured =
+            GraphNode("x", "Ana", "A", null, GraphMode.AMISTAD, GraphEdgeState.CONNECTED)
+        val low = unmeasured.copy(affinity = 50)
+        for (colors in listOf(DarkParcheUColors, LightParcheUColors)) {
+            for (style in PuGraphStyle.entries) {
+                val hollow = nodePaint(unmeasured, colors, style)
+                assertTrue(hollow.hollow)
+                assertEquals(colors.bg, hollow.fill)
+                assertTrue(contrastRatio(hollow.content, colors.bg) >= Wcag.AA_NORMAL_TEXT)
+                val filled = nodePaint(low, colors, style)
+                assertFalse(filled.hollow)
+                assertTrue(filled.fill != hollow.fill)
+            }
+        }
+    }
+
+    @Test
     fun `un amigo de amigo sin padre conserva su posicion radial y no falla`() {
         val fof = listOf(GraphFof("f1", null, "", "", 80), GraphFof("f2", "no-existe", "", "", 75))
         val layout = computeGraphLayout(PuGraphSamples.nodes, fof, 300f)

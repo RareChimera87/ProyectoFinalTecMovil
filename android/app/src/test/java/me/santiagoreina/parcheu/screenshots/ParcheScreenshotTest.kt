@@ -67,6 +67,24 @@ class ParcheScreenshotTest(private val dark: Boolean) {
 
     private val loaded = ParcheUiState.Loaded(ParcheSamples.content)
 
+    /** Sebas y Juli conectaron por invitación y aún no simulan: nodos huecos con borde punteado. */
+    private val withUnmeasured = ParcheUiState.Loaded(
+        ParcheSamples.content.copy(
+            graph = ParcheSamples.graph.copy(
+                nodes = ParcheSamples.nodes.map {
+                    if (it.id == "seb" || it.id == "juli") {
+                        it.copy(affinity = 0, affinityMeasured = false)
+                    } else {
+                        it
+                    }
+                }
+            )
+        )
+    )
+
+    @Test
+    fun d1Unmeasured() = capture("d1_sin_simular", withUnmeasured)
+
     @Test
     fun d1Graph() = capture("d1_grafo", loaded)
 
@@ -98,7 +116,7 @@ class ParcheScreenshotTest(private val dark: Boolean) {
     @Test
     fun d2Unmeasured() = capture(
         "d2_sin_simular",
-        loaded.copy(
+        withUnmeasured.copy(
             sheet = sheetFor("seb", withSimulation = false).let {
                 it.copy(node = it.node.copy(affinity = 0, affinityMeasured = false))
             }

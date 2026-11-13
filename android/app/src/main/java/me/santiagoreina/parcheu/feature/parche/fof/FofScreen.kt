@@ -37,23 +37,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.FofCandidate
 import me.santiagoreina.parcheu.contract.NodeDto
+import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
-import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCardVariant
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUPlusBadge
 import me.santiagoreina.parcheu.designsystem.components.compound.AvatarInitials
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
 import me.santiagoreina.parcheu.designsystem.components.compound.LoadingDots
-import me.santiagoreina.parcheu.designsystem.components.compound.LockedOverlay
-import me.santiagoreina.parcheu.designsystem.components.compound.LockedPlaceholder
 import me.santiagoreina.parcheu.designsystem.components.compound.initialsOf
 import me.santiagoreina.parcheu.designsystem.graph.GraphFof
 import me.santiagoreina.parcheu.designsystem.graph.PU_GRAPH_DEFAULT_SIZE
 import me.santiagoreina.parcheu.designsystem.graph.PuGraph
+import me.santiagoreina.parcheu.designsystem.graph.PuGraphStyle
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.feature.parche.IncludedFeatureRow
 import me.santiagoreina.parcheu.feature.parche.ParcheIcon
+import me.santiagoreina.parcheu.feature.parche.ParchePlusHero
 import me.santiagoreina.parcheu.feature.parche.parcheIconPainter
+import me.santiagoreina.parcheu.feature.parche.parcheSpine
 import me.santiagoreina.parcheu.feature.parche.toGraphNode
 import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
 
@@ -184,22 +186,12 @@ private fun LockedContent(state: FofUiState.Locked, callbacks: FofCallbacks) {
             .padding(top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        LockedOverlay(
+        ParchePlusHero(
             title = lockedTitle(state.count),
-            actionLabel = "Ver ParcheU+",
-            onActionClick = callbacks.onUnlock,
-            lockIcon = parcheIconPainter(ParcheIcon.Lock),
-            placeholder = LockedPlaceholder.Graph,
-            modifier = Modifier.height(320.dp).testTag(FofTags.LOCKED)
-        )
-        Text(
-            text =
-            "Con ParcheU+ ves a los amigos de tus amigos que son compatibles contigo y puedes " +
-                "pedir que te los presenten.",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-            color = colors.mu,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            body = "Con ParcheU+ ves a los amigos de tus amigos que son compatibles contigo y " +
+                "puedes pedir que te los presenten.",
+            onUnlock = callbacks.onUnlock,
+            modifier = Modifier.testTag(FofTags.LOCKED)
         )
         ParcheUCard(modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -211,8 +203,11 @@ private fun LockedContent(state: FofUiState.Locked, callbacks: FofCallbacks) {
                 ),
                 color = colors.mu
             )
-            IncludedRow("Tu grafo con tus contactos directos")
-            IncludedRow("Presentar a dos amigos")
+            IncludedFeatureRow(
+                "Tu grafo con tus contactos directos",
+                rememberVectorPainter(FofIcons.Check)
+            )
+            IncludedFeatureRow("Presentar a dos amigos", rememberVectorPainter(FofIcons.Check))
         }
     }
 }
@@ -222,25 +217,6 @@ fun lockedTitle(count: Int): String = when {
     count <= 0 -> "Mira a las personas afines a 2 pasos de ti"
     count == 1 -> "Hay 1 persona a 2 pasos de ti"
     else -> "Hay $count personas a 2 pasos de ti"
-}
-
-@Composable
-private fun IncludedRow(text: String) {
-    val colors = ParcheUTheme.colors
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            painter = rememberVectorPainter(FofIcons.Check),
-            contentDescription = null,
-            tint = colors.prt,
-            modifier = Modifier.size(20.dp)
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-            color = colors.tx,
-            modifier = Modifier.padding(start = 10.dp)
-        )
-    }
 }
 
 /** D6: G0 con la capa fof y la lista de candidatos. */
@@ -259,7 +235,8 @@ private fun UnlockedContent(state: FofUiState.Unlocked, callbacks: FofCallbacks)
             PuGraph(
                 nodes = content.nodes.map { it.toGraphNode() },
                 size = graphSize,
-                fof = content.candidates.take(MAX_GRAPH_FOF).map { it.toGraphFof() }
+                fof = content.candidates.take(MAX_GRAPH_FOF).map { it.toGraphFof() },
+                style = PuGraphStyle.ParcheVivo
             )
         }
         Column(
@@ -334,8 +311,10 @@ private fun FofCard(
 ) {
     val colors = ParcheUTheme.colors
     val name = if (candidate.isAnonymous) ANON_LABEL else candidate.label
-    ParcheUCard(
-        variant = ParcheUCardVariant.Suggestion,
+    // Parche Vivo: lomo violeta ("por conocer"); el nombre y la afinidad tienen todo el ancho y la
+    // acción baja a su propia fila para que nada se parta en tres líneas.
+    ModeSpineCard(
+        mode = parcheSpine(),
         modifier = Modifier.fillMaxWidth().testTag(FofTags.card(candidate.anonId))
     ) {
         Row(
@@ -345,15 +324,15 @@ private fun FofCard(
             AvatarInitials(
                 name = name,
                 affinity = candidate.estimatedAffinity,
-                size = 40.dp,
+                size = 44.dp,
                 anonymous = candidate.isAnonymous,
                 anonymousIcon = parcheIconPainter(ParcheIcon.Person)
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = "$name · ${candidate.estimatedAffinity} % afín",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 14.sp,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     ),
                     color = colors.tx,
@@ -368,6 +347,12 @@ private fun FofCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             val enabled = !requested && !sending
             val actionDescription = introActionDescription(name, viaName, requested, sending)
             Text(
@@ -376,21 +361,22 @@ private fun FofCard(
                     sending -> "Pidiendo…"
                     else -> "Pedir presentación"
                 },
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = 13.sp,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
                 ),
-                color = if (enabled) colors.prt else colors.mu,
+                color = if (enabled) colors.onprc else colors.mu,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
-                    .widthIn(max = 96.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .weight(1f)
+                    .clip(ParcheUTheme.shapes.buttonCompact)
+                    .background(if (enabled) colors.prc else colors.s2)
                     .clickable(enabled = enabled, role = Role.Button, onClick = onRequest)
                     // TalkBack: el botón dice a quién se refiere (todos los de la lista decían lo mismo).
                     .semantics { contentDescription = actionDescription }
                     .heightIn(min = 48.dp)
                     .wrapContentHeight()
-                    .padding(horizontal = 4.dp)
+                    .padding(horizontal = 12.dp)
             )
             ReportOrBlockAction(onClick = onReportOrBlock)
         }

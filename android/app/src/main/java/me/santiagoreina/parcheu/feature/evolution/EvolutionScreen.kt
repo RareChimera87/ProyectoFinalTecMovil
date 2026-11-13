@@ -41,21 +41,21 @@ import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.HistoryDto
 import me.santiagoreina.parcheu.contract.Moment
 import me.santiagoreina.parcheu.contract.MonthSnapshot
-import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUPlusBadge
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
 import me.santiagoreina.parcheu.designsystem.components.compound.LoadingDots
-import me.santiagoreina.parcheu.designsystem.components.compound.LockedOverlay
-import me.santiagoreina.parcheu.designsystem.components.compound.LockedPlaceholder
 import me.santiagoreina.parcheu.designsystem.graph.GraphEdgeState
 import me.santiagoreina.parcheu.designsystem.graph.GraphMode
 import me.santiagoreina.parcheu.designsystem.graph.GraphNode
 import me.santiagoreina.parcheu.designsystem.graph.PuGraph
+import me.santiagoreina.parcheu.designsystem.graph.PuGraphStyle
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
-import me.santiagoreina.parcheu.feature.parche.ParcheIcon
+import me.santiagoreina.parcheu.feature.parche.ParchePlusHero
 import me.santiagoreina.parcheu.feature.parche.fof.FofIcons
-import me.santiagoreina.parcheu.feature.parche.parcheIconPainter
 
 /** Etiquetas de prueba de D9. */
 object EvolutionTags {
@@ -122,10 +122,9 @@ fun EvolutionScreen(
     }
 }
 
-/** Bloqueado (gratis): sin ningún dato real, solo el placeholder decorativo. */
+/** Bloqueado (gratis): sin ningún dato real, solo el héroe de ParcheU+. */
 @Composable
 private fun LockedContent(callbacks: EvolutionCallbacks) {
-    val colors = ParcheUTheme.colors
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -134,22 +133,33 @@ private fun LockedContent(callbacks: EvolutionCallbacks) {
             .padding(top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        LockedOverlay(
+        ParchePlusHero(
             title = "Mira cómo creció tu parche mes a mes",
-            actionLabel = "Ver ParcheU+",
-            onActionClick = callbacks.onUnlock,
-            lockIcon = parcheIconPainter(ParcheIcon.Lock),
-            placeholder = LockedPlaceholder.Graph,
-            modifier = Modifier.height(320.dp).testTag(EvolutionTags.LOCKED)
-        )
-        Text(
-            text = "Con ParcheU+ ves una línea de tiempo con tus conexiones de cada mes y los " +
+            body = "Con ParcheU+ ves una línea de tiempo con tus conexiones de cada mes y los " +
                 "momentos que marcaron tu red.",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-            color = colors.mu,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            onUnlock = callbacks.onUnlock,
+            modifier = Modifier.testTag(EvolutionTags.LOCKED),
+            illustration = { GrowthIllustration() }
         )
+    }
+}
+
+/** Ilustración del bloqueo de D9: la P crece mes a mes (decorativa). */
+@Composable
+private fun GrowthIllustration() {
+    val colors = ParcheUTheme.colors
+    Row(
+        modifier = Modifier.clearAndSetSemantics { },
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        listOf(24.dp, 30.dp, 36.dp, 44.dp).forEachIndexed { i, w ->
+            TwinMascotGlyph(
+                width = w,
+                color = if (i == 3) colors.onHero else colors.heroQuiet,
+                eyeColor = colors.hero
+            )
+        }
     }
 }
 
@@ -203,6 +213,7 @@ private fun HistoryContent(state: EvolutionUiState.Content, callbacks: Evolution
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        months.firstOrNull { it.month == state.selected }?.let { MonthDetail(it) }
         Column(
             modifier = Modifier.testTag(EvolutionTags.MONTHS),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -221,7 +232,6 @@ private fun HistoryContent(state: EvolutionUiState.Content, callbacks: Evolution
                 }
             }
         }
-        months.firstOrNull { it.month == state.selected }?.let { MonthDetail(it) }
         if (state.history.moments.isNotEmpty()) Moments(state.history.moments)
     }
 }
@@ -258,17 +268,15 @@ private fun MonthCard(
             PuGraph(
                 nodes = miniNodes(snapshot.connections),
                 size = 140.dp,
-                centerLabel = "Tú"
+                centerLabel = "Tú",
+                style = PuGraphStyle.ParcheVivo
             )
             // El Canvas del grafo consume los toques: esta capa (sin semántica) los reenvía a la tarjeta.
             Box(Modifier.matchParentSize().clickable(onClick = onClick))
         }
         Text(
             text = monthName(snapshot.month),
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             color = colors.tx
         )
         Text(
@@ -293,26 +301,17 @@ internal fun miniNodes(connections: Int): List<GraphNode> =
         )
     }
 
+/** Héroe del mes elegido: cuántas personas tenía tu parche, en Sora 800, y cuántas llegaron. */
 @Composable
 private fun MonthDetail(snapshot: MonthSnapshot) {
-    val colors = ParcheUTheme.colors
-    ParcheUCard(modifier = Modifier.fillMaxWidth().testTag(EvolutionTags.DETAIL)) {
-        Text(
-            text = monthName(snapshot.month),
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
-            color = colors.tx
-        )
-        Text(
-            text = "${newConnectionsText(
-                snapshot.newConnections
-            )} · ${personasText(snapshot.nodes)} en tu parche",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-            color = colors.mu
-        )
-    }
+    HeroBlock(
+        title = "${snapshot.nodes}",
+        titleSuffix = if (snapshot.nodes == 1) "persona en tu parche" else "personas en tu parche",
+        overline = monthName(snapshot.month),
+        titleSize = HeroTitleSize.NumberCompact,
+        subtitle = newConnectionsText(snapshot.newConnections),
+        modifier = Modifier.testTag(EvolutionTags.DETAIL)
+    )
 }
 
 fun newConnectionsText(n: Int): String = if (n == 1) "1 conexión nueva" else "$n conexiones nuevas"

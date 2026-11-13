@@ -13,13 +13,16 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -41,6 +44,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -52,6 +56,9 @@ import me.santiagoreina.parcheu.designsystem.graph.layout.GraphLayout
 import me.santiagoreina.parcheu.designsystem.graph.layout.LayoutNode
 import me.santiagoreina.parcheu.designsystem.graph.layout.PlacedNode
 import me.santiagoreina.parcheu.designsystem.graph.layout.RadialLayout
+import me.santiagoreina.parcheu.designsystem.mascot.MASCOT_ASPECT_RATIO
+import me.santiagoreina.parcheu.designsystem.mascot.MascotMouth
+import me.santiagoreina.parcheu.designsystem.mascot.drawPMascot
 import me.santiagoreina.parcheu.designsystem.theme.AFFINITY_UNMEASURED_LABEL
 import me.santiagoreina.parcheu.designsystem.theme.AvatarColors
 import me.santiagoreina.parcheu.designsystem.theme.InterFontFamily
@@ -61,6 +68,7 @@ import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.SoraFontFamily
 import me.santiagoreina.parcheu.designsystem.theme.affinityAlphaOrNeutral
 import me.santiagoreina.parcheu.designsystem.theme.avatarColors
+import me.santiagoreina.parcheu.designsystem.theme.contrastRatio
 
 /** Modo de una conexión. Mismos nombres que `contract.Mode` para mapear con `valueOf(dto.mode.name)`. */
 enum class GraphMode(val label: String) {
@@ -106,6 +114,21 @@ data class GraphFof(
     val affinity: Int,
     val anonymous: Boolean = true
 )
+
+/**
+ * Estilo de dibujo de G0. [Classic] es el de siempre (A4 del onboarding, capturas `g0_*`).
+ * [ParcheVivo] es el de la dirección A (D1, D6): "Tú" es la mascota "La P que mira" blanca sobre
+ * violeta, los nodos se tiñen con el color de su modo (opacidad según afinidad) y los anillos llevan
+ * rótulo ("cercanos", "por conocer"). Ninguno cambia el layout ni la semántica.
+ */
+enum class PuGraphStyle { Classic, ParcheVivo }
+
+/** Rótulos de los anillos en [PuGraphStyle.ParcheVivo]: el interior y el exterior. */
+const val PU_GRAPH_RING_INNER_LABEL = "CERCANOS"
+const val PU_GRAPH_RING_OUTER_LABEL = "POR CONOCER"
+
+/** Ancho mínimo en dp para dibujar la mascota al centro (por debajo, "Tú" en texto). */
+internal const val CENTER_MASCOT_MIN_DP = 24f
 
 /** Tamaño por debajo del cual el grafo se dibuja como miniatura (sin etiquetas). */
 val PU_GRAPH_MINI_THRESHOLD: Dp = 200.dp
@@ -185,6 +208,50 @@ internal fun nodeAvatarColors(node: GraphNode, isDark: Boolean): AvatarColors {
     val fill = avatarColors(fillAlpha, isDark).fill
     return avatarColors(effective, isDark).copy(fill = fill)
 }
+
+/** Relleno y color de las iniciales de un nodo de conexión; [hollow] = sin simular (borde punteado). */
+@Immutable
+internal data class NodePaint(val fill: Color, val content: Color, val hollow: Boolean)
+
+/** Tinta o blanco: el que más contraste dé sobre [background] (opaco). */
+private fun bestOn(background: Color): Color {
+    val ink = ParcheUPalette.Ink
+    val white = ParcheUPalette.White
+    return if (contrastRatio(ink, background) >= contrastRatio(white, background)) ink else white
+}
+
+/**
+ * Pintura de un nodo según [style]:
+ *
+ * - Sin simular (`affinity == null`): **hueco**, con el relleno del fondo, borde punteado del modo e
+ *   iniciales en `tx`. Así no se confunde con una afinidad baja (relleno tenue y borde sólido) aunque
+ *   el alpha neutro de la escala sea el mismo ([AFFINITY_ALPHA_UNMEASURED] no cambia).
+ * - [PuGraphStyle.Classic]: relleno violeta con alpha por afinidad ([nodeAvatarColors], ADR-0030).
+ * - [PuGraphStyle.ParcheVivo]: relleno del pleno del modo con alpha por afinidad. Las iniciales van en
+ *   tinta o blanco según cuál contraste más con el relleno compuesto sobre el fondo (con el 0,7 de
+ *   PENDING); si ninguno llega a 4,5:1, el alpha sube hasta que uno llegue.
+ */
+internal fun nodePaint(node: GraphNode, colors: ParcheUColors, style: PuGraphStyle): NodePaint {
+    if (node.affinity == null) return NodePaint(colors.bg, colors.tx, hollow = true)
+    if (style == PuGraphStyle.Classic) {
+        val avatar = nodeAvatarColors(node, colors.isDark)
+        return NodePaint(avatar.fill, avatar.content, hollow = false)
+    }
+    val solid = modeColor(colors, node.mode)
+    val layer = if (node.state == GraphEdgeState.PENDING) GraphAlpha.NODE_PENDING else 1f
+    var alpha = affinityAlphaOrNeutral(node.affinity)
+    while (true) {
+        val composed = solid.copy(alpha = alpha * layer).compositeOver(colors.bg)
+        val content = bestOn(composed)
+        if (contrastRatio(content, composed) >= VIVID_MIN_CONTRAST || alpha >= 1f) {
+            return NodePaint(solid.copy(alpha = alpha), content, hollow = false)
+        }
+        alpha = min(1f, alpha + VIVID_ALPHA_STEP)
+    }
+}
+
+private const val VIVID_MIN_CONTRAST = 4.5
+private const val VIVID_ALPHA_STEP = 0.04f
 
 /**
  * Layout de G0 para un lienzo de [sizeDp] dp. Los amigos de amigos se ordenan por su conexión de
@@ -411,6 +478,12 @@ private fun labelBox(n: PlacedNode, text: String, offset: Float, charDp: Float):
     return Box(n.x - half, n.y + n.radius + offset - 9f, n.x + half, n.y + n.radius + offset + 3f)
 }
 
+/** Ángulo llevado a (−π, π]. */
+private fun normalizeSigned(angle: Double): Double {
+    val n = normalize(angle)
+    return if (n > PI) n - 2 * PI else n
+}
+
 private fun normalize(angle: Double): Double {
     val tau = 2 * PI
     return ((angle % tau) + tau) % tau
@@ -438,6 +511,7 @@ fun PuGraph(
     fof: List<GraphFof> = emptyList(),
     dimmedIds: Set<String> = emptySet(),
     centerLabel: String = "Tú",
+    style: PuGraphStyle = PuGraphStyle.Classic,
     onNodeClick: (String) -> Unit = {}
 ) {
     val sizeDp = size.value
@@ -479,7 +553,8 @@ fun PuGraph(
                 centerLabel = centerLabel,
                 colors = colors,
                 textMeasurer = textMeasurer,
-                labels = size >= PU_GRAPH_MINI_THRESHOLD
+                labels = size >= PU_GRAPH_MINI_THRESHOLD,
+                style = style
             )
         }
         SemanticNodes(layout, byId, fofById, selectedId) { currentOnClick.value(it) }
@@ -535,7 +610,8 @@ private fun DrawScope.drawGraph(
     centerLabel: String,
     colors: ParcheUColors,
     textMeasurer: TextMeasurer,
-    labels: Boolean
+    labels: Boolean,
+    style: PuGraphStyle
 ) {
     if (layout.size <= 0f) return
     val u = density // px por dp
@@ -592,22 +668,48 @@ private fun DrawScope.drawGraph(
         )
     }
 
-    // Nodo central.
-    drawCircle(ParcheUPalette.Violet, radius = layout.centerRadius * u, center = center)
-    drawCenteredText(
-        textMeasurer,
-        centerLabel,
-        TextStyle(
-            color = ParcheUPalette.White,
-            fontFamily = SoraFontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = toSp(14f * k)
-        ),
-        x = center.x,
-        baseline = center.y + 5f * k * u
-    )
+    // Rótulos de anillos: sobre las aristas (con parche del fondo) y bajo los nodos.
+    if (style == PuGraphStyle.ParcheVivo && labels) {
+        val drawn = layout.ringRadii.take(ringCount)
+        drawRingLabel(layout, drawn.first(), PU_GRAPH_RING_INNER_LABEL, colors, textMeasurer, k)
+        drawRingLabel(layout, drawn.last(), PU_GRAPH_RING_OUTER_LABEL, colors, textMeasurer, k)
+    }
 
-    // Conexiones.
+    // Nodo central: la mascota en Parche Vivo (si cabe a 24 dp o más); si no, "Tú" en texto.
+    drawCircle(ParcheUPalette.Violet, radius = layout.centerRadius * u, center = center)
+    val mascotW = layout.centerRadius * CENTER_MASCOT_SCALE
+    if (style == PuGraphStyle.ParcheVivo && mascotW >= CENTER_MASCOT_MIN_DP) {
+        val w = mascotW * u
+        val h = w * MASCOT_ASPECT_RATIO
+        // La P ocupa x 10-72 de su caja de 80: se corre un poco a la derecha para centrarla.
+        val left = center.x - w / 2f + w * 0.05f
+        val top = center.y - h / 2f
+        inset(left, top, size.width - left - w, size.height - top - h) {
+            drawPMascot(
+                body = ParcheUPalette.White,
+                eye = ParcheUPalette.Violet,
+                simplified = mascotW <= MASCOT_SIMPLIFIED_DP,
+                mouth = MascotMouth.Quiet,
+                phase = 0f
+            )
+        }
+    } else {
+        drawCenteredText(
+            textMeasurer,
+            centerLabel,
+            TextStyle(
+                color = ParcheUPalette.White,
+                fontFamily = SoraFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = toSp(14f * k)
+            ),
+            x = center.x,
+            baseline = center.y + 5f * k * u
+        )
+    }
+
+    // Conexiones. Las que aún no se simulan van huecas y con borde punteado ("4 3").
+    val unmeasuredDash = PathEffect.dashPathEffect(floatArrayOf(4f * u, 3f * u))
     layout.nodes.forEach { p ->
         val node = nodes[p.id] ?: return@forEach
         val dimmed = isDimmed(node, modeFilter, selectedId, dimmedIds)
@@ -622,25 +724,28 @@ private fun DrawScope.drawGraph(
                     style = Stroke(width = 2f * u)
                 )
             }
-            val avatar = nodeAvatarColors(node, colors.isDark)
+            val paint = nodePaint(node, colors, style)
             drawCircle(colors.bg, radius = r, center = o)
-            drawCircle(avatar.fill, radius = r, center = o)
+            drawCircle(paint.fill, radius = r, center = o)
             drawCircle(
                 color = modeColor(colors, node.mode),
                 radius = r,
                 center = o,
-                style = Stroke(width = 2f * strokeK * u)
+                style = Stroke(
+                    width = 2f * strokeK * u,
+                    pathEffect = if (paint.hollow) unmeasuredDash else null
+                )
             )
         }
         withLayerAlpha(textAlpha(dimmed)) {
             val o = p.offset()
             val r = p.radius * u
-            val avatar = nodeAvatarColors(node, colors.isDark)
+            val paint = nodePaint(node, colors, style)
             drawCenteredText(
                 textMeasurer,
                 if (node.anonymous) "?" else node.initials,
                 TextStyle(
-                    color = avatar.content,
+                    color = paint.content,
                     fontFamily = SoraFontFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = toSp(12.5f * k)
@@ -705,6 +810,84 @@ private fun DrawScope.drawGraph(
             )
         }
     }
+}
+
+/** La mascota del centro mide 1,2 veces el radio del nodo central (30 dp a tamaño de diseño). */
+private const val CENTER_MASCOT_SCALE = 1.2f
+
+/** Ángulos (grados, 0 = derecha, −90 = arriba) donde se prueba el rótulo de un anillo, en orden. */
+private val RING_LABEL_ANGLES: List<Int> = listOf(-90, 90).flatMap { base ->
+    (listOf(0) + (1..6).flatMap { listOf(it * 10, -it * 10) }).map { base + it }
+}
+
+/** Medio ancho aproximado de la etiqueta de un nodo ("Valentina") y holgura alrededor del rótulo. */
+private const val NODE_LABEL_HALF_DP = 28f
+private const val RING_LABEL_GAP_DP = 4f
+
+/** Hasta este ancho la mascota del centro va en su variante simplificada. */
+private const val MASCOT_SIMPLIFIED_DP = 30f
+
+/**
+ * Rótulo de un anillo ("CERCANOS") sobre la línea del anillo, con un parche del fondo para que
+ * la línea punteada no lo cruce. Prueba arriba y luego abajo (ver [RING_LABEL_ANGLES]); si no cabe, no se
+ * dibuja (el anillo sigue ahí). Es decorativo: TalkBack ya lee la afinidad de cada nodo.
+ */
+private fun DrawScope.drawRingLabel(
+    layout: GraphLayout,
+    radius: Float,
+    text: String,
+    colors: ParcheUColors,
+    measurer: TextMeasurer,
+    k: Float
+) {
+    val u = density
+    val style = TextStyle(
+        color = colors.mu,
+        fontFamily = InterFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = toSp(max(9f * k, 8f)),
+        letterSpacing = toSp(0.6f * k)
+    )
+    val result = measurer.measure(text, style, softWrap = false, maxLines = 1)
+    val wDp = result.size.width / u
+    val hDp = result.size.height / u
+    val placed = layout.nodes + layout.fof
+    // Del punto más alto hacia los lados y luego abajo: el primero donde no tape un nodo ni su etiqueta.
+    // Primero se busca un hueco sin aristas que crucen el rótulo; si no hay, se acepta que una arista
+    // pase por debajo (el parche del fondo la corta y el texto se sigue leyendo).
+    val halfSpan = (wDp / 2f + 4f) / radius
+    val crossing = layout.nodes.filter {
+        hypot(it.x - layout.centerX, it.y - layout.centerY) > radius - it.radius
+    }.map { atan2(it.y - layout.centerY, it.x - layout.centerX).toDouble() }
+
+    fun fits(a: Double): Pair<Float, Float>? {
+        val cx = (layout.centerX + radius * cos(a)).toFloat()
+        val cy = (layout.centerY + radius * sin(a)).toFloat()
+        if (cx - wDp / 2f < 0f || cx + wDp / 2f > layout.size) return null
+        val free = placed.none { n ->
+            // Caja del nodo con su etiqueta debajo (unos 16 dp de alto y 30 de medio ancho).
+            val half = max(n.radius, NODE_LABEL_HALF_DP * k) + RING_LABEL_GAP_DP
+            n.x + half > cx - wDp / 2f &&
+                n.x - half < cx + wDp / 2f &&
+                n.y + n.radius + 16f * k > cy - hDp / 2f &&
+                n.y - n.radius - RING_LABEL_GAP_DP < cy + hDp / 2f
+        }
+        return if (free) cx to cy else null
+    }
+    val angles = RING_LABEL_ANGLES.map { it * PI / 180.0 }
+    val spot = angles.asSequence()
+        .filter { a -> crossing.none { e -> abs(normalizeSigned(e - a)) < halfSpan } }
+        .mapNotNull(::fits).firstOrNull()
+        ?: angles.asSequence().mapNotNull(::fits).firstOrNull()
+        ?: return
+    val (x, y) = spot
+    val topLeft = Offset((x - wDp / 2f) * u, (y - hDp / 2f) * u)
+    drawRect(
+        colors.bg,
+        topLeft = Offset(topLeft.x - 4f * u, topLeft.y),
+        size = Size(result.size.width + 8f * u, result.size.height.toFloat())
+    )
+    drawText(textLayoutResult = result, topLeft = topLeft)
 }
 
 internal fun modeColor(colors: ParcheUColors, mode: GraphMode): Color = when (mode) {
