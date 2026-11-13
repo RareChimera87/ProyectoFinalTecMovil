@@ -24,6 +24,8 @@ class QuotaModule(
     val clock: Clock,
     /** Topes diarios internos (B-M1): reenvíos del gemelo y moderaciones con IA. */
     val daily: DailyLimiter,
+    /** ¿Tiene ParcheU+? La misma instancia que usan [service] y [daily] (identidad la usa para `MeDto.plus`). */
+    val entitlements: EntitlementService,
 )
 
 /** `GET /v1/quota` (arquitectura.md §5.2). `POST /internal/dev/grant-plus` lo registra `BillingRoutes` (E7.1) con [QuotaModule.devPlus]. */
