@@ -275,6 +275,49 @@ gcloud secrets versions list hmac-anon-key --project $P
 gcloud secrets versions disable <versión-anterior> --secret hmac-anon-key --project $P
 ```
 
+### Cambiar de proveedor de IA
+
+`AI_PROVIDER` lo fija Terraform (`ai_provider` en `envs/prod`, `gemini` por defecto). `anthropic` usa la API directa de
+Anthropic con la clave del secreto `anthropic-api-key` ([ADR-0008](adr/0008-ia-vertex-proveedores-intercambiables.md),
+enmienda del 12 nov 2026). **Antes de activarlo** en prod: la versión desplegada debe incluir `ClaudeApiClient` y la
+política de privacidad y Data safety deben nombrar a Anthropic ([ADR-0020](adr/0020-region-y-transferencia-internacional.md),
+enmienda del 12 nov 2026). Los topes (`AI_DAILY_BUDGET_USD`, `AI_USER_DAILY_BUDGET_USD`) aplican igual con cualquier proveedor.
+
+```bash
+# 1. La clave, desde un archivo local con permisos 600 (nunca se imprime). Crea una versión nueva cada vez.
+ANTHROPIC_KEY_FILE=~/.parcheu/anthropic-api-key scripts/cargar-secretos.sh prod
+gcloud secrets versions list anthropic-api-key --project $P
+
+# 2. Cambiar (desde infra/terraform/envs/prod; el apply de prod lo hace solo el usuario).
+terraform plan -var 'alert_emails=["sanctireinadiaz@gmail.com"]' -var ai_provider=anthropic -out=plan.tfplan
+terraform show -json plan.tfplan > plan.json && ../../../../scripts/check-plan.sh plan.json
+terraform apply plan.tfplan     # solo cambia AI_PROVIDER en la api y los jobs: revisión nueva, misma imagen
+
+# 3. Comprobar: variable de la revisión servida y llamadas con modelos claude-* en los logs.
+gcloud run services describe api --region $R --project $P --format=json \
+  | jq -r '.spec.template.spec.containers[0].env[] | select(.name=="AI_PROVIDER") | .value'
+gcloud logging read 'resource.labels.service_name="api" AND jsonPayload.event="ai_call"' --project $P --freshness 1h \
+  --limit 10 --format 'value(timestamp,jsonPayload.model,jsonPayload.costMicros)'
+```
+
+El `-var ai_provider=anthropic` **no queda guardado**: un `apply` posterior sin él vuelve a `gemini`. Para dejarlo fijo,
+cambia el `default` de `ai_provider` en `envs/prod/main.tf` en un PR (o pásalo siempre). Un error de clave (401) o de
+saldo de Anthropic sale como error de IA en los logs (`AnthropicServiceException`) y la pasarela registra el costo estimado.
+
+**Volver a Gemini en un minuto** (sin Terraform; `gemini` es el valor por defecto de Terraform, así que no queda deriva):
+
+```bash
+gcloud run services update api --region $R --project $P --update-env-vars AI_PROVIDER=gemini
+```
+
+Crea una revisión nueva con la misma imagen y le pasa el tráfico. Alternativa igual de rápida: mover el tráfico a la
+revisión anterior al cambio (`gcloud run services update-traffic api --to-revisions <revisión-con-gemini>=100 --region $R
+--project $P`); en ese caso aplica después `terraform apply` sin `-var ai_provider` para que la última revisión también sea
+`gemini` (el siguiente despliegue hace `update-traffic --to-latest`). Los jobs (`migrate`, demo) no llaman a la IA. Rotar
+la clave: carga otra versión con el paso 1 y fuerza una revisión nueva
+(`gcloud run services update api --region $R --project $P --revision-suffix "anthropic-$(date +%Y%m%d%H%M)"`), porque la
+API la guarda en memoria; luego deshabilita la versión anterior y revoca la clave vieja en la consola de Anthropic.
+
 ### `too many connections` en Cloud SQL
 
 **Síntoma:** la API devuelve 500/503 en ráfaga y en los logs aparecen `FATAL: sorry, too many clients already`,
@@ -464,7 +507,9 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
   después del cual no se modera más ese día y se registra `moderation_sampled_out` con `reason=sampled_cap`), `AI_RATE_LIMIT_PER_MINUTE` (30; peticiones por minuto y persona en las rutas con IA, 429
   al pasarlo). Vacías usan esos valores; uno inválido hace fallar el arranque.
 - **Proveedor y modelos de IA:** `AI_PROVIDER`, `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`; cambiar de modelo es una variable
-  y un reinicio ([ADR-0008](adr/0008-ia-vertex-proveedores-intercambiables.md)). Claude solo tras confirmar que los créditos lo cubren.
+  y un reinicio ([ADR-0008](adr/0008-ia-vertex-proveedores-intercambiables.md)). Claude en Vertex solo tras confirmar que los créditos lo cubren.
+  `AI_PROVIDER=anthropic` (API directa) necesita la clave: aquí `ENV=local` admite `ANTHROPIC_API_KEY`, pero esa variable no
+  está en `compose.yaml` y con `ENV=dev` solo vale `SECRET_ANTHROPIC_API_KEY`; en prod ver [Cambiar de proveedor de IA](#cambiar-de-proveedor-de-ia).
 - **Llave de la cuenta de servicio** (`~/parcheu/secrets/sa.json`): rotarla es crear una llave nueva, copiarla con permisos 600,
   reiniciar la API y borrar la anterior en IAM. La cuenta `sa-homelab` es temporal: bórrala al terminar las pruebas.
 - **Banderas útiles:** `DEMO_USERS_ENABLED`, `SCENARIO_MODE_ENABLED`, `MODERATION_ENABLED` (ver [desarrollo-local.md](desarrollo-local.md)).
