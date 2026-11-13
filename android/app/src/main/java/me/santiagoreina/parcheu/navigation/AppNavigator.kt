@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.navigation
 
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import kotlin.reflect.KClass
 
@@ -25,8 +26,18 @@ interface AppNavigator {
      */
     fun navigateAsNew(route: AppRoute, replacing: KClass<out AppRoute>) = navigate(route)
 
-    /** Cambia de pestaña de la NavBar conservando el estado de cada raíz. */
+    /**
+     * Cambia de pestaña de la NavBar conservando el estado de cada raíz. Si [route] es la pestaña activa,
+     * vuelve a su raíz (quita lo que tenga encima).
+     */
     fun navigateToTopLevel(route: AppRoute)
+
+    /**
+     * Abre la raíz [route] desde el contenido de una pantalla (botón "Match al azar" de C1, un deep link),
+     * como cambio de pestaña pero sin restaurar la pila guardada de esa pestaña: el usuario pidió empezar
+     * ahí, no volver a donde la dejó. Por defecto es [navigateToTopLevel].
+     */
+    fun openTopLevel(route: AppRoute) = navigateToTopLevel(route)
 
     /** Deja [route] como única pantalla de la pila (fin del onboarding, cierre de sesión). */
     fun replaceAll(route: AppRoute)
@@ -39,8 +50,9 @@ interface AppNavigator {
 }
 
 class NavControllerNavigator(private val navController: NavHostController) : AppNavigator {
+    /** Una raíz de la NavBar nunca se apila como hija: se abre como pestaña (deep links, efectos, botones). */
     override fun navigate(route: AppRoute) {
-        navController.navigate(route)
+        if (route.isTopLevelRoute()) openTopLevel(route) else navController.navigate(route)
     }
 
     override fun navigateReplacing(route: AppRoute, replacing: KClass<out AppRoute>) {
@@ -56,12 +68,47 @@ class NavControllerNavigator(private val navController: NavHostController) : App
         navController.navigate(route)
     }
 
-    override fun navigateToTopLevel(route: AppRoute) {
+    override fun navigateToTopLevel(route: AppRoute) = toTopLevel(route, restore = true)
+
+    override fun openTopLevel(route: AppRoute) = toTopLevel(route, restore = false)
+
+    /**
+     * Cada pestaña vive encima de Home: [Home, raíz de la pestaña, hijas...]. Las raíces se abren siempre
+     * con esta función (nunca con navigate), de modo que la pila guardada de una pestaña solo contiene sus
+     * propias hijas; antes C1 abría F1 con navigate, F1 quedaba guardada en la pila de Inicio y tocar
+     * Inicio la restauraba (ADR-0006).
+     */
+    private fun toTopLevel(route: AppRoute, restore: Boolean) {
+        val target = route::class
+        val currentTab = navController.currentBackStack.value.lastOrNull { entry ->
+            TopLevelDestination.entries.any { entry.destination.hasRoute(it.routeClass) }
+        }
+        if (currentTab?.destination?.hasRoute(target) == true) {
+            if (restore) {
+                // Volver a tocar la pestaña activa: queda solo su raíz.
+                navController.popBackStack(target, inclusive = false)
+            } else {
+                // Desde el contenido, la raíz se reabre con los argumentos nuevos (p. ej. el modo de F1).
+                navController.navigate(route) {
+                    popUpTo(target) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+            return
+        }
+        // Inicio no se "navega": basta con quitar lo que hay encima de Home. Con navigate + restoreState,
+        // Navigation restauraría la pila guardada al hacer popUpTo<Home>, que queda asociada también al id
+        // de Home (la de otra pestaña), y tocar Inicio mostraba esa otra pestaña.
+        if (target == Home::class &&
+            navController.popBackStack<Home>(inclusive = false, saveState = restore)
+        ) {
+            return
+        }
         navController.navigate(route) {
             // Home es la raíz real tras replaceAll; Splash ya no está en la pila y Navigation ignoraría el popUpTo.
-            popUpTo<Home> { saveState = true }
+            popUpTo<Home> { saveState = restore }
             launchSingleTop = true
-            restoreState = true
+            restoreState = restore
         }
     }
 
@@ -78,3 +125,7 @@ class NavControllerNavigator(private val navController: NavHostController) : App
     override fun canGoBack(): Boolean = navController.previousBackStackEntry != null &&
         !navController.currentDestination.isTopLevel()
 }
+
+/** `true` si [this] es la ruta de una raíz de la NavBar. */
+fun AppRoute.isTopLevelRoute(): Boolean =
+    TopLevelDestination.entries.any { it.routeClass == this::class }

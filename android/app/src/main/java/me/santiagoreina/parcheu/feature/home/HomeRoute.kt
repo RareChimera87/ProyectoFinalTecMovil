@@ -59,7 +59,7 @@ fun HomeRoute(
                     )
                 },
                 onSimulate = viewModel::onSimulate,
-                onRandomMatch = { navigator.navigate(MatchQueue()) },
+                onRandomMatch = { navigator.openTopLevel(MatchQueue()) },
                 onPickFromParche = { navigator.navigateToTopLevel(Parche()) },
                 onPlus = { navigator.navigate(Paywall(PAYWALL_SOURCE_HOME)) },
                 onRetry = viewModel::load,

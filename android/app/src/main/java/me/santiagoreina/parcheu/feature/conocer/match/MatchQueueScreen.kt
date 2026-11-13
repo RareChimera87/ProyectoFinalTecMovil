@@ -95,7 +95,8 @@ private fun QueueBody(
     animate: Boolean
 ) {
     val colors = ParcheUTheme.colors
-    val matched = state.phase is QueuePhase.Matched
+    val used = state.phase is QueuePhase.AlreadyUsed
+    val matched = state.phase is QueuePhase.Matched || used
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -111,7 +112,9 @@ private fun QueueBody(
             )
             Spacer(Modifier.height(24.dp))
             Text(
-                text = if (matched) {
+                text = if (used) {
+                    MatchStrings.ALREADY_USED_MESSAGE
+                } else if (matched) {
                     MatchStrings.MATCHED_MESSAGE
                 } else {
                     MatchStrings.searching(MatchStrings.modeName(state.mode))
@@ -125,7 +128,7 @@ private fun QueueBody(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = MatchStrings.COMPARING,
+                text = if (used) MatchStrings.ALREADY_USED_NOTE else MatchStrings.COMPARING,
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.mu,
                 textAlign = TextAlign.Center
