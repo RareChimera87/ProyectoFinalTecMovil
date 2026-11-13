@@ -41,11 +41,33 @@ object ParcheUPalette {
     /** rgba(5,3,12,.62). */
     val DarkScrim = Color(red = 5, green = 3, blue = 12, alpha = 158)
 
-    // Tema claro, "Hueso" (§3.2).
-    val Bone = Color(0xFFFAF7F2)
+    /**
+     * Mascotas apagadas del cupo y detalles tenues sobre el bloque héroe violeta (dirección A "Parche
+     * Vivo"). Es decorativo: la información la lleva la etiqueta accesible, no este color.
+     */
+    val VioletQuiet = Color(0xFF8F75FF)
+
+    // Contenedores tonales de modo en oscuro (dirección A): fondo de chip grande, tile o banner del modo.
+    val DarkMintContainer = Color(0xFF12352E)
+    val DarkCoralContainer = Color(0xFF3C1520)
+    val DarkBlueContainer = Color(0xFF142A4D)
+    val DarkOrangeContainer = Color(0xFF3A2A12)
+
+    // Tema claro de la dirección A "Parche Vivo": lila muy pálido para que el blanco de las tarjetas
+    // despegue (antes "Hueso" #FAF7F2 / #F1ECE4 / #E2DBCF, §3.2, que se veía lavado).
+    val LilacBg = Color(0xFFF4F2F8)
     val LightSurface1 = Color(0xFFFFFFFF)
-    val LightSurface2 = Color(0xFFF1ECE4)
-    val LightOutline = Color(0xFFE2DBCF)
+    val LightSurface2 = Color(0xFFECE9F3)
+    val LightOutline = Color(0xFFE4DFF0)
+
+    // Contenedores tonales de modo en claro.
+    val LightMintContainer = Color(0xFFD9F3EE)
+    val LightCoralContainer = Color(0xFFFFE2E7)
+    val LightBlueContainer = Color(0xFFE0ECFF)
+    val LightOrangeContainer = Color(0xFFFFF0DC)
+
+    /** Texto de Pareja sobre su contenedor claro (#C42C4A daría 4,54:1, demasiado justo). */
+    val LightCoralOnContainer = Color(0xFFA3203A)
     val LightText = Color(0xFF1A1626)
     val LightMuted = Color(0xFF5C566E)
     val LightPrimaryTint = Color(0xFF5533E8)
@@ -64,9 +86,19 @@ object ParcheUPalette {
     val LightScrim = Color(red = 20, green = 17, blue = 31, alpha = 115)
 }
 
-/** Color pleno de un modo, su tint de texto por tema y el color del contenido sobre el pleno. */
+/**
+ * Color pleno de un modo, su tint de texto por tema y el color del contenido sobre el pleno. Con la
+ * dirección A ("Parche Vivo") el pleno es también el lomo de las tarjetas (`ModeSpineCard`) y suma un
+ * contenedor tonal ([container]) con su texto ([onContainer]), ambos AA.
+ */
 @Immutable
-data class ModeColors(val solid: Color, val text: Color, val onSolid: Color)
+data class ModeColors(
+    val solid: Color,
+    val text: Color,
+    val onSolid: Color,
+    val container: Color,
+    val onContainer: Color
+)
 
 /**
  * Tokens de color de ParcheU que Material 3 no cubre. Los nombres cortos siguen el inventario
@@ -105,6 +137,13 @@ data class ParcheUColors(
     val scrim: Color,
     /** Color de la palabra "Parche" del wordmark (blanco en oscuro, violeta en claro). */
     val wordmark: Color,
+    /**
+     * Bloque héroe de la dirección A (`HeroBlock`): relleno violeta pleno en ambos temas, con [onHero]
+     * encima (5,15:1) y [heroQuiet] para lo apagado (mascotas del cupo ya gastadas; solo decorativo).
+     */
+    val hero: Color,
+    val onHero: Color,
+    val heroQuiet: Color,
     val plusGradient: ParcheUGradient,
     val paywallHeroGradient: ParcheUGradient,
     val celebrationGradient: ParcheURadialGradient
@@ -159,23 +198,42 @@ val DarkParcheUColors =
         prc = ParcheUPalette.DarkPrimaryContainer,
         onprc = ParcheUPalette.DarkOnPrimaryContainer,
         friendship = ModeColors(
-            ParcheUPalette.Mint,
-            ParcheUPalette.DarkMintTint,
-            ParcheUPalette.Ink
+            solid = ParcheUPalette.Mint,
+            text = ParcheUPalette.DarkMintTint,
+            onSolid = ParcheUPalette.Ink,
+            container = ParcheUPalette.DarkMintContainer,
+            onContainer = ParcheUPalette.DarkMintTint
         ),
-        couple = ModeColors(ParcheUPalette.Coral, ParcheUPalette.DarkCoralTint, ParcheUPalette.Ink),
+        couple = ModeColors(
+            solid = ParcheUPalette.Coral,
+            text = ParcheUPalette.DarkCoralTint,
+            onSolid = ParcheUPalette.Ink,
+            container = ParcheUPalette.DarkCoralContainer,
+            onContainer = ParcheUPalette.DarkCoralTint
+        ),
         study = ModeColors(
-            ParcheUPalette.ElectricBlue,
-            ParcheUPalette.DarkBlueTint,
-            ParcheUPalette.Ink
+            solid = ParcheUPalette.ElectricBlue,
+            text = ParcheUPalette.DarkBlueTint,
+            onSolid = ParcheUPalette.Ink,
+            container = ParcheUPalette.DarkBlueContainer,
+            onContainer = ParcheUPalette.DarkBlueTint
         ),
-        accent = ModeColors(ParcheUPalette.Orange, ParcheUPalette.OrangeTint, ParcheUPalette.Ink),
+        accent = ModeColors(
+            solid = ParcheUPalette.Orange,
+            text = ParcheUPalette.OrangeTint,
+            onSolid = ParcheUPalette.Ink,
+            container = ParcheUPalette.DarkOrangeContainer,
+            onContainer = ParcheUPalette.OrangeTint
+        ),
         error = ParcheUPalette.DarkCoralTint,
         onError = ParcheUPalette.Ink,
         onMode = ParcheUPalette.Ink,
         white = ParcheUPalette.White,
         scrim = ParcheUPalette.DarkScrim,
         wordmark = ParcheUPalette.White,
+        hero = ParcheUPalette.Violet,
+        onHero = ParcheUPalette.White,
+        heroQuiet = ParcheUPalette.VioletQuiet,
         plusGradient = PlusGradient,
         paywallHeroGradient = PaywallHeroGradient,
         celebrationGradient = CelebrationGradient
@@ -186,7 +244,7 @@ val LightParcheUColors =
         isDark = false,
         primary = ParcheUPalette.Violet,
         onPrimary = ParcheUPalette.White,
-        bg = ParcheUPalette.Bone,
+        bg = ParcheUPalette.LilacBg,
         s1 = ParcheUPalette.LightSurface1,
         s2 = ParcheUPalette.LightSurface2,
         ln = ParcheUPalette.LightOutline,
@@ -196,24 +254,32 @@ val LightParcheUColors =
         prc = ParcheUPalette.LightPrimaryContainer,
         onprc = ParcheUPalette.LightOnPrimaryContainer,
         friendship = ModeColors(
-            ParcheUPalette.Mint,
-            ParcheUPalette.LightMintText,
-            ParcheUPalette.Ink
+            solid = ParcheUPalette.Mint,
+            text = ParcheUPalette.LightMintText,
+            onSolid = ParcheUPalette.Ink,
+            container = ParcheUPalette.LightMintContainer,
+            onContainer = ParcheUPalette.LightMintText
         ),
         couple = ModeColors(
-            ParcheUPalette.Coral,
-            ParcheUPalette.LightCoralText,
-            ParcheUPalette.Ink
+            solid = ParcheUPalette.Coral,
+            text = ParcheUPalette.LightCoralText,
+            onSolid = ParcheUPalette.Ink,
+            container = ParcheUPalette.LightCoralContainer,
+            onContainer = ParcheUPalette.LightCoralOnContainer
         ),
         study = ModeColors(
-            ParcheUPalette.ElectricBlue,
-            ParcheUPalette.LightBlueText,
-            ParcheUPalette.Ink
+            solid = ParcheUPalette.ElectricBlue,
+            text = ParcheUPalette.LightBlueText,
+            onSolid = ParcheUPalette.Ink,
+            container = ParcheUPalette.LightBlueContainer,
+            onContainer = ParcheUPalette.LightBlueText
         ),
         accent = ModeColors(
-            ParcheUPalette.Orange,
-            ParcheUPalette.LightOrangeText,
-            ParcheUPalette.Ink
+            solid = ParcheUPalette.Orange,
+            text = ParcheUPalette.LightOrangeText,
+            onSolid = ParcheUPalette.Ink,
+            container = ParcheUPalette.LightOrangeContainer,
+            onContainer = ParcheUPalette.LightOrangeText
         ),
         error = ParcheUPalette.LightCoralText,
         onError = ParcheUPalette.White,
@@ -221,6 +287,9 @@ val LightParcheUColors =
         white = ParcheUPalette.White,
         scrim = ParcheUPalette.LightScrim,
         wordmark = ParcheUPalette.Violet,
+        hero = ParcheUPalette.Violet,
+        onHero = ParcheUPalette.White,
+        heroQuiet = ParcheUPalette.VioletQuiet,
         plusGradient = PlusGradient,
         paywallHeroGradient = PaywallHeroGradient,
         celebrationGradient = CelebrationGradient

@@ -7,15 +7,20 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Radios del inventario §3.6. */
+/** Radios del inventario §3.6, con los de la dirección A "Parche Vivo" (tarjeta 18, héroe 24, foto 20). */
 object ParcheURadius {
     val Checkbox: Dp = 7.dp
-    val ButtonCompact: Dp = 12.dp
+
+    /** 14 desde la dirección A (antes 12): botones compactos de 40 y 36. */
+    val ButtonCompact: Dp = 14.dp
     val Field: Dp = 14.dp
     val FieldLarge: Dp = 16.dp
     val Button: Dp = 16.dp
     val NavPill: Dp = 15.dp
-    val Card: Dp = 20.dp
+    val Card: Dp = 18.dp
+
+    /** Fotos con duotono (B1) y tarjetas de opción con imagen. */
+    val Photo: Dp = 20.dp
     val Hero: Dp = 24.dp
     val HeroLarge: Dp = 28.dp
     val Sheet: Dp = 28.dp
@@ -31,6 +36,7 @@ data class ParcheUShapeTokens(
     val buttonCompact: RoundedCornerShape = RoundedCornerShape(ParcheURadius.ButtonCompact),
     val card: RoundedCornerShape = RoundedCornerShape(ParcheURadius.Card),
     val hero: RoundedCornerShape = RoundedCornerShape(ParcheURadius.Hero),
+    val photo: RoundedCornerShape = RoundedCornerShape(ParcheURadius.Photo),
     val heroLarge: RoundedCornerShape = RoundedCornerShape(ParcheURadius.HeroLarge),
     val bottomSheet: RoundedCornerShape =
         RoundedCornerShape(topStart = ParcheURadius.Sheet, topEnd = ParcheURadius.Sheet),
