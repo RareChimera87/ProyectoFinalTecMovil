@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -25,14 +26,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
-/** Barra de progreso lineal de 6dp, radio 3: pista s2 y relleno violeta. [contentDescription] la describe a TalkBack. */
+/**
+ * Barra de progreso lineal de 6dp, radio 3: pista s2 y relleno violeta. [contentDescription] la describe a
+ * TalkBack. En una `ModeSpineCard` pasa [color] = `mode.solid` para que la barra sea del color del modo.
+ */
 @Composable
 fun ParcheULinearProgress(
     progress: Float,
     contentDescription: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    color: Color = ParcheUTheme.colors.primary
 ) {
     val colors = ParcheUTheme.colors
     val value = progress.coerceIn(0f, 1f)
@@ -49,7 +55,7 @@ fun ParcheULinearProgress(
                 progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
             }
     ) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(value).clip(shape).background(colors.primary))
+        Box(Modifier.fillMaxHeight().fillMaxWidth(value).clip(shape).background(color))
     }
 }
 
@@ -93,22 +99,41 @@ enum class PlusBadgeSize(val height: androidx.compose.ui.unit.Dp) {
     Large(26.dp)
 }
 
-/** Píldora "ParcheU+" con borde degradado violeta a naranja; el "+" va en el texto de acento. */
+/**
+ * Píldora "ParcheU+" con borde degradado violeta a naranja; el "+" va en el texto de acento. Con [onHero]
+ * (encima de un `HeroBlock` violeta) es una píldora tinta #14111F con "ParcheU" blanco y "+" naranja
+ * claro, como en el mockup A · Inicio: así no depende del tema (el texto tx del claro no se lee sobre
+ * violeta).
+ */
 @Composable
-fun ParcheUPlusBadge(modifier: Modifier = Modifier, size: PlusBadgeSize = PlusBadgeSize.Regular) {
+fun ParcheUPlusBadge(
+    modifier: Modifier = Modifier,
+    size: PlusBadgeSize = PlusBadgeSize.Regular,
+    onHero: Boolean = false
+) {
     val colors = ParcheUTheme.colors
     val shape = ParcheUTheme.shapes.pill
     val label =
         buildAnnotatedString {
-            withStyle(SpanStyle(color = colors.tx)) { append("ParcheU") }
-            withStyle(SpanStyle(color = colors.ort)) { append("+") }
+            withStyle(SpanStyle(color = if (onHero) Color.White else colors.tx)) {
+                append("ParcheU")
+            }
+            withStyle(
+                SpanStyle(color = if (onHero) ParcheUPalette.OrangeTint else colors.ort)
+            ) { append("+") }
         }
     Box(
         modifier =
         modifier
             .height(size.height)
             .clip(shape)
-            .border(1.5.dp, colors.plusGradient.brush(), shape)
+            .then(
+                if (onHero) {
+                    Modifier.background(ParcheUPalette.Ink, shape)
+                } else {
+                    Modifier.border(1.5.dp, colors.plusGradient.brush(), shape)
+                }
+            )
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center
     ) {
