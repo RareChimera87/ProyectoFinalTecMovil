@@ -19,6 +19,19 @@ fun affinityAlpha(affinity: Float): Float =
 fun affinityAlpha(affinity: Int): Float = affinityAlpha(affinity.toFloat())
 
 /**
+ * Alpha neutro de una afinidad que aún no se ha medido (conexión sin simular): el mínimo de la escala, el
+ * mismo tono que una afinidad baja pero sin afirmar ningún número. Nunca se calcula como si fuera 0 %.
+ */
+const val AFFINITY_ALPHA_UNMEASURED = AFFINITY_ALPHA_MIN
+
+/** Como [affinityAlpha], con `null` = sin medir ([AFFINITY_ALPHA_UNMEASURED]). */
+fun affinityAlphaOrNeutral(affinity: Int?): Float =
+    affinity?.let(::affinityAlpha) ?: AFFINITY_ALPHA_UNMEASURED
+
+/** Texto visible de una afinidad sin medir. */
+const val AFFINITY_UNMEASURED_LABEL = "Sin simular"
+
+/**
  * En el tema claro, por encima de este alpha ni el texto oscuro ni el blanco llegan a 4,5:1 sobre el
  * violeta translúcido, así que el relleno se vuelve pleno (ADR-0030).
  */

@@ -14,14 +14,20 @@ import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.TestDatabase
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
 import me.santiagoreina.parcheu.api.platform.db.runMigrations
+import me.santiagoreina.parcheu.api.platform.db.tables.Simulations
 import me.santiagoreina.parcheu.api.platform.db.tables.TwinMemories
 import me.santiagoreina.parcheu.api.platform.db.tables.TwinVersions
 import me.santiagoreina.parcheu.api.platform.db.tables.Twins
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
+import me.santiagoreina.parcheu.api.twin.feedback.ExposedFeedbackRepository
+import me.santiagoreina.parcheu.api.twin.memories.ExposedMemoryRepository
 import me.santiagoreina.parcheu.contract.MemoryStatus
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.SimulationOrigin
+import me.santiagoreina.parcheu.contract.SimulationStatus
+import me.santiagoreina.parcheu.contract.TwinAnswer
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -153,6 +159,96 @@ class TwinDbTest : FunSpec({
             points.map { it.accuracy } shouldBe listOf(40, 58, 71)
             points.map { it.month } shouldBe listOf("2026-11", "2026-11", "2026-12")
             runBlocking { service.twin(ana) }.accuracy shouldBe 71
+        }
+    }
+
+    test("Postgres: el XP crece con memorias aceptadas, calificaciones, controles respondidos y simulaciones propias DONE, una vez por evento").config(enabled = TestDatabase.enabled) {
+        withTwin { service, _, db, _, _ ->
+            val ana = newUser(db, "ana")
+            val beto = newUser(db, "beto")
+            val caro = newUser(db, "caro")
+            runBlocking { service.submitAnswers(ana, answersOf()) }.xp shouldBe 120
+
+            fun memory(status: MemoryStatus) = transaction(db) {
+                TwinMemories.insert {
+                    it[userId] = ana
+                    it[mode] = Mode.AMISTAD
+                    it[text] = "Le gusta el café"
+                    it[TwinMemories.status] = status
+                    it[createdAt] = at
+                }[TwinMemories.id]
+            }
+            fun simulation(a: UUID, b: UUID, requestedBy: UUID?, status: SimulationStatus, origin: SimulationOrigin) = transaction(db) {
+                Simulations.insert {
+                    it[mode] = Mode.AMISTAD
+                    it[userA] = a
+                    it[userB] = b
+                    it[Simulations.requestedBy] = requestedBy
+                    it[Simulations.origin] = origin
+                    it[Simulations.status] = status
+                    it[createdAt] = at
+                }[Simulations.id]
+            }
+            val memories = ExposedMemoryRepository(db)
+            val pendiente = memory(MemoryStatus.PENDING)
+            memory(MemoryStatus.PENDING)
+            memory(MemoryStatus.REJECTED)
+            // Aceptar dos veces la misma memoria no vuelve a sumar.
+            memories.decide(ana, pendiente, MemoryStatus.ACCEPTED, FIXED_CLOCK.instant())
+            memories.decide(ana, pendiente, MemoryStatus.ACCEPTED, FIXED_CLOCK.instant())
+
+            val propia = simulation(ana, beto, ana, SimulationStatus.DONE, SimulationOrigin.PARCHE)
+            simulation(beto, ana, beto, SimulationStatus.DONE, SimulationOrigin.PARCHE) // la pidió Beto
+            simulation(ana, caro, ana, SimulationStatus.FAILED, SimulationOrigin.PARCHE)
+            simulation(beto, caro, ana, SimulationStatus.DONE, SimulationOrigin.INTRODUCTION) // Ana presenta, no participa
+
+            val feedback = ExposedFeedbackRepository(db)
+            // Calificar el mismo turno dos veces cuenta una sola vez (índice único de E9.3).
+            feedback.addRating(ana, propia, 0, 1, FIXED_CLOCK.instant())
+            feedback.addRating(ana, propia, 0, 1, FIXED_CLOCK.instant())
+            val respondida = feedback.createControl(ana, 1, TwinAnswer.A, FIXED_CLOCK.instant())
+            feedback.createControl(ana, 2, TwinAnswer.B, FIXED_CLOCK.instant()) // sin responder
+            feedback.answerControl(ana, respondida.id, TwinAnswer.B)
+            feedback.answerControl(ana, respondida.id, TwinAnswer.A)
+
+            val esperado = 120 + XP_PER_ACCEPTED_MEMORY + XP_PER_RATING + XP_PER_CONTROL_ANSWER + XP_PER_DONE_SIMULATION
+            val twin = runBlocking { service.twin(ana) }
+            twin.xp shouldBe esperado
+            twin.level shouldBe levelFor(esperado)
+            twin.xpNext shouldBe xpNextFor(esperado)
+            // Leer otra vez no suma nada: el XP se cuenta desde filas únicas, no se acumula al leer.
+            runBlocking { service.twin(ana) }.xp shouldBe esperado
+            service.progress(ana)?.xp shouldBe esperado
+            // El reenvío de respuestas tampoco suma.
+            runBlocking { service.submitAnswers(ana, answersOf()) }.xp shouldBe esperado
+        }
+    }
+
+    test("Postgres: con suficiente actividad el nivel sube y evolution lo refleja").config(enabled = TestDatabase.enabled) {
+        withTwin { service, repo, db, _, _ ->
+            val ana = newUser(db, "ana")
+            val beto = newUser(db, "beto")
+            runBlocking { service.submitAnswers(ana, answersOf()) }
+            // 120 + 19 × 20 = 500 XP: nivel 2.
+            repeat(19) {
+                transaction(db) {
+                    Simulations.insert {
+                        it[mode] = Mode.AMISTAD
+                        it[userA] = ana
+                        it[userB] = beto
+                        it[requestedBy] = ana
+                        it[origin] = SimulationOrigin.PARCHE
+                        it[status] = SimulationStatus.DONE
+                        it[createdAt] = at
+                    }
+                }
+            }
+            repo.addAccuracyPoint(ana, AccuracyPoint(LocalDate.of(2026, 11, 23), 40))
+            val twin = runBlocking { service.twin(ana) }
+            twin.xp shouldBe 500
+            twin.level shouldBe 2
+            twin.xpNext shouldBe 1000
+            service.evolution(ana).single().level shouldBe 2
         }
     }
 })

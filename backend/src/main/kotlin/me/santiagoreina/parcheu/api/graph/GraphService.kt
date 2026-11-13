@@ -24,6 +24,10 @@ import kotlin.math.roundToInt
  * modo y afinidad son los de su arista principal (CONNECTED > PENDING > SIMULATED y luego mayor
  * afinidad). `stats` describe el subgrafo filtrado y cuenta personas: `connections` solo las que
  * tienen alguna arista CONNECTED.
+ *
+ * Una arista sin afinidad (conexión por invitación o presentación aún sin simular) sale con
+ * `affinityMeasured = false`: el `0` de `affinity` es solo para las apps 0.1/0.2, que exigen el número.
+ * Nunca se promedia ni se ordena como si fuera una medida.
  */
 class GraphService(
     private val repo: GraphRepository,
@@ -37,7 +41,9 @@ class GraphService(
         if (filter.community != null && !isPlus(viewer)) throw PlusRequired("El filtro por comunidad es de ParcheU+")
         val me = repo.person(viewer) ?: throw NotFound("Usuario sin perfil")
         val nodes = visibleNodes(viewer, filter)
-        val edges = nodes.flatMap { node -> node.edges.map { EdgeDto(node.view.id, it.mode, it.state, it.affinity ?: 0) } }
+        val edges = nodes.flatMap { node ->
+            node.edges.map { EdgeDto(node.view.id, it.mode, it.state, wireAffinity(it.affinity), affinityMeasured = it.affinity != null) }
+        }
         return GraphDto(
             me = meNode(me),
             nodes = nodes.map { it.toDto() },
@@ -120,16 +126,20 @@ class GraphService(
             label = view.label,
             initials = view.initials,
             photoUrl = view.photoUrl,
-            affinity = primary.affinity ?: 0,
+            affinity = wireAffinity(primary.affinity),
             mode = primary.mode,
             state = primary.state,
             anonymous = view.anonymous,
             isDemo = view.isDemo,
+            affinityMeasured = primary.affinity != null,
         )
     }
 
     companion object {
         const val ME_LABEL = "Tú"
+
+        /** Valor de `affinity` en el cable: la medida, o 0 (con `affinityMeasured = false`) si no la hay. */
+        private fun wireAffinity(affinity: Int?): Int = affinity ?: 0
 
         private val STATE_RANK = mapOf(EdgeState.CONNECTED to 0, EdgeState.PENDING to 1, EdgeState.SIMULATED to 2)
 

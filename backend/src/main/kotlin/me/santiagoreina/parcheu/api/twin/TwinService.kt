@@ -56,7 +56,7 @@ class TwinService(
         val traits = TraitEngine.compute(questions, answers)
         val saved = repo.saveAnswers(userId, answers, traits, clock.instant())
         enqueuePersona(userId, saved.version)
-        return saved.state.toDto()
+        return saved.state.withActivity(repo.activity(userId)).toDto()
     }
 
     /**
@@ -68,8 +68,14 @@ class TwinService(
     suspend fun twin(userId: UUID): TwinDto {
         val state = repo.state(userId) ?: return EMPTY_STATE.toDto()
         if (state.traits != null && !state.personaReady) enqueuePersona(userId, state.version)
-        return state.toDto()
+        return state.withActivity(repo.activity(userId)).toDto()
     }
+
+    /**
+     * Estado con el XP y el nivel completos: respuestas más memorias aceptadas, calificaciones, preguntas de
+     * control y simulaciones propias terminadas (arquitectura.md §7.1, punto 6). Null sin gemelo.
+     */
+    fun progress(userId: UUID): TwinState? = repo.state(userId)?.withActivity(repo.activity(userId))
 
     /**
      * Un punto por cada semana con datos en `twin_accuracy`, por semana ascendente. `month` es el mes
@@ -78,7 +84,7 @@ class TwinService(
     fun evolution(userId: UUID): List<TwinPoint> {
         val points = repo.accuracyPoints(userId)
         if (points.isEmpty()) return emptyList()
-        val level = repo.state(userId)?.level ?: 1
+        val level = progress(userId)?.level ?: 1
         return points.sortedBy { it.week }.map { TwinPoint("%04d-%02d".format(it.week.year, it.week.monthValue), it.accuracy, level) }
     }
 
