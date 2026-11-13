@@ -95,10 +95,31 @@ Alguien reportó a otra persona o un chat (E8.1). Es un aviso informativo, no un
 
 1. Abre el reporte en Postgres (`reports`, el log trae `reportId`, `kind`, `reason`, `priority`):
    `select * from reports where id = '<reportId>'`. La instantánea del chat está en la fila.
-2. `priority = 2` (`SELF_HARM` o `UNDERAGE`): atiende primero y el mismo día. Autolesión: sigue el protocolo de apoyo que acuerde el equipo
-   (aún no está escrito en la arquitectura); menor de edad: suspende la cuenta.
+2. `priority = 2` (`SELF_HARM` o `UNDERAGE`): atiende primero y el mismo día. Autolesión: sigue el [protocolo de apoyo](#protocolo-de-apoyo-ante-autolesión-borrador);
+   menor de edad: suspende la cuenta.
 3. Resuelve con el script de administración (claim `admin`) y registra la resolución en el mismo reporte.
 4. Nunca copies textos de mensajes a canales de chat del equipo ni a issues.
+
+### Protocolo de apoyo ante autolesión (borrador)
+
+> **Borrador pendiente de aprobación del equipo.** No es política vigente hasta que I1, I2 e I3 lo aprueben.
+
+- **Qué lo dispara:** un reporte con motivo `SELF_HARM` o una moderación de IA con hallazgo `SELF_HARM`
+  ([ADR-0026](adr/0026-moderacion-ia-fail-open.md)); los reportes con ese motivo quedan con `priority = 2`.
+- **Qué ve la persona de inmediato:** `helpResources` en la respuesta de `POST /v1/reports` y, para la moderación,
+  un aviso y un push solo al autor, nunca al chat compartido: Línea 192, opción 4 (salud mental, Ministerio de
+  Salud); Línea 106 (escucha y orientación en crisis emocional); Emergencias 123 (peligro inmediato). Vigencia y
+  cobertura en Santander siguen por verificar antes de darlas por buenas.
+- **Quién y cuándo:** quien administre (claim `admin`), el mismo día, como todo `priority = 2`.
+- **Qué hace el equipo:** revisa el reporte en `admin.html`, oculta el mensaje si corresponde, resuelve y registra la
+  resolución. Si hay peligro inmediato aparente, remite a emergencias (123) y a las líneas oficiales.
+- **Qué NO hace:** no diagnostica, no contacta a terceros (familia, universidad, autoridades) sin base legal, no
+  promete ni ofrece seguimiento clínico y no escribe a la persona en nombre de un servicio de salud.
+- **Registro mínimo:** el reporte (con su instantánea de 20 mensajes) y su resolución; nada de textos en canales
+  del equipo ni en issues. El `snapshot` se borra 180 días después de resolverse y el reporte se conserva
+  ([arquitectura §10.2](arquitectura.md#102-retención-de-datos-fuente-para-privacidad-data-safety-e83-y-e88)).
+- **Escalamiento:** si hay duda, si el caso involucra a un menor o si afecta a más de una persona, se informa a los
+  otros dos integrantes ese mismo día; cualquier contacto con terceros lo decide el equipo completo.
 
 ## simulaciones-failed
 

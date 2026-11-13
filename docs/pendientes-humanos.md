@@ -2,11 +2,13 @@
 
 Pasos que solo puede hacer una persona (consolas, pagos, términos, identidad). Cada feature agrega su sección.
 
-## Ruta crítica (actualizada el 4 nov 2026)
+## Ruta crítica (actualizada el 12 nov 2026)
 
 Lo que solo puede hacer el usuario para llegar a producción, en orden. Los pasos marcados **(facturación)** implican pagos, cuotas o cambios en la cuenta de facturación de GCP. Cada paso dice de qué depende y dónde está el detalle.
 
-**Decisión del 4 nov (ADR-0033):** MVP de costo mínimo. Prod está encendido; dev **no** se aplica en GCP (sigue en el homelab y `GCP_DEV_ENABLED` queda sin definir). No hay tags ni ramas `release/*`, y la tabla de Play Console (`docs/play-console.md` §1) sigue en _pendiente_.
+**Decisión del 4 nov (ADR-0033):** MVP de costo mínimo. Prod está encendido; dev **no** se aplica en GCP (sigue en el homelab y `GCP_DEV_ENABLED` queda sin definir). El tag `v0.1.0` se desplegó el 4 nov (ver la tabla del 12 nov abajo), y la tabla de Play Console (`docs/play-console.md` §1) se actualizó el 12 nov.
+
+**Bloqueo actual (12 nov):** el paso 15 (verificación de identidad) está iniciada y sin aprobar. Play no permite crear la app hasta completar identidad, perfil de comerciante, dispositivo Android y teléfono, así que el paso 17 (crear la app) y los que dependen de él siguen bloqueados.
 
 **Fechas:** el calendario de `docs/PLAN.md` §6 ya no aplica; el día 14 se recalcula desde la fecha real de publicación con ≥ 12 inscritos (`docs/play-console.md` §12.9) y la 0.3 se desplaza en consecuencia.
 
@@ -24,24 +26,38 @@ Lo que solo puede hacer el usuario para llegar a producción, en orden. Los paso
 | Variables de GitHub | Repo: `GCP_PROJECT_PROD=parcheu-prod`, `PARCHEU_API_URL_PROD=https://api-n3yxvjziqq-uc.a.run.app/`, `PARCHEU_HOSTING_URL_PROD=https://parcheu-prod.web.app`, `DESPLEGAR_API_PROD=true` (la API se despliega desde el primer tag). Environments `play` y `play-alpha`: `PLAY_SERVICE_ACCOUNT=sa-play@parcheu-prod.iam.gserviceaccount.com`. Environment `production`: `PLAY_APP_SIGNING_SHA256` provisional = SHA-256 de la llave de subida |
 | PR | #119 mezclado (incluye #118); #120 pendiente |
 
+### Hecho desde el 4 nov (verificado el 12 nov)
+
+| Qué | Estado |
+|---|---|
+| Despliegue de producción v0.1.0 | Tag `v0.1.0` con PR #121 mezclado. API en Cloud Run de `parcheu-prod`, versión 4dc3e23. Hosting en https://parcheu-prod.web.app con `/privacidad`, `/terminos`, `/borrar-cuenta` y assetlinks en 200. Migración ejecutada y 8 jobs de Scheduler ejecutándose. Sin errores en los logs de los últimos 7 días |
+| Costo | MVP de costo mínimo, ~9,5 USD/mes. Dev no se aplica en GCP (homelab) |
+| Firebase prod | Acceso con Google habilitado. `google-services` de prod con clientes OAuth |
+| Secretos de GitHub | Cargados: `WIF_PROVIDER_PROD`, `WIF_SERVICE_ACCOUNT_PROD`, `UPLOAD_KEYSTORE`, `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`, `GOOGLE_SERVICES_JSON_PROD` |
+| Variables de GitHub | `DESPLEGAR_API_PROD=true`, `GCP_PROJECT_PROD`, `PARCHEU_API_URL_PROD`, `PARCHEU_HOSTING_URL_PROD`. En el environment `production`, `PLAY_APP_SIGNING_SHA256` sigue con el valor provisional (huella de la llave de subida) |
+| Permisos de la base | `GRANT` a `sa-api` aplicados el 4 nov |
+| Cuenta de Play | Cuenta personal creada y pagada el 4 nov. Aplica la regla de 12 testers × 14 días |
+| Verificación en Play | Identidad iniciada, sin aprobar. App no creada |
+| `android-release` del tag v0.1.0 | Falló, como se esperaba: la app no existe todavía en Play |
+
 ### GCP dev
 Los pasos 1 a 6 quedan **No aplica (decisión 4 nov, ADR-0033)**: 1 decidir E0.5 en dev; 2 bootstrap de dev; 3 Firebase/Firestore y plataforma de dev; 4 secretos WIF de dev; 5 variable `GCP_DEV_ENABLED=true`; 6 verificar `env_ref` en la primera corrida real. Detalle histórico: `infra/terraform/README.md` "Puesta en marcha" y § "Aplicar Terraform tras fix/wif-deployer-dev".
 
 ### GCP prod
 Los pasos 7 a 10 están hechos (ver la tabla). `DESPLEGAR_API_PROD` quedó en `true` por decisión del 4 nov, en lugar de esperar a la 0.2. Falta:
 
-10b. **(I1) Aplicar los `GRANT` a `sa-api`** (antes del primer `migrate`; `ALTER ... OWNER TO` falla en Postgres 16). Instala el proxy con `gcloud components install cloud-sql-proxy`, conecta con `gcloud sql connect parcheu-prod --user=postgres --database=parcheu --project=parcheu-prod` (contraseña en `~/.parcheu/sql-prod.env`) y pega los dos `GRANT` del README de infra (`infra/terraform/README.md`, nota de E0.4).
-11. **(I3, consola) Activar Google en Authentication de `parcheu-prod`** (Firebase Console > Authentication > Sign-in method > Google). Después, descarga de nuevo el archivo: `firebase apps:sdkconfig ANDROID 1:650971875793:android:ea80fae4a62a3eb6bb38f0 --project parcheu-prod > ~/.parcheu/google-services.prod.json` y comprueba que `oauth_client` ya no esté vacío. Detalle: § "E0.8", paso 2.
-12. **(I1) Cargar los secretos de WIF de prod** a nivel de repo (los usan `deploy-prod.yml` y `firebase-deploy.yml`) y en los environments `play` y `play-alpha` (los usa `android-release.yml`). Valores: `WIF_PROVIDER_PROD=projects/650971875793/locations/global/workloadIdentityPools/github/providers/github-oidc` y `WIF_SERVICE_ACCOUNT_PROD` = correo de `sa-deployer` (`terraform output` de `envs/prod`). Comando: `printf %s "$VALOR" | gh secret set WIF_PROVIDER_PROD -R RareChimera87/ProyectoFinalTecMovil` (añade `--env play` o `--env play-alpha` para los environments; repite con `WIF_SERVICE_ACCOUNT_PROD`). `TF_PLAN_SERVICE_ACCOUNT_PROD` (`sa-terraform-plan`) sigue pendiente. Detalle: README "Secretos de GitHub que salen del bootstrap".
+10b. **Hecho (4 nov).** **(I1) Aplicar los `GRANT` a `sa-api`** (antes del primer `migrate`; `ALTER ... OWNER TO` falla en Postgres 16). Instala el proxy con `gcloud components install cloud-sql-proxy`, conecta con `gcloud sql connect parcheu-prod --user=postgres --database=parcheu --project=parcheu-prod` (contraseña en `~/.parcheu/sql-prod.env`) y pega los dos `GRANT` del README de infra (`infra/terraform/README.md`, nota de E0.4).
+11. **Hecho (verificado 12 nov).** **(I3, consola) Activar Google en Authentication de `parcheu-prod`** (Firebase Console > Authentication > Sign-in method > Google). Después, descarga de nuevo el archivo: `firebase apps:sdkconfig ANDROID 1:650971875793:android:ea80fae4a62a3eb6bb38f0 --project parcheu-prod > ~/.parcheu/google-services.prod.json` y comprueba que `oauth_client` ya no esté vacío. Detalle: § "E0.8", paso 2.
+12. **Hecho (verificado 12 nov, a nivel de repo; `TF_PLAN_SERVICE_ACCOUNT_PROD` no aparece en el registro, confirmar con `gh secret list`).** **(I1) Cargar los secretos de WIF de prod** a nivel de repo (los usan `deploy-prod.yml` y `firebase-deploy.yml`) y en los environments `play` y `play-alpha` (los usa `android-release.yml`). Valores: `WIF_PROVIDER_PROD=projects/650971875793/locations/global/workloadIdentityPools/github/providers/github-oidc` y `WIF_SERVICE_ACCOUNT_PROD` = correo de `sa-deployer` (`terraform output` de `envs/prod`). Comando: `printf %s "$VALOR" | gh secret set WIF_PROVIDER_PROD -R RareChimera87/ProyectoFinalTecMovil` (añade `--env play` o `--env play-alpha` para los environments; repite con `WIF_SERVICE_ACCOUNT_PROD`). `TF_PLAN_SERVICE_ACCOUNT_PROD` (`sa-terraform-plan`) sigue pendiente. Detalle: README "Secretos de GitHub que salen del bootstrap".
 13. **Comprobar que el environment `production` admite tags `v*`:** `gh api repos/RareChimera87/ProyectoFinalTecMovil/environments/production --jq .deployment_branch_policy` (si es `custom_branch_policies`: `gh api -X POST repos/RareChimera87/ProyectoFinalTecMovil/environments/production/deployment-branch-policies -f name='v*' -f type=tag`). Las variables ya están cargadas.
 
 ### Play Console
-14. **(facturación) Cuenta de desarrollador** (cuota única de USD 25): confirmar tipo de cuenta y fecha de creación y registrarlos. Sin dependencias. Detalle: `docs/play-console.md` §3 y §1.
-15. **Verificación de identidad** (y de dispositivo si Play la pide); puede tardar días. Depende de 14. Detalle: `docs/play-console.md` §3, paso 4; § "E10.1", paso 2.
+14. **Hecho (4 nov): cuenta personal creada y pagada.** **(facturación) Cuenta de desarrollador** (cuota única de USD 25): confirmar tipo de cuenta y fecha de creación y registrarlos. Sin dependencias. Detalle: `docs/play-console.md` §3 y §1.
+15. **Bloqueo actual (12 nov): iniciada, sin aprobar.** El documento físico no está disponible; opciones: duplicado del documento o usar la cuenta de otro integrante. **Verificación de identidad** (y de dispositivo si Play la pide); puede tardar días. Depende de 14. Detalle: `docs/play-console.md` §3, paso 4; § "E10.1", paso 2.
 16. **(facturación) Perfil de pagos** creado y verificado (datos fiscales y cuenta bancaria). Depende de 14. Detalle: `docs/play-console.md` §5; § "E10.1", paso 4.
 17. **Crear la app** `me.santiagoreina.parcheu` (es-419, Social, gratis con compras) con Play App Signing. Depende de 15. Detalle: `docs/play-console.md` §4; § "E10.1", paso 3.
-18. **(I1) Cargar la llave de subida** en los environments `play` y `play-alpha` (secretos `UPLOAD_KEYSTORE`, `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`): usa los comandos de `docs/play-console.md` §6 añadiendo `--env play` (y otra pasada con `--env play-alpha`) a cada `gh secret set`, y respalda `~/.parcheu/upload-keystore.jks`. Sin dependencias (la llave ya existe).
-18b. **(I1) Cargar `GOOGLE_SERVICES_JSON_PROD`** en los environments `play` y `play-alpha`, después del paso 11: `base64 -w0 ~/.parcheu/google-services.prod.json | gh secret set GOOGLE_SERVICES_JSON_PROD -R RareChimera87/ProyectoFinalTecMovil --env play` (y `--env play-alpha`). Detalle: `docs/play-console.md` §12.4.
+18. **Hecho (verificado 12 nov): secretos `UPLOAD_*` cargados en GitHub.** Confirmar con `gh secret list --env play` y `--env play-alpha` que están en los environments; el registro verificado no lo especifica. **(I1) Cargar la llave de subida** en los environments `play` y `play-alpha` (secretos `UPLOAD_KEYSTORE`, `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`): usa los comandos de `docs/play-console.md` §6 añadiendo `--env play` (y otra pasada con `--env play-alpha`) a cada `gh secret set`, y respalda `~/.parcheu/upload-keystore.jks`. Sin dependencias (la llave ya existe).
+18b. **Hecho (verificado 12 nov): `GOOGLE_SERVICES_JSON_PROD` cargado** (confirmar el environment como en el paso 18). **(I1) Cargar `GOOGLE_SERVICES_JSON_PROD`** en los environments `play` y `play-alpha`, después del paso 11: `base64 -w0 ~/.parcheu/google-services.prod.json | gh secret set GOOGLE_SERVICES_JSON_PROD -R RareChimera87/ProyectoFinalTecMovil --env play` (y `--env play-alpha`). Detalle: `docs/play-console.md` §12.4.
 19. **Invitar `sa-play` en Play Console** (Usuarios y permisos) con publicación y permisos de pedidos y datos financieros; propaga hasta en 24 h. Depende de 17 (`sa-play` ya existe). Detalle: `docs/play-console.md` §7; § "E7.1", paso 2.
 20. **Primer AAB 0.0.1 a mano** en Pruebas internas con Play App Signing (la API no lo permite). Depende de 15, 16, 17 y 18. Detalle: `docs/play-console.md` §4.1 y §11.2; § "E7.0", paso 2.
 21. **Reemplazar `PLAY_APP_SIGNING_SHA256`** en el environment `production` por la SHA-256 del certificado de Play App Signing (Integridad de la app); hoy tiene provisionalmente la de la llave de subida y `deploy-prod` fallaría cerrado con ese valor. Depende de 20. Detalle: `docs/play-console.md` §12.3 paso 7 y §12.4; § "E10.3", paso 7.
@@ -54,7 +70,7 @@ Los pasos 7 a 10 están hechos (ver la tabla). `DESPLEGAR_API_PROD` quedó en `t
 
 ### Release
 28. **Preparar `release/0.1.0`** desde `dev` (con `fix/version-0.1.0`: `versionName` 0.1.0 y `versionCode` > 1) y las notas es-419. Depende de 17, 25, 26 y 27. Detalle: `docs/PLAN.md` §5 "Releases intermedios"; `docs/play-console.md` §12.3 pasos 1-3; § "E10.3", paso 3.
-29. **Aprobar el PR `release/0.1.0` → `main`, crear el tag `v0.1.0` y aprobar `deploy-prod`.** Depende de 10b, 12 y 13 (secretos), 21 (`PLAY_APP_SIGNING_SHA256`) y 28. Detalle: `docs/PLAN.md` §5 "Despliegue"; § "E10.3", paso 5.
+29. **Parcial (12 nov): PR #121 mezclado, tag `v0.1.0` y `deploy-prod` hechos el 4 nov** (API y Hosting desplegados). Pendiente: `android-release` (falló, esperado, hasta crear la app en Play, paso 17). Aprobar el PR `release/0.1.0` → `main`, crear el tag `v0.1.0` y aprobar `deploy-prod`. Depende de 10b, 12 y 13 (secretos), 21 (`PLAY_APP_SIGNING_SHA256`) y 28. Detalle: `docs/PLAN.md` §5 "Despliegue"; § "E10.3", paso 5.
 30. **Subir la 0.1 a la pista cerrada** (`android-release` con `sa-play`, o el plan B manual de `docs/play-console.md` §12.3 paso 8) y enviarla a revisión a mano. Depende de 19, 20 y 29. Detalle: § "E10.3", pasos 5-6; `docs/play-console.md` §12.9 paso 1 y §12.11.
 31. **Huellas de App Signing en Firebase prod** (SHA-1 y SHA-256 de Play App Signing; las de la llave de subida ya están registradas) y recarga de `GOOGLE_SERVICES_JSON_PROD`. Depende de 11 y 20. Detalle: `docs/play-console.md` §12.4; § "E10.3", paso 7.
 32. **Prueba cerrada 0.1:** tras la aprobación, 'Publicar cambios' y desactivar la publicación administrada; solo entonces enviar el enlace de inscripción y mantener ≥ 12 inscritos durante 14 días seguidos; después, solicitud de acceso a producción. Depende de 24, 30 y 31. Detalle: `docs/play-console.md` §12.9 pasos 2-4; § "E10.3", paso 8; `docs/PLAN.md` §9 "Producción".
