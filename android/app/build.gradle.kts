@@ -88,6 +88,32 @@ if (hasUploadKey && !file(uploadKeystoreFile!!).isFile) {
     throw GradleException("UPLOAD_KEYSTORE_FILE no apunta a un archivo: $uploadKeystoreFile")
 }
 
+// Llave de subida SOLO para el prodDebug que ejecuta Android Studio. El flavor prod es el que Android Studio ejecuta por
+// defecto (isDefault) y habla con parcheu-prod: el login con Google solo funciona si la huella del APK está registrada
+// en la app Android de Firebase prod, y la de la llave de subida lo está. Si existe ~/.parcheu/upload-key.env (fuera del
+// repo; mismo formato que las variables UPLOAD_*, el keystore es ~/.parcheu/upload-keystore.jks salvo UPLOAD_KEYSTORE_FILE)
+// el prodDebug se firma con ella y se instala sobre el APK de demo sin desinstalar. Sin el archivo (CI, otros integrantes)
+// no cambia nada: el debug sigue firmándose con la llave de debug. No afecta a los release (hasUploadKey sigue siendo solo
+// de entorno) ni a devDebug. -Pparcheu.localSigning.file=<ruta> cambia el archivo.
+val localUploadEnv = providers.gradleProperty("parcheu.localSigning.file")
+    .orElse(providers.systemProperty("user.home").map { "$it/.parcheu/upload-key.env" })
+    .let { ruta -> providers.fileContents(layout.file(ruta.map { File(it) })).asText }
+    .map { text ->
+        text.lineSequence().map { it.trim().removePrefix("export ").trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") && '=' in it }
+            .associate { line ->
+                line.substringBefore('=').trim() to line.substringAfter('=').trim().trim('"', '\'')
+            }
+    }
+    .getOrElse(emptyMap())
+val localUploadKeystore = (
+    localUploadEnv["UPLOAD_KEYSTORE_FILE"]
+        ?: "${System.getProperty("user.home")}/.parcheu/upload-keystore.jks"
+    )
+val hasLocalUploadKey = !hasUploadKey && file(localUploadKeystore).isFile &&
+    listOf("UPLOAD_KEYSTORE_PASSWORD", "UPLOAD_KEY_ALIAS", "UPLOAD_KEY_PASSWORD")
+        .all { !localUploadEnv[it].isNullOrBlank() }
+
 // Crashlytics (E10.5): el plugin engancha la subida del mapa de R8 al bundle de release y esa tarea falla si
 // el flavor no tiene google-services.json (appIdFile inexistente). El archivo no se versiona y en CI puede faltar
 // (secreto GOOGLE_SERVICES_JSON_PROD pendiente), así que la subida solo se activa si el flavor lo tiene.
@@ -118,6 +144,14 @@ android {
                 keyPassword = uploadKeyPassword
             }
         }
+        if (hasLocalUploadKey) {
+            create("uploadLocal") {
+                storeFile = file(localUploadKeystore)
+                storePassword = localUploadEnv["UPLOAD_KEYSTORE_PASSWORD"]
+                keyAlias = localUploadEnv["UPLOAD_KEY_ALIAS"]
+                keyPassword = localUploadEnv["UPLOAD_KEY_PASSWORD"]
+            }
+        }
     }
 
     flavorDimensions += "env"
@@ -145,6 +179,9 @@ android {
         }
         create("prod") {
             dimension = "env"
+            // Variante por defecto de Android Studio (Run y Build Variants tras sincronizar): prodDebug, contra
+            // parcheu-prod. El homeserver sigue en devDebug (docs/desarrollo-local.md, ADR-0033).
+            isDefault = true
             // Por defecto, la URL real de la API de parcheu-prod; -Pparcheu.apiUrl.prod la cambia (el pipeline la lee
             // de la variable PARCHEU_API_URL_PROD). La de Hosting es el sitio por defecto de parcheu-prod.
             val api = urlProperty("parcheu.apiUrl.prod", prodApiDefecto)
@@ -268,6 +305,13 @@ abstract class VerifyMergedManifestPermission : DefaultTask() {
 }
 
 androidComponents {
+    // prodDebug con la llave de subida local (ver hasLocalUploadKey): el buildType debug fija su firma y pisa la del
+    // flavor, así que se cambia por variante.
+    if (hasLocalUploadKey) {
+        onVariants(selector().withName("prodDebug")) { variant ->
+            variant.signingConfig.setConfig(android.signingConfigs.getByName("uploadLocal"))
+        }
+    }
     onVariants(selector().withName("prodRelease")) { variant ->
         val verify =
             tasks.register<VerifyMergedManifestPermission>("verifyProdReleaseBillingPermission") {
