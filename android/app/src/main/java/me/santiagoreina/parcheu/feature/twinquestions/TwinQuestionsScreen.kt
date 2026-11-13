@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,10 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -44,9 +43,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.R
 import me.santiagoreina.parcheu.contract.QuestionDto
@@ -55,12 +59,11 @@ import me.santiagoreina.parcheu.core.error.AI_BUDGET_MESSAGE
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
-import me.santiagoreina.parcheu.designsystem.components.base.ParcheULinearProgress
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
 import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
-import me.santiagoreina.parcheu.designsystem.theme.ParcheURadius
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.plus.formatWeekdayDate
 
@@ -81,6 +84,9 @@ private val CloseIcon: ImageVector =
 
 /** Distancia horizontal (dp) a partir de la cual soltar la tarjeta cuenta como respuesta. */
 internal val SWIPE_THRESHOLD = 110.dp
+
+/** Luminancia de una pantalla de celular encendida en blanco: el color del velo de [photoVeil]. */
+private const val SCREEN_LUMA = 0.92f
 
 /** B1 sin estado: pila de tarjetas, progreso "n de 12", barra de gestos y estados de carga, envío y error. */
 @Composable
@@ -105,7 +111,7 @@ fun TwinQuestionsContent(
                         state.currentNumber,
                         state.total
                     ),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
                     color = colors.mu,
                     modifier = Modifier.padding(
                         end = 8.dp
@@ -133,8 +139,9 @@ fun TwinQuestionsContent(
             }
         }
         if (showProgress) {
-            ParcheULinearProgress(
-                progress = state.answeredCount.toFloat() / state.total,
+            QuestionSegments(
+                total = state.total,
+                answered = state.answeredCount,
                 contentDescription =
                 stringResource(
                     R.string.twin_questions_progress_description,
@@ -225,52 +232,76 @@ private fun ErrorPane(error: AppError?, onRetry: () -> Unit) {
     }
 }
 
+/**
+ * Barra de 12 segmentos de la dirección A: los respondidos en violeta pleno y los demás en s2. Para TalkBack
+ * es una sola barra de progreso ("Pregunta 4 de 12").
+ */
+@Composable
+private fun QuestionSegments(
+    total: Int,
+    answered: Int,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    val colors = ParcheUTheme.colors
+    // En claro s2 casi no se distingue del fondo lila: los pendientes van en el color de los bordes.
+    val pending = if (colors.isDark) colors.s2 else colors.ln
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(5.dp)
+            .semantics {
+                this.contentDescription = contentDescription
+                progressBarRangeInfo = ProgressBarRangeInfo(answered.toFloat() / total, 0f..1f)
+            },
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        repeat(total) { i ->
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(if (i < answered) colors.hero else pending, CircleShape)
+            )
+        }
+    }
+}
+
 @Composable
 private fun QuestionStack(question: QuestionDto, onAnswer: (TwinAnswer) -> Unit) {
     val colors = ParcheUTheme.colors
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
-            modifier = Modifier.padding(top = 16.dp),
+            modifier = Modifier.padding(top = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            TwinMascot(size = TwinMascotSize.S)
+            TwinMascot(size = TwinMascotSize.S, talking = true)
             Text(
                 stringResource(R.string.twin_questions_taking_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.mu
             )
         }
-        Box(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp)) {
-            // Dos tarjetas decorativas detrás de la actual (rotación -3 y +2 grados).
-            Box(
-                Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(bottom = 12.dp)
-                    .rotate(-3f).background(colors.s2, RoundedCornerShape(ParcheURadius.Hero))
+        // La clave por id reinicia el desplazamiento al pasar a la siguiente pregunta.
+        key(question.id) {
+            SwipeableQuestionCard(
+                question = question,
+                onAnswer = onAnswer,
+                modifier = Modifier.weight(1f).fillMaxWidth()
             )
-            Box(
-                Modifier.fillMaxSize().padding(
-                    horizontal = 12.dp
-                ).padding(top = 6.dp, bottom = 6.dp)
-                    .rotate(
-                        2f
-                    ).alpha(0.6f).background(colors.ln, RoundedCornerShape(ParcheURadius.Hero))
-            )
-            // La clave por id reinicia el desplazamiento al pasar a la siguiente pregunta.
-            key(question.id) {
-                SwipeableQuestionCard(
-                    question = question,
-                    onAnswer = onAnswer,
-                    modifier = Modifier.fillMaxSize().padding(top = 12.dp)
-                )
-            }
         }
         SwipeHintBar(onDepends = { onAnswer(TwinAnswer.DEPENDS) })
     }
 }
 
+/**
+ * La pregunta y sus dos opciones. Todo el bloque se arrastra: a la izquierda responde A y a la derecha B. Sin
+ * sombra ni tarjetas apiladas (dirección A): la opción hacia la que se arrastra se marca con el borde de 2 dp.
+ */
 @Composable
 private fun SwipeableQuestionCard(
     question: QuestionDto,
@@ -296,6 +327,14 @@ private fun SwipeableQuestionCard(
 
     LaunchedEffect(question.id) { offset.snapTo(0f) }
     val images = remember(question.id) { TwinQuestionImages.forQuestion(question.id) }
+    val (toneA, toneB) = questionPhotoHighlights(question.id)
+    // A partir de un tercio del umbral ya se ve hacia qué opción va el gesto.
+    val leaning =
+        when {
+            offset.value <= -thresholdPx / 3 -> TwinAnswer.A
+            offset.value >= thresholdPx / 3 -> TwinAnswer.B
+            else -> null
+        }
 
     Column(
         modifier =
@@ -304,8 +343,6 @@ private fun SwipeableQuestionCard(
                 translationX = offset.value
                 rotationZ = (offset.value / flingPx) * 12f
             }
-            .shadow(18.dp, RoundedCornerShape(ParcheURadius.Hero), clip = false)
-            .background(colors.s1, RoundedCornerShape(ParcheURadius.Hero))
             .pointerInput(question.id) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
@@ -322,29 +359,35 @@ private fun SwipeableQuestionCard(
                     }
                 )
             }
-            .padding(horizontal = 18.dp, vertical = 22.dp)
+            .padding(top = 4.dp, bottom = 4.dp)
             .testTag("twinQuestions:card"),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
             text = question.text,
             style = MaterialTheme.typography.headlineSmall,
             color = colors.tx,
-            modifier = Modifier.testTag("twinQuestions:questionText")
+            modifier = Modifier.padding(bottom = 4.dp).testTag("twinQuestions:questionText")
         )
         OptionCard(
+            letter = "A",
             label = stringResource(R.string.twin_questions_option_a),
             text = question.optionA,
             tag = "twinQuestions:optionA",
             image = images?.a,
+            highlight = toneA,
+            selected = leaning == TwinAnswer.A,
             onClick = { commit(TwinAnswer.A, -flingPx) },
             modifier = Modifier.weight(1f)
         )
         OptionCard(
+            letter = "B",
             label = stringResource(R.string.twin_questions_option_b),
             text = question.optionB,
             tag = "twinQuestions:optionB",
             image = images?.b,
+            highlight = toneB,
+            selected = leaning == TwinAnswer.B,
             onClick = { commit(TwinAnswer.B, flingPx) },
             modifier = Modifier.weight(1f)
         )
@@ -352,44 +395,77 @@ private fun SwipeableQuestionCard(
 }
 
 /**
- * Opción A o B. Con [image] la foto ocupa la parte superior (recortada a lo ancho, decorativa: el texto ya
- * describe la opción) y el rótulo y el texto van debajo; sin ella la tarjeta deja el texto abajo como antes.
- * La foto cede altura al texto, así que con letra grande se achica en vez de recortar el texto.
+ * Opción A o B (dirección A): tarjeta s1 de radio 20 con la foto arriba a sangre, en duotono (decorativa: el
+ * texto ya describe la opción), y abajo la letra en Sora 800 22 `prt` junto al texto. TalkBack lee "Opción A"
+ * y el texto. Sin foto, la tarjeta deja el texto abajo como antes. La foto cede altura al texto, así que con
+ * letra grande se achica en vez de recortar el texto.
  */
 @Composable
 private fun OptionCard(
+    letter: String,
     label: String,
     text: String,
     tag: String,
     @DrawableRes image: Int?,
+    highlight: Color,
+    selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = ParcheUTheme.colors
-    val shape = RoundedCornerShape(18.dp)
+    val shape = ParcheUTheme.shapes.photo
     Column(
         modifier =
         modifier
             .fillMaxWidth()
             .clip(shape)
             .background(colors.s1, shape)
-            .border(2.dp, colors.ln, shape)
+            .border(2.dp, if (selected) colors.prt else Color.Transparent, shape)
             .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
             .testTag(tag)
     ) {
         if (image != null) {
+            val painter = painterResource(image)
+            val gain = photoGainFor(image)
             Image(
-                painter = painterResource(image),
+                painter = painter,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().weight(1f).testTag("$tag:image")
+                colorFilter = b1DuotoneFilter(ParcheUPalette.Ink, highlight, gain),
+                modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .photoVeil(
+                        image = image,
+                        intrinsic = painter.intrinsicSize,
+                        color = b1DuotoneColor(ParcheUPalette.Ink, highlight, gain, SCREEN_LUMA)
+                    )
+                    .testTag("$tag:image")
             )
         } else {
             Spacer(Modifier.weight(1f))
         }
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = colors.prt)
-            Spacer(Modifier.height(6.dp))
+        Row(
+            Modifier.fillMaxWidth().padding(
+                start = 14.dp,
+                end = 14.dp,
+                top = 10.dp,
+                bottom = 12.dp
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                letter,
+                style = ParcheUTheme.textStyles.hero46.copy(
+                    fontSize = 22.sp,
+                    lineHeight = 26.sp,
+                    letterSpacing = 0.sp
+                ),
+                color = colors.prt,
+                modifier = Modifier.widthIn(min = 18.dp).semantics { contentDescription = label }
+            )
             Text(text, style = MaterialTheme.typography.titleMedium, color = colors.tx)
         }
     }
