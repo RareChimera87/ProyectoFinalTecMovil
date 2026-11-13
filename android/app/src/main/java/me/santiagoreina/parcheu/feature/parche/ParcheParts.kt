@@ -56,6 +56,7 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
+import me.santiagoreina.parcheu.designsystem.components.compound.displayInitials
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
 import me.santiagoreina.parcheu.designsystem.theme.avatarColors
@@ -124,7 +125,7 @@ fun NodeAvatar(node: NodeDto, size: Dp, modifier: Modifier = Modifier) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = node.initials,
+                text = displayInitials(node.initials, node.label),
                 style =
                 MaterialTheme.typography.titleLarge.copy(
                     fontSize = (size.value * 0.37f).sp,

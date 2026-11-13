@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Recursos que el reductor de recursos de R8 no puede ver como usados porque se leen por nombre
+    (Resources.getIdentifier) y no con R.string. Sin esta lista el release minificado los elimina.
+
+    - default_web_client_id: FirebaseAuthRepository.webClientId() lo busca por nombre (lo genera
+      google-services solo si el proveedor Google está activo). Sin él, A4 muestra "todavía no está
+      disponible en esta versión" y no se puede iniciar sesión (fix/crash-r8-release, 0.2.1).
+    - google_app_id, gcm_defaultSenderId, google_api_key, google_crash_reporting_api_key,
+      google_storage_bucket, project_id: los genera google-services y Firebase (FirebaseOptions.fromResource)
+      los lee por nombre. Las bibliotecas ya protegen casi todos; se repiten aquí por seguridad.
+    - com_google_firebase_crashlytics_* y com_crashlytics_android_build_id: Crashlytics los lee por nombre.
+    - fcm_fallback_notification_channel_label: FCM lo busca con getIdentifier para nombrar el canal de
+      respaldo (sin él usa "Misc"; R8 lo quitaba en 0.2.1).
+    - android.credentials.TYPE_PASSWORD_CREDENTIAL y androidx.credentials.TYPE_PUBLIC_KEY_CREDENTIAL (en
+      tools:keep, con los puntos como "_"):
+      cadenas de Credential Manager que R8 quitaba; se conservan por prudencia (no cuestan nada).
+
+    Un nombre que no exista en una variante (p. ej. dev sin google-services.json) no rompe el build.
+    ResourceKeepTest exige que todo getIdentifier(..., "string", ...) del código figure aquí.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/default_web_client_id,@string/google_app_id,@string/gcm_defaultSenderId,@string/google_api_key,@string/google_crash_reporting_api_key,@string/google_storage_bucket,@string/project_id,@string/com_google_firebase_crashlytics_*,@string/com_crashlytics_android_build_id,@string/fcm_fallback_notification_channel_label,@string/android_credentials_TYPE_PASSWORD_CREDENTIAL,@string/androidx_credentials_TYPE_PUBLIC_KEY_CREDENTIAL" />

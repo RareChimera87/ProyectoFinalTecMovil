@@ -27,7 +27,11 @@ fun urlProperty(name: String, default: String): String = providers.gradlePropert
     .orElse(localProperties.map { it.getProperty(name) ?: "" }.map { it.ifBlank { default } })
     .getOrElse(default)
 
-// URL de relleno de la API de prod (la de Cloud Run lleva el número de proyecto). Un AAB que la lleve no debe llegar a Play.
+// URL real de la API de prod: el servicio `api` de Cloud Run de parcheu-prod (la misma que la variable de GitHub
+// PARCHEU_API_URL_PROD y docs/pendientes-humanos.md). Es el valor por defecto desde 0.2.2: antes era un relleno que daba
+// 404 y un APK construido sin -Pparcheu.apiUrl.prod no podía hablar con el backend.
+val prodApiDefecto = "https://api-n3yxvjziqq-uc.a.run.app/"
+// URL de relleno antigua (sin número de proyecto, no existe): verificarUrlsProd la sigue rechazando si alguien la pasa.
 val prodApiRelleno = "https://api-parcheu-prod.us-central1.run.app/"
 // Hosting de prod: el sitio por defecto de parcheu-prod. NO es de relleno: es la URL real si el proyecto no lleva sufijo,
 // así que verificarUrlsProd no la rechaza (antes la rechazaba y PARCHEU_HOSTING_URL_PROD=https://parcheu-prod.web.app,
@@ -50,6 +54,11 @@ require(releaseVersionCode in 1..2_100_000_000) {
     "parcheu.versionCode=$releaseVersionCode fuera del rango que acepta Play (1..2100000000)"
 }
 
+// R8 en release (fix/crash-r8-release). Solo para depurar o demos: -Pparcheu.release.minify=false construye el
+// release firmado sin minificar. Por defecto true; no lo usan android-ci ni android-release.
+val releaseMinify =
+    providers.gradleProperty("parcheu.release.minify").map(String::toBoolean).getOrElse(true)
+
 // Llave de subida (E10.2). Nunca en el repo: el keystore y sus contraseñas llegan por variables de
 // entorno (secretos UPLOAD_* en CI; en local, ~/.parcheu/upload-key.env más UPLOAD_KEYSTORE_FILE).
 // Sin ellas el release se firma con la llave de debug para probar R8 en local, salvo que se pida
@@ -68,6 +77,11 @@ if (requireUploadKey && !hasUploadKey) {
     throw GradleException(
         "parcheu.release.requireUploadKey=true pero falta la llave de subida: define " +
             "UPLOAD_KEYSTORE_FILE, UPLOAD_KEYSTORE_PASSWORD, UPLOAD_KEY_ALIAS y UPLOAD_KEY_PASSWORD."
+    )
+}
+if (requireUploadKey && !releaseMinify) {
+    throw GradleException(
+        "parcheu.release.minify=false es solo para depurar o demos: el pipeline de Play no lo admite."
     )
 }
 if (hasUploadKey && !file(uploadKeystoreFile!!).isFile) {
@@ -131,11 +145,9 @@ android {
         }
         create("prod") {
             dimension = "env"
-            // Pendiente humano (docs/pendientes-humanos.md, E0.7): cuando exista parcheu-prod y su servicio api,
-            // pasar la URL real con -Pparcheu.apiUrl.prod (el pipeline la lee de la variable PARCHEU_API_URL_PROD).
-            // La URL de la API de abajo es de relleno: verificarUrlsProd hace fallar el assemble/bundle de prodRelease
-            // firmado con la llave de subida si se queda así. La de Hosting es el sitio por defecto de parcheu-prod.
-            val api = urlProperty("parcheu.apiUrl.prod", prodApiRelleno)
+            // Por defecto, la URL real de la API de parcheu-prod; -Pparcheu.apiUrl.prod la cambia (el pipeline la lee
+            // de la variable PARCHEU_API_URL_PROD). La de Hosting es el sitio por defecto de parcheu-prod.
+            val api = urlProperty("parcheu.apiUrl.prod", prodApiDefecto)
             val hosting = hostingUrlProperty("parcheu.hostingUrl.prod", prodHostingDefecto)
             buildConfigField("String", "API_URL", "\"$api\"")
             buildConfigField("String", "HOSTING_URL", "\"$hosting\"")
@@ -154,8 +166,14 @@ android {
     buildTypes {
         release {
             optimization {
-                enable = true
+                // R8 (minificación y ofuscación). -Pparcheu.release.minify=false lo apaga SOLO para depurar o
+                // para una demo de emergencia (APK firmado sin minificar); por defecto true, y CI y
+                // android-release nunca lo pasan.
+                enable = releaseMinify
             }
+            // Reglas propias de R8 (argumentos de ruta, contrato, kotlinx.serialization, Retrofit). Se suman a
+            // proguard-android-optimize.txt (que agrega optimization) y a las reglas de consumidor.
+            proguardFiles("proguard-rules.pro")
             // Con la llave de subida en el entorno (pipeline android-release) se firma con ella; si no,
             // con la de debug para instalar y probar R8 en local. Un AAB firmado con debug nunca va a Play:
             // el pipeline exige la llave (requireUploadKey) y verifica la huella del certificado.
@@ -264,17 +282,25 @@ androidComponents {
     }
 }
 
+// RouteKeepRulesTest y ResourceKeepTest leen las reglas de R8, res/raw/keep.xml y este script: son entradas de las
+// pruebas JVM, para que Gradle no las dé por al día (ni las saque de caché) cuando solo cambian esos archivos.
+tasks.withType<Test>().configureEach {
+    inputs.file("proguard-rules.pro").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file("src/main/res/raw/keep.xml").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file("build.gradle.kts").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 roborazzi {
     // Las capturas de referencia se versionan junto a las pruebas.
     outputDir.set(file("src/test/screenshots"))
 }
 
 // A-M1: el AAB de prod que puede llegar a Play (firmado con la llave de subida) no puede salir con la URL de API de
-// relleno. Se exige cuando el pipeline pide la llave (-Pparcheu.release.requireUploadKey=true, solo android-release)
-// o cuando hay llave de subida en el entorno (un AAB firmado a mano). android-ci construye bundleProdRelease sin
-// llave y con relleno para probar R8 y Crashlytics; ese AAB va firmado con la de debug y Play lo rechaza.
+// relleno antigua, sin https o sin '/' final. Se exige cuando el pipeline pide la llave
+// (-Pparcheu.release.requireUploadKey=true, solo android-release) o cuando hay llave de subida en el entorno (un AAB
+// firmado a mano). android-ci construye bundleProdRelease sin llave (firmado con la de debug, que Play rechaza).
 // workflows.test.py (AndroidReleaseUrlsProd) mantiene coherentes esta regla, android-ci.yml y android-release.yml.
-val prodApiUrl = urlProperty("parcheu.apiUrl.prod", prodApiRelleno)
+val prodApiUrl = urlProperty("parcheu.apiUrl.prod", prodApiDefecto)
 val prodHostingUrl = hostingUrlProperty("parcheu.hostingUrl.prod", prodHostingDefecto)
 val exigirUrlsProd = requireUploadKey || hasUploadKey
 val verificarUrlsProd = tasks.register("verificarUrlsProd") {

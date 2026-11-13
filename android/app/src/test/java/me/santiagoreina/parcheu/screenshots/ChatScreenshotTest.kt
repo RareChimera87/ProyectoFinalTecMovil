@@ -1,7 +1,12 @@
 package me.santiagoreina.parcheu.screenshots
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -16,6 +21,7 @@ import me.santiagoreina.parcheu.core.ui.UiState
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.chat.ChatActions
 import me.santiagoreina.parcheu.feature.chat.ChatHeader
+import me.santiagoreina.parcheu.feature.chat.ChatInputBar
 import me.santiagoreina.parcheu.feature.chat.ChatMessageUi
 import me.santiagoreina.parcheu.feature.chat.ChatScreen
 import me.santiagoreina.parcheu.feature.chat.ChatUiState
@@ -136,7 +142,8 @@ class ChatScreenshotTest(private val dark: Boolean) {
         ChatScreen(
             ChatUiState(
                 loading = false,
-                header = header.copy(name = "Valentina (demo)", initials = "V", isDemo = true),
+                // El servidor manda "V(" para "Valentina (demo)"; el avatar debe mostrar solo "V".
+                header = header.copy(name = "Valentina (demo)", initials = "V(", isDemo = true),
                 messages =
                 listOf(
                     ChatMessageUi("1", "Hola, ¿qué tal el parcial?", mine = true, createdAt = at)
@@ -164,6 +171,34 @@ class ChatScreenshotTest(private val dark: Boolean) {
     @Test
     fun chatListEmpty() = capture("chat_list_empty") {
         ChatListScreen(UiState.Empty, onOpenChat = {}, onRetry = {})
+    }
+
+    /** Barra de envío con texto (botón habilitado, violeta pleno) y vacía (deshabilitado, s2 con borde). */
+    @Test
+    fun inputEnabled() = captureNode("f9_input_enabled") {
+        ChatInputBar("¿Estudiamos mañana?", {
+        }, {}, canSend = true, enabled = true, placeholder = "Escribe un mensaje")
+    }
+
+    @Test
+    fun inputDisabled() = captureNode("f9_input_disabled") {
+        ChatInputBar("", {
+        }, {}, canSend = false, enabled = true, placeholder = "Escribe un mensaje")
+    }
+
+    private fun captureNode(name: String, content: @Composable () -> Unit) {
+        composeRule.setContent {
+            ParcheUTheme(darkTheme = dark) {
+                Box(Modifier.background(ParcheUTheme.colors.bg).testTag("input")) { content() }
+            }
+        }
+        composeRule.onNodeWithTag("input").captureRoboImage(
+            filePath = "src/test/screenshots/chat/${name}_$theme.png",
+            roborazziOptions =
+            RoborazziOptions(
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+            )
+        )
     }
 
     companion object {
