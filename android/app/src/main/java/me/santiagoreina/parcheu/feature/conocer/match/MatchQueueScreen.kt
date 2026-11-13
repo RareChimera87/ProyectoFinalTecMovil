@@ -41,6 +41,7 @@ object MatchQueueTags {
     const val SEARCHING = "match_queue_searching"
     const val CANCEL = "match_queue_cancel"
     const val RETRY = "match_queue_retry"
+    const val TODAY_COUNT = "match_queue_today_count"
 }
 
 /** F1 · Match al azar, en la fila (13a). El match diario agotado abre la G2 de E7.3 desde la ruta. */
@@ -131,17 +132,21 @@ private fun QueueBody(
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(24.dp))
-            ParcheUCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    MatchStrings.TODAY,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.tx
-                )
-                Text(
-                    MatchStrings.TODAY_COUNT,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = colors.prt
-                )
+            // Cupo real del día (`GET /v1/home`); sin dato (cargando o con error) se omite la tarjeta.
+            state.dailyQuota?.let { quota ->
+                ParcheUCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        MatchStrings.TODAY,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.tx
+                    )
+                    Text(
+                        MatchStrings.todayCount(quota),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.prt,
+                        modifier = Modifier.testTag(MatchQueueTags.TODAY_COUNT)
+                    )
+                }
             }
         }
         Column(

@@ -9,6 +9,7 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.TicketDto
 import me.santiagoreina.parcheu.contract.TicketStatus
+import me.santiagoreina.parcheu.contract.Usage
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
@@ -330,5 +331,34 @@ class MatchQueueViewModelTest {
             assertEquals(MatchQueueEffect.OpenMatch("m5"), awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    private val resetsAt = Instant.fromEpochSeconds(0)
+
+    @Test
+    fun loadsTheRealDailyQuotaWithoutBlockingTheSearch() {
+        val quota = Usage(used = 1, limit = 3, resetsAt = resetsAt)
+        val vm = MatchQueueViewModel(Mode.AMISTAD, repository, loadDailyQuota = { quota })
+
+        assertEquals(quota, vm.state.value.dailyQuota)
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
+    }
+
+    @Test
+    fun withoutQuotaDataTheStateKeepsNull() {
+        val vm = MatchQueueViewModel(Mode.AMISTAD, repository, loadDailyQuota = { null })
+
+        assertNull(vm.state.value.dailyQuota)
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
+    }
+
+    @Test
+    fun todayCountFollowsTheRealLimit() {
+        assertEquals("1 de 1", MatchStrings.todayCount(Usage(0, 1, resetsAt)))
+        assertEquals("2 de 3", MatchStrings.todayCount(Usage(1, 3, resetsAt)))
+        assertEquals(
+            MatchStrings.TODAY_UNLIMITED,
+            MatchStrings.todayCount(Usage(4, null, resetsAt))
+        )
     }
 }
