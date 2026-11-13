@@ -28,49 +28,23 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.designsystem.brand.ParcheUAppIcon
-import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.SoraFontFamily
 
 /*
- * Arte de A1-A4 dibujado con los tokens. Wordmark, AppIcon y la mascota del gemelo tendrán su versión
- * oficial en :designsystem con E1.2 y E1.5; cuando se mezclen, estas versiones locales se reemplazan.
+ * Arte de A1-A4 dibujado con los tokens. El logo (`ParcheULogo`), el ícono y la mascota ("La P que mira",
+ * `TwinMascotGlyph`) vienen de :designsystem; aquí quedan el ícono de A1, los avatares, el indicador y los
+ * puntos de carga.
  */
-
-/** Wordmark "ParcheU": Sora 700, la U en naranja. */
-@Composable
-internal fun OnboardingWordmark(size: Dp, modifier: Modifier = Modifier) {
-    val text =
-        buildAnnotatedString {
-            withStyle(SpanStyle(color = ParcheUTheme.colors.wordmark)) { append("Parche") }
-            withStyle(SpanStyle(color = ParcheUPalette.Orange)) { append("U") }
-        }
-    Text(
-        text = text,
-        modifier = modifier.semantics { contentDescription = "ParcheU" },
-        style =
-        TextStyle(
-            fontFamily = SoraFontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = size.value.sp,
-            lineHeight = size.value.sp,
-            letterSpacing = (-size.value * 0.03f).sp
-        )
-    )
-}
 
 /** Ícono de la app: el `ParcheUAppIcon` de :designsystem ("La P que mira" blanca sobre violeta). */
 @Composable
@@ -78,22 +52,22 @@ internal fun OnboardingAppIcon(size: Dp, modifier: Modifier = Modifier) {
     ParcheUAppIcon(size = size, modifier = modifier)
 }
 
-/** Mascota del gemelo: "La P que mira" (`TwinMascotGlyph`) del [color] dado, alto = 1,125 x ancho. */
+/** Avatar con iniciales: violeta con blanco por defecto (sobre el héroe violeta se invierte). */
 @Composable
-internal fun OnboardingMascot(width: Dp, color: Color, modifier: Modifier = Modifier) {
-    TwinMascotGlyph(width = width, color = color, modifier = modifier)
-}
-
-/** Avatar con iniciales sobre violeta. */
-@Composable
-internal fun InitialsAvatar(initials: String, size: Dp, modifier: Modifier = Modifier) {
+internal fun InitialsAvatar(
+    initials: String,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    background: Color = ParcheUPalette.Violet,
+    content: Color = Color.White
+) {
     Box(
-        modifier = modifier.size(size).background(ParcheUPalette.Violet, CircleShape),
+        modifier = modifier.size(size).background(background, CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = initials,
-            color = Color.White,
+            color = content,
             style = TextStyle(
                 fontFamily = SoraFontFamily,
                 fontWeight = FontWeight.SemiBold,
