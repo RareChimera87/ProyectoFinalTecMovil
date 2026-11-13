@@ -22,22 +22,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.IntroductionStatus
 import me.santiagoreina.parcheu.contract.ReportDto
-import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
-import me.santiagoreina.parcheu.designsystem.components.compound.LoadingDots
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlockDefaults
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
-import me.santiagoreina.parcheu.feature.results.AffinityRing
 import me.santiagoreina.parcheu.feature.results.CardOverline
 import me.santiagoreina.parcheu.feature.results.LockedReport
 import me.santiagoreina.parcheu.feature.results.ReportRow
 import me.santiagoreina.parcheu.feature.results.ResultsIcons
 import me.santiagoreina.parcheu.feature.results.rememberResultsIcon
-import me.santiagoreina.parcheu.feature.simulation.SimulationMascot
 import me.santiagoreina.parcheu.feature.simulation.forMode
 import me.santiagoreina.parcheu.feature.simulation.label
 
@@ -129,45 +128,34 @@ private fun Loaded(content: IntroResultContent, actions: IntroResultActions) {
     }
 }
 
+/**
+ * E2 en Parche Vivo: héroe del color del modo con la afinidad como número gigante (Sora 800 56) y las
+ * dos P frente a frente (la de la derecha con `mirrored`). Mientras simulan, el titular dice que
+ * conversan y las P hablan; si falló, las P quedan apagadas.
+ */
 @Composable
 private fun PairHeader(content: IntroResultContent) {
     val colors = ParcheUTheme.colors
     val mode = colors.forMode(content.introduction.mode)
     val (first, second) = content.names
     val score = content.introduction.report?.score
-    Column(
-        Modifier.fillMaxWidth().padding(top = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    val failed = content.status == IntroductionStatus.FAILED
+    HeroBlock(
+        title = score?.let { "$it %" } ?: if (failed) "Sin resultado" else "Conversando…",
+        titleSuffix = score?.let { "afines" },
+        titleSize = if (score != null) HeroTitleSize.Number else HeroTitleSize.Headline,
+        overline = "${content.introduction.mode.label()} · $first y $second",
+        colors = HeroBlockDefaults.modeColors(mode),
+        modifier = Modifier.padding(top = 8.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            val failed = content.status == IntroductionStatus.FAILED
-            SimulationMascot(mode.solid, 64.dp, error = failed)
-            if (score != null) AffinityRing(score, size = 112.dp) else LoadingDots(animated = false)
-            SimulationMascot(mode.solid, 64.dp, error = failed)
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            NameLabel(first)
-            NameLabel(second)
-        }
-        ModeChip(label = content.introduction.mode.label(), mode = mode)
+        FacingMascots(
+            first = first,
+            second = second,
+            mode = mode,
+            dimmed = failed,
+            talking = content.status == IntroductionStatus.SIMULATING
+        )
     }
-}
-
-@Composable
-private fun NameLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelLarge.copy(
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
-        ),
-        color = ParcheUTheme.colors.tx,
-        maxLines = 1
-    )
 }
 
 @Composable
