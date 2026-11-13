@@ -163,6 +163,13 @@ enum class ParcheIcon(private val build: ImageVector.Builder.() -> Unit) {
             moveTo(4f, 21f)
             curveTo(4f, 14.5f, 20f, 14.5f, 20f, 21f)
         }
+    }),
+    ChevronRight({
+        line {
+            moveTo(9f, 5f)
+            lineTo(16f, 12f)
+            lineTo(9f, 19f)
+        }
     });
 
     internal fun vector(): ImageVector =
