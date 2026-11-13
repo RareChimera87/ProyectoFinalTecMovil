@@ -30,6 +30,7 @@ private const val MAX_LIFETIME_MS = 600_000L
  * prestar la conexión siguen evitando que una petición reciba una conexión muerta.
  */
 private const val KEEPALIVE_TIME_MS = 120_000L
+private const val CONNECTION_TIMEOUT_MS = 10_000L
 
 /**
  * Pool Hikari hacia Postgres. En Cloud Run usa el conector de Cloud SQL (autenticación IAM, sin
@@ -53,6 +54,7 @@ fun createDataSource(config: DbConfig, maxPoolSize: Int = config.maxPoolSize, fa
         idleTimeout = IDLE_TIMEOUT_MS
         maxLifetime = MAX_LIFETIME_MS
         keepaliveTime = KEEPALIVE_TIME_MS
+        connectionTimeout = CONNECTION_TIMEOUT_MS
         // El servicio no debe caerse al arrancar si Cloud SQL tarda: Hikari reintenta al pedir la conexión.
         if (!failFast) initializationFailTimeout = -1
         if (config.cloudSqlInstance != null) {

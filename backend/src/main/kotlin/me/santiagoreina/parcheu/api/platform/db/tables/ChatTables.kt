@@ -45,5 +45,7 @@ object ChatMessages : Table("chat_messages") {
     val moderatedAt = timestampWithTimeZone("moderated_at").nullable()
     /** El aviso de ayuda ante autolesión falló y sigue pendiente (`moderate-help`). */
     val moderationHelpPending = bool("moderation_help_pending").default(false)
+    /** Cuántas veces el barrido reencoló este mensaje sin que terminara; al llegar al tope se da por moderado. */
+    val moderationSweeps = integer("moderation_sweeps").default(0)
     override val primaryKey = PrimaryKey(id)
 }

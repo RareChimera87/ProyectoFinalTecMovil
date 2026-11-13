@@ -375,7 +375,10 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
 2. La cola en proceso **pierde lo que tenía en memoria**. Se recuperan solas: las simulaciones `QUEUED` o `RUNNING` de entre
    10 min y 24 h (`simulation-recovery`, cada 15 min), las purgas de cuentas (`purge-sweep`, cada hora) y la moderación
    (`moderation-sweep`, cada 15 min: reencola `moderate` de los mensajes sin moderar de entre 10 min y 24 h, hasta 100 por corrida, y
-   los `moderate-help` de ayuda ante `SELF_HARM` que quedaron sin entregar; con `MODERATION_ENABLED=false` no hace nada). Las tareas de
+   los `moderate-help` de ayuda ante `SELF_HARM` que quedaron sin entregar; un mismo mensaje se reencola como mucho 3 veces
+   (`chat_messages.moderation_sweeps`): después se da por moderado y se registra `moderation_sweep_gave_up` en WARN, para que un fallo persistente
+   no gaste IA en cada barrido; `moderation_swept` cuenta solo lo encolado de verdad. Con `MODERATION_ENABLED=false` el barrido no hace nada y cada
+   mensaje nuevo se guarda ya marcado como moderado, así que al volver a encenderla no se revisan los escritos con la moderación apagada). Las tareas de
    gemelo y memorias se rehacen al siguiente uso o a las 02:00 de Bogotá (`memories`). Un mensaje con más de 24 h sin moderar ya no se
    recupera; tras un corte largo revisa en `admin.html` los reportes de prioridad 2 recientes.
 3. Si ves el mismo id de simulación repetido en los registros una y otra vez, hay una simulación que mata el proceso: míralo

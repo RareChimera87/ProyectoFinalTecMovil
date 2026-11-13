@@ -168,8 +168,9 @@ class CommunityServiceTest : FunSpec({
         // name-community falla de forma persistente (cuota o error del LLM): la comunidad sigue PENDING_NAME.
         val enqueued = mutableListOf<String>()
         val queue = object : TaskQueue {
-            override suspend fun enqueue(task: TaskRequest) {
+            override suspend fun enqueue(task: TaskRequest): Boolean {
                 enqueued += task.name
+                return true
             }
         }
         val service = CommunityService(f.repo, queue, CommunityNamer(testGateway(f.llm)), clock)
@@ -210,7 +211,7 @@ class CommunityServiceTest : FunSpec({
         f.service.runWeekly()
         val enqueued = mutableListOf<String>()
         val counting = object : TaskQueue {
-            override suspend fun enqueue(task: TaskRequest) { enqueued += task.name }
+            override suspend fun enqueue(task: TaskRequest): Boolean { enqueued += task.name; return true }
         }
         val service = CommunityService(f.repo, counting, CommunityNamer(testGateway(f.llm)), clock)
         service.runWeekly()

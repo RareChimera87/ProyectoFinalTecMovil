@@ -48,7 +48,7 @@ class InProcessTaskQueue(
         handlers[path] = handler
     }
 
-    override suspend fun enqueue(task: TaskRequest) {
+    override suspend fun enqueue(task: TaskRequest): Boolean {
         val handler = handlers[task.path] ?: error("Sin handler registrado para la tarea ${task.path}")
         val now = clock.instant()
         val key = "${task.queue}/${task.name}"
@@ -56,11 +56,12 @@ class InProcessTaskQueue(
         seen.entries.removeIf { Duration.between(it.value, now) >= dedupTtl }
         if (seen.putIfAbsent(key, now) != null) {
             log.info("Tarea {} ya encolada en {}: no se duplica", task.name, task.queue)
-            return
+            return false
         }
         scope.launch {
             permits.getValue(task.queue).withPermit { run(task, handler) }
         }
+        return true
     }
 
     private suspend fun run(task: TaskRequest, handler: suspend (String) -> Unit) {

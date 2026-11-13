@@ -131,6 +131,7 @@ class ModerationServiceTest : FunSpec({
         sampleEvery: Int = ModerationService.DEFAULT_SAMPLE_EVERY,
         withinSpend: suspend (UUID) -> Boolean = { true },
         withinSampledCap: (UUID) -> Boolean = { true },
+        enabled: Boolean = true,
     ) {
         val identityRepo = InMemoryIdentityRepository().apply { listOf("ana", "beto").forEach { seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
         val ana = identityRepo.user("ana")
@@ -157,7 +158,7 @@ class ModerationServiceTest : FunSpec({
         val flakyNotifier = FlakyNotifier(notifier)
         val moderation = ModerationService(
             MessageModerator(testGateway(llm, aiUsage)), chatRepo, chat.service, flakySafety, queue, FIXED_CLOCK, flakyNotifier,
-            withinDailyCap, sampleEvery, withinSpend, withinSampledCap,
+            withinDailyCap, sampleEvery, withinSpend, withinSampledCap, enabled,
         ).also { it.attachTo(chat) }
         val room = runBlocking { chat.service.createDirect(ana.id, beto.id, Mode.AMISTAD) }
 
@@ -552,6 +553,60 @@ class ModerationServiceTest : FunSpec({
         q.tasks.shouldBeEmpty()
     }
 
+    test("moderation-sweep: con la moderación apagada el mensaje se guarda marcado y al encenderla el barrido no lo encola") {
+        val f = Fixture(enabled = false)
+        f.send("escrito con la moderación apagada")
+        f.queue.tasks.shouldBeEmpty()
+        f.llm.calls shouldBe 0
+        val q = FakeTaskQueue()
+        runBlocking { f.sweeper(thirtyMinutes, q, enabled = true).sweep() } shouldBe 0
+        q.tasks.shouldBeEmpty()
+        f.llm.calls shouldBe 0
+    }
+
+    test("moderation-sweep: tras 3 reencolados el mensaje se abandona, se marca moderado y no se vuelve a tocar") {
+        val f = Fixture()
+        val id = f.send("hola")
+        // Nadie ejecuta la tarea (fallo persistente tras el LLM): cada barrido lo ve de nuevo sin moderar.
+        repeat(ModerationService.SWEEP_MAX_REQUEUES) {
+            val q = FakeTaskQueue()
+            runBlocking { f.sweeper(thirtyMinutes, q).sweep() } shouldBe 1
+            q.tasks.single().name shouldBe "moderate-$id"
+        }
+        val last = FakeTaskQueue()
+        runBlocking { f.sweeper(thirtyMinutes, last).sweep() } shouldBe 0
+        last.tasks.shouldBeEmpty()
+        runBlocking { f.chatRepo.unmoderated(FIXED_CLOCK.instant().plus(thirtyMinutes), FIXED_CLOCK.instant().minus(java.time.Duration.ofHours(1)), 10) }.shouldBeEmpty()
+        f.llm.calls shouldBe 0
+    }
+
+    test("moderation-sweep: las tareas que la cola deduplicó no cuentan como encoladas") {
+        val f = Fixture()
+        f.send("hola")
+        val q = FakeTaskQueue()
+        runBlocking { f.sweeper(thirtyMinutes, q).sweep() } shouldBe 1
+        runBlocking { f.sweeper(thirtyMinutes, q).sweep() } shouldBe 0
+        q.tasks shouldHaveSize 1
+    }
+
+    test("moderate-help: si el autor ya no existe limpia el marcador y no avisa a nadie, así el barrido no reencola en vano") {
+        val f = Fixture()
+        val id = f.send("hola")
+        runBlocking { f.chatRepo.setHelpPending(id, true) }
+        val purged = object : ChatRepository by f.chatRepo {
+            override suspend fun message(messageId: UUID): MessageRecord? = f.chatRepo.message(messageId)?.copy(senderId = null)
+        }
+        val service = ModerationService(
+            MessageModerator(testGateway(f.llm, f.aiUsage)), purged, f.chat.service, f.flakySafety, FakeTaskQueue(),
+            java.time.Clock.offset(FIXED_CLOCK, thirtyMinutes), f.flakyNotifier,
+        )
+        val window = FIXED_CLOCK.instant().plus(thirtyMinutes) to FIXED_CLOCK.instant().minus(java.time.Duration.ofHours(1))
+        runBlocking { f.chatRepo.helpPending(window.first, window.second, 10) } shouldBe listOf(id)
+        runBlocking { service.deliverHelp(id) }
+        f.notifier.sent.shouldBeEmpty()
+        runBlocking { f.chatRepo.helpPending(window.first, window.second, 10) }.shouldBeEmpty()
+    }
+
     test("moderation-sweep: sin sub-techo de gasto del autor no encola, lo da por no moderado y no lo vuelve a intentar") {
         val f = Fixture()
         f.send("hola")
@@ -576,7 +631,7 @@ class ModerationServiceTest : FunSpec({
         f.flakyNotifier.failOnce = true
         val q = FakeTaskQueue()
         val sweeper = f.sweeper(thirtyMinutes, q)
-        runBlocking { sweeper.moderate(id) } shouldBe ModerationOutcome.ACTED
+        runBlocking { f.moderation.moderate(id) } shouldBe ModerationOutcome.ACTED
         // Se pierde la tarea moderate-help (reinicio de la cola en proceso): la cola del barrido es otra, vacía.
         runBlocking { sweeper.sweep() } shouldBe 1
         q.tasks.single().apply {

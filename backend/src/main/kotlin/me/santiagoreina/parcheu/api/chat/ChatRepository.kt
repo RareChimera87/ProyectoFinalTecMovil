@@ -41,6 +41,9 @@ interface ChatRepository {
     /** Fija si el aviso de ayuda ante autolesión de [messageId] sigue pendiente de entregar. */
     suspend fun setHelpPending(messageId: UUID, pending: Boolean)
 
+    /** Suma uno al contador de reencolados del barrido de [messageId] y devuelve el valor nuevo (0 si no existe). */
+    suspend fun bumpModerationSweeps(messageId: UUID): Int
+
     /** Ids de mensajes visibles, con autor y sin moderar, creados en (newerThan, olderThan]; los más viejos primero. */
     suspend fun unmoderated(olderThan: Instant, newerThan: Instant, limit: Int): List<UUID>
 

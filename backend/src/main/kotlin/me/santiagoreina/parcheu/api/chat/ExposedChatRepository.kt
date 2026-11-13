@@ -26,6 +26,7 @@ import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -124,6 +125,12 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
 
     override suspend fun setHelpPending(messageId: UUID, pending: Boolean) {
         tx { ChatMessages.update({ ChatMessages.id eq messageId }) { it[moderationHelpPending] = pending } }
+    }
+
+    override suspend fun bumpModerationSweeps(messageId: UUID): Int = tx {
+        ChatMessages.update({ ChatMessages.id eq messageId }) { it[ChatMessages.moderationSweeps] = ChatMessages.moderationSweeps + 1 }
+        ChatMessages.select(ChatMessages.moderationSweeps).where { ChatMessages.id eq messageId }.singleOrNull()
+            ?.get(ChatMessages.moderationSweeps) ?: 0
     }
 
     override suspend fun unmoderated(olderThan: Instant, newerThan: Instant, limit: Int): List<UUID> = tx {

@@ -84,6 +84,12 @@ class InMemoryChatRepository : ChatRepository {
         synchronized(lock) { if (pending) helpPendingIds.add(messageId) else helpPendingIds.remove(messageId) }
     }
 
+    private val sweeps = mutableMapOf<UUID, Int>()
+
+    override suspend fun bumpModerationSweeps(messageId: UUID): Int = synchronized(lock) {
+        if (messages.none { it.id == messageId }) 0 else (sweeps[messageId] ?: 0).plus(1).also { sweeps[messageId] = it }
+    }
+
     override suspend fun unmoderated(olderThan: Instant, newerThan: Instant, limit: Int): List<UUID> = synchronized(lock) {
         messages.filter {
             it.id !in moderated && it.senderId != null && !it.hidden && it.createdAt <= olderThan && it.createdAt > newerThan

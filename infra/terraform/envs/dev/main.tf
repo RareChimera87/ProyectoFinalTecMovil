@@ -79,6 +79,9 @@ module "platform" {
 
   # db-f1-micro (max_connections 25, aprox.): 3 instancias × 4 + jobs 3 × 2 = 18 ≤ 20 (80 %). Con el valor por
   # defecto (10) eran 30 + jobs, por encima del límite. Cuenta completa en envs/prod/main.tf.
+  # Durante un despliegue coexisten dos revisiones y, con las dos en el máximo, el pico (26) puede pasar el límite (25).
+  # Se acepta en dev: el pool conecta de forma perezosa, casi nunca hay 3 instancias a la vez, Hikari espera 10 s por
+  # conexión y reintenta, y a lo sumo falla alguna petición pasajera; subir de tier solo por eso costaría más que el riesgo.
   db_max_pool_size = 4
 
   sql_tier            = "db-f1-micro"

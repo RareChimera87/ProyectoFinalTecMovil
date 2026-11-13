@@ -123,6 +123,9 @@ class ModerationDbTest : FunSpec({
             repo.unmoderated(older, newer, 0) shouldHaveSize 0
             repo.setHelpPending(ids.last(), true)
             repo.helpPending(older, newer, 10) shouldBe listOf(ids.last())
+            repo.bumpModerationSweeps(ids.first()) shouldBe 1
+            repo.bumpModerationSweeps(ids.first()) shouldBe 2
+            repo.bumpModerationSweeps(UUID.randomUUID()) shouldBe 0
             repo.setHelpPending(ids.last(), false)
             repo.helpPending(older, newer, 10) shouldHaveSize 0
         }

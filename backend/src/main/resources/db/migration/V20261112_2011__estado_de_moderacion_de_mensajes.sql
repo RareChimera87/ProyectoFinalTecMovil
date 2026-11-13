@@ -4,6 +4,8 @@
 -- `moderation_help_pending` = el aviso de ayuda ante SELF_HARM falló y falta entregarlo (`moderate-help`).
 alter table chat_messages add column moderated_at timestamptz;
 alter table chat_messages add column moderation_help_pending boolean not null default false;
+-- Reencolados del barrido por mensaje: tras SWEEP_MAX_REQUEUES se da por moderado (fail-open) para acotar el gasto de IA.
+alter table chat_messages add column moderation_sweeps integer not null default 0;
 
 -- Lo anterior a esta migración no se vuelve a moderar: se da por revisado para que el barrido no encole todo el historial.
 update chat_messages set moderated_at = created_at;
