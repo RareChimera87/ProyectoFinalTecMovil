@@ -56,7 +56,7 @@ Hacerlo 30 minutos antes. Cada punto tiene su responsable.
 > gemelos conversan primero y, si les va bien, las personas deciden si se conectan."
 
 Mostrar A2 (onboarding) y C1 (inicio). Decir una sola vez: Android con Kotlin y Compose, backend Ktor
-(destino Cloud Run en GCP; hoy corre en un homeserver con el mismo código), IA en Vertex. No entrar en detalles todavía.
+(producción en Cloud Run de GCP desde el 4 nov; el desarrollo corre en un homeserver con el mismo código), IA en Vertex. No entrar en detalles todavía.
 
 ### 1:00-2:30 · Arquitectura (I1)
 
@@ -66,7 +66,7 @@ Abrir [c4.md](c4.md). Tres ideas, en este orden:
    ([ADR-0003](adr/0003-postgres-fuente-de-verdad.md), [ADR-0004](adr/0004-firestore-canal-solo-lectura.md)).
 2. **Todo lo lento va a una cola** (la simulación son unas 25 llamadas al modelo)
    ([ADR-0019](adr/0019-cloud-tasks-trabajo-asincrono.md)).
-3. **El destino es Cloud Run y Cloud SQL, pero para el desarrollo corre en un homeserver** con la cola y el
+3. **Producción ya corre en Cloud Run y Cloud SQL (desde el 4 nov), pero para el desarrollo corre en un homeserver** con la cola y el
    programador dentro del proceso ([ADR-0033](adr/0033-backend-en-homeserver.md)): mismo código, menos costo fijo.
 
 ### 2:30-5:00 · Demo del flujo central (I2 conduce, I3 es la otra persona)
@@ -234,7 +234,7 @@ Decir esto antes de que lo pregunten. Actualizar esta tabla el día antes con el
 |---|---|
 | App y backend en dev | Funcionales de punta a punta en el flavor `dev` contra el homeserver |
 | Publicación en Play | Prioridad del usuario del 27 oct: la app funcional en `dev` va primero. Pipeline de release, ficha y Data safety están como código y documentos; la ejecución en Play Console (prueba cerrada, acceso a producción) depende de pasos humanos en [pendientes-humanos.md](pendientes-humanos.md) y [play-console.md](play-console.md). **Registrar aquí la fecha real antes de sustentar.** |
-| Prod en GCP | Terraform escrito y validado; `apply` de prod solo lo ejecuta el usuario y no se ha hecho por ahora |
+| Prod en GCP | Aplicado el 4 nov 2026: plataforma y bootstrap de prod, API v0.1.0 en Cloud Run y Hosting en parcheu-prod.web.app. El desarrollo sigue en el homeserver |
 | Compras | Verificación en servidor lista; en dev se prueba con `grant-plus` y sin RTDN |
 | Notificaciones push | Reales con `PARCHEU_ENV=dev`; no hay RTDN de renovaciones en el homeserver |
 | ADR-0029 (texto del ahorro del plan anual) | Propuesta, pendiente de confirmación del usuario |
