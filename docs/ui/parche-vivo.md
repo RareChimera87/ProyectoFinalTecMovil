@@ -2,7 +2,7 @@
 
 Dirección visual A, elegida el 13 nov 2026. La marca no cambia (violeta `#6D4AFF`, naranja `#FF8A3D`, Amistad `#2EC4A6`, Estudio `#3A86FF`, Pareja `#FF5C7A`). Lo que cambia es la jerarquía: **cada pantalla tiene un protagonista**, que puede ser un bloque de color grande, un número gigante o la mascota. La mascota nueva es **"La P que mira"**.
 
-La base ya está en la rama `rediseno/parche-vivo`: tokens, tema, mascota, logo, ícono y componentes. Inicio (C1/I1) es la pantalla de referencia ya rediseñada (`android/app/src/main/java/me/santiagoreina/parcheu/feature/home/HomeScreen.kt`). Esta guía es para quien rediseñe los demás grupos (tabla al final).
+Todo vive en la rama `rediseno/parche-vivo`: tokens, tema, mascota, logo, ícono, componentes y las pantallas de los cuatro grupos (G-A acceso y gemelo, G-B Inicio y Conocer, G-C Tu parche y social, G-D chats, perfil, ajustes y ParcheU+), ya integradas. Inicio (C1/I1, `feature/home/HomeScreen.kt`) fue la pantalla de referencia. Esta guía describe lo que existe hoy; la tabla del final dice dónde quedó cada pantalla y lo pendiente.
 
 ## Principios
 
@@ -73,17 +73,26 @@ fun TwinMascotGlyph(
     eyeColor: Color = ParcheUPalette.Ink,   // sobre un bloque de color, pasa el color del bloque
     mouth: MascotMouth = MascotMouth.Quiet, // Quiet | Talking
     simplified: Boolean = width <= MASCOT_SIMPLIFIED_MAX_WIDTH,
-    mirrored: Boolean = false               // la otra persona, mirando hacia ti
+    mirrored: Boolean = false,              // la otra persona, mirando hacia ti
+    lookingLeft: Boolean = false            // experimental: sin espejar, brillo a la izquierda (sin uso)
 )
 ```
 
-`SimulationMascot` (F4-F8, E2) y `OnboardingMascot` (A2-A4) de `:app` ya delegan en `TwinMascotGlyph`, así que esas pantallas muestran la P nueva sin otros cambios.
+`lookingLeft` es una alternativa en evaluación a `mirrored` (la P espejada se lee como una "q"): deja la P derecha y corre el brillo del ojo a la izquierda. Ninguna pantalla lo usa todavía.
+
+### Las dos P frente a frente (`feature/simulation/SimulationParts.kt`)
+
+- `SimulationMascot(color, width, error, mirrored, talking, animate, eyeColor)`: la P de una escena, con la boca y el balanceo al conversar (respeta "reducir animaciones") y gris al 50 % con `error`.
+- `FacingTwins(otherColor, width, speaker = TwinSpeaker.Nobody, gap = 20.dp, error, animate, myColor = primary, otherEyeColor = Ink)`: tu P en violeta a la izquierda y la del otro espejada, del color de su modo, a la derecha. Solo anima la que habla.
+- `TwinSpeaker { Me, Other, Nobody }`: quién habla en la escena.
+
+Se usan en F2 (incluido "vencido"), F4-F5, F6, F7/F8/I3 y la conversación de gemelos. Son decorativas: la pantalla describe la escena.
 
 ## Logo e ícono
 
 - `ParcheULogo(modifier, size: WordmarkSize = Medium, textColor = colors.wordmark, mascotColor = Violet)`: lockup con la P-mascota como P de "ParcheU", "arche" en Sora 700 y la U naranja. TalkBack lo lee como "ParcheU". Inicio ya lo usa en la barra.
 - `Wordmark(darkTheme, …)` sigue existiendo (texto, ahora en Sora). Úsalo solo donde la mascota sobre.
-- `ParcheUAppIcon(size, modifier, background = Violet, foreground = White)`: el ícono como composable. `OnboardingAppIcon` (A1) ya delega en él.
+- `ParcheUAppIcon(size, modifier, background = Violet, foreground = White)`: el ícono como composable. `OnboardingAppIcon` (A1, splash) delega en él y el centro del QR de C5 lo usa directo. El splash y el onboarding usan `ParcheULogo` (ya no hay `OnboardingMascot` ni `OnboardingWordmark`).
 - Launcher: `res/drawable/ic_launcher_foreground.xml` (P blanca con el ojo y la boca como huecos), `ic_launcher_monochrome.xml` (íconos temáticos), `ic_launcher_background.xml` (violeta, sin cambios) y los `mipmap-*/ic_launcher{,_round}.webp` heredados, regenerados desde la misma geometría. El splash del sistema (`ic_splash`) los compone. No cambiaron ni el `applicationId` ni el nombre.
 
 ## Componentes
@@ -179,6 +188,20 @@ fun DuotonePhoto(painter: Painter, mode: ModeColors, contentDescription: String?
 
 Las sombras quedan en tinta y las luces en el pleno del modo. Funciona con los WebP de `drawable-nodpi` (captura `android/app/src/test/screenshots/parchevivo/duotone_webp.png`). `Modifier.duotone` va después del `clip`.
 
+### PuGraphStyle (`designsystem/graph/PuGraph.kt`)
+
+`PuGraph(…, style = PuGraphStyle.Classic | ParcheVivo)`. Con `ParcheVivo`, "Tú" es La P que mira blanca sobre violeta (si cabe a 24 dp o más; si no, "Tú" en texto), los nodos se tiñen con el pleno de su modo (opacidad según afinidad) y los anillos llevan rótulo ("CERCANOS", "POR CONOCER"). No cambia el layout ni la semántica. Lo usan D1 (Tu parche), D6 (amigos de amigos), D9 (evolución, miniaturas) y el ejemplo de A4. El valor por defecto sigue en `Classic`.
+
+### Componentes de `:app` compartidos
+
+- **`StateIllustration(prop, modifier, error = false)`** (`core/ui/StateIllustrations.kt`): la P (gris y apagada con `error`) junto a un objeto de contexto `StateProp` (`Chat`, `Map`, `Cup`, `Notebook`). `AppError.stateProp()` elige el objeto de un error: mapa sin conexión, taza con el cupo de IA y cuaderno en el resto. Pásala como `illustration` de `EmptyState`/`ErrorState`; ya la usan los vacíos y errores de B0, B1, B2-B3, C2, C3, C4, C5, D6, D8, D9, F2, chats, bloqueados, G4 y ajustes de privacidad. Los estados con ilustración propia (F1 con el tono del modo, F2 vencido con las dos P, C2 vacío con la campana, D3/D5) la conservan.
+- **`DestructiveButton(text, onClick, modifier, enabled)`** (`core/ui/DestructiveButton.kt`): relleno `error` con `onError`, mismo alto y radio que `PrimaryButton`. Para lo que no se deshace (borrar la cuenta, bloquear).
+- **`ParchePlusHero(title, body, onUnlock, overline = "Con ParcheU+", actionLabel = "Ver ParcheU+", illustration = { PlusPeopleIllustration() })`** (`feature/parche/ParcheVivoParts.kt`): `HeroBlock` de una función de ParcheU+ bloqueada en gratis (D7, D8, D9), con la insignia sobre el héroe. No muestra datos reales.
+
+### Fotos de B1 (`feature/twinquestions/TwinQuestionPhotos.kt`)
+
+B1 no usa `Modifier.duotone` tal cual: las fotos nocturnas quedaban casi enteras en tinta. Antes del duotono, `b1DuotoneFilter` aplica un **filtro de exposición**: una ganancia por foto (`photoGainFor`, ≈ 0,36 / luminancia media, tope 3, medida sobre los WebP) y un levante del negro de 0,05 (`B1_PHOTO_LIFT`) para todas. **`Modifier.photoVeil(image, intrinsic, color)`** pinta un velo liso del color del duotono sobre una zona que no debe leerse (hoy, la marca de un festival en la pantalla del celular de `twin_q09_a`), sin tocar el archivo.
+
 ### Ajustes a componentes existentes
 
 - `ModeChip(…, style = ModeChipStyle.Solid | Tonal)`: el tonal usa `container`/`onContainer`. Úsalo dentro de una tarjeta con lomo.
@@ -186,6 +209,7 @@ Las sombras quedan en tinta y las luces en el pleno del modo. Funciona con los W
 - `ParcheUPlusBadge(…, onHero = true)` para ponerlo sobre el héroe.
 - `ParcheULinearProgress(…, color = …)`.
 - `ParcheUCard` sigue igual (radio 18). Úsala para lo que no es de un modo.
+- `StackedAvatars` centra las iniciales en la parte visible de cada círculo tapado y les pone un fondo opaco; `AvatarInitials` ganó `initialsEndInset` e `initialsSizeRatio` (por defecto, sin cambio).
 
 ## Qué NO hacer
 
@@ -204,42 +228,49 @@ Las referencias se versionan junto a las pruebas (`android/{app,designsystem}/sr
 
 ```bash
 export ANDROID_HOME=~/Android/Sdk
+mkdir -p android/app/src/dev
 cp ~/.parcheu/google-services.dev.json android/app/src/dev/google-services.json   # en .gitignore
 cd android
-# 1. Grabar en un solo lote (designsystem y app):
-./gradlew spotlessApply :designsystem:testDebugUnitTest :app:testDevDebugUnitTest -Proborazzi.test.record=true
+# 1. Formatear y grabar en un solo lote (designsystem y app):
+./gradlew spotlessApply
+./gradlew :designsystem:testDebugUnitTest :app:testDevDebugUnitTest -Proborazzi.test.record=true
 # 2. Mirar las PNG cambiadas (git status) en pares oscuro/claro antes de confirmar.
-# 3. Verificar como CI:
+# 3. Verificar como CI (android-ci.yml):
 ./gradlew spotlessCheck :app:lintDevDebug :app:testDevDebugUnitTest :app:verifyProdReleaseBillingPermission \
   :designsystem:lintDebug :designsystem:testDebugUnitTest -Proborazzi.test.verify=true
 ```
 
+`spotlessApply` va en su propia corrida: junto a las pruebas puede leer `build/intermediates` mientras se escriben y fallar sin motivo. Si una sola prueba de captura cambia de forma esperada, regrábala sola (`--tests`) y vuelve a correr la verificación completa.
+
 Para grabar una sola clase, agrega `--tests '*HomeScreenshotTest*'` a la tarea de pruebas del módulo. Las diferencias de una verificación fallida quedan en `android/*/build/outputs/roborazzi/`.
 
-## Pantalla → qué cambia
+## Pantallas: dónde quedó cada una
 
-Los códigos son los de `RouteCatalog.kt` y `docs/mockups-inventario.md`. Todas heredan ya los tokens (fondo lila en claro, radios, Sora 800 en titulares, chips en píldora). La tabla dice qué falta adoptar.
+Los códigos son los de `RouteCatalog.kt` y `docs/mockups-inventario.md`. Todas heredan los tokens (fondo lila en claro, radios, Sora 800 en titulares, chips en píldora).
 
-| Grupo | Pantalla | Qué cambia |
+| Grupo | Pantalla | Cómo quedó |
 |---|---|---|
-| **G-A** acceso y gemelo | A1 Splash | Cambiar `OnboardingWordmark` por `ParcheULogo(size = Large)`; el ícono ya es `ParcheUAppIcon`. |
-| G-A | A2-A4 Onboarding y login | `TwinIllustration` ya usa la P; agregar un héroe por página (titular Sora 800). En A4, `GoogleSignInButton` se queda. |
-| G-A | B0 Perfil básico, Edad, Suspendida | Titular `headlineLarge`; campos sin cambio; la mascota de error en gris. |
-| G-A | B1 Preguntas | Las fotos de opción pasan a `DuotonePhoto(mode = …)` (radio 20). La letra A/B va en Sora 800 22 `prt`, la opción elegida con borde de 2 dp `prt` y la barra de 12 segmentos violeta. "Tu gemelo está tomando nota…" con `TwinMascot(S, talking)`. |
-| G-A | B2-B3 Modos | Cada modo como `HeroBlock(colors = HeroBlockDefaults.modeColors(mode))` o `ModeSpineCard`; `ModeChip` tonal. |
-| G-A | B4 Consentimiento, B5 Gemelo listo | B5 con un héroe y `TwinMascot(XL)` grande; botón primario abajo. |
-| **G-B** Inicio y Conocer | C1/I1 Inicio | **Hecha** (referencia). |
-| G-B | C2 Notificaciones | Filas por relación en `ModeSpineCard`; vacío con mascota. |
-| G-B | F1 Cola de match | Héroe con la mascota conversando (`talking`) y "Te queda 1 hoy"; el modo como `ModeFilterChip(dotColor)`. |
-| G-B | F2 Match encontrado | `HeroBlock(colors = modeColors(mode))` con las dos P frente a frente (`mirrored = true` para el otro). |
-| G-B | F3 Escenario, F4-F5 Simulación | Las dos P se acercan y conversan (`TwinMascotGlyph(mouth = Talking)` y `mirrored`); barra del color del modo; escenario actual en Sora 800. |
-| G-B | F6 Simulaciones, F7-F8/I3 Resultados | F6 como lista de `ModeSpineCard`. En F8, el % de afinidad como número héroe (`hero56`) dentro de `HeroBlock(modeColors)`. |
-| **G-C** Tu parche y social | D1-D5/I2 Tu parche (grafo) | Filtros `ModeFilterChip(dotColor)`. En `PuGraph`, "Tú" con `TwinMascotGlyph` blanca sobre violeta y anillos rotulados ("cercanos", "por conocer"). Hoja de nodo con % en Sora 800 30. |
-| G-C | D6-D9 Amigos de amigos, Comunidades, Evolución | `ModeSpineCard` por persona; números de estadística en Sora 800. |
-| G-C | C5 Agregar amigos, invitaciones y código | El código en un `HeroBlock` (Headline); atajos con `AccessTile`. |
-| G-C | E1-E3 Presentar | `AccessTile` para elegir a los dos; E2 con `HeroBlock(modeColors)` y las dos P. |
-| **G-D** chats, perfil, ajustes y ParcheU+ | Lista de chats, F9 Chat | Filas con lomo del modo; aviso de perfil demo con borde discontinuo `prt`; burbujas sin cambio de lógica. |
-| G-D | C3 Perfil, C4 Entrena a tu gemelo | Héroe con `TwinMascot(L)` y precisión en Sora 800; memorias en `ModeSpineCard` por modo. |
-| G-D | H1-H3, Borrado, Exportar, Bloqueados | Solo tokens: titulares `headlineLarge`; acciones destructivas en `error`. |
-| G-D | G1/I4 ParcheU+, G3, G4, LimitSheet | Héroe con `plusGradient`; `ParcheUPlusBadge(onHero = true)` sobre violeta; G3 con celebración y la P. |
-| G-D | Vacíos y errores globales | `EmptyState`/`ErrorState` de `components/compound/States.kt`: mascota más un objeto de contexto (cuaderno, taza, mapa) y texto de qué va a pasar; error con `TwinMascot(error = true)`. |
+| **G-A** acceso y gemelo | A1 Splash | `ParcheULogo` grande y `ParcheUAppIcon`. |
+| G-A | A2-A4 Onboarding y login | Héroe por página con titular Sora 800; A4 con `PuGraph(style = ParcheVivo)` a 260 dp ("Tú" en texto: la mascota no cabe a ese tamaño). `GoogleSignInButton` sin cambio. |
+| G-A | B0 Perfil básico, Edad, Suspendida | Titular `headlineLarge`; error con `StateIllustration`. |
+| G-A | B1 Preguntas | Fotos en duotono con filtro de exposición y `photoVeil`; letra A/B en Sora 800 `prt`; barra de 12 segmentos; "Tu gemelo está tomando nota…" con la P conversando; error con `StateIllustration`. |
+| G-A | B2-B5 Modos, Consentimiento, Gemelo listo | Héroe de modos, filas con `ModeSpineCard`; B5 con héroe y la P grande. |
+| **G-B** Inicio y Conocer | C1/I1 Inicio | Referencia. |
+| G-B | C2 Notificaciones | Filas por relación en `ModeSpineCard`; vacío con la P y la campana; solicitudes de ParcheU+ en `ModeSpineCard`. |
+| G-B | F1 Cola de match | Héroe tonal del modo con la P conversando y el cupo del día; `ModeFilterChip(dotColor)`. |
+| G-B | F2 Match encontrado | `HeroBlock(modeColors)` con `FacingTwins`. |
+| G-B | F3 Escenario, F4-F5 Simulación | `FacingTwins` conversando, barra del modo, escenario en Sora 800. |
+| G-B | F6 Simulaciones, F7-F8/I3 Resultados | F6 en `ModeSpineCard`; F8 con el % en `hero56` dentro de `HeroBlock(modeColors)`. |
+| **G-C** Tu parche y social | D1-D5 Tu parche | `PuGraphStyle.ParcheVivo`, filtros con punto del modo, hoja de nodo con % en Sora 800. |
+| G-C | D6-D9 | `ModeSpineCard` por persona o comunidad; números en Sora 800; bloqueado en gratis con `ParchePlusHero`. |
+| G-C | C5 Agregar amigos | Código en un héroe, QR con `ParcheUAppIcon` al centro. |
+| G-C | E1-E3 Presentar | E1 con la pareja en un bloque tonal del modo y la lista en `ModeSpineCard`; E2 con `HeroBlock(modeColors)` y las dos P; E3 con estados por modo. |
+| **G-D** chats, perfil, ajustes y ParcheU+ | Lista de chats, F9 Chat | Filas con lomo del modo; aviso de perfil demo con borde discontinuo `prt`. |
+| G-D | C3 Perfil, C4 Entrena a tu gemelo | Héroe con la P y la precisión en Sora 800; memorias en `ModeSpineCard`. |
+| G-D | H1-H3, Borrar cuenta, Exportar, Bloqueados | Titulares `headlineLarge`; `DestructiveButton`. Borrar cuenta: con ParcheU+ concedido sin Play (`SubscriptionStatus.Granted`) dice cuándo vence y no manda a Google Play. |
+| G-D | G1/I4 ParcheU+, G2, G3, G4 | Héroe con `plusGradient` y `QuotaMascots`; G2 lee el Plus del servidor; G4 con `Granted` no menciona Play. |
+
+### Pendiente
+
+- La P espejada del otro gemelo (`mirrored = true`) se lee como una "q" (F2-F8, D7, D8). Hay una alternativa preparada (`lookingLeft`) que falta decidir.
+- E1 no tiene titular propio: agregarlo sería texto nuevo.
