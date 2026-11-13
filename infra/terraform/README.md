@@ -34,8 +34,12 @@ de la entidad (deduplicación).
 
 ## Contrato con el backend (E0.3)
 
-Cloud Run `api` (args `serve`) y los jobs `migrate`, `seed-demo` y `purge-demo` usan la **misma imagen**
-con distinto argumento y la identidad `sa-api`. Terraform crea todo con una imagen de ejemplo de Google e
+Cloud Run `api` (args `serve`) y los jobs `migrate`, `seed-demo`, `purge-demo` y `grant-plus` usan la **misma imagen**
+con distinto argumento y la identidad `sa-api`. `grant-plus` (Plus manual acotado, enmienda de ADR-0013) tiene como
+argumento por defecto solo `grant-plus`, que falla sin `--email` o `--uid`: se ejecuta con
+`gcloud run jobs execute grant-plus --args=grant-plus,--email=<correo>,--days=7` (exige `run.jobs.runWithOverrides`;
+comandos y revocación en [operacion.md](../../docs/operacion.md#parcheu-manual-para-una-demo-job-grant-plus)).
+`scripts/check-plan.sh` exige los cuatro jobs con su argumento y cuenta 2 conexiones por job en el presupuesto de Cloud SQL. Terraform crea todo con una imagen de ejemplo de Google e
 ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de entorno que reciben:
 
 | Variable | Valor |

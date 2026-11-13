@@ -205,7 +205,7 @@ mientras `api` exista (lo crea Terraform con una imagen de relleno). Cuando `dep
 # API (últimas 2 h, solo errores)
 gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="api" AND severity>=ERROR' \
   --project $P --freshness 2h --limit 50 --format 'value(timestamp,jsonPayload.message,jsonPayload.traceId)'
-# Un job (migrate, seed-demo o purge-demo)
+# Un job (migrate, seed-demo, purge-demo o grant-plus)
 gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="migrate"' --project $P --freshness 1d --limit 100
 gcloud run jobs executions list --job migrate --region $R --project $P
 ```
@@ -223,7 +223,50 @@ gcloud run jobs execute seed-demo --region $R --project $P --wait    # solo con 
 Los jobs usan la imagen del último despliegue. Antes del **primer** `migrate`, el usuario IAM de `sa-api` necesita
 permisos sobre el esquema `public` (`GRANT`, ver [infra/terraform/README.md](../infra/terraform/README.md)). Para
 encender o apagar los demo cambia `demo_users_enabled` en Terraform (`terraform apply -var demo_users_enabled=true`
-en `envs/prod`): una variable puesta con `gcloud run services update --update-env-vars` la borra el siguiente `apply`.
+en `envs/prod`): una variable puesta con `gcloud run services update --update-env-vars` la borra el siguiente `apply`
+(el servicio `api` y los jobs no ignoran los cambios de variables de entorno ni de instancias mínimas:
+`modules/platform/cloud_run.tf`, `lifecycle.ignore_changes`). Por eso, con la demo del 18 nov armada (demo encendidos, topes de
+IA temporales, `DEMO_CONNECT_PROBABILITY=1`), **no corras un `apply` completo** hasta pasada la demo; el orden seguro está en
+[sustentacion.md](sustentacion.md#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento) y la vuelta a costo
+mínimo en [pendientes-humanos.md](pendientes-humanos.md#después-de-la-demo-pendiente).
+
+### ParcheU+ manual para una demo (job `grant-plus`)
+
+Plus sin pasar por Play, acotado y auditado (enmienda de [ADR-0013](adr/0013-billing-servidor-rtdn.md)). No hay ruta
+HTTP. Solo lo ejecuta quien tiene `run.jobs.runWithOverrides` en `parcheu-prod` (el propietario). El job existe
+tras un `terraform apply` que lo declare y tiene la imagen del último despliegue **si ya existía cuando se desplegó**
+(`_desplegar-api.yml` solo actualiza su imagen si el job existe; si no, queda con la imagen de relleno y falla). Antes de
+la demo se crea con un apply **acotado** (`-target`), no con uno completo: el procedimiento, el orden y el comando para
+ponerle la imagen a mano están en
+[sustentacion.md](sustentacion.md#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento). Sin argumentos falla a propósito.
+
+```bash
+# Conceder (1..30 días, 7 por defecto). Correo exacto (sin comodines) o, mejor, el uid de Firebase.
+gcloud run jobs execute grant-plus --project $P --region $R --wait \
+  --args=grant-plus,--email=<correo>,--days=7
+gcloud run jobs execute grant-plus --project $P --region $R --wait --args=grant-plus,--uid=<firebase uid>,--days=1
+
+# Comprobar: el log del resultado (uuid interno y vencimiento, nunca el correo) y, en la app, Perfil dice "ParcheU+ activo".
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="grant-plus" AND (jsonPayload.event="plus_granted_manual" OR jsonPayload.event="plus_revoked_manual" OR jsonPayload.event="plus_manual_refused" OR severity>=ERROR)' \
+  --project $P --freshness 1d --limit 20
+
+# Revocar (inmediato; repetirlo no hace nada). --days=0 hace lo mismo.
+gcloud run jobs execute grant-plus --project $P --region $R --wait --args=revoke-plus,--email=<correo>
+```
+
+Cómo se comporta:
+- `--wait` termina con error si el job sale distinto de 0. El código 2 es un argumento inválido. El código 3 es un
+  rechazo: usuario inexistente, correo repetido (usa `--uid`), cuenta borrada, suspendida o demo, una suscripción
+  de Play vigente que no se toca, o un `revoke-plus` sobre un derecho que no es manual.
+- Repetir `grant-plus` no duplica nada. Extiende el vencimiento o lo deja igual, nunca lo acorta y nunca pasa de
+  hoy + 30 días.
+- Al vencer, la persona vuelve a gratis sola, sin hacer nada.
+- Cada ejecución deja una fila en `purchase_events` (`message_id` `manual-grant:…`, `payload.source = MANUAL`).
+
+**Tras la demo, revócalo** el mismo día; no esperes a que venza.
+
+Ten en cuenta dónde queda el correo. Los argumentos de `--args` se guardan en la ejecución del job: se ven en
+`gcloud run jobs executions describe` y en los registros de auditoría de Cloud Run. Con `--uid` no queda el correo.
 
 ### Reintentar un despliegue
 
@@ -282,6 +325,13 @@ Anthropic con la clave del secreto `anthropic-api-key` ([ADR-0008](adr/0008-ia-v
 enmienda del 12 nov 2026). **Antes de activarlo** en prod: la versión desplegada debe incluir `ClaudeApiClient` y la
 política de privacidad y Data safety deben nombrar a Anthropic ([ADR-0020](adr/0020-region-y-transferencia-internacional.md),
 enmienda del 12 nov 2026). Los topes (`AI_DAILY_BUDGET_USD`, `AI_USER_DAILY_BUDGET_USD`) aplican igual con cualquier proveedor.
+
+**Hazlo después de la demo del miércoles 18 nov, no antes.** El `terraform plan/apply` de abajo es **completo**: sin
+`-var demo_users_enabled=true` deja `DEMO_USERS_ENABLED=false` en la `api` y los jobs, y además devuelve los topes de IA a
+1 y 0,25 USD y borra `DEMO_CONNECT_PROBABILITY`, justo lo que la demo necesita. Primero la vuelta a costo mínimo
+([pendientes-humanos.md](pendientes-humanos.md#después-de-la-demo-pendiente)); si por una razón de fuerza mayor hay que
+aplicar antes, agrega `-var demo_users_enabled=true` y repón después los topes y la probabilidad con `gcloud`
+([sustentacion.md](sustentacion.md#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento), paso 4).
 
 ```bash
 # 1. La clave, desde un archivo local con permisos 600 (nunca se imprime). Crea una versión nueva cada vez.

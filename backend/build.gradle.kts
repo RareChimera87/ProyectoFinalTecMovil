@@ -124,7 +124,7 @@ tasks.register<Test>("e2eTest") {
 }
 
 // Imagen sin daemon de Docker: `./gradlew jibBuildTar`. La misma imagen sirve para el servicio
-// y para los Cloud Run Jobs (migrate, seed-demo, purge-demo); el modo se pasa como argumento.
+// y para los Cloud Run Jobs (migrate, seed-demo, purge-demo, grant-plus); el modo se pasa como argumento.
 jib {
     from {
         // Tag verificado en Docker Hub el 22-oct-2026 (eclipse-temurin:21-jre existe).

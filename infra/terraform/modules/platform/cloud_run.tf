@@ -38,6 +38,9 @@ locals {
     "migrate"    = { args = ["migrate"], timeout = "600s" }
     "seed-demo"  = { args = ["seed-demo"], timeout = "900s" }
     "purge-demo" = { args = ["purge-demo"], timeout = "900s" }
+    # Plus manual acotado (enmienda de ADR-0013). El argumento por defecto falla a propósito (falta --email o --uid):
+    # se ejecuta con `--args=grant-plus,--email=<correo>,--days=7` (o `revoke-plus,...`), ver docs/operacion.md.
+    "grant-plus" = { args = ["grant-plus"], timeout = "300s" }
   }
 }
 
@@ -126,7 +129,7 @@ resource "google_cloud_run_v2_service_iam_member" "tasks_invoker" {
   member   = "serviceAccount:${data.google_service_account.tasks.email}"
 }
 
-# Tres Cloud Run Jobs con la misma imagen y distinto argumento (ADR-0011, ADR-0027).
+# Cuatro Cloud Run Jobs con la misma imagen y distinto argumento (ADR-0011, ADR-0027 y la enmienda de ADR-0013).
 resource "google_cloud_run_v2_job" "this" {
   for_each            = local.jobs
   project             = var.project_id

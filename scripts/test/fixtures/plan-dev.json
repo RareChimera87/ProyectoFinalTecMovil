@@ -230,6 +230,170 @@
           }
         },
         {
+          "address": "module.platform.google_cloud_run_v2_job.this[\"grant-plus\"]",
+          "name": "this",
+          "type": "google_cloud_run_v2_job",
+          "values": {
+            "annotations": null,
+            "binary_authorization": [],
+            "client": null,
+            "client_version": null,
+            "deletion_policy": "DELETE",
+            "deletion_protection": false,
+            "effective_labels": {
+              "app": "parcheu",
+              "env": "dev",
+              "goog-terraform-provisioned": "true"
+            },
+            "labels": {
+              "app": "parcheu",
+              "env": "dev"
+            },
+            "location": "us-central1",
+            "name": "grant-plus",
+            "project": "parcheu-dev",
+            "run_execution_token": null,
+            "start_execution_token": null,
+            "tags": null,
+            "template": [
+              {
+                "annotations": null,
+                "labels": null,
+                "parallelism": 1,
+                "task_count": 1,
+                "template": [
+                  {
+                    "containers": [
+                      {
+                        "args": [
+                          "grant-plus"
+                        ],
+                        "command": null,
+                        "depends_on": null,
+                        "env": [
+                          {
+                            "name": "CLOUD_SQL_INSTANCE",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_IAM_AUTH",
+                            "value": "true",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_MAX_POOL_SIZE",
+                            "value": "4",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_NAME",
+                            "value": "parcheu",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_USER",
+                            "value": "sa-api@parcheu-dev.iam",
+                            "value_source": []
+                          },
+                          {
+                            "name": "ENV",
+                            "value": "dev",
+                            "value_source": []
+                          },
+                          {
+                            "name": "GCP_PROJECT",
+                            "value": "parcheu-dev",
+                            "value_source": []
+                          },
+                          {
+                            "name": "GCP_REGION",
+                            "value": "us-central1",
+                            "value_source": []
+                          },
+                          {
+                            "name": "INTERNAL_OIDC_AUDIENCE",
+                            "value": "https://api.parcheu-dev.internal",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_HMAC_ANON_KEY",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_PLAY_SA",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SERVICE_URL",
+                            "value": "https://api-388770932007.us-central1.run.app",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_AI_LIGHT",
+                            "value": "ai-light",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_MAINT",
+                            "value": "maintenance",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_QUEUE_SIM",
+                            "value": "simulations",
+                            "value_source": []
+                          },
+                          {
+                            "name": "TASKS_SERVICE_ACCOUNT",
+                            "value": "sa-tasks@parcheu-dev.iam.gserviceaccount.com",
+                            "value_source": []
+                          },
+                          {
+                            "name": "AI_PROVIDER",
+                            "value": "gemini",
+                            "value_source": []
+                          },
+                          {
+                            "name": "SECRET_ANTHROPIC_API_KEY",
+                            "value_source": []
+                          }
+                        ],
+                        "image": "us-docker.pkg.dev/cloudrun/container/job",
+                        "name": null,
+                        "ports": [],
+                        "resources": [
+                          {
+                            "limits": {
+                              "cpu": "1",
+                              "memory": "1Gi"
+                            }
+                          }
+                        ],
+                        "volume_mounts": [],
+                        "working_dir": null
+                      }
+                    ],
+                    "encryption_key": null,
+                    "gpu_zonal_redundancy_disabled": null,
+                    "max_retries": 0,
+                    "node_selector": [],
+                    "service_account": "sa-api@parcheu-dev.iam.gserviceaccount.com",
+                    "timeout": "300s",
+                    "volumes": [],
+                    "vpc_access": []
+                  }
+                ]
+              }
+            ],
+            "terraform_labels": {
+              "app": "parcheu",
+              "env": "dev",
+              "goog-terraform-provisioned": "true"
+            },
+            "timeouts": null
+          }
+        },
+        {
           "address": "module.platform.google_cloud_run_v2_job.this[\"purge-demo\"]",
           "name": "this",
           "type": "google_cloud_run_v2_job",

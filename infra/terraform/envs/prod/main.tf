@@ -98,7 +98,7 @@ module "platform" {
 
   # Conexiones a Postgres por instancia. db-f1-micro admite max_connections = 25 (tabla de Cloud SQL por memoria,
   # 0,6 GB; aprox., parte la reserva Cloud SQL para su propio usuario): presupuesto del 80 % ≈ 20.
-  #   - Régimen: 2 instancias × 4 + los tres jobs a la vez × 2 = 14 ≤ 20.
+  #   - Régimen: 2 instancias × 4 + los cuatro jobs a la vez × 2 = 16 ≤ 20 (grant-plus casi nunca corre).
   #   - Despliegue: la revisión vieja y la nueva conviven un momento (hasta 2 + 2 instancias) más migrate:
   #     4 × 4 + 2 = 18 ≤ 20.
   # Con 10 (el valor por defecto) eran 2 × 10 + 2 = 22 en régimen y hasta 42 en un despliegue: por encima de 25.

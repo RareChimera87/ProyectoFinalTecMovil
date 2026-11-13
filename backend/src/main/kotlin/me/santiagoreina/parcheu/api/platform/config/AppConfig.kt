@@ -53,7 +53,7 @@ data class DbConfig(
  * - `LEGAL_TEXT_VERSION`: versión vigente de los Términos y la Política de privacidad (E2.1, ADR-0017). Debe coincidir
  *   con la de las páginas web (E8.4); al subirla, todos los usuarios vuelven a `NEEDS_TERMS`.
  *
- * Obligatorias según el modo (solo `serve` valida Firebase y OIDC; `migrate`, `seed-demo` y `purge-demo` no los usan):
+ * Obligatorias según el modo (solo `serve` valida Firebase y OIDC; `migrate`, `seed-demo`, `purge-demo`, `grant-plus` y `revoke-plus` no los usan):
  * - todos: `ENV`.
  * - `serve` en dev/prod: proyecto de Firebase (`FIREBASE_PROJECT_ID` o `GCP_PROJECT`), audiencia
  *   (`INTERNAL_OIDC_AUDIENCE` o `SERVICE_URL`, https) y `TASKS_SERVICE_ACCOUNT`.
