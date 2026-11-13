@@ -23,13 +23,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -37,22 +41,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.PendingInvite
+import me.santiagoreina.parcheu.designsystem.brand.ParcheUAppIcon
 import me.santiagoreina.parcheu.designsystem.components.base.ModeFilterChip
+import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
-import me.santiagoreina.parcheu.designsystem.components.base.ParcheUIconButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextField
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextFieldStyle
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.SegmentedControl
-import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
 import me.santiagoreina.parcheu.designsystem.components.compound.AvatarInitials
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
 import me.santiagoreina.parcheu.designsystem.components.compound.QRCard
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.SoraFontFamily
+import me.santiagoreina.parcheu.feature.parche.HeroActionButton
 import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
+import me.santiagoreina.parcheu.feature.simulation.forMode
 
 object InvitesTags {
     const val SCREEN = "invites"
@@ -141,54 +148,34 @@ private fun ColumnScope.MyCodeTab(state: InvitesUiState, actions: InvitesActions
             CircularProgressIndicator(color = colors.prt)
         }
         else -> {
-            state.qr?.let { qr ->
-                QRCard(
-                    matrix = qr,
-                    name = state.name ?: "Tu código",
-                    contentDescription = "Código QR de tu invitación, ${invite.code}",
-                    logo = rememberVectorPainter(InvitesIcons.AppIcon),
-                    modifier = Modifier.align(Alignment.CenterHorizontally).testTag(InvitesTags.QR)
-                )
-            }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(colors.s1, RoundedCornerShape(16.dp))
-                    .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .semantics(mergeDescendants = true) {
-                            contentDescription = "Tu código de invitación: ${spelled(invite.code)}"
-                        }
-                ) {
-                    Text("Tu código de invitación", fontSize = 12.sp, color = colors.mu)
-                    Text(
-                        invite.code,
-                        fontFamily = SoraFontFamily,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp,
-                        color = colors.tx,
-                        modifier = Modifier.testTag(InvitesTags.CODE)
-                    )
-                }
-                ParcheUIconButton(
-                    icon = rememberVectorPainter(InvitesIcons.Copy),
-                    contentDescription = "Copiar código",
-                    onClick = { actions.onCopy(invite.code) },
-                    modifier = Modifier.testTag(InvitesTags.COPY)
-                )
-            }
-            TonalButton(
-                text = "Compartir invitación",
-                onClick = { actions.onShare(invite.code, invite.link) },
-                icon = rememberVectorPainter(InvitesIcons.Share),
-                modifier = Modifier.fillMaxWidth().testTag(InvitesTags.SHARE)
-            )
+            // Si alguien ya canjeó tu código, aceptarlo va primero (en la demo es el paso siguiente).
             if (state.pending.isNotEmpty()) PendingList(state, actions)
+            CodeHero(
+                code = invite.code,
+                onCopy = { actions.onCopy(invite.code) },
+                onShare = { actions.onShare(invite.code, invite.link) }
+            )
+            state.qr?.let { qr ->
+                Text(
+                    "O QUE ESCANEEN TU QR",
+                    style = ParcheUTheme.textStyles.overline.copy(letterSpacing = 0.9.sp),
+                    color = colors.mu,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp)
+                )
+                Box(
+                    Modifier.align(Alignment.CenterHorizontally),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    QRCard(
+                        matrix = qr,
+                        name = state.name ?: "Tu código",
+                        contentDescription = "Código QR de tu invitación, ${invite.code}",
+                        modifier = Modifier.testTag(InvitesTags.QR)
+                    )
+                    // El ícono nuevo (la P que mira) al centro del QR, sobre su recuadro blanco.
+                    QrLogo(Modifier.padding(top = QR_LOGO_TOP))
+                }
+            }
         }
     }
 }
@@ -207,35 +194,36 @@ private fun PendingList(state: InvitesUiState, actions: InvitesActions) {
             modifier = Modifier.semantics { heading() }
         )
         state.pending.forEach { pending ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(colors.s1, RoundedCornerShape(16.dp))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                AvatarInitials(name = pending.other.label, affinity = 100)
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        pending.other.label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.tx
-                    )
-                    Text(
-                        "Quiere conectar en ${pending.mode.label()}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.mu
-                    )
+            ModeSpineCard(mode = colors.forMode(pending.mode), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AvatarInitials(name = pending.other.label, affinity = 100)
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            pending.other.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.tx
+                        )
+                        Text(
+                            "Quiere conectar en ${pending.mode.label()}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.mu
+                        )
+                    }
+                    ReportOrBlockAction(onClick = { actions.onReportOrBlock(pending) })
                 }
-                ReportOrBlockAction(onClick = { actions.onReportOrBlock(pending) })
                 PrimaryButton(
                     text = if (state.accepting == pending.id) "Aceptando…" else "Aceptar",
                     onClick = { actions.onAccept(pending) },
-                    size = ParcheUButtonSize.Small,
+                    size = ParcheUButtonSize.Medium,
                     enabled = state.accepting == null,
-                    modifier = Modifier.testTag(InvitesTags.accept(pending.id))
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .testTag(InvitesTags.accept(pending.id))
                 )
             }
         }
@@ -248,38 +236,44 @@ private fun ScanTab(actions: InvitesActions) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(colors.s1, RoundedCornerShape(24.dp))
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .clip(ParcheUTheme.shapes.hero)
+            .background(colors.hero)
+            .padding(horizontal = 16.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(
-            Modifier.size(72.dp).background(colors.prc, RoundedCornerShape(20.dp)),
-            contentAlignment = Alignment.Center
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(
-                painter = rememberVectorPainter(InvitesIcons.Scanner),
-                contentDescription = null,
-                tint = colors.onprc,
-                modifier = Modifier.size(36.dp)
-            )
+            Box(
+                Modifier.size(64.dp).background(colors.onHero, RoundedCornerShape(18.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = rememberVectorPainter(InvitesIcons.Scanner),
+                    contentDescription = null,
+                    tint = colors.hero,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
+            TwinMascotGlyph(width = 40.dp, color = colors.onHero, eyeColor = colors.hero)
         }
         Text(
             "Escanea el QR de tu amigo",
-            style = MaterialTheme.typography.titleMedium,
-            color = colors.tx,
+            style = MaterialTheme.typography.headlineMedium,
+            color = colors.onHero,
             modifier = Modifier.semantics { heading() }
         )
         Text(
             "Abre el lector y apunta al QR que aparece en su pantalla de Agregar amigos.",
             style = MaterialTheme.typography.bodyMedium,
-            color = colors.mu
+            color = colors.onHero
         )
-        PrimaryButton(
+        HeroActionButton(
             text = "Abrir escáner",
             onClick = actions.onScan,
             icon = rememberVectorPainter(InvitesIcons.Scanner),
-            modifier = Modifier.fillMaxWidth().testTag(InvitesTags.SCAN)
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp).testTag(InvitesTags.SCAN)
         )
     }
     InfoNote(
@@ -296,7 +290,12 @@ private fun OrDivider() {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(Modifier.weight(1f).height(1.dp).background(colors.ln))
-        Text("o ingresa un código", fontSize = 13.sp, color = colors.mu)
+        Text(
+            "o ingresa el código de tu amigo",
+            style = MaterialTheme.typography.titleSmall,
+            color = colors.tx,
+            modifier = Modifier.semantics { heading() }
+        )
         Box(Modifier.weight(1f).height(1.dp).background(colors.ln))
     }
 }
@@ -304,10 +303,7 @@ private fun OrDivider() {
 @Composable
 private fun CodeEntry(state: InvitesUiState, actions: InvitesActions) {
     val colors = ParcheUTheme.colors
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ParcheUTextField(
             value = state.codeInput,
             onValueChange = actions.onCodeChange,
@@ -320,25 +316,27 @@ private fun CodeEntry(state: InvitesUiState, actions: InvitesActions) {
                 imeAction = ImeAction.Done
             ),
             keyboardActions = KeyboardActions(onDone = { actions.onAdd() }),
-            modifier = Modifier.weight(1f).testTag(InvitesTags.INPUT)
+            modifier = Modifier.fillMaxWidth().testTag(InvitesTags.INPUT)
         )
+        Text("¿Cómo se conocen?", style = MaterialTheme.typography.bodyMedium, color = colors.mu)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(Mode.AMISTAD, Mode.ESTUDIO, Mode.PAREJA).forEach { mode ->
+                ModeFilterChip(
+                    label = mode.label(),
+                    selected = state.mode == mode,
+                    onClick = { actions.onMode(mode) },
+                    dotColor = colors.forMode(mode).solid,
+                    modifier = Modifier.testTag(InvitesTags.mode(mode))
+                )
+            }
+        }
         PrimaryButton(
             text = if (state.submitting) "Agregando…" else "Agregar",
             onClick = actions.onAdd,
             enabled = state.canSubmit,
-            modifier = Modifier.testTag(InvitesTags.ADD)
+            icon = rememberVectorPainter(InvitesIcons.PersonAdd),
+            modifier = Modifier.fillMaxWidth().testTag(InvitesTags.ADD)
         )
-    }
-    Text("¿Cómo se conocen?", style = MaterialTheme.typography.bodyMedium, color = colors.mu)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(Mode.AMISTAD, Mode.ESTUDIO, Mode.PAREJA).forEach { mode ->
-            ModeFilterChip(
-                label = mode.label(),
-                selected = state.mode == mode,
-                onClick = { actions.onMode(mode) },
-                modifier = Modifier.testTag(InvitesTags.mode(mode))
-            )
-        }
     }
     state.message?.let { message ->
         Text(
@@ -349,6 +347,100 @@ private fun CodeEntry(state: InvitesUiState, actions: InvitesActions) {
                 .testTag(InvitesTags.MESSAGE)
                 .semantics { liveRegion = LiveRegionMode.Polite }
         )
+    }
+}
+
+/** Código del héroe: Sora 800 de 36 con aire entre letras, para leerlo de un teléfono a otro. */
+private val CODE_HERO_STYLE = TextStyle(
+    fontFamily = SoraFontFamily,
+    fontWeight = FontWeight.ExtraBold,
+    fontSize = 36.sp,
+    lineHeight = 42.sp,
+    letterSpacing = 2.sp
+)
+
+/** Distancia del borde superior de [QRCard] al recuadro del logo: 20 de relleno + 100 − 22. */
+private val QR_LOGO_TOP = 98.dp
+
+/**
+ * C5 · "Mi código" como protagonista (dirección A): un héroe violeta con el código en Sora 800 de 36 y
+ * las dos acciones (copiar y compartir) en píldoras blancas. Es lo que se lee en voz alta en la demo
+ * con dos teléfonos. TalkBack lee el código letra por letra.
+ */
+@Composable
+private fun CodeHero(code: String, onCopy: () -> Unit, onShare: () -> Unit) {
+    val colors = ParcheUTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(ParcheUTheme.shapes.hero)
+            .background(colors.hero)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(
+            Modifier.semantics(mergeDescendants = true) {
+                contentDescription = "Tu código de invitación: ${spelled(code)}"
+            },
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Tu código de invitación".uppercase(),
+                    style = ParcheUTheme.textStyles.overline.copy(letterSpacing = 0.9.sp),
+                    color = colors.onHero,
+                    modifier = Modifier.weight(1f)
+                )
+                TwinMascotGlyph(width = 26.dp, color = colors.onHero, eyeColor = colors.hero)
+            }
+            Text(
+                code,
+                style = CODE_HERO_STYLE,
+                color = colors.onHero,
+                maxLines = 1,
+                modifier = Modifier.testTag(InvitesTags.CODE)
+            )
+            Text(
+                "Díctalo o compártelo: tu amigo lo escribe abajo en su app.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onHero
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HeroActionButton(
+                text = "Copiar",
+                onClick = onCopy,
+                icon = rememberVectorPainter(InvitesIcons.Copy),
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = "Copiar código" }
+                    .testTag(InvitesTags.COPY)
+            )
+            HeroActionButton(
+                text = "Compartir",
+                onClick = onShare,
+                icon = rememberVectorPainter(InvitesIcons.Share),
+                modifier = Modifier
+                    .weight(1.25f)
+                    .semantics { contentDescription = "Compartir invitación" }
+                    .testTag(InvitesTags.SHARE)
+            )
+        }
+    }
+}
+
+/** El ícono de la app (la P que mira sobre violeta) en su recuadro blanco, para el centro del QR. */
+@Composable
+private fun QrLogo(modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(44.dp)
+            .background(Color.White, RoundedCornerShape(10.dp))
+            .padding(4.dp)
+            .clearAndSetSemantics { },
+        contentAlignment = Alignment.Center
+    ) {
+        ParcheUAppIcon(size = 36.dp)
     }
 }
 
