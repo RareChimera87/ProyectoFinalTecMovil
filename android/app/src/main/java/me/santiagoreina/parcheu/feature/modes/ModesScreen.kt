@@ -32,6 +32,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCheckbox
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
@@ -106,6 +108,7 @@ fun ModesScreen(
                 state.loadError != null -> ErrorState(
                     title = "No pudimos cargar tus modos",
                     message = modesErrorMessage(state.loadError),
+                    illustration = { StateIllustration(state.loadError.stateProp(), error = true) },
                     retryLabel = "Reintentar",
                     onRetryClick = onRetry,
                     modifier = Modifier.weight(1f).testTag(ModesTags.ERROR)

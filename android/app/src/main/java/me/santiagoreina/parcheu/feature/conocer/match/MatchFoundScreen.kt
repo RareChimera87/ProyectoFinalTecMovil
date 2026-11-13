@@ -35,6 +35,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.contract.MatchChoice
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.R as DsR
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChipStyle
@@ -97,6 +99,7 @@ fun MatchFoundScreen(
                 ErrorState(
                     title = MatchStrings.QUEUE_TITLE,
                     message = MatchStrings.errorMessage(state.error),
+                    illustration = { StateIllustration(state.error.stateProp(), error = true) },
                     retryLabel = MatchStrings.RETRY,
                     onRetryClick = onRetry
                 )

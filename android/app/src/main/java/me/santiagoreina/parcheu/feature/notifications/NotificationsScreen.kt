@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.NotificationDto
 import me.santiagoreina.parcheu.contract.NotificationKinds
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.R as DsR
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
@@ -111,6 +113,7 @@ fun NotificationsScreen(
                 ErrorState(
                     title = "No pudimos cargar tus notificaciones",
                     message = notificationsErrorMessage(state.error),
+                    illustration = { StateIllustration(state.error.stateProp(), error = true) },
                     retryLabel = "Reintentar",
                     onRetryClick = callbacks.onRetry,
                     modifier = Modifier.fillMaxSize().testTag(NotificationsTags.ERROR)

@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.FofCandidate
 import me.santiagoreina.parcheu.contract.NodeDto
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
@@ -163,6 +165,7 @@ fun FofScreen(
                     ErrorState(
                         title = "No pudimos cargar amigos de amigos",
                         message = state.error.fofMessage(),
+                        illustration = { StateIllustration(state.error.stateProp(), error = true) },
                         retryLabel = "Reintentar",
                         onRetryClick = callbacks.onRetry,
                         modifier = Modifier.fillMaxSize()

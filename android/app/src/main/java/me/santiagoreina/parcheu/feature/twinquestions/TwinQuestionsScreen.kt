@@ -57,6 +57,9 @@ import me.santiagoreina.parcheu.contract.QuestionDto
 import me.santiagoreina.parcheu.contract.TwinAnswer
 import me.santiagoreina.parcheu.core.error.AI_BUDGET_MESSAGE
 import me.santiagoreina.parcheu.core.error.AppError
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.StateProp
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
@@ -207,7 +210,7 @@ private fun ErrorPane(error: AppError?, onRetry: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        TwinMascot(size = TwinMascotSize.L, error = true)
+        StateIllustration(error?.stateProp() ?: StateProp.Notebook, error = true)
         Spacer(Modifier.height(20.dp))
         Text(
             stringResource(R.string.twin_questions_error_title),

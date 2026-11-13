@@ -36,6 +36,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.contract.University
 import me.santiagoreina.parcheu.core.error.AppError
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.InterestChip
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheURadioRow
@@ -119,6 +121,7 @@ fun BasicProfileScreen(
                     ErrorState(
                         title = "No pudimos cargar tu perfil",
                         message = basicProfileErrorMessage(state.error),
+                        illustration = { StateIllustration(state.error.stateProp(), error = true) },
                         retryLabel = "Reintentar",
                         onRetryClick = onRetryLoad
                     )

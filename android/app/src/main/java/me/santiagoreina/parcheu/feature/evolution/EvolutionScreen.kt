@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.HistoryDto
 import me.santiagoreina.parcheu.contract.Moment
 import me.santiagoreina.parcheu.contract.MonthSnapshot
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUPlusBadge
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
@@ -110,6 +112,7 @@ fun EvolutionScreen(
                     ErrorState(
                         title = "No pudimos cargar tu evolución",
                         message = state.error.evolutionMessage(),
+                        illustration = { StateIllustration(state.error.stateProp(), error = true) },
                         retryLabel = "Reintentar",
                         onRetryClick = callbacks.onRetry,
                         modifier = Modifier.fillMaxSize()

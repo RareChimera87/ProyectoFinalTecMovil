@@ -29,6 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.CommunityDto
 import me.santiagoreina.parcheu.contract.PersonRef
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.StateProp
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
@@ -114,6 +117,7 @@ fun CommunitiesScreen(
                     ErrorState(
                         title = "No pudimos cargar tus comunidades",
                         message = state.error.communitiesMessage(),
+                        illustration = { StateIllustration(state.error.stateProp(), error = true) },
                         retryLabel = "Reintentar",
                         onRetryClick = callbacks.onRetry,
                         modifier = Modifier.fillMaxSize()
@@ -124,6 +128,7 @@ fun CommunitiesScreen(
                         title = "Aún no tienes comunidades",
                         message = "Cada semana agrupamos a tus conexiones que también se conocen " +
                             "entre sí. Una comunidad necesita al menos 3 personas.",
+                        illustration = { StateIllustration(StateProp.Notebook) },
                         modifier = Modifier.fillMaxSize().testTag(CommunitiesTags.EMPTY)
                     )
                 is CommunitiesUiState.Loaded -> LoadedContent(state, callbacks)

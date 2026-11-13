@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.PendingInvite
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.brand.ParcheUAppIcon
 import me.santiagoreina.parcheu.designsystem.components.base.ModeFilterChip
 import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
@@ -139,6 +141,7 @@ private fun ColumnScope.MyCodeTab(state: InvitesUiState, actions: InvitesActions
             title = "No pudimos cargar tu código",
             message = "Revisa tu conexión e inténtalo de nuevo.",
             retryLabel = "Reintentar",
+            illustration = { StateIllustration(state.loadError.stateProp(), error = true) },
             onRetryClick = actions.onRetry
         )
         invite == null -> Box(
