@@ -20,6 +20,8 @@ internal object MatchStrings {
     const val EXPIRED_TITLE = "No encontramos a nadie"
     const val EXPIRED_MESSAGE = "Pasaron 24 horas sin match. No se descontó tu match del día."
     const val MATCHED_MESSAGE = "¡Encontramos a alguien!"
+    const val ALREADY_USED_MESSAGE = "Ya usaste tu match al azar de hoy"
+    const val ALREADY_USED_NOTE = "Mañana te buscamos a alguien nuevo."
     const val SEE_MATCH = "Ver match"
 
     const val FOUND = "¡ENCONTRAMOS A ALGUIEN!"

@@ -1,6 +1,8 @@
 package me.santiagoreina.parcheu.feature.twinquestions
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -36,8 +39,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -288,6 +293,7 @@ private fun SwipeableQuestionCard(
     }
 
     LaunchedEffect(question.id) { offset.snapTo(0f) }
+    val images = remember(question.id) { TwinQuestionImages.forQuestion(question.id) }
 
     Column(
         modifier =
@@ -328,6 +334,7 @@ private fun SwipeableQuestionCard(
             label = stringResource(R.string.twin_questions_option_a),
             text = question.optionA,
             tag = "twinQuestions:optionA",
+            image = images?.a,
             onClick = { commit(TwinAnswer.A, -flingPx) },
             modifier = Modifier.weight(1f)
         )
@@ -335,17 +342,24 @@ private fun SwipeableQuestionCard(
             label = stringResource(R.string.twin_questions_option_b),
             text = question.optionB,
             tag = "twinQuestions:optionB",
+            image = images?.b,
             onClick = { commit(TwinAnswer.B, flingPx) },
             modifier = Modifier.weight(1f)
         )
     }
 }
 
+/**
+ * Opción A o B. Con [image] la foto ocupa la parte superior (recortada a lo ancho, decorativa: el texto ya
+ * describe la opción) y el rótulo y el texto van debajo; sin ella la tarjeta deja el texto abajo como antes.
+ * La foto cede altura al texto, así que con letra grande se achica en vez de recortar el texto.
+ */
 @Composable
 private fun OptionCard(
     label: String,
     text: String,
     tag: String,
+    @DrawableRes image: Int?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -355,16 +369,27 @@ private fun OptionCard(
         modifier =
         modifier
             .fillMaxWidth()
+            .clip(shape)
             .background(colors.s1, shape)
             .border(2.dp, colors.ln, shape)
             .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
-            .padding(16.dp)
-            .testTag(tag),
-        verticalArrangement = Arrangement.Bottom
+            .testTag(tag)
     ) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = colors.prt)
-        Spacer(Modifier.height(6.dp))
-        Text(text, style = MaterialTheme.typography.titleMedium, color = colors.tx)
+        if (image != null) {
+            Image(
+                painter = painterResource(image),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth().weight(1f).testTag("$tag:image")
+            )
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = colors.prt)
+            Spacer(Modifier.height(6.dp))
+            Text(text, style = MaterialTheme.typography.titleMedium, color = colors.tx)
+        }
     }
 }
 

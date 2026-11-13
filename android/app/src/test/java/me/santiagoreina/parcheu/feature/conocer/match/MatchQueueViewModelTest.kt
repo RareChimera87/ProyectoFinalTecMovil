@@ -331,4 +331,54 @@ class MatchQueueViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    /** Fallo de 0.2.2: con el match del día ya resuelto, F1 decía "¡Encontramos a alguien!" y abría F2. */
+    @Test
+    fun resolvedMatchOnEnqueueShowsAlreadyUsedAndDoesNotOpenF2() = runTest {
+        repository.enqueueResult = ApiResult.Success(matchedTicket("m1"))
+        repository.matchResults = mutableListOf(
+            ApiResult.Success(
+                testMatch(status = MatchStatus.SIMULATION, myChoice = MatchChoice.SIMULATION)
+            )
+        )
+        val vm = viewModel()
+        vm.effects.test {
+            assertEquals(QueuePhase.AlreadyUsed("m1"), vm.state.value.phase)
+            // El listener repite el ticket: sigue "ya usado" y no abre F2.
+            repository.tickets.emit(matchedTicket("m1"))
+            expectNoEvents()
+            assertEquals(QueuePhase.AlreadyUsed("m1"), vm.state.value.phase)
+            // "Ver match" sí abre F2 a pedido.
+            vm.onOpenMatchAgain()
+            assertEquals(MatchQueueEffect.OpenMatch("m1"), awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun closeWithoutLiveSearchLeavesWithoutDelete() = runTest {
+        repository.enqueueResult = ApiResult.Success(matchedTicket("m1"))
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
+        repository.cancelResult = ApiResult.Failure(AppError.Network)
+        val vm = viewModel()
+        vm.effects.test {
+            vm.onCancel()
+            assertEquals(MatchQueueEffect.Close, awaitItem())
+            assertEquals(0, repository.cancelCalls)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun closeFromErrorLeaves() = runTest {
+        repository.enqueueResult = ApiResult.Failure(AppError.Network)
+        val vm = viewModel()
+        vm.effects.test {
+            assertTrue(vm.state.value.phase is QueuePhase.Error)
+            vm.onCancel()
+            assertEquals(MatchQueueEffect.Close, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

@@ -92,16 +92,20 @@ Pasos que solo puede hacer el dueño del repo tras mezclar el PR `fix/gobernanza
 
 `android-release` ya no compila el AAB de prod con la URL de relleno (`api-parcheu-prod.us-central1.run.app`): lee dos
 variables de GitHub, falla antes de compilar si faltan, no son `https://`, la de la API no termina en `/` o la de Hosting
-sí, y Gradle (`verificarUrlsProd`) rechaza `assembleProdRelease`/`bundleProdRelease` si siguen siendo las de relleno.
-La verificación de Gradle aplica al AAB firmado con la llave de subida (`-Pparcheu.release.requireUploadKey=true`, que
-solo pasa `android-release`, o con las variables `UPLOAD_*` en el entorno); el `bundleProdRelease` de `android-ci`, sin
-llave, sigue construyéndose con el relleno y firmado con la de debug, que Play rechaza. Hasta que existan las
-variables, el release de prod falla a propósito.
+sí, y Gradle (`verificarUrlsProd`) rechaza `assembleProdRelease`/`bundleProdRelease` si la API es esa URL de relleno, no
+es `https://` o no termina en `/`. La verificación de Gradle aplica al AAB firmado con la llave de subida
+(`-Pparcheu.release.requireUploadKey=true`, que solo pasa `android-release`, o con las variables `UPLOAD_*` en el
+entorno); el `bundleProdRelease` de `android-ci`, sin llave, va firmado con la de debug, que Play rechaza.
+
+Desde 0.2.2 (fix/crash-r8-release) el valor por defecto de la API de prod en `app/build.gradle.kts` (`prodApiDefecto`)
+es la URL real `https://api-n3yxvjziqq-uc.a.run.app/`, la misma que `PARCHEU_API_URL_PROD`: un APK construido sin
+`-Pparcheu.apiUrl.prod` ya no apunta a un 404. Las variables siguen siendo obligatorias en `android-release` y mandan
+sobre el valor por defecto; si cambia el servicio de Cloud Run hay que actualizar las dos.
 
 | # | Qué | Quién | Cuándo |
 |---|---|---|---|
 | 1 | Crear las variables (Settings > Secrets and variables > Actions > Variables, a nivel de repo o en los environments `play` y `play-alpha`): `PARCHEU_API_URL_PROD` (URL https del servicio `api` de `parcheu-prod`, con el número de proyecto, o el hostname público que se use) y `PARCHEU_HOSTING_URL_PROD` (p. ej. `https://parcheu-prod.web.app`, sin barra final; Gradle la quita igualmente). `gh variable set PARCHEU_API_URL_PROD -R RareChimera87/ProyectoFinalTecMovil --body <url>` | El usuario | Antes del primer release de prod |
-| 2 | Para probar R8 en local con `assembleProdRelease` sin esas URLs basta con no tener las variables `UPLOAD_*` en el entorno (se firma con la llave de debug y `verificarUrlsProd` se salta). Con la llave de subida cargada hay que pasar las dos URL. | Cada desarrollador | Si hace falta |
+| 2 | Para probar R8 en local con `assembleProdRelease` basta con no tener las variables `UPLOAD_*` en el entorno (se firma con la llave de debug y `verificarUrlsProd` se salta). Con la llave de subida cargada se usan los valores por defecto (las URL reales) o los que se pasen con `-P`, que deben ser `https` y, en la API, terminar en `/`. | Cada desarrollador | Si hace falta |
 
 ## Auditoría 28 oct: assetlinks de prod (C-B9)
 
