@@ -146,6 +146,10 @@ enum class MascotMouth { Quiet, Talking }
  * [eyeColor] es el color de la contraforma: tinta por defecto; sobre un bloque de color (p. ej. una P
  * blanca sobre el héroe violeta) pasa el color de ese fondo para que el ojo se lea como un hueco.
  * Es decorativa: el llamador pone la descripción accesible en el contenedor.
+ *
+ * [lookingLeft] (experimental, sin uso en pantallas) deja la P sin espejar pero corre el brillo al lado
+ * izquierdo del ojo, para que "mire" hacia una P que está a su izquierda: alternativa a [mirrored], que
+ * hace que la P del otro se lea como una "q". Por defecto es `false` y la mascota no cambia.
  */
 @Composable
 fun TwinMascotGlyph(
@@ -155,13 +159,16 @@ fun TwinMascotGlyph(
     eyeColor: Color = ParcheUPalette.Ink,
     mouth: MascotMouth = MascotMouth.Quiet,
     simplified: Boolean = width <= MASCOT_SIMPLIFIED_MAX_WIDTH,
-    mirrored: Boolean = false
+    mirrored: Boolean = false,
+    lookingLeft: Boolean = false
 ) {
+    val lookLeft = if (simplified) LOOK_LEFT_SIMPLIFIED else LOOK_LEFT_UNITS
+    val glance = if (lookingLeft) -lookLeft else 0f
     Canvas(modifier.size(width, width * MASCOT_ASPECT_RATIO).clearAndSetSemantics { }) {
         if (mirrored) {
-            scale(-1f, 1f) { drawPMascot(color, eyeColor, simplified, mouth, 0f) }
+            scale(-1f, 1f) { drawPMascot(color, eyeColor, simplified, mouth, 0f, glance) }
         } else {
-            drawPMascot(color, eyeColor, simplified, mouth, 0f)
+            drawPMascot(color, eyeColor, simplified, mouth, 0f, glance)
         }
     }
 }
@@ -204,7 +211,8 @@ internal fun DrawScope.drawPMascot(
     eye: Color,
     simplified: Boolean,
     mouth: MascotMouth,
-    phase: Float
+    phase: Float,
+    glanceUnits: Float = 0f
 ) {
     val k = size.width / VIEW_W
     val animating = phase != 0f
@@ -224,7 +232,7 @@ internal fun DrawScope.drawPMascot(
             size = Size(eyeRx * 2, eyeRy * 2)
         )
         // Brillo: al conversar "mira" de lado a lado dentro del ojo.
-        val glance = swing * GLANCE_UNITS * k
+        val glance = (swing * GLANCE_UNITS + glanceUnits) * k
         val glintX = (if (simplified) 52f else 51f) * k + glance
         val glintY = (if (simplified) 28f else 26.5f) * k
         val glintR = (if (simplified) 4.5f else 3.4f) * k
@@ -286,4 +294,8 @@ private const val ERROR_ALPHA = 0.5f
 private const val STEM_HIGHLIGHT_ALPHA = 0.24f
 private const val SWAY_DEGREES = 4f
 private const val GLANCE_UNITS = 2.5f
+
+/** Corrimiento del brillo con `lookingLeft`: al lado izquierdo del ojo (51 → 43; simplificada 52 → 42). */
+private const val LOOK_LEFT_UNITS = 8f
+private const val LOOK_LEFT_SIMPLIFIED = 10f
 private const val TALK_PERIOD_MS = 420
