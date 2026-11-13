@@ -5,6 +5,7 @@ import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import me.santiagoreina.parcheu.contract.TwinPoint
+import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.profile.ProfileCallbacks
 import me.santiagoreina.parcheu.feature.profile.ProfileSamples
@@ -60,6 +61,21 @@ class ProfileScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun c3SixteenPoints() = capture("c3_16_points", ProfileSamples.sixteen)
+
+    @Test
+    fun c3Error() {
+        composeRule.setContent {
+            ParcheUTheme(darkTheme = dark) {
+                ProfileScreen(ProfileUiState.Error(AppError.Unknown()), ProfileCallbacks())
+            }
+        }
+        composeRule.onRoot().captureRoboImage(
+            filePath = "src/test/screenshots/profile/c3_error_$theme.png",
+            roborazziOptions = RoborazziOptions(
+                compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)
+            )
+        )
+    }
 
     companion object {
         @JvmStatic

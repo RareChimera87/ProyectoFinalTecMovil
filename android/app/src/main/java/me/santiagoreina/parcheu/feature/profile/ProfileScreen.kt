@@ -7,10 +7,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -19,13 +22,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.MeDto
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.TraitKey
 import me.santiagoreina.parcheu.contract.TwinDto
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChipSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
@@ -34,14 +45,13 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUIconButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheULinearProgress
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheURootTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.PillChip
-import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.SectionHeader
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlockDefaults
 import me.santiagoreina.parcheu.designsystem.components.compound.LineChart
 import me.santiagoreina.parcheu.designsystem.components.compound.SettingsRow
-import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
-import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.simulation.errorMessage
 import me.santiagoreina.parcheu.feature.simulation.forMode
@@ -113,7 +123,8 @@ fun ProfileScreen(
                     message = errorMessage(state.error),
                     retryLabel = "Reintentar",
                     onRetryClick = callbacks.onRetry,
-                    modifier = Modifier.testTag(ProfileTags.ERROR)
+                    illustration = { StateIllustration(state.error.stateProp(), error = true) },
+                    modifier = Modifier.fillMaxSize().testTag(ProfileTags.ERROR)
                 )
             is ProfileUiState.Loaded -> LoadedContent(state, callbacks)
         }
@@ -124,10 +135,11 @@ fun ProfileScreen(
 private fun LoadedContent(state: ProfileUiState.Loaded, callbacks: ProfileCallbacks) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        ProfileCard(state, callbacks.onEditProfile)
-        TwinCard(state.twin, callbacks.onTrainTwin)
+        ProfileHeader(state, callbacks.onEditProfile)
+        TwinHero(state.twin, state.chart, callbacks.onTrainTwin)
+        TraitsCard(state.twin)
         AccuracyCard(state.chart)
         ModesRow(state.me)
         ParcheUCard {
@@ -161,16 +173,18 @@ private fun Chevron() {
     )
 }
 
+/** Cabecera de C3 sin tarjeta (dirección A): el nombre como titular para que el héroe suba. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ProfileCard(state: ProfileUiState.Loaded, onEdit: () -> Unit) {
+private fun ProfileHeader(state: ProfileUiState.Loaded, onEdit: () -> Unit) {
     val colors = ParcheUTheme.colors
     val me = state.me
-    ParcheUCard {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = me.displayName ?: "Tú",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            color = colors.tx
+            style = MaterialTheme.typography.headlineLarge,
+            color = colors.tx,
+            modifier = Modifier.semantics { heading() }
         )
         val detail = listOfNotNull(me.career, state.universityName).joinToString(" · ")
         if (detail.isNotEmpty()) {
@@ -194,94 +208,150 @@ private fun ProfileCard(state: ProfileUiState.Loaded, onEdit: () -> Unit) {
     }
 }
 
+/** Precisión del gemelo para el héroe: el último punto con datos, o `null` si aún no hay. */
+private val TwinChart.latest: Int?
+    get() = when (this) {
+        is TwinChart.Single -> value
+        is TwinChart.Line -> last
+        else -> null
+    }
+
+/**
+ * Protagonista de C3: héroe violeta con la precisión en Sora 800 56 ("78 %"), la P que mira en blanco
+ * (ojo del color del héroe), el nivel y la experiencia, y "Entrenar a mi gemelo". Sin precisión todavía,
+ * el número grande es el nivel. Todo el texto va en onHero sólido (5,15:1).
+ */
 @Composable
-private fun TwinCard(twin: TwinDto, onTrain: () -> Unit) {
+private fun TwinHero(twin: TwinDto, chart: TwinChart, onTrain: () -> Unit) {
     val colors = ParcheUTheme.colors
-    ParcheUCard {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            TwinMascot(size = TwinMascotSize.M)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val accuracy = chart.latest
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(ParcheUTheme.shapes.hero)
+            .background(colors.hero, ParcheUTheme.shapes.hero)
+            .padding(HeroBlockDefaults.ContentPadding),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    "Tu gemelo · Nivel ${twin.level}",
-                    style =
-                    MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = colors.tx
+                    text = (
+                        if (accuracy !=
+                            null
+                        ) {
+                            "Qué tanto te conoce"
+                        } else {
+                            "Tu gemelo"
+                        }
+                        ).uppercase(),
+                    style = ParcheUTheme.textStyles.overline.copy(letterSpacing = 0.9.sp),
+                    color = colors.onHero
                 )
-                ParcheULinearProgress(
-                    progress = if (twin.xpNext > 0) twin.xp.toFloat() / twin.xpNext else 0f,
-                    contentDescription = "Experiencia: ${twin.xp} de ${twin.xpNext}"
-                )
-                Text(
-                    "${twin.xp}/${twin.xpNext} XP",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.mu
-                )
-            }
-        }
-        if (twin.traits.isNotEmpty()) {
-            SectionHeader(title = "Rasgos")
-            twin.traits.forEach { trait ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+                if (accuracy != null) {
                     Text(
-                        trait.key.label(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.tx,
-                        modifier = Modifier.weight(0.45f)
+                        "$accuracy %",
+                        style = ParcheUTheme.textStyles.hero56,
+                        color = colors.onHero,
+                        modifier =
+                        Modifier.testTag(ProfileTags.CHART_VALUE).semantics { heading() }
                     )
-                    Box(Modifier.weight(0.55f)) {
-                        ParcheULinearProgress(
-                            progress = trait.value.toFloat(),
-                            contentDescription =
-                            "${trait.key.label()}: ${(trait.value * 100).toInt()} %"
-                        )
-                    }
+                } else {
+                    Text(
+                        "Nivel ${twin.level}",
+                        style = ParcheUTheme.textStyles.hero46,
+                        color = colors.onHero,
+                        modifier = Modifier.semantics { heading() }
+                    )
+                }
+            }
+            TwinMascotGlyph(
+                width = 72.dp,
+                color = colors.onHero,
+                eyeColor = colors.hero,
+                modifier = Modifier.padding(start = 12.dp)
+            )
+        }
+        if (accuracy != null) {
+            Text(
+                "Tu gemelo · Nivel ${twin.level}",
+                style = MaterialTheme.typography.titleSmall,
+                color = colors.onHero
+            )
+        }
+        HeroProgress(
+            progress = if (twin.xpNext > 0) twin.xp.toFloat() / twin.xpNext else 0f,
+            contentDescription = "Experiencia: ${twin.xp} de ${twin.xpNext}"
+        )
+        Text(
+            "${twin.xp}/${twin.xpNext} XP",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onHero
+        )
+        TonalButton(
+            text = "Entrenar a mi gemelo",
+            onClick = onTrain,
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).testTag(ProfileTags.TRAIN)
+        )
+    }
+}
+
+/** Barra de experiencia sobre el héroe: pista heroQuiet y avance onHero (la de s2 no se ve en violeta). */
+@Composable
+private fun HeroProgress(progress: Float, contentDescription: String) {
+    val colors = ParcheUTheme.colors
+    val value = progress.coerceIn(0f, 1f)
+    val shape = RoundedCornerShape(3.dp)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+            .height(6.dp)
+            .clip(shape)
+            .background(colors.heroQuiet, shape)
+            .semantics {
+                this.contentDescription = contentDescription
+                progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
+            }
+    ) {
+        Box(Modifier.fillMaxWidth(value).fillMaxHeight().background(colors.onHero, shape))
+    }
+}
+
+@Composable
+private fun TraitsCard(twin: TwinDto) {
+    if (twin.traits.isEmpty()) return
+    val colors = ParcheUTheme.colors
+    ParcheUCard(Modifier.fillMaxWidth()) {
+        SectionHeader(title = "Rasgos")
+        twin.traits.forEach { trait ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    trait.key.label(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.tx,
+                    modifier = Modifier.weight(0.45f)
+                )
+                Box(Modifier.weight(0.55f)) {
+                    ParcheULinearProgress(
+                        progress = trait.value.toFloat(),
+                        contentDescription =
+                        "${trait.key.label()}: ${(trait.value * 100).toInt()} %"
+                    )
                 }
             }
         }
-        PrimaryButton(
-            text = "Entrenar a mi gemelo",
-            onClick = onTrain,
-            modifier = Modifier.fillMaxWidth().testTag(ProfileTags.TRAIN)
-        )
     }
 }
 
 @Composable
 private fun AccuracyCard(chart: TwinChart) {
     val colors = ParcheUTheme.colors
-    ParcheUCard(modifier = Modifier.testTag(ProfileTags.CHART)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Qué tanto te conoce",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = colors.tx
-            )
-            val value = when (chart) {
-                is TwinChart.Single -> chart.value
-                is TwinChart.Line -> chart.last
-                else -> null
-            }
-            if (value != null) {
-                Text(
-                    "$value %",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = colors.prt,
-                    modifier = Modifier.testTag(ProfileTags.CHART_VALUE)
-                )
-            }
-        }
+    ParcheUCard(modifier = Modifier.fillMaxWidth().testTag(ProfileTags.CHART)) {
+        SectionHeader(title = "Evolución")
         when (chart) {
             TwinChart.Empty ->
                 Text(
