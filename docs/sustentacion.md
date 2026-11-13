@@ -1,11 +1,14 @@
 # ParcheU · Guion de sustentación
 
-Guion de 10 minutos para la sustentación del proyecto final (E10.7). Está pensado para que cada integrante
-sepa exactamente qué dice, qué muestra y qué comando corre. Todo lo que se enseña funciona en el flavor `dev`
-contra el backend del homeserver ([ADR-0033](adr/0033-backend-en-homeserver.md)); nada del guion depende de
-Play Console. Qué se entrega de cara a Play y en qué estado está se declara en la sección 8, sin adornos.
+Guion de 10 minutos para la sustentación del proyecto final (E10.7), con demo en vivo el **miércoles 18 de
+noviembre de 2026** (ensayo general el martes 17). Está pensado para que cada integrante sepa exactamente qué dice,
+qué muestra y qué comando corre. La demo principal es contra **producción** (`parcheu-prod`, Cloud Run `api`) con el
+APK firmado 0.3.0; el flavor `dev` contra el backend del homeserver ([ADR-0033](adr/0033-backend-en-homeserver.md))
+queda como respaldo. Nada del guion depende de Play Console. Qué se entrega de cara a Play y en qué estado está se
+declara en la sección 8, sin adornos.
 
-Índice: [1 Reparto](#1-reparto-y-tiempos) · [2 Antes de empezar](#2-antes-de-empezar-lista-de-chequeo) ·
+Índice: [1 Reparto](#1-reparto-y-tiempos) · [2 Antes de empezar](#2-antes-de-empezar-lista-de-chequeo)
+([orden de la víspera y del día](#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento)) ·
 [3 Guion minuto a minuto](#3-guion-minuto-a-minuto) · [4 Demo de mutación](#4-demo-de-mutación-de-privacidad) ·
 [5 Capturas frente a mockups](#5-capturas-roborazzi-frente-a-mockups) · [6 Recorrido por los ADR](#6-recorrido-por-los-adr) ·
 [7 Costo de la IA](#7-costo-de-la-ia) · [8 Estado honesto](#8-estado-honesto-y-preguntas-esperadas) ·
@@ -43,34 +46,130 @@ Hay dos entornos posibles y la recomendación es usar los dos con funciones dist
 | ParcheU+ | Sí: `grant-plus` existe en dev | Sí, con el job `grant-plus` (Plus manual, acotado y auditado; [ver abajo](#parcheu-en-la-demo-entorno-b)). `/internal/dev/grant-plus` sigue sin existir y no hay compra posible sin la app en Play |
 | Qué muestra | Todo el flujo, incluida F8 | Evidencia de producción real: health, Hosting con términos y privacidad, login |
 
-**Recomendación (plan decidido el 12 nov):** demo principal en B (prod) con los perfiles de demostración encendidos, un
-teléfono y el emulador. A (homeserver) queda como respaldo si prod falla en la sala. En B se muestra el despliegue real
-(`curl https://api-n3yxvjziqq-uc.a.run.app/v1/health`, <https://parcheu-prod.web.app> con las páginas legales y un
-inicio de sesión desde el APK). ParcheU+ se muestra con el Plus manual del job `grant-plus`, una vez aplicado y desplegado
-([ver abajo](#parcheu-en-la-demo-entorno-b)). El flujo de pago no se muestra porque depende de Play. Para la demo, prod
-tiene `DEMO_USERS_ENABLED=true` y un tope de IA temporal de 5 USD/día en total y 1,5 USD/día por persona; el costo
-mínimo (1 USD/día y 0,25 USD/día por persona, `DEMO_USERS_ENABLED=false`) vuelve con los pasos de
+**Recomendación (plan decidido el 12 nov; demo el miércoles 18 nov):** demo principal en B (prod) con los perfiles de
+demostración encendidos, un teléfono y el emulador. A (homeserver) queda como respaldo si prod falla en la sala. En B
+se muestra el despliegue real (`curl https://api-n3yxvjziqq-uc.a.run.app/v1/health`, <https://parcheu-prod.web.app>
+con las páginas legales y un inicio de sesión desde el APK 0.3.0). ParcheU+ se muestra con el Plus manual del job
+`grant-plus`, una vez creado y desplegado ([ver abajo](#parcheu-en-la-demo-entorno-b)). El flujo de pago no se muestra
+porque depende de Play. Hoy prod corre la API **v0.2.0**; la demo exige **v0.3.0** (ver las advertencias de abajo).
+Para la demo, prod tiene `DEMO_USERS_ENABLED=true` y un tope de IA temporal de 5 USD/día en total y 1,5 USD/día por
+persona; el costo mínimo (1 USD/día y 0,25 USD/día por persona, `DEMO_USERS_ENABLED=false`) vuelve con los pasos de
 [pendientes-humanos.md](pendientes-humanos.md#después-de-la-demo-pendiente) tras la sustentación.
 
-**Preparación la víspera (entorno B):**
+### Orden de la víspera y del día de la demo (único procedimiento)
+
+Este es el único lugar donde se fija el orden; [pendientes-humanos.md](pendientes-humanos.md#parcheu-manual-para-la-demo-i1),
+[operacion.md](operacion.md#parcheu-manual-para-una-demo-job-grant-plus) y la sección del proveedor `anthropic` enlazan
+aquí. Lo que se deshace después está en [pendientes-humanos.md](pendientes-humanos.md#después-de-la-demo-pendiente).
+
+**Por qué no basta un `terraform apply` normal.** Hoy prod tiene cosas puestas fuera de Terraform o con una variable:
+`demo_users_enabled=true` se pasó con `-var` en el último `apply` (el valor por defecto es `false`,
+`infra/terraform/envs/prod/main.tf:49-52`), y con `gcloud run services update` están `DEMO_CONNECT_PROBABILITY=1` (no
+existe en Terraform) y los topes de IA (Terraform los fija en 1 y 0,25 USD, `main.tf:139-140`). El servicio `api` y los
+cuatro jobs **no** ignoran los cambios de variables de entorno (`ignore_changes` solo cubre imagen, argumentos,
+revisión, etiquetas y cliente: `modules/platform/cloud_run.tf:98-105` y `:173-178`), y el escalado mínimo tampoco
+(`cloud_run.tf:61-64`, `main.tf:93`: 0). Por eso un `apply` completo, sin más, deja `DEMO_USERS_ENABLED=false`, devuelve
+los topes a 1 y 0,25, borra `DEMO_CONNECT_PROBABILITY` y baja el mínimo a 0, justo antes de la demo.
+
+**Regla:** antes de la demo, lo único que necesita Terraform en prod es **crear el job `grant-plus`**. Si el plan muestra
+cualquier cambio sobre el servicio `api` o sobre `DEMO_USERS_ENABLED`, **no apliques**.
+
+1. **Mezclar a `dev` el PR de `feature/plus-manual` y cortar la 0.3.0:** `release/0.3.0` → `main` (aprueba el usuario).
+   Todavía **sin** tag: el apply del paso 2 se corre desde un árbol que ya tenga el job declarado (`dev` o `release/0.3.0`).
+2. **Crear el job con un apply acotado** (recomendado). Desde la raíz del repo, con tu ADC, en el árbol del paso 1:
+
+   ```bash
+   cd infra/terraform/envs/prod && terraform init
+   terraform plan -target='module.platform.google_cloud_run_v2_job.this["grant-plus"]' \
+     -var 'alert_emails=["sanctireinadiaz@gmail.com"]' -var demo_users_enabled=true -out=grant-plus.tfplan
+   terraform show grant-plus.tfplan | grep -E '^Plan:|will be|must be|# '
+   ```
+
+   El resultado esperado es `Plan: 1 to add, 0 to change, 0 to destroy`, con un solo `# ... will be created`: el job
+   `grant-plus`. Se admite `2 to add` solo si el segundo recurso es
+   `module.platform.google_secret_manager_secret.this["anthropic-api-key"]`: el job lo referencia en `SECRET_ANTHROPIC_API_KEY`
+   (`cloud_run.tf:29`), así que `-target` lo arrastra si aún no existe; es un contenedor vacío y no cambia nada de la
+   API. Cualquier `change` o `destroy`, cualquier recurso `google_cloud_run_v2_service.api` o cualquier línea sobre
+   `DEMO_USERS_ENABLED`: **no apliques** (¿otra rama? ¿falta `-target`?). Si el plan es el esperado:
+
+   ```bash
+   terraform apply grant-plus.tfplan
+   ```
+
+   `-var demo_users_enabled=true` solo hace que el job nuevo nazca con la misma variable que los otros tres jobs;
+   `grant-plus` no depende de ella. Terraform avisará de que el plan está acotado: es lo que se busca.
+   - **Alternativa (más riesgosa):** el `apply` completo con la variable demo, y luego volver a poner con `gcloud` lo que
+     Terraform pisa. Revisa antes que el plan **no** cambie `DEMO_USERS_ENABLED` (debe quedar `true`); sí mostrará
+     cambios esperados en `api` y los jobs (topes de IA, `AI_PROVIDER`, `SECRET_ANTHROPIC_API_KEY`, el mínimo de
+     instancias y el contenedor del secreto). Si ves `DEMO_USERS_ENABLED` pasar a `false`, falta el `-var`: no apliques.
+
+     ```bash
+     cd infra/terraform/envs/prod
+     terraform plan -var 'alert_emails=["sanctireinadiaz@gmail.com"]' -var demo_users_enabled=true -out=plan.tfplan
+     terraform apply plan.tfplan
+     # Terraform devolvió los topes a 1 / 0,25, quitó DEMO_CONNECT_PROBABILITY y bajó el mínimo a 0: repón (paso 4).
+     ```
+3. **Tag `v0.3.0` y aprobar `deploy-prod`.** El workflow ejecuta `migrate`, pone la imagen nueva a `seed-demo`, `purge-demo`
+   y `grant-plus` **solo si `grant-plus` ya existe** (`.github/workflows/_desplegar-api.yml:86-96`), despliega `api` y
+   comprueba `/v1/health`. Por eso el paso 2 va **antes** del 3: así el job nace con la imagen de relleno y el despliegue
+   se la cambia. Si se hizo al revés (el job se creó después del despliegue), el job tiene la imagen de relleno y falla:
+   ponle la imagen vigente a mano, sin tocar nada más:
+
+   ```bash
+   gcloud run jobs update grant-plus --region us-central1 --project parcheu-prod \
+     --image us-central1-docker.pkg.dev/parcheu-prod/parcheu/api:v0.3.0 --quiet
+   ```
+
+   Comprueba la versión servida: `curl https://api-n3yxvjziqq-uc.a.run.app/v1/health` debe decir `0.3.0`, y la imagen del
+   job: `gcloud run jobs describe grant-plus --region us-central1 --project parcheu-prod --format=json | jq -r '.spec.template.spec.template.spec.containers[0].image'`.
+4. **Topes de IA, probabilidad de conexión y una instancia caliente** (la víspera o esa mañana; es el mismo comando si hubo
+   que reponerlos tras la alternativa del paso 2):
+
+   ```bash
+   gcloud run services update api --region us-central1 --project parcheu-prod \
+     --update-env-vars AI_DAILY_BUDGET_USD=5,AI_USER_DAILY_BUDGET_USD=1.5,DEMO_CONNECT_PROBABILITY=1 --min-instances=1
+   gcloud run services describe api --region us-central1 --project parcheu-prod --format=json \
+     | jq -r '.spec.template.spec.containers[0].env[] | select(.name|test("DEMO|AI_")) | "\(.name)=\(.value)"'
+   ```
+
+   Debe verse `DEMO_USERS_ENABLED=true`, `AI_DAILY_BUDGET_USD=5`, `AI_USER_DAILY_BUDGET_USD=1.5` y
+   `DEMO_CONNECT_PROBABILITY=1`. Las revisiones nuevas de `deploy-prod` conservan estas variables (solo cambia la imagen).
+5. **Sembrar los demo:** `gcloud run jobs execute seed-demo --region us-central1 --project parcheu-prod --wait`.
+6. **Instalar el APK 0.3.0** en el teléfono y el emulador ([cómo generarlo](#generar-el-apk-de-prod-instalable-sin-play)),
+   iniciar sesión con las dos cuentas (al menos una vez cada una) y **conceder Plus** a la del teléfono con el job
+   ([comandos](#parcheu-en-la-demo-entorno-b)).
+7. **Ensayo general el martes 17 nov** con cronómetro y una o dos simulaciones, no más (ver el cupo de IA abajo).
+
+**Advertencias comprobadas para la demo:**
+
+- **APK 0.3.0 con backend v0.3.0.** Con el backend v0.2.0 un amigo agregado por código muestra "0 %" en lugar de
+  "Sin simular". Despliega la 0.3.0 (paso 3) antes de instalar el APK.
+- **No abras "Gestionar suscripción" (G4)** con el Plus manual: describe una suscripción de Google Play cancelada
+  (detalle en [ParcheU+ en la demo](#parcheu-en-la-demo-entorno-b)).
+- **No cambies de cuenta en el mismo dispositivo durante la demo** (cerrar sesión e iniciar con otra), mientras la
+  corrección de navegación no esté en el APK instalado: usa un teléfono por cuenta (teléfono y emulador).
+
+**Preparación la víspera (entorno B)**, después de los pasos 1 a 5 del [orden de arriba](#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento):
 
 - [ ] Dos cuentas reales, una en el teléfono y otra en el emulador, conectadas entre sí por QR, con onboarding y gemelo
       listos. Simular exige una arista `CONNECTED`; con una sola cuenta no hay demo.
-- [ ] Volver a ejecutar `seed-demo` el día de la demo, antes de empezar:
+- [ ] Volver a ejecutar `seed-demo` el día de la demo (miércoles 18), antes de empezar:
       `gcloud run jobs execute seed-demo --region us-central1 --project parcheu-prod --wait`. Un demo da como máximo un
       match al día y vuelve a la fila solo al repetir el job (sección E4.9, paso 2, de
       [pendientes-humanos.md](pendientes-humanos.md#e49--usuarios-semilla-de-demo)).
 - [ ] Añadir una cuenta de Google al emulador para la segunda cuenta de la demo.
-- [ ] ParcheU+ para la cuenta del teléfono: conceder 1 día con el job `grant-plus` la víspera o esa mañana
-      ([cómo](#parcheu-en-la-demo-entorno-b)). Comprobar que Perfil dice "ParcheU+ activo". La otra cuenta queda gratis
-      para mostrar la diferencia.
+- [ ] ParcheU+ para la cuenta del teléfono: conceder con el job `grant-plus` esa mañana (`--days=1`) o la víspera con
+      `--days=2` ([cómo](#parcheu-en-la-demo-entorno-b)); el job debe existir y tener la imagen 0.3.0 (pasos 2 y 3 del
+      orden). Comprobar que Perfil dice "ParcheU+ activo". La otra cuenta queda gratis para mostrar la diferencia.
 - [ ] Revocarlo al terminar (`revoke-plus`, [operacion.md](operacion.md#parcheu-manual-para-una-demo-job-grant-plus)).
-- [ ] Abrir la app 15 minutos antes de empezar: Cloud Run con mínimo 0 tiene arranque en frío en la primera petición.
-- [ ] No gastar el tope de IA de prod el mismo día: ensayar la víspera con una o dos simulaciones, no más, y dejar el
-      resto del cupo (5 USD/día en total mientras el tope temporal esté puesto) para la sustentación.
+- [ ] Abrir la app 15 minutos antes de empezar: con el mínimo de instancias en 1 (paso 4 del orden) el arranque en frío no debería aparecer; si el paso 4 no se hizo, Cloud Run con mínimo 0 tarda varios segundos en la primera petición.
+- [ ] No gastar el tope de IA de prod el mismo día: ensayar el martes 17 con una o dos simulaciones, no más, y dejar el
+      cupo del miércoles 18 (5 USD/día en total mientras el tope temporal esté puesto) para la sustentación.
 - [ ] El APK instalado y con la sesión iniciada en ambos teléfonos antes de entrar a la sala.
 
-**Generar el APK de prod instalable sin Play** (desde `android/`; los nombres salen de `android/app/build.gradle.kts`):
+#### Generar el APK de prod instalable sin Play
+
+Desde `android/`; los nombres salen de `android/app/build.gradle.kts`. La demo usa la versión **0.3.0**:
 
 ```bash
 # 1. google-services.json de prod (no se versiona: .gitignore lo excluye). Queda en android/app/src/prod/
@@ -84,7 +183,7 @@ export UPLOAD_KEYSTORE_PASSWORD=...  UPLOAD_KEY_ALIAS=...  UPLOAD_KEY_PASSWORD=.
 #    -Pparcheu.release.minify=false construye un APK sin R8 (solo para depurar o como respaldo de la demo).
 cd android
 ./gradlew :app:assembleProdRelease -Pparcheu.apiUrl.prod=https://api-n3yxvjziqq-uc.a.run.app/ \
-  -Pparcheu.versionName=0.2.2 -Pparcheu.versionCode=22
+  -Pparcheu.versionName=0.3.0 -Pparcheu.versionCode=31
 
 # 4. Instalar en cada teléfono
 adb install -r app/build/outputs/apk/prod/release/app-prod-release.apk
@@ -112,7 +211,8 @@ Lista general (entorno A). Hacerlo 30 minutos antes. Cada punto tiene su respons
 ### ParcheU+ en la demo (entorno B)
 
 Prod no vende ParcheU+ mientras la app no esté en Play. Para la demo, I1 lo activa a mano para la cuenta del teléfono
-con el job `grant-plus`. Comandos, comprobación y revocación están en
+con el job `grant-plus`, que debe existir y tener la imagen 0.3.0 (pasos 2 y 3 del
+[orden de la víspera](#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento)). Comandos, comprobación y revocación están en
 [operacion.md](operacion.md#parcheu-manual-para-una-demo-job-grant-plus):
 
 ```bash
@@ -331,11 +431,11 @@ Decir esto antes de que lo pregunten. Actualizar esta tabla el día antes con el
 
 | Tema | Estado |
 |---|---|
-| App y backend en dev | Funcionales de punta a punta en el flavor `dev` contra el homeserver |
-| Publicación en Play | Prioridad del usuario del 27 oct: la app funcional en `dev` va primero. Pipeline de release, ficha y Data safety están como código y documentos; la ejecución en Play Console (prueba cerrada, acceso a producción) depende de pasos humanos en [pendientes-humanos.md](pendientes-humanos.md) y [play-console.md](play-console.md). **Registrar aquí la fecha real antes de sustentar.** |
-| Prod en GCP | Aplicado el 4 nov 2026: plataforma y bootstrap de prod, API v0.1.0 en Cloud Run y Hosting en parcheu-prod.web.app. El desarrollo sigue en el homeserver |
+| App y backend | Funcionales de punta a punta en prod (APK 0.3.0 firmado, demo principal) y en el flavor `dev` contra el homeserver (respaldo) |
+| Publicación en Play | Prioridad del usuario del 27 oct: la app funcional en `dev` va primero. Pipeline de release, ficha y Data safety están como código y documentos; la ejecución en Play Console (prueba cerrada, acceso a producción) depende de pasos humanos en [pendientes-humanos.md](pendientes-humanos.md) y [play-console.md](play-console.md). **Registrar aquí la fecha real antes de sustentar (miércoles 18 nov).** |
+| Prod en GCP | Aplicado el 4 nov 2026: plataforma y bootstrap de prod y Hosting en parcheu-prod.web.app. La API desplegada hoy es la v0.2.0 (12 nov); la v0.3.0 se despliega antes de la demo del miércoles 18 nov. El desarrollo sigue en el homeserver |
 | Fuera de alcance de la sustentación | E10.8 (acceso a producción y login desde una instalación de Play) y E10.9 (release 1.0 en Play): no hay app en Play porque la verificación de identidad de la cuenta de desarrollador está pendiente, y la regla de 12 testers durante 14 días hace imposible una 1.0 en Play antes de fin de noviembre. No se presentan como cumplidos |
-| Qué sí está en producción | GCP `parcheu-prod` con la API v0.1.0 (<https://api-n3yxvjziqq-uc.a.run.app>) y Hosting (<https://parcheu-prod.web.app>); MVP de costo mínimo. ParcheU+ se activa en prod solo a mano, con el job `grant-plus` (con vencimiento, auditado y sin ruta HTTP; enmienda de [ADR-0013](adr/0013-billing-servidor-rtdn.md)). Sin app en Play no se puede comprar |
+| Qué sí está en producción | GCP `parcheu-prod` con la API v0.2.0 hoy y v0.3.0 para la demo (<https://api-n3yxvjziqq-uc.a.run.app>) y Hosting (<https://parcheu-prod.web.app>); MVP de costo mínimo. ParcheU+ se activa en prod solo a mano, con el job `grant-plus` (con vencimiento, auditado y sin ruta HTTP; enmienda de [ADR-0013](adr/0013-billing-servidor-rtdn.md)). Sin app en Play no se puede comprar |
 | Compras | Verificación en servidor lista; en dev se prueba con `grant-plus` y sin RTDN |
 | Notificaciones push | Reales con `PARCHEU_ENV=dev`; no hay RTDN de renovaciones en el homeserver |
 | ADR-0029 (texto del ahorro del plan anual) | Propuesta, pendiente de confirmación del usuario |
@@ -352,9 +452,9 @@ Preguntas probables y respuesta corta:
 
 | Falla | Qué hacer |
 |---|---|
-| El backend no responde | I1 revisa `docker compose logs parcheu-api` ([operacion.md](operacion.md#backend-de-dev-en-el-homeserver)); mientras tanto I2 enseña las capturas de la sección 5 y [c4.md](c4.md) |
+| El backend de prod no responde | I1 revisa los logs de Cloud Run ([operacion.md](operacion.md#logs)) y el humo de `/v1/health`; si no se recupera en un par de minutos, pasar al respaldo (entorno A, flavor `dev` contra el homeserver: `docker compose logs parcheu-api`, [operacion.md](operacion.md#backend-de-dev-en-el-homeserver)); mientras tanto I2 enseña las capturas de la sección 5 y [c4.md](c4.md) |
 | La simulación tarda o falla | Enseñar una simulación ya terminada de la cuenta de ensayo (F7/F8); explicar `AiBudgetExceeded` si fue el tope |
 | La fila está vacía | Es el riesgo 8 del [PLAN](PLAN.md): usar "Simular" desde un perfil o los usuarios demo sembrados |
 | La demo de mutación no compila | Mostrar la salida grabada del ensayo (guardarla el día anterior) y `--verificar-anclas` |
-| El teléfono no alcanza el homeserver (sin LAN ni Tailscale) | Pasar a la evidencia del entorno B (APK de prod, health y Hosting) y contar F8 con capturas |
+| El teléfono no alcanza el homeserver (sin LAN ni Tailscale) | Quedarse en el entorno B (prod, APK 0.3.0, health y Hosting) y contar F8 con capturas |
 | Sin red en la sala | Hotspot del teléfono de I3; si el homeserver no es alcanzable, todo el guion se puede contar con capturas y [c4.md](c4.md) |

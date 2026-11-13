@@ -223,13 +223,22 @@ gcloud run jobs execute seed-demo --region $R --project $P --wait    # solo con 
 Los jobs usan la imagen del último despliegue. Antes del **primer** `migrate`, el usuario IAM de `sa-api` necesita
 permisos sobre el esquema `public` (`GRANT`, ver [infra/terraform/README.md](../infra/terraform/README.md)). Para
 encender o apagar los demo cambia `demo_users_enabled` en Terraform (`terraform apply -var demo_users_enabled=true`
-en `envs/prod`): una variable puesta con `gcloud run services update --update-env-vars` la borra el siguiente `apply`.
+en `envs/prod`): una variable puesta con `gcloud run services update --update-env-vars` la borra el siguiente `apply`
+(el servicio `api` y los jobs no ignoran los cambios de variables de entorno ni de instancias mínimas:
+`modules/platform/cloud_run.tf`, `lifecycle.ignore_changes`). Por eso, con la demo del 18 nov armada (demo encendidos, topes de
+IA temporales, `DEMO_CONNECT_PROBABILITY=1`), **no corras un `apply` completo** hasta pasada la demo; el orden seguro está en
+[sustentacion.md](sustentacion.md#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento) y la vuelta a costo
+mínimo en [pendientes-humanos.md](pendientes-humanos.md#después-de-la-demo-pendiente).
 
 ### ParcheU+ manual para una demo (job `grant-plus`)
 
 Plus sin pasar por Play, acotado y auditado (enmienda de [ADR-0013](adr/0013-billing-servidor-rtdn.md)). No hay ruta
 HTTP. Solo lo ejecuta quien tiene `run.jobs.runWithOverrides` en `parcheu-prod` (el propietario). El job existe
-tras el `terraform apply` que lo declara, y tiene la imagen del último despliegue. Sin argumentos falla a propósito.
+tras un `terraform apply` que lo declare y tiene la imagen del último despliegue **si ya existía cuando se desplegó**
+(`_desplegar-api.yml` solo actualiza su imagen si el job existe; si no, queda con la imagen de relleno y falla). Antes de
+la demo se crea con un apply **acotado** (`-target`), no con uno completo: el procedimiento, el orden y el comando para
+ponerle la imagen a mano están en
+[sustentacion.md](sustentacion.md#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento). Sin argumentos falla a propósito.
 
 ```bash
 # Conceder (1..30 días, 7 por defecto). Correo exacto (sin comodines) o, mejor, el uid de Firebase.
@@ -316,6 +325,13 @@ Anthropic con la clave del secreto `anthropic-api-key` ([ADR-0008](adr/0008-ia-v
 enmienda del 12 nov 2026). **Antes de activarlo** en prod: la versión desplegada debe incluir `ClaudeApiClient` y la
 política de privacidad y Data safety deben nombrar a Anthropic ([ADR-0020](adr/0020-region-y-transferencia-internacional.md),
 enmienda del 12 nov 2026). Los topes (`AI_DAILY_BUDGET_USD`, `AI_USER_DAILY_BUDGET_USD`) aplican igual con cualquier proveedor.
+
+**Hazlo después de la demo del miércoles 18 nov, no antes.** El `terraform plan/apply` de abajo es **completo**: sin
+`-var demo_users_enabled=true` deja `DEMO_USERS_ENABLED=false` en la `api` y los jobs, y además devuelve los topes de IA a
+1 y 0,25 USD y borra `DEMO_CONNECT_PROBABILITY`, justo lo que la demo necesita. Primero la vuelta a costo mínimo
+([pendientes-humanos.md](pendientes-humanos.md#después-de-la-demo-pendiente)); si por una razón de fuerza mayor hay que
+aplicar antes, agrega `-var demo_users_enabled=true` y repón después los topes y la probabilidad con `gcloud`
+([sustentacion.md](sustentacion.md#orden-de-la-víspera-y-del-día-de-la-demo-único-procedimiento), paso 4).
 
 ```bash
 # 1. La clave, desde un archivo local con permisos 600 (nunca se imprime). Crea una versión nueva cada vez.
