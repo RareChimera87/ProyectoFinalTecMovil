@@ -41,7 +41,7 @@ expect fail "job purge-demo con otro argumento" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_job" and .values.name=="purge-demo" then .values.template[0].template[0].containers[0].args=["serve"] else . end')"
 expect fail "falta el job de Scheduler purge-sweep (E8.3)" "$ROOT/scripts/check-plan.sh" \
   "$(drop plan-dev.json '.type=="google_cloud_scheduler_job" and .values.name=="purge-sweep"')"
-for job in match-sweep scenario-sweep simulation-recovery; do
+for job in match-sweep scenario-sweep simulation-recovery moderation-sweep; do
   expect fail "falta el job de Scheduler $job" "$ROOT/scripts/check-plan.sh" \
     "$(drop plan-dev.json ".type==\"google_cloud_scheduler_job\" and .values.name==\"$job\"")"
 done

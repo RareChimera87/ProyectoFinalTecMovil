@@ -446,7 +446,7 @@ Base: `https://api-<entorno>.../v1`. Autenticación: `Authorization: Bearer <Fir
 | POST `/v1/billing/verify` | `VerifyPurchase{purchaseToken, productId}` | `EntitlementDto` | FORBIDDEN, VALIDATION |
 | GET `/v1/admin/reports` · POST `/v1/admin/reports/{id}/resolve` | `Resolve{action: DISMISS\|HIDE_MESSAGE\|SUSPEND_24H\|BAN, note?}` | `Page<AdminReport>` / `AdminReport` | FORBIDDEN |
 | POST `/internal/tasks/simulate` · `/judge-scenario` (cola `simulations`) · `/build-persona` · `/extract-memories` · `/moderate` · `/name-community` (cola `ai-light`) · `/purge-user` (cola `maintenance`) | `{id}` | 204 | (OIDC) |
-| POST `/internal/jobs/communities` · `/memories` · `/twin-accuracy` · `/retention` · `/match-sweep` · `/scenario-sweep` · `/purge-sweep` · `/simulation-recovery` | - | 204 | (OIDC, Scheduler) |
+| POST `/internal/jobs/communities` · `/memories` · `/twin-accuracy` · `/retention` · `/match-sweep` · `/scenario-sweep` · `/purge-sweep` · `/simulation-recovery` · `/moderation-sweep` | - | 204 | (OIDC, Scheduler) |
 | POST `/internal/billing/rtdn` | sobre Pub/Sub push | 204 | (OIDC) |
 | POST `/internal/dev/grant-plus` | `{userId, days}` | 204 (404 en prod) | - |
 
@@ -771,7 +771,7 @@ Amenazas principales (STRIDE resumido): suplantación (tokens de Firebase verifi
 | Cloud SQL Postgres 16 | `db-f1-micro`, sin HA | MVP (4 nov, por costo): `db-f1-micro`, 10 GB HDD, backups diarios sin PITR; con usuarios reales `db-g1-small` y PITR |
 | Firestore | nativo, nam5 | nativo, nam5 |
 | Cloud Tasks | `simulations` (2/s, 10 concurrentes): `simulate`, `judge-scenario`; `ai-light` (5/s): `build-persona`, `extract-memories`, `moderate`, `name-community`; `maintenance` (1/s): `purge-user` | igual, ajustable por variable |
-| Cloud Scheduler | comunidades lunes 03:00, memorias 02:00, `twin-accuracy` domingos 23:00, `retention` diario 03:30, `purge-sweep` cada hora, `match-sweep` y `scenario-sweep` cada minuto, `simulation-recovery` cada 15 min (Bogotá; mismos jobs que el `InProcessScheduler` del homeserver) | igual |
+| Cloud Scheduler | comunidades lunes 03:00, memorias 02:00, `twin-accuracy` domingos 23:00, `retention` diario 03:30, `purge-sweep` cada hora, `match-sweep` y `scenario-sweep` cada minuto, `simulation-recovery` y `moderation-sweep` cada 15 min (Bogotá; mismos jobs que el `InProcessScheduler` del homeserver) | igual |
 | Pub/Sub | `play-rtdn` (sin uso) | `play-rtdn` + push OIDC |
 | Firebase Hosting | sí | sí (`/privacidad`, `/terminos`, `/borrar-cuenta`, `/i/*`, assetlinks, `admin.html`) |
 | Secret Manager | contenedores `hmac-anon-key`, `play-sa` (si aplica) creados por Terraform **sin valor**; el valor lo carga `scripts/cargar-secretos.sh` (I1 en dev, el usuario en prod) | igual |

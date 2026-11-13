@@ -41,5 +41,9 @@ object ChatMessages : Table("chat_messages") {
     val hidden = bool("hidden").default(false)
     val clientId = text("client_id").nullable()
     val createdAt = timestampWithTimeZone("created_at")
+    /** Nulo = la moderación aún no terminó con este mensaje (lo recupera el barrido `moderation-sweep`). */
+    val moderatedAt = timestampWithTimeZone("moderated_at").nullable()
+    /** El aviso de ayuda ante autolesión falló y sigue pendiente (`moderate-help`). */
+    val moderationHelpPending = bool("moderation_help_pending").default(false)
     override val primaryKey = PrimaryKey(id)
 }

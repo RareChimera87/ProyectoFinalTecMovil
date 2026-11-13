@@ -272,7 +272,7 @@ del usuario rondan 20 USD). Dev no cuesta en GCP: no está desplegado allí.
 | Disco de Cloud SQL | 10 GB HDD | ~0,9 | SSD (~1,7; recrea la instancia) |
 | Backups de Cloud SQL | diarios, 7 copias, sin PITR | < 0,1 | PITR activado |
 | Cloud Run `api` y jobs | min 0, máx 2, `cpu_idle` | ~0 (capa gratuita) | min 1 (~7-8) |
-| Cloud Scheduler | 8 trabajos (3 gratis por cuenta de facturación; 5 × ~0,10) | ~0,5 | igual |
+| Cloud Scheduler | 9 trabajos (3 gratis por cuenta de facturación; 6 × ~0,10) | ~0,6 | igual |
 | Artifact Registry | ~10 imágenes de la API | ~0,1-0,3 | igual |
 | Cloud Tasks, Pub/Sub, Secret Manager, Firestore, Hosting, Logging | volumen de demostración | 0 (capa gratuita) | según uso |
 | Monitoring | uptime y métricas en la capa gratuita; solo la alerta `report-created` | ~0,1 | ~0,6 con las seis alertas |
@@ -351,10 +351,11 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
 
 1. `docker compose up -d` levanta lo que falte; la base conserva el volumen `parcheu-pgdata`.
 2. La cola en proceso **pierde lo que tenía en memoria**. Se recuperan solas: las simulaciones `QUEUED` o `RUNNING` de entre
-   10 min y 24 h (`simulation-recovery`, cada 15 min) y las purgas de cuentas (`purge-sweep`, cada hora). Las tareas de
-   gemelo y memorias se rehacen al siguiente uso o a las 02:00 de Bogotá (`memories`). **No se recuperan** las tareas
-   `moderate` ni `moderate-help` (la ayuda ante `SELF_HARM`, E8.6): no tienen barrido. El reporte sí queda en la base; tras un corte,
-   revisa en `admin.html` los reportes de prioridad 2 recientes. Es un hueco de código conocido (un barrido de moderación sin terminar).
+   10 min y 24 h (`simulation-recovery`, cada 15 min), las purgas de cuentas (`purge-sweep`, cada hora) y la moderación
+   (`moderation-sweep`, cada 15 min: reencola `moderate` de los mensajes sin moderar de entre 10 min y 24 h, hasta 100 por corrida, y
+   los `moderate-help` de ayuda ante `SELF_HARM` que quedaron sin entregar; con `MODERATION_ENABLED=false` no hace nada). Las tareas de
+   gemelo y memorias se rehacen al siguiente uso o a las 02:00 de Bogotá (`memories`). Un mensaje con más de 24 h sin moderar ya no se
+   recupera; tras un corte largo revisa en `admin.html` los reportes de prioridad 2 recientes.
 3. Si ves el mismo id de simulación repetido en los registros una y otra vez, hay una simulación que mata el proceso: míralo
    antes de que gaste IA ([incidentes](#incidentes-frecuentes-por-síntoma)).
 4. La IP `192.168.0.10` del servidor debe seguir siendo estática; si cambió, AdGuard apunta a otra máquina y el HTTPS queda

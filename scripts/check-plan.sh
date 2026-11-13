@@ -11,8 +11,8 @@
 #   - los secretos hmac-anon-key y play-sa sin valor (ninguna secret_version ni secret_data);
 #   - escalado de la API: dev min 0; prod min 0 o 1 y máx entre 1 y 5 (4 nov: min 0 y máx 2 por costo);
 #   - SERVICE_URL de la API = URL determinista de Cloud Run (https://api-<número>.<región>.run.app);
-#   - Firestore nativo en nam5, Firebase, Pub/Sub play-rtdn, 8 trabajos de Scheduler (con purge-sweep de E8.3
-#     y los barridos match-sweep, scenario-sweep y simulation-recovery) que apuntan a SERVICE_URL,
+#   - Firestore nativo en nam5, Firebase, Pub/Sub play-rtdn, 9 trabajos de Scheduler (con purge-sweep de E8.3
+#     y los barridos match-sweep, scenario-sweep, simulation-recovery y moderation-sweep) que apuntan a SERVICE_URL,
 #     uptime check. El presupuesto (50 %, 90 % y 100 % pronosticado) lo crea el bootstrap, no la
 #     plataforma; para un plan de bootstrap solo se verifica eso.
 set -euo pipefail
@@ -130,7 +130,7 @@ fs="$(q '[.[] | select(.type=="google_firestore_database") | "\(.values.type) \(
 [ "$(q '[.[] | select(.type=="google_firebase_project")] | length')" = "1" ] && ok "google_firebase_project" || fail "falta google_firebase_project"
 [ "$(q '[.[] | select(.type=="google_pubsub_topic" and .values.name=="play-rtdn")] | length')" = "1" ] && ok "Pub/Sub play-rtdn" || fail "falta el tema play-rtdn"
 sched="$(q '[.[] | select(.type=="google_cloud_scheduler_job") | .values.name] | sort | join(",")')"
-want_sched="communities,match-sweep,memories,purge-sweep,retention,scenario-sweep,simulation-recovery,twin-accuracy"
+want_sched="communities,match-sweep,memories,moderation-sweep,purge-sweep,retention,scenario-sweep,simulation-recovery,twin-accuracy"
 [ "$sched" = "$want_sched" ] && ok "Scheduler: $sched" || fail "Scheduler esperado $want_sched (es '$sched')"
 bad_uri="$(q --arg u "${service_url:-}" '[.[] | select(.type=="google_cloud_scheduler_job") | select(.values.http_target[0].uri != null and .values.http_target[0].uri != ($u + "/internal/jobs/" + .values.name)) | .values.name] | join(",")')"
 [ -z "$bad_uri" ] && ok "Scheduler apunta a SERVICE_URL/internal/jobs/<nombre>" || fail "Scheduler con URI distinta de SERVICE_URL/internal/jobs/<nombre>: $bad_uri"

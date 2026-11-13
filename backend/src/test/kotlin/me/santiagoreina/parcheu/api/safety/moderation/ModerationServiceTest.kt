@@ -492,4 +492,116 @@ class ModerationServiceTest : FunSpec({
             }.status shouldBe HttpStatusCode.NoContent
         }
     }
+
+    // --- Barrido de moderación (moderation-sweep) ---
+
+    /** Servicio de barrido sobre los mismos repositorios de [f], con cola propia [queue], el reloj [after] más tarde y `enabled`/gasto a elección. */
+    fun Fixture.sweeper(
+        after: java.time.Duration,
+        queue: FakeTaskQueue,
+        enabled: Boolean = true,
+        withinSpend: suspend (UUID) -> Boolean = { true },
+    ) = ModerationService(
+        MessageModerator(testGateway(llm, aiUsage)), chatRepo, chat.service, flakySafety, queue,
+        java.time.Clock.offset(FIXED_CLOCK, after), flakyNotifier, withinSpend = withinSpend, enabled = enabled,
+    )
+
+    val thirtyMinutes = java.time.Duration.ofMinutes(30)
+
+    test("moderation-sweep: un mensaje pendiente antiguo se reencola una vez; ya moderado no se vuelve a encolar") {
+        val f = Fixture()
+        val id = f.send("hola")
+        val q = FakeTaskQueue()
+        val sweeper = f.sweeper(thirtyMinutes, q)
+        runBlocking { sweeper.sweep() } shouldBe 1
+        q.tasks.single().apply {
+            queue.name shouldBe "AI_LIGHT"
+            path shouldBe ModerationService.TASK_PATH
+            name shouldBe "moderate-$id"
+        }
+        runBlocking { sweeper.moderate(id) } shouldBe ModerationOutcome.CLEAN
+        val after = FakeTaskQueue()
+        runBlocking { f.sweeper(thirtyMinutes, after).sweep() } shouldBe 0
+        after.tasks.shouldBeEmpty()
+    }
+
+    test("moderation-sweep: un mensaje reciente (menos de 10 min) o de más de 24 h no se reencola") {
+        val f = Fixture()
+        f.send("hola")
+        val q = FakeTaskQueue()
+        runBlocking { f.sweeper(java.time.Duration.ofMinutes(5), q).sweep() } shouldBe 0
+        runBlocking { f.sweeper(java.time.Duration.ofHours(25), q).sweep() } shouldBe 0
+        q.tasks.shouldBeEmpty()
+    }
+
+    test("moderation-sweep: un mensaje que se decidió no moderar por tope y muestreo no se reencola (no se salta el tope)") {
+        val f = Fixture(withinDailyCap = { false }, sampleEvery = 1_000_000)
+        f.send("hola")
+        // Tope agotado y muestreo de 1 en un millón: el envío no encola nada y el mensaje queda marcado como decidido.
+        f.queue.tasks.shouldBeEmpty()
+        val q = FakeTaskQueue()
+        runBlocking { f.sweeper(thirtyMinutes, q).sweep() } shouldBe 0
+        q.tasks.shouldBeEmpty()
+    }
+
+    test("moderation-sweep: con MODERATION_ENABLED=false no hace nada") {
+        val f = Fixture()
+        f.send("hola")
+        val q = FakeTaskQueue()
+        runBlocking { f.sweeper(thirtyMinutes, q, enabled = false).sweep() } shouldBe 0
+        q.tasks.shouldBeEmpty()
+    }
+
+    test("moderation-sweep: sin sub-techo de gasto del autor no encola, lo da por no moderado y no lo vuelve a intentar") {
+        val f = Fixture()
+        f.send("hola")
+        val q = FakeTaskQueue()
+        runBlocking { f.sweeper(thirtyMinutes, q, withinSpend = { false }).sweep() } shouldBe 0
+        q.tasks.shouldBeEmpty()
+        runBlocking { f.sweeper(thirtyMinutes, q).sweep() } shouldBe 0
+        q.tasks.shouldBeEmpty()
+        f.llm.calls shouldBe 0
+    }
+
+    test("moderation-sweep: respeta el límite por corrida") {
+        val f = Fixture()
+        repeat(ModerationService.SWEEP_LIMIT + 5) { f.send("hola $it") }
+        runBlocking { f.sweeper(thirtyMinutes, FakeTaskQueue()).sweep() } shouldBe ModerationService.SWEEP_LIMIT
+    }
+
+    test("moderation-sweep: el aviso de ayuda diferido que se perdió se reencola como moderate-help hasta que se entrega") {
+        val f = Fixture()
+        f.llm.jsonResponder = { _, _ -> finding("SELF_HARM", "HIGH") }
+        val id = f.send("ya no quiero seguir")
+        f.flakyNotifier.failOnce = true
+        val q = FakeTaskQueue()
+        val sweeper = f.sweeper(thirtyMinutes, q)
+        runBlocking { sweeper.moderate(id) } shouldBe ModerationOutcome.ACTED
+        // Se pierde la tarea moderate-help (reinicio de la cola en proceso): la cola del barrido es otra, vacía.
+        runBlocking { sweeper.sweep() } shouldBe 1
+        q.tasks.single().apply {
+            path shouldBe ModerationService.HELP_TASK_PATH
+            name shouldBe "moderate-help-$id"
+        }
+        runBlocking { sweeper.deliverHelp(id) }
+        f.notifier.sent.single().userId shouldBe f.beto.id
+        val after = FakeTaskQueue()
+        runBlocking { f.sweeper(thirtyMinutes, after).sweep() } shouldBe 0
+        after.tasks.shouldBeEmpty()
+    }
+
+    test("POST /internal/jobs/moderation-sweep exige OIDC, responde 204 y reencola los mensajes pendientes") {
+        val f = Fixture()
+        val id = f.send("hola")
+        val q = FakeTaskQueue()
+        val sweeper = f.sweeper(thirtyMinutes, q)
+        testApplication {
+            val client = startApp(testContainer(chat = f.chat, graph = f.graph, safety = f.safety, moderation = sweeper, ai = testGateway(f.llm)))
+            client.post("/internal/jobs/moderation-sweep").status shouldBe HttpStatusCode.Forbidden
+            q.tasks.shouldBeEmpty()
+            client.post("/internal/jobs/moderation-sweep") { header(HttpHeaders.Authorization, "Bearer ${TEST_OIDC_TOKEN}") }
+                .status shouldBe HttpStatusCode.NoContent
+            q.tasks.map { it.name } shouldBe listOf("moderate-$id")
+        }
+    }
 })

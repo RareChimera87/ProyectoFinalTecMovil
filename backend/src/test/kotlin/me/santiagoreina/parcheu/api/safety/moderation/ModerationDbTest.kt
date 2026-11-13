@@ -101,4 +101,30 @@ class ModerationDbTest : FunSpec({
             transaction(db) { Reports.selectAll().count() } shouldBe 0L
         }
     }
+
+    test("moderation-sweep: la base distingue pendientes de moderados y la ayuda diferida").config(enabled = TestDatabase.enabled) {
+        withDb { moderation, chat, db, llm, notifier ->
+            val (ana, beto) = twoUsers(db)
+            val room = chat.service.createDirect(ana.id, beto.id, Mode.AMISTAD)
+            chat.service.send(beto, room.id, SendMessage("b-1", "hola"))
+            chat.service.send(beto, room.id, SendMessage("b-2", "ya no quiero seguir"))
+            val ids = transaction(db) { ChatMessages.selectAll().map { it[ChatMessages.id] } }
+            val now = FIXED_CLOCK.instant()
+            val older = now.plus(java.time.Duration.ofMinutes(30))
+            val newer = now.minus(java.time.Duration.ofHours(1))
+            val repo = chat.repository
+            repo.unmoderated(older, newer, 10).toSet() shouldBe ids.toSet()
+            // Reciente (aún no pasan 10 min) y demasiado viejo quedan fuera de la ventana.
+            repo.unmoderated(now.minus(java.time.Duration.ofMinutes(10)), newer, 10) shouldHaveSize 0
+            repo.unmoderated(older, now.plus(java.time.Duration.ofMinutes(1)), 10) shouldHaveSize 0
+            llm.jsonResponder = { _, _ -> json("LOW", "LOW") }
+            moderation.moderate(ids.first())
+            repo.unmoderated(older, newer, 10) shouldBe ids.drop(1)
+            repo.unmoderated(older, newer, 0) shouldHaveSize 0
+            repo.setHelpPending(ids.last(), true)
+            repo.helpPending(older, newer, 10) shouldBe listOf(ids.last())
+            repo.setHelpPending(ids.last(), false)
+            repo.helpPending(older, newer, 10) shouldHaveSize 0
+        }
+    }
 })

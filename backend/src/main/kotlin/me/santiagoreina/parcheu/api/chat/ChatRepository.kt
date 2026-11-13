@@ -35,6 +35,18 @@ interface ChatRepository {
     /** Mensaje por id (cualquier chat); null si no existe. Lo usa la moderación (E8.6). */
     suspend fun message(messageId: UUID): MessageRecord?
 
+    /** Marca el mensaje como moderado en [at] (idempotente; conserva la primera marca). */
+    suspend fun markModerated(messageId: UUID, at: Instant)
+
+    /** Fija si el aviso de ayuda ante autolesión de [messageId] sigue pendiente de entregar. */
+    suspend fun setHelpPending(messageId: UUID, pending: Boolean)
+
+    /** Ids de mensajes visibles, con autor y sin moderar, creados en (newerThan, olderThan]; los más viejos primero. */
+    suspend fun unmoderated(olderThan: Instant, newerThan: Instant, limit: Int): List<UUID>
+
+    /** Ids de mensajes con el aviso de ayuda pendiente creados en (newerThan, olderThan]; los más viejos primero. */
+    suspend fun helpPending(olderThan: Instant, newerThan: Instant, limit: Int): List<UUID>
+
     /** Oculta el mensaje (`hidden = true`, E8.5); devuelve el mensaje ya oculto o null si no existe. */
     suspend fun hideMessage(messageId: UUID): MessageRecord?
 

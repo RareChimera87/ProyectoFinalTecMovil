@@ -56,7 +56,7 @@ ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de 
 Trabajos de Cloud Scheduler (hora de Bogotá) → `POST <SERVICE_URL>/internal/jobs/<nombre>` con OIDC de `sa-tasks`
 y audiencia `INTERNAL_OIDC_AUDIENCE`: `communities` (lunes 03:00), `memories` (diario 02:00), `twin-accuracy`
 (domingos 23:00), `retention` (diario 03:30), `purge-sweep` (cada hora, minuto 15; E8.3), `match-sweep` y
-`scenario-sweep` (cada minuto) y `simulation-recovery` (cada 15 min). Son los mismos jobs que programa el
+`scenario-sweep` (cada minuto), `simulation-recovery` y `moderation-sweep` (cada 15 min). Son los mismos jobs que programa el
 `InProcessScheduler` del homeserver (`AppContainer.inlineBackground`, ADR-0019); allí los dos barridos corren
 cada 60 s, que en Cloud Scheduler (mínimo un minuto) es `* * * * *`. `scripts/check-plan.sh` fija esta lista.
 **SERVICE_URL (decisión).** La URL del servicio la necesita el propio servicio en su entorno, pero

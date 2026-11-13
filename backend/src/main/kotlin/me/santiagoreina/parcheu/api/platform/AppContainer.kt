@@ -340,7 +340,7 @@ class AppContainer(
             )
             val safety = safetyModule(database, chat, graph, matching, clock, safetyContacts)
             // Moderación con IA (E8.6): tarea `moderate` en `ai-light` después de entregar cada mensaje (fail-open).
-            val moderation = moderationService(ai, chat, safety, tasks, clock, notifier, quota.daily, moderationSampleEvery(vars))
+            val moderation = moderationService(ai, chat, safety, tasks, clock, notifier, quota.daily, moderationSampleEvery(vars), moderationEnabled(vars))
             if (moderationEnabled(vars)) moderation.attachTo(chat)
             // Administración de reportes (E8.5): sobre la misma tabla `reports`; suspende por `users.suspended_until`.
             val admin = adminModule(database, identity.repo, chat, clock)
@@ -419,6 +419,8 @@ class AppContainer(
                 scheduler.every("simulation-recovery", Duration.ofMinutes(15), Duration.ofSeconds(30)) {
                     simulation.service.requeueUnfinished()
                 }
+                // Moderación (E8.6): reencola `moderate` y `moderate-help` que se perdieron con un reinicio de la cola en proceso.
+                scheduler.every("moderation-sweep", Duration.ofMinutes(15), Duration.ofSeconds(45)) { moderation.sweep() }
                 scheduler.every("memories", Duration.ofDays(1), InProcessScheduler.delayUntil(MEMORIES_AT, clock)) {
                     twin.memories.enqueueNightly()
                 }

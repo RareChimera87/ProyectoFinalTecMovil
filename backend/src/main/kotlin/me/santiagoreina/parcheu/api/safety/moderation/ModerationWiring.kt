@@ -16,7 +16,8 @@ import java.util.UUID
  * la ayuda a quien escribió. Con [daily] aplica el tope diario por persona (`MODERATION_DAILY_PER_USER`) y, pasado el
  * tope o el sub-techo de gasto de moderación del autor (`AI_USER_DAILY_MODERATION_USD`, que se mira siempre), modera
  * 1 de cada [sampleEvery] mensajes (B-M1, ADR-0026) hasta el corte duro de la cola muestreada
- * (`MODERATION_SAMPLED_DAILY_PER_USER`); sin [daily] solo aplica el sub-techo.
+ * (`MODERATION_SAMPLED_DAILY_PER_USER`); sin [daily] solo aplica el sub-techo. [enabled] (`MODERATION_ENABLED`) apaga también
+ * el barrido de recuperación.
  */
 fun moderationService(
     ai: AiGateway,
@@ -27,12 +28,14 @@ fun moderationService(
     notifier: Notifier = NoopNotifier,
     daily: DailyLimiter? = null,
     sampleEvery: Int = ModerationService.DEFAULT_SAMPLE_EVERY,
+    enabled: Boolean = true,
 ) = ModerationService(
     MessageModerator(ai), chat.repository, chat.service, safety.repository, tasks, clock, notifier,
     withinDailyCap = daily?.let { limiter -> { author: UUID -> limiter.tryConsume(author, DailyKind.MODERATION) } } ?: { true },
     sampleEvery = sampleEvery,
     withinSpend = { author -> ai.moderationBudgetLeft(author) },
     withinSampledCap = daily?.let { limiter -> { author: UUID -> limiter.tryConsume(author, DailyKind.MODERATION_SAMPLED) } } ?: { true },
+    enabled = enabled,
 )
 
 /**
