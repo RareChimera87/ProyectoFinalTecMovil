@@ -19,11 +19,14 @@ locals {
     # Topes diarios de gasto de IA (AiConfig.kt): total y por persona, en USD.
     AI_DAILY_BUDGET_USD      = var.ai_daily_budget_usd
     AI_USER_DAILY_BUDGET_USD = var.ai_user_daily_budget_usd
+    # Proveedor de IA (AiConfig.kt, ADR-0008): gemini (Vertex), claude (Claude en Vertex) o anthropic (API directa).
+    AI_PROVIDER = var.ai_provider
     # Nombres completos de los secretos; la API lee la versión `latest` con la
     # API de Secret Manager (no se montan para que Cloud Run no falle mientras
     # el secreto no tenga versión).
-    SECRET_HMAC_ANON_KEY = google_secret_manager_secret.this["hmac-anon-key"].id
-    SECRET_PLAY_SA       = google_secret_manager_secret.this["play-sa"].id
+    SECRET_HMAC_ANON_KEY     = google_secret_manager_secret.this["hmac-anon-key"].id
+    SECRET_PLAY_SA           = google_secret_manager_secret.this["play-sa"].id
+    SECRET_ANTHROPIC_API_KEY = google_secret_manager_secret.this["anthropic-api-key"].id
   }
 
   # Cuenta que la API suplanta para la API de Play (E7.1, solo prod); sin ella usa SECRET_PLAY_SA.
