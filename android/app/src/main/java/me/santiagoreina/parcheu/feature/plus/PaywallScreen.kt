@@ -43,6 +43,7 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUIconButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
+import me.santiagoreina.parcheu.designsystem.components.compound.QuotaMascots
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 /** Etiquetas de prueba de G1-G4. */
@@ -171,6 +172,8 @@ private fun PaywallHero(state: PaywallUiState, actions: PaywallActions) {
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                     color = ParcheUTheme.colors.white
                 )
+                // Dirección A: la mascota es la unidad de medida; con ParcheU+ las cinco P brillan y sigue ∞.
+                QuotaMascots(used = 0, limit = null, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }

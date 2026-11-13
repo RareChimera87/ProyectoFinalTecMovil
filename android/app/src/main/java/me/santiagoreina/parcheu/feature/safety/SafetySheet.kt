@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.UUID
+import me.santiagoreina.parcheu.core.ui.DestructiveButton
 import me.santiagoreina.parcheu.designsystem.components.base.OutlineButton
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
@@ -184,7 +185,7 @@ fun BlockConfirmBody(state: SafetySheetState, actions: SafetySheetActions) {
         color = ParcheUTheme.colors.mu
     )
     state.error?.let { ErrorText(it) }
-    PrimaryButton(
+    DestructiveButton(
         text = if (state.busy) "Bloqueando…" else "Bloquear",
         onClick = actions.onConfirmBlock,
         enabled = !state.busy,

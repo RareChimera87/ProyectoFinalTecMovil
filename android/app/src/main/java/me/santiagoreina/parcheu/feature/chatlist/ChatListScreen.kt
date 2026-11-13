@@ -1,10 +1,10 @@
 package me.santiagoreina.parcheu.feature.chatlist
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,25 +21,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.contract.ChatSummary
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.StateProp
 import me.santiagoreina.parcheu.core.ui.UiState
+import me.santiagoreina.parcheu.core.ui.stateProp
+import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheURootTopBar
-import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
+import me.santiagoreina.parcheu.designsystem.components.compound.EmptyState
+import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.chat.ChatAvatar
 import me.santiagoreina.parcheu.feature.chat.ChatTags
 import me.santiagoreina.parcheu.feature.chat.HIDDEN_MESSAGE_TEXT
 import me.santiagoreina.parcheu.feature.chat.errorMessage
 import me.santiagoreina.parcheu.feature.chat.rememberTimeLabel
+import me.santiagoreina.parcheu.feature.modes.colors
 
 /** Lista de chats: filas con avatar, última línea, hora y no leídos; vacío, cargando y error. */
 @Composable
@@ -58,21 +62,32 @@ fun ChatListScreen(
                     CircularProgressIndicator(color = colors.primary)
                 }
             UiState.Empty ->
-                CenteredMessage(
+                EmptyState(
                     title = "Aún no tienes chats",
-                    body = "Cuando conectes con alguien, el chat aparece aquí.",
-                    modifier = Modifier.testTag(ChatTags.LIST_EMPTY)
+                    message = "Cuando conectes con alguien, el chat aparece aquí.",
+                    illustration = { StateIllustration(StateProp.Chat) },
+                    modifier = Modifier.fillMaxSize().testTag(ChatTags.LIST_EMPTY)
                 )
             is UiState.Error ->
-                CenteredMessage(
+                ErrorState(
                     title = "No pudimos cargar tus chats",
-                    body = errorMessage(state.error),
-                    modifier = Modifier.testTag(ChatTags.LIST_ERROR)
-                ) {
-                    PrimaryButton(text = "Reintentar", onClick = onRetry)
-                }
+                    message = errorMessage(state.error),
+                    retryLabel = "Reintentar",
+                    onRetryClick = onRetry,
+                    illustration = { StateIllustration(state.error.stateProp(), error = true) },
+                    modifier = Modifier.fillMaxSize().testTag(ChatTags.LIST_ERROR)
+                )
             is UiState.Loaded ->
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 4.dp,
+                        bottom = 16.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.blockGapTight)
+                ) {
                     items(state.data, key = { it.id }) { chat ->
                         ChatRow(chat, onClick = { onOpenChat(chat.id) })
                     }
@@ -81,37 +96,14 @@ fun ChatListScreen(
     }
 }
 
-@Composable
-private fun CenteredMessage(
-    title: String,
-    body: String,
-    modifier: Modifier = Modifier,
-    action: @Composable () -> Unit = {}
-) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = ParcheUTheme.colors.tx,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = ParcheUTheme.colors.mu,
-            textAlign = TextAlign.Center
-        )
-        action()
-    }
-}
-
+/**
+ * Fila de la lista: tarjeta con el lomo del modo (dirección A). El modo también va en texto ("Amistad"),
+ * porque el lomo y el tono del avatar son decorativos.
+ */
 @Composable
 private fun ChatRow(chat: ChatSummary, onClick: () -> Unit) {
     val colors = ParcheUTheme.colors
+    val mode = chat.mode.colors()
     val anonymous = chat.other.id == null && chat.other.anonId != null
     val last = chat.lastMessage
     val preview =
@@ -122,80 +114,80 @@ private fun ChatRow(chat: ChatSummary, onClick: () -> Unit) {
         }
     val time = rememberTimeLabel(last?.createdAt)
     val unread = chat.unread > 0
-    Row(
-        modifier =
-        Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 72.dp)
-            .testTag(ChatTags.row(chat.id))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ModeSpineCard(
+        mode = mode,
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().testTag(ChatTags.row(chat.id))
     ) {
-        ChatAvatar(chat.other.initials, chat.other.label, anonymous, size = 48.dp)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = chat.other.label,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = colors.tx,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (time.isNotEmpty()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            ChatAvatar(chat.other.initials, chat.other.label, anonymous, size = 44.dp, mode = mode)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = time,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.mu
+                        text = chat.other.label,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colors.tx,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = preview,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontStyle = if (last?.hidden == true) FontStyle.Italic else FontStyle.Normal,
-                    fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (unread) colors.tx else colors.mu,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (chat.muted) {
-                    Text(
-                        text = "Silenciado",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.mu,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
-                if (unread) {
-                    Box(
-                        modifier =
-                        Modifier
-                            .padding(start = 8.dp)
-                            .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
-                            .clip(CircleShape)
-                            .background(colors.primary, CircleShape)
-                            .semantics { contentDescription = "${chat.unread} sin leer" },
-                        contentAlignment = Alignment.Center
-                    ) {
+                    if (time.isNotEmpty()) {
                         Text(
-                            text = if (chat.unread > 99) "99+" else chat.unread.toString(),
+                            text = time,
                             style = MaterialTheme.typography.labelSmall,
-                            color = colors.onPrimary,
-                            modifier = Modifier.padding(horizontal = 6.dp)
+                            color = colors.mu,
+                            modifier = Modifier.padding(start = 8.dp)
                         )
                     }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = preview,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontStyle = if (last?.hidden ==
+                            true
+                        ) {
+                            FontStyle.Italic
+                        } else {
+                            FontStyle.Normal
+                        },
+                        fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (unread) colors.tx else colors.mu,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (unread) {
+                        Box(
+                            modifier =
+                            Modifier
+                                .padding(start = 8.dp)
+                                .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary, CircleShape)
+                                .semantics { contentDescription = "${chat.unread} sin leer" },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (chat.unread > 99) "99+" else chat.unread.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.onPrimary,
+                                modifier = Modifier.padding(horizontal = 6.dp)
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text =
+                    listOfNotNull(modeLabel(chat.mode), "Silenciado".takeIf { chat.muted })
+                        .joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.mu
+                )
             }
-            Text(
-                text = modeLabel(chat.mode),
-                style = MaterialTheme.typography.labelSmall,
-                color = modeColor(chat.mode)
-            )
         }
     }
 }
@@ -204,11 +196,4 @@ private fun modeLabel(mode: Mode): String = when (mode) {
     Mode.AMISTAD -> "Amistad"
     Mode.PAREJA -> "Pareja"
     Mode.ESTUDIO -> "Estudio"
-}
-
-@Composable
-private fun modeColor(mode: Mode) = when (mode) {
-    Mode.AMISTAD -> ParcheUTheme.colors.mintt
-    Mode.PAREJA -> ParcheUTheme.colors.coralt
-    Mode.ESTUDIO -> ParcheUTheme.colors.bluet
 }

@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.R
 import me.santiagoreina.parcheu.contract.EntitlementDto
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.OutlineButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCardVariant
@@ -35,7 +38,10 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PlusBadgeSize
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
 import me.santiagoreina.parcheu.designsystem.components.compound.ParcheUModalDialog
+import me.santiagoreina.parcheu.designsystem.components.compound.QuotaMascots
 import me.santiagoreina.parcheu.designsystem.components.compound.SettingsRow
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
@@ -84,7 +90,8 @@ fun ManageSubscriptionScreen(
                     message = stringResource(R.string.plus_manage_error_message),
                     retryLabel = stringResource(R.string.plus_retry),
                     onRetryClick = actions.onRetry,
-                    modifier = Modifier.testTag(PlusTags.MANAGE_ERROR)
+                    illustration = { StateIllustration(state.error.stateProp(), error = true) },
+                    modifier = Modifier.fillMaxSize().testTag(PlusTags.MANAGE_ERROR)
                 )
             is ManageUiState.Loaded -> {
                 LoadedContent(state, actions, onShowCancelDialog)
@@ -116,8 +123,8 @@ private fun LoadedContent(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         state.message?.let { MessageCard(it, actions.onDismissMessage) }
-        PlanCard(state, status)
-        Column {
+        if (status.hasPlus) PlanHero(state, status) else PlanCard(state, status)
+        ParcheUCard(Modifier.fillMaxWidth()) {
             if (status == SubscriptionStatus.Active && entitlement.isAnnual) {
                 SettingsRow(
                     title = stringResource(R.string.plus_manage_change_monthly),
@@ -210,6 +217,52 @@ private fun Chevron() {
     )
 }
 
+/** Estados en los que la persona tiene ParcheU+ hoy: van en el héroe violeta (dirección A). */
+private val SubscriptionStatus.hasPlus: Boolean
+    get() =
+        this == SubscriptionStatus.Active ||
+            this == SubscriptionStatus.Canceled ||
+            this == SubscriptionStatus.Grace ||
+            this == SubscriptionStatus.Granted
+
+/**
+ * Protagonista de G4 cuando hay ParcheU+: héroe violeta con el estado en una píldora blanca (5,15:1), la
+ * insignia ParcheU+ sobre tinta, el plan en Sora 800 y las cinco P encendidas con ∞ (simulaciones sin
+ * límite mientras dure ParcheU+).
+ */
+@Composable
+private fun PlanHero(state: ManageUiState.Loaded, status: SubscriptionStatus) {
+    val colors = ParcheUTheme.colors
+    HeroBlock(
+        title = planTitle(state),
+        titleSize = HeroTitleSize.Headline,
+        subtitle = detailText(state.entitlement, status),
+        modifier = Modifier.testTag(PlusTags.MANAGE_STATUS),
+        badge = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(statusLabel(status)),
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = colors.hero,
+                    modifier =
+                    Modifier
+                        .clip(ParcheUTheme.shapes.pill)
+                        .background(colors.onHero, ParcheUTheme.shapes.pill)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+                ParcheUPlusBadge(onHero = true)
+            }
+        }
+    ) {
+        QuotaMascots(used = 0, limit = null, modifier = Modifier.padding(vertical = 4.dp))
+    }
+}
+
 @Composable
 private fun PlanCard(state: ManageUiState.Loaded, status: SubscriptionStatus) {
     val colors = ParcheUTheme.colors
@@ -254,6 +307,7 @@ private fun statusLabel(status: SubscriptionStatus): Int = when (status) {
     SubscriptionStatus.Grace -> R.string.plus_manage_status_grace
     SubscriptionStatus.OnHold -> R.string.plus_manage_status_on_hold
     SubscriptionStatus.Inactive -> R.string.plus_manage_status_inactive
+    SubscriptionStatus.Granted -> R.string.plus_manage_status_granted
 }
 
 @Composable
@@ -263,6 +317,8 @@ private fun planTitle(state: ManageUiState.Loaded): String {
     return when {
         entitlement.status() == SubscriptionStatus.Inactive ->
             stringResource(R.string.plus_manage_plan_none)
+        entitlement.status() == SubscriptionStatus.Granted ->
+            stringResource(R.string.plus_manage_plan_granted)
         entitlement.isAnnual && plan != null ->
             stringResource(R.string.plus_manage_plan_annual_price, plan.formattedPrice)
         entitlement.isAnnual -> stringResource(R.string.plus_manage_plan_annual)
@@ -292,6 +348,9 @@ private fun detailText(entitlement: EntitlementDto, status: SubscriptionStatus):
             SubscriptionStatus.Inactive -> listOf(
                 stringResource(R.string.plus_manage_inactive_detail)
             )
+            // Sin suscripción de Play: solo el vencimiento, sin "Cancelada" ni "Pagas con Google Play".
+            SubscriptionStatus.Granted ->
+                listOfNotNull(date?.let { stringResource(R.string.plus_manage_expires, it) })
         }
     return lines.joinToString("\n")
 }
@@ -307,6 +366,7 @@ private fun infoText(entitlement: EntitlementDto, status: SubscriptionStatus): S
             stringResource(R.string.plus_manage_info_canceled, it)
         }
         SubscriptionStatus.Inactive -> stringResource(R.string.plus_manage_info_inactive)
+        SubscriptionStatus.Granted -> stringResource(R.string.plus_manage_info_granted)
         else -> null
     }
 }
