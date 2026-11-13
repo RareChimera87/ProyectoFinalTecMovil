@@ -37,6 +37,7 @@ import me.santiagoreina.parcheu.designsystem.components.compound.InfoBanner
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoListCard
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoListItem
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.feature.plus.formatLongDate
 
 object DeleteAccountTags {
     const val SCREEN = "delete-account"
@@ -45,6 +46,7 @@ object DeleteAccountTags {
     const val ERROR = "delete-account:error"
     const val DOWNLOAD_FIRST = "delete-account:download"
     const val PLAY = "delete-account:play"
+    const val PLUS_GRANTED = "delete-account:plus-granted"
     const val DONE = "delete-account:done"
     const val DONE_SCREEN = "delete-account:deleted"
 }
@@ -107,7 +109,9 @@ private fun ConfirmScreen(
             Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = spacing.gutter),
+                // El pie fijo (casilla y botón) va debajo: sin el margen inferior, lo último del
+                // contenido quedaba pegado a él y parecía tapado.
+                .padding(start = spacing.gutter, end = spacing.gutter, bottom = spacing.blockGap),
             verticalArrangement = Arrangement.spacedBy(spacing.blockGap)
         ) {
             Text(
@@ -129,14 +133,18 @@ private fun ConfirmScreen(
                 }
             )
             InfoListCard(title = "Qué se conserva", items = KeptItems.map { InfoListItem(it) })
-            InfoBanner(
-                text =
-                "Si tienes ParcheU+, borrar la cuenta no cancela tu suscripción: cancélala en " +
-                    "Google Play para que no te cobren más.",
-                actionLabel = "Ir a Google Play",
-                onActionClick = actions.onManageSubscription,
-                modifier = Modifier.testTag(DeleteAccountTags.PLAY)
-            )
+            when (val notice = state.plusNotice) {
+                DeletePlusNotice.Neutral -> InfoBanner(
+                    text = PLUS_NOTICE_PLAY,
+                    actionLabel = "Ir a Google Play",
+                    onActionClick = actions.onManageSubscription,
+                    modifier = Modifier.testTag(DeleteAccountTags.PLAY)
+                )
+                is DeletePlusNotice.Granted -> InfoBanner(
+                    text = plusNoticeGranted(notice),
+                    modifier = Modifier.testTag(DeleteAccountTags.PLUS_GRANTED)
+                )
+            }
             ParcheUTextButton(
                 text = "Descargar mis datos primero",
                 onClick = actions.onDownloadFirst,
@@ -248,6 +256,17 @@ private fun DeletedScreen(onDone: () -> Unit, modifier: Modifier) {
         )
     }
 }
+
+/** Aviso cierto con y sin suscripción de Play: no afirma que la persona tenga ParcheU+ ni de dónde viene. */
+internal const val PLUS_NOTICE_PLAY =
+    "Si pagas ParcheU+ con Google Play, borrar la cuenta no cancela la suscripción: " +
+        "cancélala allí para que no te cobren más."
+
+/** ParcheU+ sin suscripción de Play: vence solo y no hay nada que cancelar. */
+internal fun plusNoticeGranted(notice: DeletePlusNotice.Granted): String = notice.expiresAt?.let {
+    "Tu ParcheU+ vence el ${formatLongDate(it)} y no se renueva: no hay nada que cancelar."
+}
+    ?: "Tu ParcheU+ no se renueva solo: no hay nada que cancelar."
 
 internal const val CONFIRM_LABEL = "Entiendo que borrar mi cuenta no se puede deshacer"
 
