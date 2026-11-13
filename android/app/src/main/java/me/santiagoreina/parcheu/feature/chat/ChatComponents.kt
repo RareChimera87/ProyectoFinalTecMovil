@@ -27,8 +27,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -47,6 +53,8 @@ import kotlin.time.Instant
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.compound.displayInitials
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
+import me.santiagoreina.parcheu.designsystem.theme.ModeColors
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUColors
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
@@ -85,14 +93,18 @@ internal fun rememberTimeLabel(instant: Instant?): String {
     }
 }
 
-/** Avatar de F9 y de la lista: iniciales sobre violeta (como G0) o silueta si la persona es anónima. */
+/**
+ * Avatar de F9 y de la lista: iniciales sobre el pleno del [mode] con tinta encima (≥ 5,3:1, dirección A),
+ * sobre violeta si no se sabe el modo, o silueta si la persona es anónima.
+ */
 @Composable
 internal fun ChatAvatar(
     initials: String,
     name: String,
     anonymous: Boolean,
     size: Dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    mode: ModeColors? = null
 ) {
     val colors = ParcheUTheme.colors
     if (anonymous) {
@@ -115,19 +127,20 @@ internal fun ChatAvatar(
         }
     } else {
         val alpha = affinityAlpha(70)
-        val palette = avatarColors(alpha, colors.isDark)
+        val fill = mode?.solid ?: avatarColors(alpha, colors.isDark).fill
+        val content = mode?.onSolid ?: onAvatarColor(alpha, colors.isDark)
         Box(
             modifier =
             modifier
                 .size(size)
                 .clip(CircleShape)
-                .background(palette.fill, CircleShape)
+                .background(fill, CircleShape)
                 .clearAndSetSemantics { contentDescription = name },
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = displayInitials(initials, name),
-                color = onAvatarColor(alpha, colors.isDark),
+                color = content,
                 fontSize = (size.value * 0.38f).sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1
@@ -137,8 +150,10 @@ internal fun ChatAvatar(
 }
 
 /**
- * Burbuja de F9. Ajena: s2, radio 20 20 20 6; propia: violeta, radio 20 20 6 20. Mientras se envía se
- * atenúa; si falló muestra "No se envió" y "Reintentar". Un mensaje oculto muestra [HIDDEN_MESSAGE_TEXT].
+ * Burbuja de F9. Ajena: s2 en oscuro y s1 (blanca) en claro, para que despegue del fondo lila; radio
+ * 20 20 20 6. Propia: violeta, radio 20 20 6 20. La hora va en color sólido (onPrimary o mu), nunca con
+ * alpha sobre el violeta. Mientras se envía se atenúa; si falló muestra "No se envió" y "Reintentar". Un
+ * mensaje oculto muestra [HIDDEN_MESSAGE_TEXT].
  */
 @Composable
 internal fun ChatBubble(
@@ -148,8 +163,14 @@ internal fun ChatBubble(
 ) {
     val colors = ParcheUTheme.colors
     val mine = message.mine
-    val container = if (mine) colors.primary else colors.s2
+    val container =
+        when {
+            mine -> colors.primary
+            colors.isDark -> colors.s2
+            else -> colors.s1
+        }
     val content = if (mine) colors.onPrimary else colors.tx
+    val captionColor = if (mine) colors.onPrimary else colors.mu
     val shape =
         RoundedCornerShape(
             topStart = 20.dp,
@@ -189,7 +210,7 @@ internal fun ChatBubble(
                     Text(
                         text = caption,
                         style = MaterialTheme.typography.labelSmall,
-                        color = content.copy(alpha = 0.72f)
+                        color = captionColor
                     )
                 }
             }
@@ -273,27 +294,51 @@ const val DEMO_CHAT_BANNER_TEXT = "Esta es una cuenta de demostración: no respo
 /** Subtítulo de la barra superior cuando la otra persona es un demo. */
 const val DEMO_CHAT_SUBTITLE = "Perfil de demostración"
 
-/** Banner fijo de F9 con un demo (ADR-0027): no se puede cerrar y siempre está visible. */
+/**
+ * Banner fijo de F9 con un demo (ADR-0027): no se puede cerrar y siempre está visible. Dirección A: borde
+ * discontinuo `prt` de 1,5 dp con la P que mira, para que se lea como un aviso y no como un mensaje.
+ */
 @Composable
 internal fun DemoBanner(modifier: Modifier = Modifier) {
     val colors = ParcheUTheme.colors
-    val shape = RoundedCornerShape(16.dp)
-    Text(
-        text = DEMO_CHAT_BANNER_TEXT,
-        style = MaterialTheme.typography.bodySmall,
-        color = colors.tx,
+    val radius = 16.dp
+    Row(
         modifier =
         modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(shape)
-            .background(colors.s2, shape)
+            .drawBehind {
+                val stroke = 1.5.dp.toPx()
+                drawRoundRect(
+                    color = colors.prt,
+                    topLeft = Offset(stroke / 2, stroke / 2),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = CornerRadius(radius.toPx()),
+                    style =
+                    Stroke(
+                        width = stroke,
+                        pathEffect = PathEffect.dashPathEffect(
+                            floatArrayOf(6.dp.toPx(), 4.dp.toPx())
+                        )
+                    )
+                )
+            }
             .padding(horizontal = 14.dp, vertical = 12.dp)
-            .testTag(ChatTags.DEMO_BANNER)
-    )
+            .testTag(ChatTags.DEMO_BANNER),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TwinMascotGlyph(width = 26.dp, color = colors.prt)
+        Text(
+            text = DEMO_CHAT_BANNER_TEXT,
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.tx,
+            modifier = Modifier.weight(1f)
+        )
+    }
 }
 
-/** Entrada de F9: píldora s2 de 48dp y botón de enviar circular de 48dp, deshabilitado sin texto. */
+/** Entrada de F9: píldora s1 con borde ln de 48dp y botón de enviar circular de 48dp, deshabilitado sin texto. */
 
 /** Colores del botón de enviar: relleno, borde e icono. */
 internal data class SendButtonColors(val container: Color, val border: Color, val icon: Color)
@@ -331,7 +376,7 @@ internal fun ChatInputBar(
             Modifier
                 .weight(1f)
                 .clip(CircleShape)
-                .background(colors.s2, CircleShape)
+                .background(colors.s1, CircleShape)
                 .border(1.dp, colors.ln, CircleShape)
                 .padding(horizontal = 18.dp),
             contentAlignment = Alignment.CenterStart
