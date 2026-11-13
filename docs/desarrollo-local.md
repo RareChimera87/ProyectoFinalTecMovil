@@ -137,7 +137,7 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
 
 - Con `ENV=local` y sin `AI_PROVIDER` el backend usa `FakeLlmClient` y guarda el uso en memoria: no se llama a Vertex ni se gasta nada.
 - Para probar con Vertex real en local: `gcloud auth application-default login` y luego `ENV=local AI_PROVIDER=gemini AI_VERTEX_PROJECT=parcheu-dev ./gradlew run`.
-- Con la API directa de Anthropic (gasta saldo de la clave): `ENV=local AI_PROVIDER=anthropic ANTHROPIC_API_KEY="$(cat ~/.parcheu/anthropic-api-key)" ./gradlew run`. `ANTHROPIC_API_KEY` solo se acepta con `ENV=local`; en dev y prod la clave sale del secreto `anthropic-api-key` (`SECRET_ANTHROPIC_API_KEY`). Las pruebas (`ClaudeApiClientTest`) usan un servidor HTTP falso y no necesitan clave.
+- Con la API directa de Anthropic (gasta saldo de la clave): `ENV=local AI_PROVIDER=anthropic ANTHROPIC_API_KEY="$(cat ~/.parcheu/anthropic-api-key)" ./gradlew run`. `ANTHROPIC_API_KEY` solo se acepta con `ENV=local`; en dev y prod la clave sale del secreto `anthropic-api-key` (`SECRET_ANTHROPIC_API_KEY`). Las pruebas (`ClaudeApiClientTest`) usan un servidor HTTP falso y no necesitan clave. Humo real (centavos; texto con Haiku y el juez de la simulación con Sonnet): `cd backend && ANTHROPIC_API_KEY="$(cat ~/.parcheu/anthropic-api-key)" ./gradlew test -Panthropic -PsinContenedores --tests '*AnthropicSmokeTest*'` (el tag `anthropic` se excluye sin `-Panthropic`).
 - Humo manual (no corre en CI ni en `./gradlew test`; consume unos centavos de USD):
 
   ```bash

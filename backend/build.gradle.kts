@@ -89,6 +89,8 @@ tasks.test {
     useJUnitPlatform {
         excludeTags("e2e")
         if (!providers.gradleProperty("vertex").isPresent) excludeTags("vertex")
+        // Humo contra la API directa de Anthropic (@Tag("anthropic"), gasta saldo de la clave): solo con -Panthropic.
+        if (!providers.gradleProperty("anthropic").isPresent) excludeTags("anthropic")
     }
     if (sinContenedores) systemProperty("sinContenedores", "true")
     // Semilla de la suite de privacidad (E3.5): es entrada de la tarea para que cambiarla vuelva a

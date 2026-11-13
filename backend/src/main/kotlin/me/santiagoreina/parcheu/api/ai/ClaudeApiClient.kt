@@ -15,6 +15,10 @@ import java.time.Duration
  * El backend se arma explícito con la clave para no depender de la cadena de credenciales por defecto del SDK
  * (variables `ANTHROPIC_*`, perfiles locales): solo se usa la clave del secreto. Nunca se llama a `fromEnv()`.
  *
+ * Cabecera: la API autentica las claves con `x-api-key`. En `anthropic-java` 3.1.0 el backend aplica toda credencial
+ * estática (también `apiKey`) como `Authorization: Bearer` salvo que la petición ya traiga `X-Api-Key`
+ * (`StaticAuthHeaders`), así que se fija `X-Api-Key` en el cliente y el SDK ya no añade el `Bearer`.
+ *
  * [baseUrl] solo lo cambian las pruebas (servidor HTTP falso); en producción es el del SDK.
  */
 class ClaudeApiClient(
@@ -23,13 +27,15 @@ class ClaudeApiClient(
     timeout: Duration = ClaudeMessagesClient.TIMEOUT,
     maxRetries: Int = ClaudeMessagesClient.MAX_RETRIES,
 ) : ClaudeMessagesClient({
+    val key = apiKey.value()
     AnthropicOkHttpClientAsync.builder()
         .backend(
             AnthropicBackend.builder()
-                .apiKey(apiKey.value())
+                .apiKey(key)
                 .apply { if (baseUrl != null) baseUrl(baseUrl) }
                 .build(),
         )
+        .putHeader("X-Api-Key", key)
         .timeout(timeout)
         .maxRetries(maxRetries)
         .build()

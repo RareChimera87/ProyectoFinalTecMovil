@@ -79,9 +79,13 @@ abstract class ClaudeMessagesClient(factory: () -> AnthropicClientAsync) : LlmCl
         return stop
     }
 
-    /** Las salidas estructuradas de Claude exigen `additionalProperties: false` en cada objeto. */
+    /**
+     * Las salidas estructuradas de Claude exigen `additionalProperties: false` en cada objeto. Además se quitan las
+     * restricciones numéricas y de longitud ([UNSUPPORTED_KEYWORDS]), que las salidas estructuradas de Claude no
+     * admiten (precaución; los topes se siguen validando aquí con [JsonSchemaCheck] sobre el esquema original).
+     */
     private fun closeObjects(schema: JsonObject): JsonObject = JsonObject(
-        schema.mapValues { (key, value) ->
+        schema.filterKeys { it !in UNSUPPORTED_KEYWORDS }.mapValues { (key, value) ->
             when {
                 key == "properties" && value is JsonObject ->
                     JsonObject(value.mapValues { (_, sub) -> if (sub is JsonObject) closeObjects(sub) else sub })
@@ -119,5 +123,9 @@ abstract class ClaudeMessagesClient(factory: () -> AnthropicClientAsync) : LlmCl
         /** Igual que el cliente de Claude en Vertex desde E0.9. */
         val TIMEOUT: Duration = Duration.ofSeconds(120)
         const val MAX_RETRIES = 2
+
+        private val UNSUPPORTED_KEYWORDS = setOf(
+            "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf", "minLength", "maxLength",
+        )
     }
 }

@@ -67,7 +67,7 @@ class ClaudeApiClientTest : FunSpec({
         """{"type":"object","properties":{"score":{"type":"integer"},"motivo":{"type":"string"}},"required":["score","motivo"]}""",
     ).jsonObject
 
-    test("texto normal: mapea modelo, system, techo de tokens y uso; manda solo la clave configurada") {
+    test("texto normal: mapea modelo, system, techo de tokens y uso; manda la clave solo en x-api-key") {
         FakeAnthropic(200 to message("hola, parce")).use { server ->
             val result = client(server).generateText(
                 LlmRequest(model = "claude-sonnet-5-5", prompt = "<dato>hola</dato>", system = "Eres el gemelo", maxOutputTokens = 256),
@@ -75,9 +75,9 @@ class ClaudeApiClientTest : FunSpec({
             result shouldBe LlmTextResult("hola, parce", "claude-sonnet-5-5", LlmUsage(120, 30), truncated = false)
             val (path, headers, _) = server.requests.single()
             path shouldBe "/v1/messages"
-            // El SDK 3.x manda la clave estática como `Authorization: Bearer` (o `x-api-key` si ya viene puesta).
-            (headers["x-api-key"] ?: headers["authorization"]?.removePrefix("Bearer ")) shouldBe key
-            if (headers["x-api-key"] != null) headers["authorization"] shouldBe null
+            // La API autentica las claves con x-api-key; sin fijarla, el SDK 3.1.0 mandaría `Authorization: Bearer`.
+            headers["x-api-key"] shouldBe key
+            headers["authorization"] shouldBe null
             val body = server.lastBody()
             body["model"]!!.jsonPrimitive.content shouldBe "claude-sonnet-5-5"
             body["max_tokens"]!!.jsonPrimitive.int shouldBe 256
@@ -105,6 +105,20 @@ class ClaudeApiClientTest : FunSpec({
                 client(server).generateJson(LlmRequest(model = "claude-sonnet-5-5", prompt = "juzga"), schema)
             }
             e.usage shouldBe LlmUsage(120, 30)
+        }
+    }
+
+    test("esquema del juez real: no manda minimum/maximum, pero los sigue validando localmente") {
+        val judge = me.santiagoreina.parcheu.api.simulation.SimulationJudge.SCHEMA
+        val fuera = """{"afinidad":150,"dimensiones":[],"porQue":[],"dondeChocarian":[],"resumen":"x"}"""
+        FakeAnthropic(200 to message(fuera)).use { server ->
+            shouldThrow<LlmInvalidOutput> {
+                client(server).generateJson(LlmRequest(model = "claude-sonnet-5-5", prompt = "juzga"), judge)
+            }
+            val sent = server.lastBody()["output_config"]!!.jsonObject["format"]!!.jsonObject["schema"].toString()
+            sent shouldNotContain "minimum"
+            sent shouldNotContain "maximum"
+            sent shouldContain "\"additionalProperties\":false"
         }
     }
 
