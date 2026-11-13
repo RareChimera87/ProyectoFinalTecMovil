@@ -129,7 +129,7 @@ class TabReselectNavigationTest {
     }
 
     /** Lo que hace MatchQueueRoute con MatchQueueEffect.Close (la X de F1). */
-    private fun closeF1() = go { if (canGoBack()) back() else navigateToTopLevel(Home) }
+    private fun closeF1() = go { if (canGoBack()) back() else leaveTopLevel() }
 
     @Test
     fun laXDeF1LlevaAInicioAunqueConocerTengaHistoria() {
