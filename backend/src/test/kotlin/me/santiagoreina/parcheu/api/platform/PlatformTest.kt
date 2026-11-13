@@ -245,6 +245,24 @@ class PlatformTest : FunSpec({
         AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "LEGAL_TEXT_VERSION" to "2027-01-01")).legalTextVersion shouldBe "2027-01-01"
     }
 
+    test("DB_MAX_POOL_SIZE: 10 por defecto, entero 1..50 y rechaza lo demás aunque falte DB_NAME") {
+        val local = mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "DB_NAME" to "parcheu")
+        AppConfig.fromEnv(local).db?.maxPoolSize shouldBe DbConfig.DEFAULT_MAX_POOL_SIZE
+        DbConfig.DEFAULT_MAX_POOL_SIZE shouldBe 10
+        AppConfig.fromEnv(local + ("DB_MAX_POOL_SIZE" to "")).db?.maxPoolSize shouldBe 10
+        AppConfig.fromEnv(local + ("DB_MAX_POOL_SIZE" to "4")).db?.maxPoolSize shouldBe 4
+        AppConfig.fromEnv(local + ("DB_MAX_POOL_SIZE" to " 1 ")).db?.maxPoolSize shouldBe 1
+        AppConfig.fromEnv(local + ("DB_MAX_POOL_SIZE" to "50")).db?.maxPoolSize shouldBe 50
+        listOf("0", "-1", "51", "abc", "4.5").forEach { v ->
+            shouldThrow<IllegalArgumentException> {
+                AppConfig.fromEnv(local + ("DB_MAX_POOL_SIZE" to v))
+            }.message shouldContain "DB_MAX_POOL_SIZE"
+            shouldThrow<IllegalArgumentException> {
+                AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "DB_MAX_POOL_SIZE" to v), serving = false)
+            }
+        }
+    }
+
     test("FirebaseTokenVerifier no resuelve credenciales al construirse (ADC diferido)") {
         var llamadas = 0
         FirebaseTokenVerifier("parcheu-prod") {

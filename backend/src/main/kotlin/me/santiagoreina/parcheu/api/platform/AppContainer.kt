@@ -73,6 +73,7 @@ import me.santiagoreina.parcheu.api.platform.auth.TokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
+import me.santiagoreina.parcheu.api.platform.db.JOB_POOL_SIZE
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
 import me.santiagoreina.parcheu.api.quota.QuotaModule
 import me.santiagoreina.parcheu.api.quota.QuotaRoutes
@@ -340,8 +341,9 @@ class AppContainer(
             )
             val safety = safetyModule(database, chat, graph, matching, clock, safetyContacts)
             // Moderación con IA (E8.6): tarea `moderate` en `ai-light` después de entregar cada mensaje (fail-open).
-            val moderation = moderationService(ai, chat, safety, tasks, clock, notifier, quota.daily, moderationSampleEvery(vars))
-            if (moderationEnabled(vars)) moderation.attachTo(chat)
+            val moderation = moderationService(ai, chat, safety, tasks, clock, notifier, quota.daily, moderationSampleEvery(vars), moderationEnabled(vars))
+            // Con la moderación apagada también se engancha: solo marca `moderated_at` (sin LLM) para que el barrido no la reviva.
+            moderation.attachTo(chat)
             // Administración de reportes (E8.5): sobre la misma tabla `reports`; suspende por `users.suspended_until`.
             val admin = adminModule(database, identity.repo, chat, clock)
             // Borrado y exportación (E8.3): purga por la cola `maintenance`; Firestore y Auth reales fuera de local.
@@ -419,6 +421,8 @@ class AppContainer(
                 scheduler.every("simulation-recovery", Duration.ofMinutes(15), Duration.ofSeconds(30)) {
                     simulation.service.requeueUnfinished()
                 }
+                // Moderación (E8.6): reencola `moderate` y `moderate-help` que se perdieron con un reinicio de la cola en proceso.
+                scheduler.every("moderation-sweep", Duration.ofMinutes(15), Duration.ofSeconds(45)) { moderation.sweep() }
                 scheduler.every("memories", Duration.ofDays(1), InProcessScheduler.delayUntil(MEMORIES_AT, clock)) {
                     twin.memories.enqueueNightly()
                 }
@@ -449,7 +453,7 @@ class AppContainer(
             val db = config.db
             val usage = when {
                 database != null -> ExposedAiUsageStore(database)
-                db != null -> ExposedAiUsageStore { connectExposed(createDataSource(db, maxPoolSize = 2)) }
+                db != null -> ExposedAiUsageStore { connectExposed(createDataSource(db, maxPoolSize = minOf(JOB_POOL_SIZE, db.maxPoolSize))) }
                 config.env == Env.LOCAL -> InMemoryAiUsageStore()
                 else -> error("La pasarela de IA necesita DB_NAME y la conexión a la base en ${config.env}")
             }

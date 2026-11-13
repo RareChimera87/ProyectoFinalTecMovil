@@ -44,6 +44,7 @@ ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de 
 | `GCP_PROJECT`, `GCP_REGION` | proyecto y `us-central1` |
 | `CLOUD_SQL_INSTANCE` | `<proyecto>:us-central1:parcheu-<env>` (Cloud SQL Java Connector) |
 | `DB_NAME`, `DB_USER`, `DB_IAM_AUTH` | `parcheu`, `sa-api@<proyecto>.iam` (usuario IAM, sin contraseña), `true` |
+| `DB_MAX_POOL_SIZE` | `var.db_max_pool_size` (entero 1..50, por defecto 10 como el backend): conexiones máximas del pool Hikari por instancia; los jobs usan `min(2, valor)`. dev y prod, `4` para que máx instancias × pool + jobs quepa en el ~80 % de las 25 conexiones de db-f1-micro (cuenta en `envs/prod/main.tf`; `scripts/check-plan.sh` la comprueba) |
 | `TASKS_SERVICE_ACCOUNT` | email de `sa-tasks` (va en el token OIDC de cada tarea) |
 | `TASKS_QUEUE_SIM`, `TASKS_QUEUE_AI_LIGHT`, `TASKS_QUEUE_MAINT` | nombre completo de cada cola |
 | `INTERNAL_OIDC_AUDIENCE` | `https://api.parcheu-<env>.internal`: audiencia fija (custom audience de Cloud Run) de los tokens de Tasks, Scheduler y Pub/Sub; `/internal/*` la verifica junto con el email de `sa-tasks` |
@@ -56,7 +57,7 @@ ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de 
 Trabajos de Cloud Scheduler (hora de Bogotá) → `POST <SERVICE_URL>/internal/jobs/<nombre>` con OIDC de `sa-tasks`
 y audiencia `INTERNAL_OIDC_AUDIENCE`: `communities` (lunes 03:00), `memories` (diario 02:00), `twin-accuracy`
 (domingos 23:00), `retention` (diario 03:30), `purge-sweep` (cada hora, minuto 15; E8.3), `match-sweep` y
-`scenario-sweep` (cada minuto) y `simulation-recovery` (cada 15 min). Son los mismos jobs que programa el
+`scenario-sweep` (cada minuto), `simulation-recovery` y `moderation-sweep` (cada 15 min). Son los mismos jobs que programa el
 `InProcessScheduler` del homeserver (`AppContainer.inlineBackground`, ADR-0019); allí los dos barridos corren
 cada 60 s, que en Cloud Scheduler (mínimo un minuto) es `* * * * *`. `scripts/check-plan.sh` fija esta lista.
 **SERVICE_URL (decisión).** La URL del servicio la necesita el propio servicio en su entorno, pero

@@ -24,7 +24,8 @@ data class TaskRequest(
 
 /** Encola trabajo asíncrono. Los handlers de las tareas deben ser idempotentes (ADR-0019). */
 interface TaskQueue {
-    suspend fun enqueue(task: TaskRequest)
+    /** Encola [task]; devuelve false si la cola la deduplicó (ya existía una con ese nombre) y true si quedó encolada. */
+    suspend fun enqueue(task: TaskRequest): Boolean
 }
 
 /**
@@ -38,17 +39,18 @@ class FakeTaskQueue(var inline: (suspend (TaskRequest) -> Unit)? = null) : TaskQ
     /** Si no es null, [enqueue] lanza este error sin registrar la tarea (simula un fallo de Cloud Tasks). */
     @Volatile var failWith: Throwable? = null
 
-    override suspend fun enqueue(task: TaskRequest) {
+    override suspend fun enqueue(task: TaskRequest): Boolean {
         failWith?.let { throw it }
-        if (recorded.any { it.name == task.name && it.queue == task.queue }) return
+        if (recorded.any { it.name == task.name && it.queue == task.queue }) return false
         recorded += task
         inline?.invoke(task)
+        return true
     }
 }
 
 /** Cola sin configurar (dev/prod sin `TASKS_QUEUE_*` ni `SERVICE_URL`): falla al encolar, no al arrancar. */
 class UnconfiguredTaskQueue(private val reason: String) : TaskQueue {
-    override suspend fun enqueue(task: TaskRequest) {
+    override suspend fun enqueue(task: TaskRequest): Boolean {
         error("Cloud Tasks no está configurado: $reason")
     }
 }

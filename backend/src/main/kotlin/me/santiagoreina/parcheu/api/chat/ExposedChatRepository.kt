@@ -22,13 +22,16 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -114,6 +117,42 @@ class ExposedChatRepository(private val db: Database) : ChatRepository {
 
     override suspend fun message(messageId: UUID): MessageRecord? = tx {
         ChatMessages.selectAll().where { ChatMessages.id eq messageId }.singleOrNull()?.toMessage()
+    }
+
+    override suspend fun markModerated(messageId: UUID, at: Instant) {
+        tx { ChatMessages.update({ (ChatMessages.id eq messageId) and ChatMessages.moderatedAt.isNull() }) { it[moderatedAt] = at.odt() } }
+    }
+
+    override suspend fun setHelpPending(messageId: UUID, pending: Boolean) {
+        tx { ChatMessages.update({ ChatMessages.id eq messageId }) { it[moderationHelpPending] = pending } }
+    }
+
+    override suspend fun bumpModerationSweeps(messageId: UUID): Int = tx {
+        ChatMessages.update({ ChatMessages.id eq messageId }) { it[ChatMessages.moderationSweeps] = ChatMessages.moderationSweeps + 1 }
+        ChatMessages.select(ChatMessages.moderationSweeps).where { ChatMessages.id eq messageId }.singleOrNull()
+            ?.get(ChatMessages.moderationSweeps) ?: 0
+    }
+
+    override suspend fun unmoderated(olderThan: Instant, newerThan: Instant, limit: Int): List<UUID> = tx {
+        ChatMessages.select(ChatMessages.id)
+            .where {
+                ChatMessages.moderatedAt.isNull() and ChatMessages.senderId.isNotNull() and (ChatMessages.hidden eq false) and
+                    (ChatMessages.createdAt lessEq olderThan.odt()) and (ChatMessages.createdAt greater newerThan.odt())
+            }
+            .orderBy(ChatMessages.createdAt to SortOrder.ASC, ChatMessages.id to SortOrder.ASC)
+            .limit(limit)
+            .map { it[ChatMessages.id] }
+    }
+
+    override suspend fun helpPending(olderThan: Instant, newerThan: Instant, limit: Int): List<UUID> = tx {
+        ChatMessages.select(ChatMessages.id)
+            .where {
+                (ChatMessages.moderationHelpPending eq true) and
+                    (ChatMessages.createdAt lessEq olderThan.odt()) and (ChatMessages.createdAt greater newerThan.odt())
+            }
+            .orderBy(ChatMessages.createdAt to SortOrder.ASC, ChatMessages.id to SortOrder.ASC)
+            .limit(limit)
+            .map { it[ChatMessages.id] }
     }
 
     override suspend fun hideMessage(messageId: UUID): MessageRecord? = tx {

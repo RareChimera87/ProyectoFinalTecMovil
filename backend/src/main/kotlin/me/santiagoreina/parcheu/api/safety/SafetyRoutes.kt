@@ -56,6 +56,11 @@ class SafetyRoutes(
             moderation.deliverHelp(call.receive<TaskPayload>().uuid())
             call.respond(HttpStatusCode.NoContent)
         }
+        // Barrido de recuperación (Cloud Scheduler; el InProcessScheduler del homeserver llama directo a sweep()).
+        post(ModerationService.SWEEP_PATH) {
+            moderation.sweep()
+            call.respond(HttpStatusCode.NoContent)
+        }
     }
 
     private suspend fun ApplicationCall.userId(): UUID = currentUserId(principal<FirebaseUser>() ?: throw Unauthenticated())

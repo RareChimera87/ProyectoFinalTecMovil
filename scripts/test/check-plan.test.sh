@@ -41,7 +41,7 @@ expect fail "job purge-demo con otro argumento" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_job" and .values.name=="purge-demo" then .values.template[0].template[0].containers[0].args=["serve"] else . end')"
 expect fail "falta el job de Scheduler purge-sweep (E8.3)" "$ROOT/scripts/check-plan.sh" \
   "$(drop plan-dev.json '.type=="google_cloud_scheduler_job" and .values.name=="purge-sweep"')"
-for job in match-sweep scenario-sweep simulation-recovery; do
+for job in match-sweep scenario-sweep simulation-recovery moderation-sweep; do
   expect fail "falta el job de Scheduler $job" "$ROOT/scripts/check-plan.sh" \
     "$(drop plan-dev.json ".type==\"google_cloud_scheduler_job\" and .values.name==\"$job\"")"
 done
@@ -81,6 +81,16 @@ expect fail "AI_USER_DAILY_BUDGET_USD con coma decimal" "$ROOT/scripts/check-pla
   "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(if .name=="AI_USER_DAILY_BUDGET_USD" then .value="0,75" else . end) else . end')"
 expect fail "prod con el tope de IA por defecto (3)" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(if .name=="AI_DAILY_BUDGET_USD" then .value="3" else . end) else . end')"
+expect fail "falta DB_MAX_POOL_SIZE en la api" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(select(.name!="DB_MAX_POOL_SIZE")) else . end')"
+expect fail "DB_MAX_POOL_SIZE fuera de 1..50" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(if .name=="DB_MAX_POOL_SIZE" then .value="0" else . end) else . end')"
+expect fail "job migrate sin DB_MAX_POOL_SIZE" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_job" and .values.name=="migrate" then .values.template[0].template[0].containers[0].env |= map(select(.name!="DB_MAX_POOL_SIZE")) else . end')"
+expect fail "db-f1-micro con el pool por defecto (2 × 10 + 6 > 20)" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(if .name=="DB_MAX_POOL_SIZE" then .value="10" else . end) elif .type=="google_cloud_run_v2_job" then .values.template[0].template[0].containers[0].env |= map(if .name=="DB_MAX_POOL_SIZE" then .value="10" else . end) elif .type=="google_sql_database_instance" then .values.settings[0].tier="db-f1-micro" else . end')"
+expect ok   "db-f1-micro con pool 4 (2 × 4 + 6 = 14 ≤ 20)" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-prod.json 'if .type=="google_sql_database_instance" then .values.settings[0].tier="db-f1-micro" else . end')"
 expect fail "Firestore fuera de nam5" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-dev.json 'if .type=="google_firestore_database" then .values.location_id="us-east1" else . end')"
 cp "$ROOT/infra/terraform/README.md" "$TMP/README.md"

@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.api.platform.db.connectExposed
+import me.santiagoreina.parcheu.api.platform.db.JOB_POOL_SIZE
 import me.santiagoreina.parcheu.api.platform.db.createDataSource
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.slf4j.LoggerFactory
@@ -35,6 +36,6 @@ object DemoJobs {
 
     private fun <T> withDatabase(config: AppConfig, job: String, block: (Database) -> T): T {
         val dbConfig = requireNotNull(config.db) { "$job requiere DB_NAME y la conexión (CLOUD_SQL_INSTANCE o DB_URL)" }
-        return createDataSource(dbConfig, maxPoolSize = 2).use { ds -> block(connectExposed(ds)) }
+        return createDataSource(dbConfig, maxPoolSize = minOf(JOB_POOL_SIZE, dbConfig.maxPoolSize)).use { ds -> block(connectExposed(ds)) }
     }
 }
