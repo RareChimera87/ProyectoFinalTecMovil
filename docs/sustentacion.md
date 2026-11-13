@@ -32,7 +32,54 @@ Quien no habla maneja el dispositivo o el terminal. Ensayar con cronómetro; si 
 
 ## 2. Antes de empezar (lista de chequeo)
 
-Hacerlo 30 minutos antes. Cada punto tiene su responsable.
+### Entorno de la demo
+
+Hay dos entornos posibles y la recomendación es usar los dos con funciones distintas.
+
+| | A. Flavor `dev` contra el homeserver | B. Flavor `prod` contra GCP |
+|---|---|---|
+| Qué se instala | APK `dev` (paquete `me.santiagoreina.parcheu.dev`) | APK `prodRelease` firmado con la llave de subida (paquete `me.santiagoreina.parcheu`), instalado a mano porque no hay app en Play |
+| Red | El homeserver solo se alcanza por LAN o Tailscale: los teléfonos de la demo deben estar en la LAN o con Tailscale conectado | Internet normal |
+| ParcheU+ | Sí: `grant-plus` existe en dev | No: en prod no existe `/internal/dev/grant-plus` y no hay compra posible sin la app en Play |
+| Qué muestra | Todo el flujo, incluida F8 | Evidencia de producción real: health, Hosting con términos y privacidad, login |
+
+**Recomendación:** demo principal en A, porque enseña el producto completo; B como evidencia de que existe un
+despliegue real (`curl https://api-n3yxvjziqq-uc.a.run.app/v1/health`, <https://parcheu-prod.web.app> con las páginas legales y un
+inicio de sesión desde el APK). No se promete ParcheU+ ni el flujo de pago en B. Prod corre el MVP de costo mínimo:
+Cloud Run con mínimo 0 instancias, `DEMO_USERS_ENABLED=false` y tope de IA de 1 USD/día en total y 0,25 USD/día por
+persona.
+
+**Preparación la víspera (entorno B):**
+
+- [ ] Dos cuentas reales, conectadas entre sí por QR, con onboarding y gemelo listos. Simular exige una arista
+      `CONNECTED`; con una sola cuenta no hay demo, y en prod no hay usuarios demo que la reemplacen.
+- [ ] Abrir la app 15 minutos antes de empezar: Cloud Run con mínimo 0 tiene arranque en frío en la primera petición.
+- [ ] No gastar el tope de IA de prod el mismo día: ensayar la víspera con una o dos simulaciones, no más, y dejar el
+      resto del cupo (1 USD/día en total) para la sustentación.
+- [ ] El APK instalado y con la sesión iniciada en ambos teléfonos antes de entrar a la sala.
+
+**Generar el APK de prod instalable sin Play** (desde `android/`; los nombres salen de `android/app/build.gradle.kts`):
+
+```bash
+# 1. google-services.json de prod (no se versiona: .gitignore lo excluye). Queda en android/app/src/prod/
+scripts/fetch-google-services.sh prod          # desde la raíz del repo; necesita firebase login o ADC
+
+# 2. Llave de subida por variables de ENTORNO (no son propiedades de Gradle)
+export UPLOAD_KEYSTORE_FILE=~/.parcheu/upload-keystore.jks
+export UPLOAD_KEYSTORE_PASSWORD=...  UPLOAD_KEY_ALIAS=...  UPLOAD_KEY_PASSWORD=...   # ~/.parcheu/upload-key.env
+
+# 3. APK de prod (con la llave de subida presente, la URL real de la API es obligatoria)
+cd android
+./gradlew :app:assembleProdRelease -Pparcheu.apiUrl.prod=https://api-n3yxvjziqq-uc.a.run.app/
+
+# 4. Instalar en cada teléfono
+adb install -r app/build/outputs/apk/prod/release/app-prod-release.apk
+```
+
+La URL debe ser `https` y terminar en `/`; `verificarUrlsProd` falla si no. La huella registrada en Firebase prod es la
+de la llave de subida, no la de debug: por eso el APK debe ir firmado con ella o el login con Google falla.
+
+Lista general (entorno A). Hacerlo 30 minutos antes. Cada punto tiene su responsable.
 
 - [ ] **I1:** API arriba: `curl https://<host del homeserver>/v1/health` responde 200 y `docker compose logs parcheu-api` no
       muestra errores ([operacion.md](operacion.md#backend-de-dev-en-el-homeserver)).
@@ -235,6 +282,8 @@ Decir esto antes de que lo pregunten. Actualizar esta tabla el día antes con el
 | App y backend en dev | Funcionales de punta a punta en el flavor `dev` contra el homeserver |
 | Publicación en Play | Prioridad del usuario del 27 oct: la app funcional en `dev` va primero. Pipeline de release, ficha y Data safety están como código y documentos; la ejecución en Play Console (prueba cerrada, acceso a producción) depende de pasos humanos en [pendientes-humanos.md](pendientes-humanos.md) y [play-console.md](play-console.md). **Registrar aquí la fecha real antes de sustentar.** |
 | Prod en GCP | Aplicado el 4 nov 2026: plataforma y bootstrap de prod, API v0.1.0 en Cloud Run y Hosting en parcheu-prod.web.app. El desarrollo sigue en el homeserver |
+| Fuera de alcance de la sustentación | E10.8 (acceso a producción y login desde una instalación de Play) y E10.9 (release 1.0 en Play): no hay app en Play porque la verificación de identidad de la cuenta de desarrollador está pendiente, y la regla de 12 testers durante 14 días hace imposible una 1.0 en Play antes de fin de noviembre. No se presentan como cumplidos |
+| Qué sí está en producción | GCP `parcheu-prod` con la API v0.1.0 (<https://api-n3yxvjziqq-uc.a.run.app>) y Hosting (<https://parcheu-prod.web.app>); MVP de costo mínimo. ParcheU+ no se puede activar en prod (sin `grant-plus` ni app en Play); se muestra en dev |
 | Compras | Verificación en servidor lista; en dev se prueba con `grant-plus` y sin RTDN |
 | Notificaciones push | Reales con `PARCHEU_ENV=dev`; no hay RTDN de renovaciones en el homeserver |
 | ADR-0029 (texto del ahorro del plan anual) | Propuesta, pendiente de confirmación del usuario |
@@ -255,4 +304,5 @@ Preguntas probables y respuesta corta:
 | La simulación tarda o falla | Enseñar una simulación ya terminada de la cuenta de ensayo (F7/F8); explicar `AiBudgetExceeded` si fue el tope |
 | La fila está vacía | Es el riesgo 8 del [PLAN](PLAN.md): usar "Simular" desde un perfil o los usuarios demo sembrados |
 | La demo de mutación no compila | Mostrar la salida grabada del ensayo (guardarla el día anterior) y `--verificar-anclas` |
+| El teléfono no alcanza el homeserver (sin LAN ni Tailscale) | Pasar a la evidencia del entorno B (APK de prod, health y Hosting) y contar F8 con capturas |
 | Sin red en la sala | Hotspot del teléfono de I3; si el homeserver no es alcanzable, todo el guion se puede contar con capturas y [c4.md](c4.md) |
