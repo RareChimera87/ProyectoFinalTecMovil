@@ -5,9 +5,10 @@ import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runCurrent
@@ -33,7 +34,7 @@ class SignOutFlowTest {
     private val scopes = mutableListOf<CoroutineScope>()
 
     @After fun tearDown() {
-        scopes.forEach { it.cancel() }
+        runBlocking { scopes.forEach { it.coroutineContext[Job]?.cancelAndJoin() } }
         dir.deleteRecursively()
     }
 
