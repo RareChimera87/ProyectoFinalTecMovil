@@ -95,10 +95,31 @@ Alguien reportó a otra persona o un chat (E8.1). Es un aviso informativo, no un
 
 1. Abre el reporte en Postgres (`reports`, el log trae `reportId`, `kind`, `reason`, `priority`):
    `select * from reports where id = '<reportId>'`. La instantánea del chat está en la fila.
-2. `priority = 2` (`SELF_HARM` o `UNDERAGE`): atiende primero y el mismo día. Autolesión: sigue el protocolo de apoyo que acuerde el equipo
-   (aún no está escrito en la arquitectura); menor de edad: suspende la cuenta.
+2. `priority = 2` (`SELF_HARM` o `UNDERAGE`): atiende primero y el mismo día. Autolesión: sigue el [protocolo de apoyo](#protocolo-de-apoyo-ante-autolesión-borrador);
+   menor de edad: suspende la cuenta.
 3. Resuelve con el script de administración (claim `admin`) y registra la resolución en el mismo reporte.
 4. Nunca copies textos de mensajes a canales de chat del equipo ni a issues.
+
+### Protocolo de apoyo ante autolesión (borrador)
+
+> **Borrador pendiente de aprobación del equipo.** No es política vigente hasta que I1, I2 e I3 lo aprueben.
+
+- **Qué lo dispara:** un reporte con motivo `SELF_HARM` o una moderación de IA con hallazgo `SELF_HARM`
+  ([ADR-0026](adr/0026-moderacion-ia-fail-open.md)); los reportes con ese motivo quedan con `priority = 2`.
+- **Qué ve la persona de inmediato:** `helpResources` en la respuesta de `POST /v1/reports` y, para la moderación,
+  un aviso y un push solo al autor, nunca al chat compartido: Línea 192, opción 4 (salud mental, Ministerio de
+  Salud); Línea 106 (escucha y orientación en crisis emocional); Emergencias 123 (peligro inmediato). Vigencia y
+  cobertura en Santander siguen por verificar antes de darlas por buenas.
+- **Quién y cuándo:** quien administre (claim `admin`), el mismo día, como todo `priority = 2`.
+- **Qué hace el equipo:** revisa el reporte en `admin.html`, oculta el mensaje si corresponde, resuelve y registra la
+  resolución. Si hay peligro inmediato aparente, remite a emergencias (123) y a las líneas oficiales.
+- **Qué NO hace:** no diagnostica, no contacta a terceros (familia, universidad, autoridades) sin base legal, no
+  promete ni ofrece seguimiento clínico y no escribe a la persona en nombre de un servicio de salud.
+- **Registro mínimo:** el reporte (con su instantánea de 20 mensajes) y su resolución; nada de textos en canales
+  del equipo ni en issues. El `snapshot` se borra 180 días después de resolverse y el reporte se conserva
+  ([arquitectura §10.2](arquitectura.md#102-retención-de-datos-fuente-para-privacidad-data-safety-e83-y-e88)).
+- **Escalamiento:** si hay duda, si el caso involucra a un menor o si afecta a más de una persona, se informa a los
+  otros dos integrantes ese mismo día; cualquier contacto con terceros lo decide el equipo completo.
 
 ## simulaciones-failed
 
@@ -254,6 +275,28 @@ gcloud secrets versions list hmac-anon-key --project $P
 gcloud secrets versions disable <versión-anterior> --secret hmac-anon-key --project $P
 ```
 
+### `too many connections` en Cloud SQL
+
+**Síntoma:** la API devuelve 500/503 en ráfaga y en los logs aparecen `FATAL: sorry, too many clients already`,
+`remaining connection slots are reserved` o `HikariPool-1 - Connection is not available, request timed out`; el job
+`migrate` de un despliegue falla igual. **Causa:** db-f1-micro admite unas 25 conexiones (`max_connections`, aprox.;
+Cloud SQL reserva algunas) y cada instancia de `api` abre su propio pool de hasta `DB_MAX_POOL_SIZE` (Terraform
+`db_max_pool_size`: 4 en prod), más 2 por cada job. La cuenta (máx instancias × pool + jobs ≤ 80 %) está en
+`infra/terraform/envs/prod/main.tf` y la comprueba `scripts/check-plan.sh`.
+
+```bash
+# Quién tiene las conexiones (desde Cloud SQL Studio o psql como postgres):
+#   SELECT usename, application_name, state, count(*) FROM pg_stat_activity GROUP BY 1,2,3 ORDER BY 4 DESC;
+gcloud sql instances describe parcheu-prod --project $P --format='value(settings.tier)'
+gcloud run services describe api --region $R --project $P --format='value(spec.template.metadata.annotations)'
+```
+
+Qué hacer: si coincide con un despliegue, espera a que la revisión vieja escale a cero (las conexiones ociosas se
+cierran a los 2 min). Si se repite, baja `db_max_pool_size` o `api_max_instances` en `envs/prod/main.tf` (o sube
+`sql_tier` a db-g1-small, ~50 conexiones) y aplica (`apply` de prod: solo el usuario). Los avisos sueltos
+`Failed to validate connection … This connection has been closed` tras ratos sin tráfico no son este problema: Hikari
+descarta la conexión muerta y abre otra (`maxLifetime` 10 min y `keepaliveTime` 2 min los reducen).
+
 ### Alertas que existen
 
 Las de [Alertas de GCP](#alertas-de-gcp) (`monitoring.tf`), **apagadas en el MVP** (`alert_policies_enabled = false`), salvo `report-created` que queda siempre activa;
@@ -272,7 +315,7 @@ del usuario rondan 20 USD). Dev no cuesta en GCP: no está desplegado allí.
 | Disco de Cloud SQL | 10 GB HDD | ~0,9 | SSD (~1,7; recrea la instancia) |
 | Backups de Cloud SQL | diarios, 7 copias, sin PITR | < 0,1 | PITR activado |
 | Cloud Run `api` y jobs | min 0, máx 2, `cpu_idle` | ~0 (capa gratuita) | min 1 (~7-8) |
-| Cloud Scheduler | 8 trabajos (3 gratis por cuenta de facturación; 5 × ~0,10) | ~0,5 | igual |
+| Cloud Scheduler | 9 trabajos (3 gratis por cuenta de facturación; 6 × ~0,10) | ~0,6 | igual |
 | Artifact Registry | ~10 imágenes de la API | ~0,1-0,3 | igual |
 | Cloud Tasks, Pub/Sub, Secret Manager, Firestore, Hosting, Logging | volumen de demostración | 0 (capa gratuita) | según uso |
 | Monitoring | uptime y métricas en la capa gratuita; solo la alerta `report-created` | ~0,1 | ~0,6 con las seis alertas |
@@ -351,10 +394,14 @@ el código viejo corre contra el esquema nuevo. Para un esquema dañado, restaur
 
 1. `docker compose up -d` levanta lo que falte; la base conserva el volumen `parcheu-pgdata`.
 2. La cola en proceso **pierde lo que tenía en memoria**. Se recuperan solas: las simulaciones `QUEUED` o `RUNNING` de entre
-   10 min y 24 h (`simulation-recovery`, cada 15 min) y las purgas de cuentas (`purge-sweep`, cada hora). Las tareas de
-   gemelo y memorias se rehacen al siguiente uso o a las 02:00 de Bogotá (`memories`). **No se recuperan** las tareas
-   `moderate` ni `moderate-help` (la ayuda ante `SELF_HARM`, E8.6): no tienen barrido. El reporte sí queda en la base; tras un corte,
-   revisa en `admin.html` los reportes de prioridad 2 recientes. Es un hueco de código conocido (un barrido de moderación sin terminar).
+   10 min y 24 h (`simulation-recovery`, cada 15 min), las purgas de cuentas (`purge-sweep`, cada hora) y la moderación
+   (`moderation-sweep`, cada 15 min: reencola `moderate` de los mensajes sin moderar de entre 10 min y 24 h, hasta 100 por corrida, y
+   los `moderate-help` de ayuda ante `SELF_HARM` que quedaron sin entregar; un mismo mensaje se reencola como mucho 3 veces
+   (`chat_messages.moderation_sweeps`): después se da por moderado y se registra `moderation_sweep_gave_up` en WARN, para que un fallo persistente
+   no gaste IA en cada barrido; `moderation_swept` cuenta solo lo encolado de verdad. Con `MODERATION_ENABLED=false` el barrido no hace nada y cada
+   mensaje nuevo se guarda ya marcado como moderado, así que al volver a encenderla no se revisan los escritos con la moderación apagada). Las tareas de
+   gemelo y memorias se rehacen al siguiente uso o a las 02:00 de Bogotá (`memories`). Un mensaje con más de 24 h sin moderar ya no se
+   recupera; tras un corte largo revisa en `admin.html` los reportes de prioridad 2 recientes.
 3. Si ves el mismo id de simulación repetido en los registros una y otra vez, hay una simulación que mata el proceso: míralo
    antes de que gaste IA ([incidentes](#incidentes-frecuentes-por-síntoma)).
 4. La IP `192.168.0.10` del servidor debe seguir siendo estática; si cambió, AdGuard apunta a otra máquina y el HTTPS queda

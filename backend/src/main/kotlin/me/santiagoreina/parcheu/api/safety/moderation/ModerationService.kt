@@ -71,6 +71,8 @@ class ModerationService(
     private val withinSpend: suspend (UUID) -> Boolean = { true },
     /** Cuenta una moderación muestreada del autor; false si ya agotó el corte duro del día (`DailyKind.MODERATION_SAMPLED`). */
     private val withinSampledCap: (UUID) -> Boolean = { true },
+    /** `MODERATION_ENABLED`: con false [enqueue] solo marca el mensaje como moderado y el barrido [sweep] no reencola nada (ADR-0026). */
+    private val enabled: Boolean = true,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -81,6 +83,12 @@ class ModerationService(
     /** Encola la moderación de [message]; nunca propaga errores (el envío ya ocurrió). */
     suspend fun enqueue(message: MessageRecord) {
         val author = message.senderId ?: return
+        if (!enabled) {
+            // Moderación apagada: no se llama al LLM, pero se marca para que, al volver a encenderla, el barrido
+            // no mande a revisión hasta 24 h de mensajes escritos mientras estaba apagada.
+            markModerated(message.id)
+            return
+        }
         if (!underCap(author)) {
             val reason = when {
                 !sampled(message.id) -> "sampling"
@@ -90,6 +98,8 @@ class ModerationService(
             if (reason != null) {
                 log.atInfo().setMessage(SAMPLED_OUT).addKeyValue("event", SAMPLED_OUT)
                     .addKeyValue("messageId", message.id.toString()).addKeyValue("reason", reason).log()
+                // Decidido no moderarlo: se marca para que el barrido no lo reencole y se salte el tope.
+                markModerated(message.id)
                 return
             }
         }
@@ -139,8 +149,29 @@ class ModerationService(
     /** Muestreo determinista por id: el mismo mensaje siempre cae del mismo lado, también en los reintentos. */
     private fun sampled(messageId: UUID): Boolean = Math.floorMod(messageId.hashCode(), sampleEvery) == 0
 
-    /** Revisa el mensaje [messageId] y aplica las acciones que correspondan. */
+    /**
+     * Revisa el mensaje [messageId] y aplica las acciones que correspondan. Al terminar sin error (con cualquier
+     * resultado, incluido el fail-open) lo marca moderado; si lanza, queda pendiente para el reintento y el barrido.
+     */
     suspend fun moderate(messageId: UUID): ModerationOutcome {
+        val outcome = review(messageId)
+        markModerated(messageId)
+        return outcome
+    }
+
+    /** Marca [messageId] como moderado; un fallo solo se registra (a lo sumo el barrido lo reencola una vez). */
+    private suspend fun markModerated(messageId: UUID) {
+        try {
+            chats.markModerated(messageId, clock.instant())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.atWarn().setMessage(MARK_FAILED).addKeyValue("event", MARK_FAILED)
+                .addKeyValue("messageId", messageId.toString()).addKeyValue("error", e.javaClass.simpleName).log()
+        }
+    }
+
+    private suspend fun review(messageId: UUID): ModerationOutcome {
         val message = chats.message(messageId) ?: return ModerationOutcome.SKIPPED
         val author = message.senderId ?: return ModerationOutcome.SKIPPED
         // Si un intento anterior ya dejó el reporte AUTO, la decisión está tomada y se aplica sin volver a llamar al LLM
@@ -191,7 +222,10 @@ class ModerationService(
         helpError?.let { error ->
             // Solo autolesión: no hay reporte que registre la decisión, así que un reintento de `moderate` volvería a
             // llamar al LLM y la ayuda podría perderse. Se reintenta el aviso en una tarea propia, sin LLM.
-            if (reportable.isNotEmpty() || !enqueueHelp(messageId)) throw error
+            if (reportable.isNotEmpty()) throw error
+            // Queda el marcador en la base: si la tarea se pierde (reinicio de la cola en proceso), el barrido la reencola.
+            chats.setHelpPending(messageId, true)
+            if (!enqueueHelp(messageId)) throw error
             log.atWarn().setMessage(HELP_DEFERRED).addKeyValue("event", HELP_DEFERRED)
                 .addKeyValue("messageId", messageId.toString()).addKeyValue("error", error.javaClass.simpleName).log()
         }
@@ -203,26 +237,107 @@ class ModerationService(
 
     /** Handler de `POST /internal/tasks/moderate-help`: entrega la ayuda al autor de [messageId] sin llamar al LLM. */
     suspend fun deliverHelp(messageId: UUID) {
-        val author = chats.message(messageId)?.senderId ?: return
-        sendHelp(author)
+        val author = chats.message(messageId)?.senderId
+        if (author != null) sendHelp(author)
+        // Sin destinatario (autor purgado) no hay a quién avisar: se limpia el marcador para que el barrido no reencole en vano.
+        try {
+            chats.setHelpPending(messageId, false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.atWarn().setMessage(MARK_FAILED).addKeyValue("event", MARK_FAILED)
+                .addKeyValue("messageId", messageId.toString()).addKeyValue("error", e.javaClass.simpleName).log()
+        }
     }
 
-    /** Encola el reintento del aviso de ayuda; false si ni eso se pudo (entonces falla la tarea y se reintenta todo). */
-    private suspend fun enqueueHelp(messageId: UUID): Boolean = try {
-        tasks.enqueue(
-            TaskRequest(
-                queue = QueueKind.AI_LIGHT,
-                path = HELP_TASK_PATH,
-                name = "moderate-help-$messageId",
-                body = buildJsonObject { put("id", JsonPrimitive(messageId.toString())) }.toString(),
-            ),
-        )
-        true
+    /**
+     * Barrido de recuperación (`POST /internal/jobs/moderation-sweep`; el `InProcessScheduler` del homeserver lo llama
+     * directo cada 15 min). Reencola `moderate` para los mensajes sin moderar de entre [SWEEP_MIN_AGE] y [SWEEP_MAX_AGE]
+     * (se perdieron con un reinicio de la cola en proceso o el encolado falló) y `moderate-help` para los avisos de ayuda
+     * diferidos que no llegaron. A lo sumo [SWEEP_LIMIT] tareas por corrida. Respeta los topes: no vuelve a contar el tope
+     * diario (esos mensajes ya lo pasaron al encolarse), pero si al autor se le agotó el sub-techo de gasto de moderación
+     * el mensaje se da por no moderado (como un fail-open), así el barrido nunca gasta IA por encima del presupuesto.
+     * Idempotente: usa los mismos nombres de tarea (`moderate-<id>`, `moderate-help-<id>`), que la cola deduplica.
+     * Un mismo mensaje se reencola como mucho [SWEEP_MAX_REQUEUES] veces (columna `moderation_sweeps`): a la siguiente se
+     * abandona, se marca moderado (fail-open) y se registra `moderation_sweep_gave_up`. Con `MODERATION_ENABLED=false` no hace nada
+     * (y [enqueue] marca los mensajes nuevos como moderados). Devuelve cuántas tareas encoló de verdad (las que la cola deduplicó no cuentan).
+     */
+    suspend fun sweep(): Int {
+        if (!enabled) return 0
+        val now = clock.instant()
+        val older = now.minus(SWEEP_MIN_AGE)
+        val newer = now.minus(SWEEP_MAX_AGE)
+        var queued = 0
+        var gaveUp = 0
+        for (id in chats.unmoderated(older, newer, SWEEP_LIMIT)) {
+            val author = chats.message(id)?.senderId ?: continue
+            if (!spendLeft(author)) {
+                log.atInfo().setMessage(SAMPLED_OUT).addKeyValue("event", SAMPLED_OUT)
+                    .addKeyValue("messageId", id.toString()).addKeyValue("reason", "budget").log()
+                markModerated(id)
+                continue
+            }
+            // Un fallo persistente después del LLM (reporte, aviso) haría que cada barrido pagara otra llamada: tras
+            // SWEEP_MAX_REQUEUES reencolados se abandona el mensaje (fail-open) en vez de repetirlo durante 24 h.
+            if (bumpSweeps(id) > SWEEP_MAX_REQUEUES) {
+                log.atWarn().setMessage(SWEEP_GAVE_UP).addKeyValue("event", SWEEP_GAVE_UP)
+                    .addKeyValue("messageId", id.toString()).addKeyValue("requeues", SWEEP_MAX_REQUEUES).log()
+                markModerated(id)
+                gaveUp++
+                continue
+            }
+            if (enqueueTask(TASK_PATH, "moderate-$id", id) == true) queued++
+        }
+        for (id in chats.helpPending(older, newer, (SWEEP_LIMIT - queued).coerceAtLeast(0))) {
+            if (enqueueTask(HELP_TASK_PATH, "moderate-help-$id", id) == true) queued++
+        }
+        if (queued > 0 || gaveUp > 0) {
+            val level = if (gaveUp > 0) org.slf4j.event.Level.WARN else org.slf4j.event.Level.INFO
+            log.atLevel(level).setMessage(SWEPT).addKeyValue("event", SWEPT).addKeyValue("queued", queued)
+                .addKeyValue("gaveUp", gaveUp).log()
+        }
+        return queued
+    }
+
+    /** Suma un reencolado del mensaje; si la base falla se cuenta como uno (el tope no se pierde, a lo sumo se pospone). */
+    private suspend fun bumpSweeps(messageId: UUID): Int = try {
+        chats.bumpModerationSweeps(messageId)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        false
+        log.atWarn().setMessage(MARK_FAILED).addKeyValue("event", MARK_FAILED)
+            .addKeyValue("messageId", messageId.toString()).addKeyValue("error", e.javaClass.simpleName).log()
+        1
     }
+
+    private suspend fun spendLeft(author: UUID): Boolean = try {
+        withinSpend(author)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        true
+    }
+
+    /** true si la tarea quedó encolada; false si la cola la deduplicó; null si el encolado falló. */
+    private suspend fun enqueueTask(path: String, name: String, messageId: UUID): Boolean? = try {
+        tasks.enqueue(
+            TaskRequest(
+                queue = QueueKind.AI_LIGHT,
+                path = path,
+                name = name,
+                body = buildJsonObject { put("id", JsonPrimitive(messageId.toString())) }.toString(),
+            ),
+        )
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.atWarn().setMessage(ENQUEUE_FAILED).addKeyValue("event", ENQUEUE_FAILED)
+            .addKeyValue("messageId", messageId.toString()).addKeyValue("error", e.javaClass.simpleName).log()
+        null
+    }
+
+    /** Encola el reintento del aviso de ayuda; false si ni eso se pudo (entonces falla la tarea y se reintenta todo). */
+    private suspend fun enqueueHelp(messageId: UUID): Boolean = enqueueTask(HELP_TASK_PATH, "moderate-help-$messageId", messageId) != null
 
     /** Las líneas de ayuda van solo a [author] (aviso del centro + push), nunca al chat que ve la otra persona. */
     private suspend fun sendHelp(author: UUID) {
@@ -264,6 +379,18 @@ class ModerationService(
     companion object {
         const val TASK_PATH = "/tasks/moderate"
         const val HELP_TASK_PATH = "/tasks/moderate-help"
+
+        /** Barrido de recuperación de la moderación (cada 15 min, como el `InProcessScheduler` del homeserver). */
+        const val SWEEP_PATH = "/jobs/moderation-sweep"
+        const val SWEPT = "moderation_swept"
+        const val SWEEP_GAVE_UP = "moderation_sweep_gave_up"
+
+        /** Reencolados por barrido de un mismo mensaje antes de abandonarlo (fail-open): acota el gasto ante fallos persistentes. */
+        const val SWEEP_MAX_REQUEUES = 3
+        const val MARK_FAILED = "moderation_mark_failed"
+        val SWEEP_MIN_AGE: java.time.Duration = java.time.Duration.ofMinutes(10)
+        val SWEEP_MAX_AGE: java.time.Duration = java.time.Duration.ofHours(24)
+        const val SWEEP_LIMIT = 100
         const val HELP_DEFERRED = "moderation_help_deferred"
         const val MODERATION_FAILED = "moderation_failed"
         const val MODERATION_ACTED = "moderation_acted"

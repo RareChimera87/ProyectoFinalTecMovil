@@ -1,12 +1,14 @@
 locals {
   base_run_env = {
-    ENV                    = var.environment
-    GCP_PROJECT            = var.project_id
-    GCP_REGION             = var.region
-    CLOUD_SQL_INSTANCE     = google_sql_database_instance.main.connection_name
-    DB_NAME                = google_sql_database.main.name
-    DB_USER                = google_sql_user.api.name
-    DB_IAM_AUTH            = "true"
+    ENV                = var.environment
+    GCP_PROJECT        = var.project_id
+    GCP_REGION         = var.region
+    CLOUD_SQL_INSTANCE = google_sql_database_instance.main.connection_name
+    DB_NAME            = google_sql_database.main.name
+    DB_USER            = google_sql_user.api.name
+    DB_IAM_AUTH        = "true"
+    # Tope del pool por instancia (los jobs usan min(2, este valor)); ver db_max_pool_size.
+    DB_MAX_POOL_SIZE       = tostring(var.db_max_pool_size)
     TASKS_SERVICE_ACCOUNT  = data.google_service_account.tasks.email
     TASKS_QUEUE_SIM        = google_cloud_tasks_queue.this["simulations"].name
     TASKS_QUEUE_AI_LIGHT   = google_cloud_tasks_queue.this["ai-light"].name

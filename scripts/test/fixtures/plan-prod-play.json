@@ -117,6 +117,11 @@
                             "value_source": []
                           },
                           {
+                            "name": "DB_MAX_POOL_SIZE",
+                            "value": "4",
+                            "value_source": []
+                          },
+                          {
                             "name": "DB_NAME",
                             "value": "parcheu",
                             "value_source": []
@@ -267,6 +272,11 @@
                             "value_source": []
                           },
                           {
+                            "name": "DB_MAX_POOL_SIZE",
+                            "value": "4",
+                            "value_source": []
+                          },
+                          {
                             "name": "DB_NAME",
                             "value": "parcheu",
                             "value_source": []
@@ -414,6 +424,11 @@
                           {
                             "name": "DB_IAM_AUTH",
                             "value": "true",
+                            "value_source": []
+                          },
+                          {
+                            "name": "DB_MAX_POOL_SIZE",
+                            "value": "4",
                             "value_source": []
                           },
                           {
@@ -568,6 +583,11 @@
                       {
                         "name": "DB_IAM_AUTH",
                         "value": "true",
+                        "value_source": []
+                      },
+                      {
+                        "name": "DB_MAX_POOL_SIZE",
+                        "value": "4",
                         "value_source": []
                       },
                       {
@@ -2033,6 +2053,44 @@
               }
             ],
             "name": "simulation-recovery",
+            "project": "parcheu-prod",
+            "pubsub_target": [],
+            "region": "us-central1",
+            "retry_config": [
+              {
+                "retry_count": 1
+              }
+            ],
+            "schedule": "*/15 * * * *",
+            "time_zone": "America/Bogota",
+            "timeouts": null
+          }
+        },
+        {
+          "address": "module.platform.google_cloud_scheduler_job.this[\"moderation-sweep\"]",
+          "name": "this",
+          "type": "google_cloud_scheduler_job",
+          "values": {
+            "app_engine_http_target": [],
+            "attempt_deadline": "320s",
+            "deletion_policy": "DELETE",
+            "description": "Reencola moderaciones y avisos de ayuda pendientes (cada 15 min)",
+            "http_target": [
+              {
+                "body": null,
+                "headers": null,
+                "http_method": "POST",
+                "oauth_token": [],
+                "oidc_token": [
+                  {
+                    "audience": "https://api.parcheu-prod.internal",
+                    "service_account_email": "sa-tasks@parcheu-prod.iam.gserviceaccount.com"
+                  }
+                ],
+                "uri": "https://api-123456789012.us-central1.run.app/internal/jobs/moderation-sweep"
+              }
+            ],
+            "name": "moderation-sweep",
             "project": "parcheu-prod",
             "pubsub_target": [],
             "region": "us-central1",

@@ -11,6 +11,7 @@ locals {
     "match-sweep"         = { schedule = "* * * * *", description = "Vence tickets y matches y reintenta simulaciones del match (cada minuto)" }
     "scenario-sweep"      = { schedule = "* * * * *", description = "Cierra escenarios vencidos y reencola evaluaciones (cada minuto)" }
     "simulation-recovery" = { schedule = "*/15 * * * *", description = "Reencola simulaciones QUEUED/RUNNING atascadas (cada 15 min)" }
+    "moderation-sweep"    = { schedule = "*/15 * * * *", description = "Reencola moderaciones y avisos de ayuda pendientes (cada 15 min)" }
   }
 }
 

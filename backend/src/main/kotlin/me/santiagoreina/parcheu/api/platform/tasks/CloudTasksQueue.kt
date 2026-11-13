@@ -25,7 +25,7 @@ class CloudTasksQueue(
 ) : TaskQueue {
     private val log = LoggerFactory.getLogger(CloudTasksQueue::class.java)
 
-    override suspend fun enqueue(task: TaskRequest) {
+    override suspend fun enqueue(task: TaskRequest): Boolean {
         val queue = queues[task.queue] ?: error("Falta ${task.queue.envVar}")
         val request = HttpRequest.newBuilder()
             .setUrl(serviceUrl.trimEnd('/') + "/internal" + task.path)
@@ -37,8 +37,10 @@ class CloudTasksQueue(
         val created = Task.newBuilder().setName("$queue/tasks/${task.name}").setHttpRequest(request).build()
         try {
             withContext(Dispatchers.IO) { client.value.createTask(queue, created) }
+            return true
         } catch (e: AlreadyExistsException) {
             log.info("Tarea {} ya existía en {}: no se duplica", task.name, queue)
+            return false
         }
     }
 

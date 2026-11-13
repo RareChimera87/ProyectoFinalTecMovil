@@ -66,7 +66,7 @@ class InlineWiringTest : FunSpec({
             }
             container.background.shouldNotBeNull().scheduleOn(recorder)
             recorder.close()
-            initialDelays.keys.shouldContainAll("memories", "retention", "communities", "purge-sweep", "match-sweep", "twin-accuracy")
+            initialDelays.keys.shouldContainAll("memories", "retention", "communities", "purge-sweep", "match-sweep", "twin-accuracy", "moderation-sweep", "simulation-recovery")
             // Cada job diario queda anclado a su hora: un cambio de reloj o de constante rompe este test.
             // El reloj es el del sistema: se tolera el segundo que pasa entre las dos lecturas.
             listOf("retention" to AppContainer.RETENTION_AT, "memories" to AppContainer.MEMORIES_AT).forEach { (job, at) ->

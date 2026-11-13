@@ -73,6 +73,34 @@ class InMemoryChatRepository : ChatRepository {
 
     override suspend fun message(messageId: UUID): MessageRecord? = synchronized(lock) { messages.firstOrNull { it.id == messageId } }
 
+    private val moderated = mutableMapOf<UUID, Instant>()
+    private val helpPendingIds = mutableSetOf<UUID>()
+
+    override suspend fun markModerated(messageId: UUID, at: Instant) {
+        synchronized(lock) { moderated.putIfAbsent(messageId, at) }
+    }
+
+    override suspend fun setHelpPending(messageId: UUID, pending: Boolean) {
+        synchronized(lock) { if (pending) helpPendingIds.add(messageId) else helpPendingIds.remove(messageId) }
+    }
+
+    private val sweeps = mutableMapOf<UUID, Int>()
+
+    override suspend fun bumpModerationSweeps(messageId: UUID): Int = synchronized(lock) {
+        if (messages.none { it.id == messageId }) 0 else (sweeps[messageId] ?: 0).plus(1).also { sweeps[messageId] = it }
+    }
+
+    override suspend fun unmoderated(olderThan: Instant, newerThan: Instant, limit: Int): List<UUID> = synchronized(lock) {
+        messages.filter {
+            it.id !in moderated && it.senderId != null && !it.hidden && it.createdAt <= olderThan && it.createdAt > newerThan
+        }.sortedWith(compareBy({ it.createdAt }, { it.id })).take(limit).map { it.id }
+    }
+
+    override suspend fun helpPending(olderThan: Instant, newerThan: Instant, limit: Int): List<UUID> = synchronized(lock) {
+        messages.filter { it.id in helpPendingIds && it.createdAt <= olderThan && it.createdAt > newerThan }
+            .sortedWith(compareBy({ it.createdAt }, { it.id })).take(limit).map { it.id }
+    }
+
     override suspend fun hideMessage(messageId: UUID): MessageRecord? = synchronized(lock) {
         val index = messages.indexOfFirst { it.id == messageId }
         if (index < 0) return null

@@ -8,18 +8,20 @@ Referencias: [PLAN §9](PLAN.md), [ADR-0016](adr/0016-prueba-cerrada-temprana.md
 
 | Dato | Valor | Fecha | Quién |
 |---|---|---|---|
-| Tipo de cuenta (personal / organización) | _pendiente_ | | I3 |
-| Fecha de creación de la cuenta de desarrollador | _pendiente_ | | I3 |
-| ¿Aplica la regla de 12 testers × 14 días? | _pendiente (sí si es personal creada después de nov 2023)_ | | I3 |
-| Verificación de identidad | _pendiente_ (enviada / en revisión / aprobada) | | I3 |
-| Verificación de dispositivo Android (si Play la pide) | _pendiente_ | | I3 |
-| App `me.santiagoreina.parcheu` creada | _pendiente_ | | I3 |
-| Play App Signing activo | _pendiente_ | | I3 |
-| Perfil de pagos | _pendiente_ (creado / verificado) | | I3 |
-| Cuenta de servicio de CI con acceso a la app | _pendiente_ | | I3 |
-| Grupo de Google de testers (dirección del grupo, sin correos individuales) | _pendiente_ | | I3 |
-| Testers con correo confirmado | _0 de 15 (meta: 15-20 antes del 28 oct)_ | | I3 |
-| License testers (≥ 3) | _pendiente_ (cantidad; sin listar correos) | | I3 |
+| Tipo de cuenta (personal / organización) | Personal | 4 nov 2026 | I1 (asume tareas de I3) |
+| Fecha de creación de la cuenta de desarrollador | 4 nov 2026 (cuota única pagada ese día) | 4 nov 2026 | I1 (asume tareas de I3) |
+| ¿Aplica la regla de 12 testers × 14 días? | Sí (cuenta personal creada después de nov 2023) | 12 nov 2026 | I1 (asume tareas de I3) |
+| Verificación de identidad | Iniciada, pendiente de aprobación. El documento físico no está disponible; opciones: duplicado del documento o usar la cuenta de otro integrante | 12 nov 2026 | I1 (asume tareas de I3) |
+| Verificación de dispositivo Android (si Play la pide) | _pendiente_ (Play la exige antes de crear la app) | | I1 (asume tareas de I3) |
+| App `me.santiagoreina.parcheu` creada | No. Bloqueada: Play no permite crearla hasta completar las verificaciones de identidad, comerciante, dispositivo Android y teléfono | 12 nov 2026 | I1 (asume tareas de I3) |
+| Play App Signing activo | _pendiente_ | | I1 (asume tareas de I3) |
+| Perfil de pagos | _pendiente_ (creado / verificado) | | I1 (asume tareas de I3) |
+| Cuenta de servicio de CI con acceso a la app | `sa-play@parcheu-prod.iam.gserviceaccount.com` existe en GCP (la creó la plataforma de prod). Falta invitarla en Play Console (Usuarios y permisos) | 4 nov 2026 | I1 (asume tareas de I3) |
+| Grupo de Google de testers (dirección del grupo, sin correos individuales) | _pendiente_ | | I1 (asume tareas de I3) |
+| Testers con correo confirmado | _0 de 15 (meta: 15-20 antes del 28 oct)_ | | I1 (asume tareas de I3) |
+| License testers (≥ 3) | _pendiente_ (cantidad; sin listar correos) | | I1 (asume tareas de I3) |
+
+Desde el 12 nov 2026 el usuario (I1) asume las tareas de Play Console que estaban asignadas a I3.
 
 No escribas correos personales de testers en este archivo: registra solo cantidades y la dirección del grupo.
 

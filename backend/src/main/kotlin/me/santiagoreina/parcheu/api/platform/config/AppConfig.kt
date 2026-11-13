@@ -14,7 +14,28 @@ data class DbConfig(
     /** `proyecto:region:instancia`. Si es nulo se usa [jdbcUrl] tal cual. */
     val cloudSqlInstance: String?,
     val jdbcUrl: String?,
-)
+    /**
+     * Tope de conexiones del pool de la API (`DB_MAX_POOL_SIZE`, entero 1..[MAX_POOL_SIZE_LIMIT]). Cada instancia de
+     * Cloud Run abre su propio pool: instancias máximas × este valor + jobs debe caber en `max_connections` de Cloud SQL.
+     */
+    val maxPoolSize: Int = DEFAULT_MAX_POOL_SIZE,
+) {
+    companion object {
+        /** Tamaño histórico del pool de la API; el homeserver lo conserva. */
+        const val DEFAULT_MAX_POOL_SIZE = 10
+        const val MAX_POOL_SIZE_LIMIT = 50
+
+        /** Lee `DB_MAX_POOL_SIZE`: vacía o ausente = [DEFAULT_MAX_POOL_SIZE]; otro valor fuera de 1..50 aborta el arranque. */
+        fun maxPoolSizeFromEnv(raw: String?): Int {
+            if (raw.isNullOrBlank()) return DEFAULT_MAX_POOL_SIZE
+            val value = raw.trim().toIntOrNull()
+            require(value != null && value in 1..MAX_POOL_SIZE_LIMIT) {
+                "DB_MAX_POOL_SIZE inválido: '$raw' (se espera un entero entre 1 y $MAX_POOL_SIZE_LIMIT)"
+            }
+            return value
+        }
+    }
+}
 
 /**
  * Configuración del servicio, leída solo de variables de entorno (nunca de archivos del repo).
@@ -38,6 +59,7 @@ data class DbConfig(
  *   (`INTERNAL_OIDC_AUDIENCE` o `SERVICE_URL`, https) y `TASKS_SERVICE_ACCOUNT`.
  * - `migrate`: `DB_NAME` y `CLOUD_SQL_INSTANCE` o `DB_URL`.
  * - `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `CLOUD_SQL_INSTANCE` o `DB_URL` (JDBC directo).
+ * - `DB_MAX_POOL_SIZE`: conexiones máximas del pool de la API (1..50, por defecto 10; ver [DbConfig.maxPoolSize]).
  */
 data class AppConfig(
     val env: Env,
@@ -79,6 +101,8 @@ data class AppConfig(
                     "ENV=local abre la autenticación falsa; exige ALLOW_FAKE_AUTH=true y una base de datos local"
                 }
             }
+            // Se valida aunque falte DB_NAME: un valor mal escrito en Terraform debe verse en cualquier modo.
+            val maxPoolSize = DbConfig.maxPoolSizeFromEnv(vars["DB_MAX_POOL_SIZE"])
             val db = vars["DB_NAME"]?.let { name ->
                 DbConfig(
                     name = name,
@@ -86,6 +110,7 @@ data class AppConfig(
                     password = vars["DB_PASSWORD"],
                     cloudSqlInstance = vars["CLOUD_SQL_INSTANCE"],
                     jdbcUrl = vars["DB_URL"],
+                    maxPoolSize = maxPoolSize,
                 )
             }
             if (env == Env.LOCAL && db != null) {
