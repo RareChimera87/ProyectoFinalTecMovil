@@ -58,3 +58,6 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 firebase/.firebase/
+
+# Registros locales de terraform apply
+infra/terraform/**/*.log
