@@ -32,16 +32,21 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCheckbox
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUSwitch
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoBanner
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
 import me.santiagoreina.parcheu.designsystem.components.compound.LoadingDots
 import me.santiagoreina.parcheu.designsystem.components.compound.ParcheUModalDialog
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 /** Etiquetas de prueba de B2 y B3. */
@@ -139,22 +144,9 @@ private fun ModesContent(
     val colors = ParcheUTheme.colors
     Column(
         modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.blockGapTight)
     ) {
-        Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "¿Para qué quieres tu parche?",
-                style = MaterialTheme.typography.headlineMedium,
-                color = colors.tx,
-                modifier = Modifier.semantics { heading() }
-            )
-            Text(
-                "Activa los modos que quieras. Puedes cambiarlos " +
-                    "cuando quieras en Ajustes.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.mu
-            )
-        }
+        ModesHero(state.modes, Modifier.padding(top = 4.dp))
         Mode.entries.forEach { mode ->
             ModeRow(mode, state.modes[mode] == true, enabled = !state.saving) { onToggle(mode, it) }
         }
@@ -169,37 +161,78 @@ private fun ModesContent(
     }
 }
 
+/**
+ * Héroe de B2 (dirección A): la pregunta en Sora 800 sobre violeta y, abajo, una P por modo en su color pleno
+ * que se enciende al activarlo (apagada en `heroQuiet`). Las P son decorativas: el estado lo dicen los
+ * interruptores.
+ */
+@Composable
+private fun ModesHero(modes: Map<Mode, Boolean>, modifier: Modifier = Modifier) {
+    val colors = ParcheUTheme.colors
+    HeroBlock(
+        title = "¿Para qué quieres tu parche?",
+        titleSize = HeroTitleSize.Headline,
+        subtitle = "Activa los modos que quieras. Puedes cambiarlos cuando quieras en Ajustes.",
+        modifier = modifier
+    ) {
+        Row(
+            Modifier.padding(top = 6.dp, bottom = 4.dp).clearAndSetSemantics { },
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Mode.entries.forEach { mode ->
+                val on = modes[mode] == true
+                TwinMascotGlyph(
+                    width = 40.dp,
+                    color = if (on) mode.colors().solid else colors.heroQuiet,
+                    eyeColor = ParcheUPalette.Ink,
+                    simplified = false
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Un modo en una tarjeta con el lomo de su color (`ModeSpineCard`): ícono, nombre, descripción e interruptor.
+ * Encendido, el lomo se acompaña del contenedor tonal del modo en el cuadro del ícono.
+ */
 @Composable
 private fun ModeRow(mode: Mode, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
     val colors = ParcheUTheme.colors
-    val shape = RoundedCornerShape(20.dp)
-    Row(
-        Modifier.fillMaxWidth().clip(shape).background(colors.s1, shape).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        ModeIconBox(mode)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+    ModeSpineCard(mode = mode.colors(), modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            ModeIconBox(mode)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        mode.label,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.tx
+                    )
+                    if (mode == Mode.PAREJA) AdultBadge()
+                }
                 Text(
-                    mode.label,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = colors.tx
+                    mode.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.mu
                 )
-                if (mode == Mode.PAREJA) AdultBadge()
             }
-            Text(mode.description, style = MaterialTheme.typography.bodySmall, color = colors.mu)
+            ParcheUSwitch(
+                checked = checked,
+                onCheckedChange = onChange,
+                contentDescription = "Modo ${mode.label}",
+                enabled = enabled,
+                modifier = Modifier.testTag(ModesTags.switch(mode))
+            )
         }
-        ParcheUSwitch(
-            checked = checked,
-            onCheckedChange = onChange,
-            contentDescription = "Modo ${mode.label}",
-            enabled = enabled,
-            modifier = Modifier.testTag(ModesTags.switch(mode))
-        )
     }
 }
 
