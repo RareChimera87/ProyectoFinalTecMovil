@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,6 +40,9 @@ import me.santiagoreina.parcheu.designsystem.components.compound.EmptyState
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
 import me.santiagoreina.parcheu.designsystem.components.compound.IconCircle
 import me.santiagoreina.parcheu.designsystem.components.compound.NotificationRow
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 /** Etiquetas de prueba de C2. */
@@ -116,11 +121,18 @@ fun NotificationsScreen(
                     EmptyState(
                         title = "Todo al día",
                         message = EMPTY_MESSAGE,
+                        // Vacío con la mascota y su campana: no hay nada pendiente.
                         illustration = {
-                            IconCircle(
-                                icon = painterResource(DsR.drawable.ic_notifications),
-                                size = 72.dp
-                            )
+                            Box(contentAlignment = Alignment.BottomEnd) {
+                                TwinMascot(
+                                    size = TwinMascotSize.L,
+                                    modifier = Modifier.padding(end = 18.dp)
+                                )
+                                IconCircle(
+                                    icon = painterResource(DsR.drawable.ic_notifications),
+                                    size = 40.dp
+                                )
+                            }
                         },
                         modifier = Modifier.fillMaxSize().testTag(NotificationsTags.EMPTY)
                     )
@@ -226,11 +238,19 @@ private fun Leading(item: NotificationDto) {
                 anonymous = actor.id == null,
                 anonymousIcon = painterResource(DsR.drawable.ic_person)
             )
+        // Los avisos de tu gemelo llevan la P blanca sobre violeta, como el ícono de la app.
+        item.kind in TWIN_KINDS ->
+            Box(
+                Modifier.size(AvatarSizes.List).background(colors.hero, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                TwinMascotGlyph(width = 24.dp, color = colors.onHero, eyeColor = colors.hero)
+            }
         else ->
             IconCircle(
                 icon = painterResource(iconOf(item.kind)),
-                container = if (item.kind in TWIN_KINDS) colors.prc else colors.s2,
-                tint = if (item.kind in TWIN_KINDS) colors.onprc else colors.tx
+                container = colors.s2,
+                tint = colors.tx
             )
     }
 }

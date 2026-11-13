@@ -163,8 +163,13 @@ internal fun ReportRow(text: String, icon: Painter, tint: Color) {
 
 /** Título de tarjeta: 12/600 mayúsculas en mu. */
 @Composable
-internal fun CardOverline(text: String) {
-    Text(text.uppercase(), style = ParcheUTheme.textStyles.overline, color = ParcheUTheme.colors.mu)
+internal fun CardOverline(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text.uppercase(),
+        style = ParcheUTheme.textStyles.overline,
+        color = ParcheUTheme.colors.mu,
+        modifier = modifier
+    )
 }
 
 /**
@@ -181,7 +186,7 @@ internal fun LockedReport(
     actions: @Composable () -> Unit
 ) {
     val colors = ParcheUTheme.colors
-    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).testTag(ResultsTags.LOCKED)) {
+    Box(modifier.fillMaxWidth().clip(ParcheUTheme.shapes.card).testTag(ResultsTags.LOCKED)) {
         // Las tarjetas difuminadas llenan lo que mida el contenido superpuesto (que crece con la fuente).
         Column(
             Modifier.matchParentSize().blur(6.dp).alpha(0.55f),
@@ -247,7 +252,7 @@ private fun PlaceholderCard(title: String, rows: Int, modifier: Modifier = Modif
     val colors = ParcheUTheme.colors
     Column(
         modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(ParcheUTheme.shapes.card)
             .background(colors.s1)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
