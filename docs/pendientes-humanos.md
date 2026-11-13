@@ -39,6 +39,9 @@ Lo que solo puede hacer el usuario para llegar a producción, en orden. Los paso
 | Cuenta de Play | Cuenta personal creada y pagada el 4 nov. Aplica la regla de 12 testers × 14 días |
 | Verificación en Play | Identidad iniciada, sin aprobar. App no creada |
 | `android-release` del tag v0.1.0 | Falló, como se esperaba: la app no existe todavía en Play |
+| Versión 0.2.0 en producción (verificada el 12 nov) | API en Cloud Run de `parcheu-prod` en la versión 30fc43a, migración `V20261112_2011` aplicada, 9 jobs de Scheduler (nuevo `moderation-sweep`) y `DB_MAX_POOL_SIZE=4` |
+| Smoke e2e contra prod (12 nov) | Pasó con la 0.1.0 (la API de 0.2.0 no se probó con el smoke): sesión, gemelo, fila, simulación real (puntaje 75, ~60 s), decisión, chat y espejo en Firestore. Los usuarios de prueba se purgaron |
+| Gasto real (1 al 12 nov) | 2,29 USD en la cuenta de facturación, cubiertos por créditos: ≈ 0,28 USD/día desde el 4 nov, ≈ 8,5 USD/mes |
 
 ### GCP dev
 Los pasos 1 a 6 quedan **No aplica (decisión 4 nov, ADR-0033)**: 1 decidir E0.5 en dev; 2 bootstrap de dev; 3 Firebase/Firestore y plataforma de dev; 4 secretos WIF de dev; 5 variable `GCP_DEV_ENABLED=true`; 6 verificar `env_ref` en la primera corrida real. Detalle histórico: `infra/terraform/README.md` "Puesta en marcha" y § "Aplicar Terraform tras fix/wif-deployer-dev".
@@ -75,6 +78,17 @@ Los pasos 7 a 10 están hechos (ver la tabla). `DESPLEGAR_API_PROD` quedó en `t
 31. **Huellas de App Signing en Firebase prod** (SHA-1 y SHA-256 de Play App Signing; las de la llave de subida ya están registradas) y recarga de `GOOGLE_SERVICES_JSON_PROD`. Depende de 11 y 20. Detalle: `docs/play-console.md` §12.4; § "E10.3", paso 7.
 32. **Prueba cerrada 0.1:** tras la aprobación, 'Publicar cambios' y desactivar la publicación administrada; solo entonces enviar el enlace de inscripción y mantener ≥ 12 inscritos durante 14 días seguidos; después, solicitud de acceso a producción. Depende de 24, 30 y 31. Detalle: `docs/play-console.md` §12.9 pasos 2-4; § "E10.3", paso 8; `docs/PLAN.md` §9 "Producción".
 33. **Verificación de compra de punta a punta con license tester en la 0.3.** Depende de 12, 13, 22, 23 y de la 0.3 publicada. Detalle: § "E7.1", pasos 4-5.
+
+### Después de la demo (pendiente)
+
+Para la sustentación del 13 nov, prod se dejó con los usuarios demo encendidos y con el tope de IA subido (5 USD/día y 1,5 USD/persona, puesto con `gcloud run services update`, fuera de Terraform). Estos pasos lo devuelven a su estado de costo mínimo, en orden:
+
+1. Vuelve a aplicar Terraform sin `demo_users_enabled`: el valor por defecto es `false` y el `apply` devuelve el tope de IA a 1 y 0,25 USD. `cd infra/terraform/envs/prod && terraform apply -var 'alert_emails=[...]'`
+2. Borra los demo: `gcloud run jobs execute purge-demo --region us-central1 --project parcheu-prod --wait`. Comprueba en los logs `purge-demo: 20 demos`.
+3. Si no se van a conservar, borra las cuentas creadas en vivo desde la app: Ajustes → Borrar cuenta.
+4. Verifica la API: `curl https://api-n3yxvjziqq-uc.a.run.app/v1/health` debe responder 200.
+
+Los comandos y la lógica de los demo están en § "E4.9 · Usuarios semilla de demo" y en [operacion.md](operacion.md#correr-un-job-a-mano).
 
 ## Gobernanza de CI (C-A1/C-A2, C-M3)
 
