@@ -319,8 +319,6 @@ private fun MonthDetail(snapshot: MonthSnapshot) {
 
 fun newConnectionsText(n: Int): String = if (n == 1) "1 conexión nueva" else "$n conexiones nuevas"
 
-fun personasText(n: Int): String = if (n == 1) "1 persona" else "$n personas"
-
 /** MomentsTimeline: línea vertical con un punto por momento, el más reciente arriba. */
 @Composable
 private fun Moments(moments: List<Moment>) {

@@ -95,7 +95,6 @@
     <!-- G4 · Gestionar suscripción -->
     <string name="plus_manage_title">Suscripción</string>
     <string name="plus_manage_back">Volver</string>
-    <string name="plus_manage_loading">Cargando tu suscripción…</string>
     <string name="plus_manage_error_title">No pudimos cargar tu suscripción</string>
     <string name="plus_manage_error_message">Revisa tu conexión e inténtalo de nuevo.</string>
     <string name="plus_manage_status_active">Activa</string>

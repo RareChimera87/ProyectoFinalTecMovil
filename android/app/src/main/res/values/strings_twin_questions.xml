@@ -7,8 +7,6 @@
     <string name="twin_questions_option_a">Opción A</string>
     <string name="twin_questions_option_b">Opción B</string>
     <string name="twin_questions_depends">Depende</string>
-    <string name="twin_questions_swipe_a">Desliza a la izquierda</string>
-    <string name="twin_questions_swipe_b">Desliza a la derecha</string>
     <string name="twin_questions_sending">Enviando tus respuestas…</string>
     <string name="twin_questions_loading">Cargando preguntas…</string>
     <string name="twin_questions_error_title">No pudimos continuar</string>
