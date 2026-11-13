@@ -23,4 +23,10 @@ class AffinityAlphaTest {
         val values = (50..95).map { affinityAlpha(it) }
         assertTrue(values.zipWithNext().all { (a, b) -> b > a })
     }
+
+    @Test
+    fun unmeasuredAffinityUsesTheDefinedNeutralAlpha() {
+        assertEquals(AFFINITY_ALPHA_UNMEASURED, affinityAlphaOrNeutral(null), 1e-6f)
+        assertEquals(affinityAlpha(72), affinityAlphaOrNeutral(72), 1e-6f)
+    }
 }

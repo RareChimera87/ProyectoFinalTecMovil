@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.feature.parche
 
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
@@ -76,6 +77,36 @@ class ParcheScreenTest {
         )
         composeRule.onNode(hasTestTag(PARCHE_DEMO_TAG)).assertIsDisplayed()
         composeRule.onNodeWithText(PARCHE_DEMO_BADGE).assertIsDisplayed()
+    }
+
+    @Test
+    fun unmeasuredNodeSheetSaysNotSimulatedInsteadOfZero() {
+        val node = ParcheSamples.nodes.first {
+            it.id == "and"
+        }.copy(affinity = 0, affinityMeasured = false)
+        show(
+            ParcheUiState.Loaded(
+                ParcheSamples.content,
+                sheet = NodeSheet(
+                    node,
+                    ParcheSamples.detail(node, withSimulation = false),
+                    loadingDetail = false
+                )
+            )
+        )
+        composeRule.onNode(hasTestTag(PARCHE_AFFINITY_TAG)).assertIsDisplayed()
+            .assertContentDescriptionEquals("Afinidad: sin simular")
+        composeRule.onAllNodesWithText("0 %").assertCountEquals(0)
+        composeRule.onNodeWithText("Simular").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Simular de nuevo").assertCountEquals(0)
+    }
+
+    @Test
+    fun measuredNodeSheetAnnouncesItsAffinity() {
+        show(ParcheUiState.Loaded(ParcheSamples.content, sheet = sheet("and")))
+        composeRule.onNode(
+            hasTestTag(PARCHE_AFFINITY_TAG)
+        ).assertContentDescriptionEquals("Afinidad 88 %")
     }
 
     @Test

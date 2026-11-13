@@ -56,8 +56,9 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
+import me.santiagoreina.parcheu.designsystem.theme.AFFINITY_UNMEASURED_LABEL
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
-import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
+import me.santiagoreina.parcheu.designsystem.theme.affinityAlphaOrNeutral
 import me.santiagoreina.parcheu.designsystem.theme.avatarColors
 import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
 
@@ -65,6 +66,7 @@ const val PARCHE_SHEET_TAG = "parche_sheet"
 const val PARCHE_BANNER_TAG = "parche_banner"
 const val PARCHE_SKELETON_TAG = "parche_skeleton"
 const val PARCHE_DEMO_TAG = "parche_demo"
+const val PARCHE_AFFINITY_TAG = "parche_affinity"
 
 /** Insignia de D2 cuando el nodo es un perfil de demostración (ADR-0027). */
 const val PARCHE_DEMO_BADGE = "Perfil de demostración"
@@ -118,7 +120,7 @@ fun NodeAvatar(node: NodeDto, size: Dp, modifier: Modifier = Modifier) {
             )
         }
     } else {
-        val avatar = avatarColors(affinityAlpha(node.affinity), colors.isDark)
+        val avatar = avatarColors(affinityAlphaOrNeutral(node.measuredAffinity), colors.isDark)
         Box(
             modifier = modifier.size(size).clip(CircleShape).background(avatar.fill),
             contentAlignment = Alignment.Center
@@ -502,17 +504,23 @@ fun NodeDetailSheet(
                     )
                     if (node.isDemo) PillChip(PARCHE_DEMO_BADGE, Modifier.testTag(PARCHE_DEMO_TAG))
                 }
-                Column(horizontalAlignment = Alignment.End) {
+                val affinity = node.measuredAffinity
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier
+                        .testTag(PARCHE_AFFINITY_TAG)
+                        .clearAndSetSemantics { contentDescription = affinityDescription(affinity) }
+                ) {
                     Text(
-                        "${node.affinity} %",
+                        affinity?.let { "$it %" } ?: AFFINITY_UNMEASURED_VALUE,
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold
                         ),
-                        color = colors.prt
+                        color = if (affinity != null) colors.prt else colors.mu
                     )
                     Text(
-                        "afinidad",
+                        if (affinity != null) "afinidad" else AFFINITY_UNMEASURED_LABEL.lowercase(),
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                         color = colors.mu
                     )
@@ -535,8 +543,9 @@ fun NodeDetailSheet(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (node.state) {
                     EdgeState.CONNECTED -> {
+                        // Si aún no han simulado (conexión por invitación) no hay un "de nuevo".
                         TonalButton(
-                            "Simular de nuevo",
+                            if (node.measuredAffinity == null) "Simular" else "Simular de nuevo",
                             onSimulateAgain,
                             Modifier.fillMaxWidth(),
                             enabled = !sheet.starting,
