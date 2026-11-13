@@ -49,10 +49,37 @@ object AvatarSizes {
     val Hero: Dp = 72.dp
 }
 
-/** Hasta dos iniciales en mayúsculas: primera letra de las dos primeras palabras. Vacío si no hay nombre. */
-fun initialsOf(name: String): String =
-    name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
-        .joinToString("") { it.first().uppercase() }
+/**
+ * Hasta dos iniciales en mayúsculas: primera letra de las dos primeras palabras que empiezan por letra o
+ * dígito. Se ignoran las que empiezan por puntuación o emoji, de modo que "Valentina (demo)" da "V" y no
+ * "V(". Vacío si no queda ninguna palabra.
+ */
+fun initialsOf(name: String): String = name.trim().split(Regex("\\s+"))
+    .filter { it.isNotEmpty() && Character.isLetterOrDigit(it.codePointAt(0)) }
+    .take(2)
+    .joinToString("") { String(Character.toChars(it.codePointAt(0))).uppercase() }
+
+/**
+ * Iniciales para mostrar a partir de las que manda el servidor: conserva solo letras y dígitos (el servidor
+ * toma el primer carácter de cada palabra y con "Valentina (demo)" manda "V("). Si el servidor no mandó
+ * nada se calculan de [name] con [initialsOf]; si mandó solo signos (p. ej. "?" de una persona oculta) o
+ * no hay nombre, se devuelve [fallback].
+ */
+fun displayInitials(serverInitials: String, name: String, fallback: String = "?"): String {
+    val clean = buildString {
+        var i = 0
+        while (i < serverInitials.length) {
+            val cp = serverInitials.codePointAt(i)
+            if (Character.isLetterOrDigit(cp)) appendCodePoint(cp)
+            i += Character.charCount(cp)
+        }
+    }.uppercase()
+    return when {
+        clean.isNotEmpty() -> clean
+        serverInitials.isBlank() -> initialsOf(name).ifEmpty { fallback }
+        else -> fallback
+    }
+}
 
 /**
  * Avatar de iniciales. El relleno es violeta con el alpha de [affinityAlpha] (50 o menos da .22; 95 o más
