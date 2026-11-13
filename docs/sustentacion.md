@@ -68,15 +68,17 @@ scripts/fetch-google-services.sh prod          # desde la raíz del repo; necesi
 export UPLOAD_KEYSTORE_FILE=~/.parcheu/upload-keystore.jks
 export UPLOAD_KEYSTORE_PASSWORD=...  UPLOAD_KEY_ALIAS=...  UPLOAD_KEY_PASSWORD=...   # ~/.parcheu/upload-key.env
 
-# 3. APK de prod (con la llave de subida presente, la URL real de la API es obligatoria)
+# 3. APK de prod. La URL real de la API ya es el valor por defecto; pasarla explícita no hace daño.
+#    -Pparcheu.release.minify=false construye un APK sin R8 (solo para depurar o como respaldo de la demo).
 cd android
-./gradlew :app:assembleProdRelease -Pparcheu.apiUrl.prod=https://api-n3yxvjziqq-uc.a.run.app/
+./gradlew :app:assembleProdRelease -Pparcheu.apiUrl.prod=https://api-n3yxvjziqq-uc.a.run.app/ \
+  -Pparcheu.versionName=0.2.2 -Pparcheu.versionCode=22
 
 # 4. Instalar en cada teléfono
 adb install -r app/build/outputs/apk/prod/release/app-prod-release.apk
 ```
 
-La URL debe ser `https` y terminar en `/`; `verificarUrlsProd` falla si no. La huella registrada en Firebase prod es la
+La URL debe ser `https` y terminar en `/`; `verificarUrlsProd` falla si no (y si es la URL de relleno antigua). La huella registrada en Firebase prod es la
 de la llave de subida, no la de debug: por eso el APK debe ir firmado con ella o el login con Google falla.
 
 Lista general (entorno A). Hacerlo 30 minutos antes. Cada punto tiene su responsable.
