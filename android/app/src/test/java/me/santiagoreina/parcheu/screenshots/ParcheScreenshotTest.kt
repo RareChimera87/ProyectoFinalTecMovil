@@ -94,6 +94,17 @@ class ParcheScreenshotTest(private val dark: Boolean) {
     @Test
     fun d2Simulated() = capture("d2_simularon", loaded.copy(sheet = sheetFor("dan")))
 
+    /** Conexión por invitación aún sin simular: D2 dice 'sin simular' en vez de un 0 % inventado. */
+    @Test
+    fun d2Unmeasured() = capture(
+        "d2_sin_simular",
+        loaded.copy(
+            sheet = sheetFor("seb", withSimulation = false).let {
+                it.copy(node = it.node.copy(affinity = 0, affinityMeasured = false))
+            }
+        )
+    )
+
     @Test
     fun d2Pending() = capture("d2_pendiente", loaded.copy(sheet = sheetFor("mat")))
 

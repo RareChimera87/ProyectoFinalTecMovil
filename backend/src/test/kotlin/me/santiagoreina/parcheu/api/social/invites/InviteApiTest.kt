@@ -210,9 +210,12 @@ class InviteApiTest : FunSpec({
             client.redeem("beto", code, Mode.ESTUDIO).body<RedeemResult>().status shouldBe RedeemStatus.CONNECTED
             w.f.notifier.sent.count { it.notification.kind == NotificationKinds.INVITE_PENDING } shouldBe 1
 
-            // El grafo de Ana muestra a Beto conectado en Estudio.
+            // El grafo de Ana muestra a Beto conectado en Estudio, sin afinidad inventada: aún no han simulado.
             val graph = client.get("/v1/graph") { auth("ana") }.body<GraphDto>()
-            graph.edges.single { it.otherId == w.beto.toString() }.state shouldBe EdgeState.CONNECTED
+            val edge = graph.edges.single { it.otherId == w.beto.toString() }
+            edge.state shouldBe EdgeState.CONNECTED
+            edge.measuredAffinity shouldBe null
+            graph.nodes.single { it.id == w.beto.toString() }.affinityMeasured shouldBe false
         }
     }
 

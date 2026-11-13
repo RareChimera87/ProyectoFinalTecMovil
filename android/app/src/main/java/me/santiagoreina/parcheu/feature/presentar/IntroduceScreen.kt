@@ -233,7 +233,7 @@ private fun FriendSelectRow(
                 color = colors.tx
             )
             Text(
-                "Afinidad ${friend.affinity} % contigo",
+                friend.affinity?.let { "Afinidad $it % contigo" } ?: "Aún no han simulado",
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
                 color = colors.mu
             )
