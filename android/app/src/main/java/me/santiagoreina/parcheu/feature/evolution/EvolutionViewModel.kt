@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.contract.HistoryDto
+import me.santiagoreina.parcheu.core.error.AI_BUDGET_MESSAGE
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.navigation.AppRoute
@@ -102,5 +103,6 @@ class EvolutionViewModel(private val repository: EvolutionRepository) : ViewMode
 /** Mensaje del error de carga de D9. */
 fun AppError.evolutionMessage(): String = when (this) {
     AppError.Network -> "Revisa tu conexión e intenta de nuevo."
+    is AppError.AiBudget -> AI_BUDGET_MESSAGE
     else -> "Algo salió mal. Intenta de nuevo en un momento."
 }

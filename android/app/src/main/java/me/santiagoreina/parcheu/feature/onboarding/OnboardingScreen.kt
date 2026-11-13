@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.santiagoreina.parcheu.R
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.data.auth.SignInErrors
 import me.santiagoreina.parcheu.designsystem.components.base.GoogleSignInButton
@@ -81,6 +83,7 @@ const val ONBOARDING_PAGES = 3
 object OnboardingTags {
     const val SCREEN = "onboarding"
     const val SKIP = "onboarding:skip"
+    const val EXAMPLE = "onboarding:example"
     const val NEXT = "onboarding:next"
     const val GOOGLE = "login:google"
     const val LOADING = "login:loading"
@@ -327,7 +330,10 @@ private fun OnboardingPage(index: Int) {
             when (index) {
                 0 -> TwinIllustration()
                 1 -> SimulationIllustration()
-                else -> PuGraph(nodes = ONBOARDING_GRAPH_NODES, size = 260.dp)
+                else -> {
+                    PuGraph(nodes = ONBOARDING_GRAPH_NODES, size = 260.dp)
+                    ExampleCaption(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
+                }
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -399,7 +405,19 @@ private fun SimulationIllustration() {
             Modifier.align(Alignment.CenterHorizontally),
             variant = PillChipVariant.Affinity
         )
+        ExampleCaption(Modifier.align(Alignment.CenterHorizontally))
     }
+}
+
+/** Rótulo discreto: los nombres, la conversación y la afinidad de A2-A4 son un ejemplo, no datos reales. */
+@Composable
+private fun ExampleCaption(modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(R.string.onboarding_example_label),
+        style = MaterialTheme.typography.labelSmall,
+        color = ParcheUTheme.colors.mu,
+        modifier = modifier.testTag(OnboardingTags.EXAMPLE)
+    )
 }
 
 @Composable

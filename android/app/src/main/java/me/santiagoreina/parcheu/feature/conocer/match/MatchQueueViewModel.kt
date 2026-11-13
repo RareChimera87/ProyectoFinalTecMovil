@@ -19,6 +19,7 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.TicketDto
 import me.santiagoreina.parcheu.contract.TicketStatus
+import me.santiagoreina.parcheu.contract.Usage
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.plus.PlusErrorRouter
@@ -51,7 +52,9 @@ data class MatchQueueUiState(
     val mode: Mode,
     /** Modos que el usuario puede elegir (los que tiene activos). */
     val activeModes: List<Mode> = Mode.entries,
-    val phase: QueuePhase = QueuePhase.Searching
+    val phase: QueuePhase = QueuePhase.Searching,
+    /** Cupo diario de match al azar (`GET /v1/home`); `null` mientras carga o si falló. */
+    val dailyQuota: Usage? = null
 )
 
 sealed interface MatchQueueEffect {
@@ -75,6 +78,8 @@ class MatchQueueViewModel(
     activeModes: List<Mode> = Mode.entries,
     /** Modos que el usuario tiene encendidos (`GET /v1/me`); `null` si no se pudieron leer. */
     private val loadActiveModes: (suspend () -> List<Mode>?)? = null,
+    /** Cupo diario de match al azar (el mismo dato de C1 Inicio); `null` si no se pudo leer. */
+    private val loadDailyQuota: (suspend () -> Usage?)? = null,
     private val pollIntervalMs: Long = POLL_INTERVAL_MS
 ) : ViewModel() {
     private val _state = MutableStateFlow(
@@ -97,6 +102,12 @@ class MatchQueueViewModel(
 
     init {
         search(cancelPrevious = false)
+        loadDailyQuota?.let { load ->
+            viewModelScope.launch {
+                val quota = load() ?: return@launch
+                _state.update { it.copy(dailyQuota = quota) }
+            }
+        }
     }
 
     companion object {

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.Speaker
+import me.santiagoreina.parcheu.core.error.AI_BUDGET_MESSAGE
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
@@ -381,6 +382,7 @@ private fun errorText(error: AppError): String = when (error) {
     AppError.Network -> "Sin conexión. Inténtalo de nuevo."
     AppError.Blocked -> "No puedes conectar con esta persona."
     AppError.NotFound -> "Este resultado ya no está disponible."
+    is AppError.AiBudget -> AI_BUDGET_MESSAGE
     else -> "Algo salió mal. Inténtalo de nuevo."
 }
 
