@@ -89,6 +89,15 @@ module "platform" {
   api_max_instances   = 2
   deletion_protection = true
 
+  # Conexiones a Postgres por instancia. db-f1-micro admite max_connections = 25 (tabla de Cloud SQL por memoria,
+  # 0,6 GB; aprox., parte la reserva Cloud SQL para su propio usuario): presupuesto del 80 % ≈ 20.
+  #   - Régimen: 2 instancias × 4 + los tres jobs a la vez × 2 = 14 ≤ 20.
+  #   - Despliegue: la revisión vieja y la nueva conviven un momento (hasta 2 + 2 instancias) más migrate:
+  #     4 × 4 + 2 = 18 ≤ 20.
+  # Con 10 (el valor por defecto) eran 2 × 10 + 2 = 22 en régimen y hasta 42 en un despliegue: por encima de 25.
+  # Si subes api_max_instances o cambias sql_tier, rehaz la cuenta (scripts/check-plan.sh la comprueba).
+  db_max_pool_size = 4
+
   # db-f1-micro (núcleo compartido, 0,6 GB): ~7,7 USD/mes encendida todo el mes; con el disco de abajo, ~8,6 USD/mes,
   # casi todo el costo fijo del entorno. Con usuarios reales: db-g1-small (~25 USD/mes) cambiando este valor y aplicando (reinicia la
   # instancia unos minutos).

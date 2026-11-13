@@ -49,6 +49,19 @@ variable "api_max_instances" {
   type        = number
 }
 
+# Cada instancia de la API abre su propio pool Hikari (DB_MAX_POOL_SIZE en Database.kt/AppConfig.kt). Elígelo para que
+# api_max_instances × db_max_pool_size + jobs quepa con holgura en max_connections de Cloud SQL (db-f1-micro: 25).
+variable "db_max_pool_size" {
+  description = "Conexiones máximas del pool Hikari por instancia de la API (DB_MAX_POOL_SIZE). Entero 1..50; por defecto 10, como el backend."
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.db_max_pool_size == floor(var.db_max_pool_size) && var.db_max_pool_size >= 1 && var.db_max_pool_size <= 50
+    error_message = "db_max_pool_size debe ser un entero entre 1 y 50 (el backend rechaza otro valor al arrancar)."
+  }
+}
+
 # Topes diarios de gasto de IA en USD, como texto: el backend los lee de AI_DAILY_BUDGET_USD y
 # AI_USER_DAILY_BUDGET_USD con toBigDecimalOrNull (> 0, punto decimal). Los defaults son los de modelos.properties.
 variable "ai_daily_budget_usd" {

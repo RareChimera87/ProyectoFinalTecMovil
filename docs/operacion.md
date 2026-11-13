@@ -254,6 +254,28 @@ gcloud secrets versions list hmac-anon-key --project $P
 gcloud secrets versions disable <versión-anterior> --secret hmac-anon-key --project $P
 ```
 
+### `too many connections` en Cloud SQL
+
+**Síntoma:** la API devuelve 500/503 en ráfaga y en los logs aparecen `FATAL: sorry, too many clients already`,
+`remaining connection slots are reserved` o `HikariPool-1 - Connection is not available, request timed out`; el job
+`migrate` de un despliegue falla igual. **Causa:** db-f1-micro admite unas 25 conexiones (`max_connections`, aprox.;
+Cloud SQL reserva algunas) y cada instancia de `api` abre su propio pool de hasta `DB_MAX_POOL_SIZE` (Terraform
+`db_max_pool_size`: 4 en prod), más 2 por cada job. La cuenta (máx instancias × pool + jobs ≤ 80 %) está en
+`infra/terraform/envs/prod/main.tf` y la comprueba `scripts/check-plan.sh`.
+
+```bash
+# Quién tiene las conexiones (desde Cloud SQL Studio o psql como postgres):
+#   SELECT usename, application_name, state, count(*) FROM pg_stat_activity GROUP BY 1,2,3 ORDER BY 4 DESC;
+gcloud sql instances describe parcheu-prod --project $P --format='value(settings.tier)'
+gcloud run services describe api --region $R --project $P --format='value(spec.template.metadata.annotations)'
+```
+
+Qué hacer: si coincide con un despliegue, espera a que la revisión vieja escale a cero (las conexiones ociosas se
+cierran a los 2 min). Si se repite, baja `db_max_pool_size` o `api_max_instances` en `envs/prod/main.tf` (o sube
+`sql_tier` a db-g1-small, ~50 conexiones) y aplica (`apply` de prod: solo el usuario). Los avisos sueltos
+`Failed to validate connection … This connection has been closed` tras ratos sin tráfico no son este problema: Hikari
+descarta la conexión muerta y abre otra (`maxLifetime` 10 min y `keepaliveTime` 2 min los reducen).
+
 ### Alertas que existen
 
 Las de [Alertas de GCP](#alertas-de-gcp) (`monitoring.tf`), **apagadas en el MVP** (`alert_policies_enabled = false`), salvo `report-created` que queda siempre activa;

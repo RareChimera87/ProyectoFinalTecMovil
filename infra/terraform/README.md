@@ -44,6 +44,7 @@ ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de 
 | `GCP_PROJECT`, `GCP_REGION` | proyecto y `us-central1` |
 | `CLOUD_SQL_INSTANCE` | `<proyecto>:us-central1:parcheu-<env>` (Cloud SQL Java Connector) |
 | `DB_NAME`, `DB_USER`, `DB_IAM_AUTH` | `parcheu`, `sa-api@<proyecto>.iam` (usuario IAM, sin contraseña), `true` |
+| `DB_MAX_POOL_SIZE` | `var.db_max_pool_size` (entero 1..50, por defecto 10 como el backend): conexiones máximas del pool Hikari por instancia; los jobs usan `min(2, valor)`. dev y prod, `4` para que máx instancias × pool + jobs quepa en el ~80 % de las 25 conexiones de db-f1-micro (cuenta en `envs/prod/main.tf`; `scripts/check-plan.sh` la comprueba) |
 | `TASKS_SERVICE_ACCOUNT` | email de `sa-tasks` (va en el token OIDC de cada tarea) |
 | `TASKS_QUEUE_SIM`, `TASKS_QUEUE_AI_LIGHT`, `TASKS_QUEUE_MAINT` | nombre completo de cada cola |
 | `INTERNAL_OIDC_AUDIENCE` | `https://api.parcheu-<env>.internal`: audiencia fija (custom audience de Cloud Run) de los tokens de Tasks, Scheduler y Pub/Sub; `/internal/*` la verifica junto con el email de `sa-tasks` |

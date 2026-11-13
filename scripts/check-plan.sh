@@ -11,6 +11,8 @@
 #   - los secretos hmac-anon-key y play-sa sin valor (ninguna secret_version ni secret_data);
 #   - escalado de la API: dev min 0; prod min 0 o 1 y máx entre 1 y 5 (4 nov: min 0 y máx 2 por costo);
 #   - SERVICE_URL de la API = URL determinista de Cloud Run (https://api-<número>.<región>.run.app);
+#   - DB_MAX_POOL_SIZE entero 1..50, igual en los jobs, y máx instancias × pool + 6 ≤ 80 % de max_connections
+#     (db-f1-micro 25, db-g1-small 50);
 #   - Firestore nativo en nam5, Firebase, Pub/Sub play-rtdn, 9 trabajos de Scheduler (con purge-sweep de E8.3
 #     y los barridos match-sweep, scenario-sweep, simulation-recovery y moderation-sweep) que apuntan a SERVICE_URL,
 #     uptime check. El presupuesto (50 %, 90 % y 100 % pronosticado) lo crea el bootstrap, no la
@@ -122,6 +124,28 @@ else
       fail "$v debe ser un decimal mayor que 0 en el run_env de la api (es '$val')"
     fi
   done
+  # Pool de Postgres por instancia (AppConfig.kt: DB_MAX_POOL_SIZE, entero 1..50). Con un tier conocido:
+  # máx instancias × pool + 3 jobs × 2 ≤ 80 % de max_connections de Cloud SQL.
+  pool="$(jq -r '[.values.template[0].containers[0].env[]? | select(.name=="DB_MAX_POOL_SIZE") | .value] | first // empty' <<<"$api")"
+  if [[ "$pool" =~ ^[0-9]+$ ]] && [ "$pool" -ge 1 ] && [ "$pool" -le 50 ]; then
+    ok "DB_MAX_POOL_SIZE=$pool"
+    bad_jobs="$(q --arg p "$pool" '[.[] | select(.type=="google_cloud_run_v2_job") | select(([.values.template[0].template[0].containers[0].env[]? | select(.name=="DB_MAX_POOL_SIZE") | .value] | first) != $p) | .values.name] | join(",")')"
+    [ -z "$bad_jobs" ] && ok "los jobs reciben el mismo DB_MAX_POOL_SIZE" || fail "jobs sin DB_MAX_POOL_SIZE=$pool: $bad_jobs"
+    tier="$(q '[.[] | select(.type=="google_sql_database_instance") | .values.settings[0].tier] | first // empty')"
+    case "$tier" in
+      db-f1-micro) limit=25 ;;
+      db-g1-small) limit=50 ;;
+      *) limit="" ;;
+    esac
+    if [ -n "$limit" ] && [[ "$max" =~ ^[0-9]+$ ]]; then
+      total=$((max * pool + 6)); budget=$((limit * 80 / 100))
+      [ "$total" -le "$budget" ] \
+        && ok "conexiones: $max × $pool + 6 (jobs) = $total ≤ $budget (80 % de $limit, $tier)" \
+        || fail "conexiones: $max × $pool + 6 (jobs) = $total > $budget (80 % de $limit, $tier): baja db_max_pool_size"
+    fi
+  else
+    fail "DB_MAX_POOL_SIZE debe ser un entero entre 1 y 50 en el run_env de la api (es '$pool')"
+  fi
 fi
 
 # --- Resto de la plataforma -------------------------------------------------------
