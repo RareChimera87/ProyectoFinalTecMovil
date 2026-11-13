@@ -66,6 +66,7 @@ import me.santiagoreina.parcheu.designsystem.graph.GraphEdgeState
 import me.santiagoreina.parcheu.designsystem.graph.GraphMode
 import me.santiagoreina.parcheu.designsystem.graph.GraphNode
 import me.santiagoreina.parcheu.designsystem.graph.PuGraph
+import me.santiagoreina.parcheu.designsystem.graph.PuGraphStyle
 import me.santiagoreina.parcheu.designsystem.mascot.MascotMouth
 import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
@@ -343,7 +344,11 @@ private fun OnboardingPage(index: Int) {
                 0 -> TwinIllustration()
                 1 -> SimulationIllustration()
                 else -> {
-                    PuGraph(nodes = ONBOARDING_GRAPH_NODES, size = 260.dp)
+                    PuGraph(
+                        nodes = ONBOARDING_GRAPH_NODES,
+                        size = 260.dp,
+                        style = PuGraphStyle.ParcheVivo
+                    )
                     ExampleCaption(
                         color = colors.mu,
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
