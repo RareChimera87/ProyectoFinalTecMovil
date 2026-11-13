@@ -50,6 +50,11 @@ require(releaseVersionCode in 1..2_100_000_000) {
     "parcheu.versionCode=$releaseVersionCode fuera del rango que acepta Play (1..2100000000)"
 }
 
+// R8 en release (fix/crash-r8-release). Solo para depurar o demos: -Pparcheu.release.minify=false construye el
+// release firmado sin minificar. Por defecto true; no lo usan android-ci ni android-release.
+val releaseMinify =
+    providers.gradleProperty("parcheu.release.minify").map(String::toBoolean).getOrElse(true)
+
 // Llave de subida (E10.2). Nunca en el repo: el keystore y sus contraseñas llegan por variables de
 // entorno (secretos UPLOAD_* en CI; en local, ~/.parcheu/upload-key.env más UPLOAD_KEYSTORE_FILE).
 // Sin ellas el release se firma con la llave de debug para probar R8 en local, salvo que se pida
@@ -68,6 +73,11 @@ if (requireUploadKey && !hasUploadKey) {
     throw GradleException(
         "parcheu.release.requireUploadKey=true pero falta la llave de subida: define " +
             "UPLOAD_KEYSTORE_FILE, UPLOAD_KEYSTORE_PASSWORD, UPLOAD_KEY_ALIAS y UPLOAD_KEY_PASSWORD."
+    )
+}
+if (requireUploadKey && !releaseMinify) {
+    throw GradleException(
+        "parcheu.release.minify=false es solo para depurar o demos: el pipeline de Play no lo admite."
     )
 }
 if (hasUploadKey && !file(uploadKeystoreFile!!).isFile) {
@@ -154,8 +164,14 @@ android {
     buildTypes {
         release {
             optimization {
-                enable = true
+                // R8 (minificación y ofuscación). -Pparcheu.release.minify=false lo apaga SOLO para depurar o
+                // para una demo de emergencia (APK firmado sin minificar); por defecto true, y CI y
+                // android-release nunca lo pasan.
+                enable = releaseMinify
             }
+            // Reglas propias de R8 (argumentos de ruta, contrato, kotlinx.serialization, Retrofit). Se suman a
+            // proguard-android-optimize.txt (que agrega optimization) y a las reglas de consumidor.
+            proguardFiles("proguard-rules.pro")
             // Con la llave de subida en el entorno (pipeline android-release) se firma con ella; si no,
             // con la de debug para instalar y probar R8 en local. Un AAB firmado con debug nunca va a Play:
             // el pipeline exige la llave (requireUploadKey) y verifica la huella del certificado.
@@ -262,6 +278,13 @@ androidComponents {
             }
         tasks.named("check") { dependsOn(verify) }
     }
+}
+
+// RouteKeepRulesTest lee las reglas de R8 y este script: son entradas de las pruebas JVM, para que Gradle no
+// las dé por al día (ni las saque de caché) cuando solo cambian las reglas.
+tasks.withType<Test>().configureEach {
+    inputs.file("proguard-rules.pro").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file("build.gradle.kts").withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 roborazzi {
