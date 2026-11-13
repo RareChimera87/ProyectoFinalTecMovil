@@ -4,8 +4,9 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.contract.TwinAnswer
 import org.junit.After
@@ -25,8 +26,14 @@ class DataStoreAnswerProgressStoreTest {
         return DataStoreAnswerProgressStore(ds)
     }
 
+    /** Cancela y espera: DataStore exige un único activo por archivo y cancel() solo pide la cancelación. */
+    private suspend fun closeStores() {
+        scopes.forEach { it.coroutineContext[Job]?.cancelAndJoin() }
+        scopes.clear()
+    }
+
     @After fun tearDown() {
-        scopes.forEach { it.cancel() }
+        runBlocking { closeStores() }
         dir.deleteRecursively()
     }
 
@@ -34,7 +41,7 @@ class DataStoreAnswerProgressStoreTest {
     fun savedAnswersSurviveReopeningTheStore() = runBlocking {
         newStore().save(mapOf(1 to TwinAnswer.A, 2 to TwinAnswer.DEPENDS, 3 to TwinAnswer.B))
         // Un DataStore nuevo sobre el mismo archivo simula cerrar y reabrir la app.
-        scopes.forEach { it.cancel() }
+        closeStores()
         assertEquals(
             mapOf(1 to TwinAnswer.A, 2 to TwinAnswer.DEPENDS, 3 to TwinAnswer.B),
             newStore().load()
