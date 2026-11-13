@@ -74,6 +74,14 @@ enum class SubscriptionStatus {
     /** El usuario canceló: sigue con ParcheU+ hasta el fin del periodo pagado. */
     Canceled,
 
+    /**
+     * ParcheU+ vigente que no viene de una suscripción de Play que la app conozca: sin plan base y sin
+     * renovación automática. Hoy es la concesión manual del servidor (`product_id = 'manual-grant'`). El
+     * contrato no trae el origen; [EntitlementDto.basePlan] nulo es la única señal, así que G4 usa un texto
+     * que es cierto en cualquier caso ("ParcheU+ activo", "Vence el …") y no menciona Google Play.
+     */
+    Granted,
+
     /** Falló el cobro y Play reintenta: aún tiene ParcheU+ durante la gracia. */
     Grace,
 
@@ -89,6 +97,8 @@ fun EntitlementDto.status(): SubscriptionStatus = when {
     state == EntitlementState.ON_HOLD || state == EntitlementState.PAUSED ->
         SubscriptionStatus.OnHold
     state == EntitlementState.CANCELED && plus -> SubscriptionStatus.Canceled
+    state == EntitlementState.ACTIVE && plus && basePlan == null && autoRenewing != true ->
+        SubscriptionStatus.Granted
     state == EntitlementState.ACTIVE && plus ->
         if (autoRenewing == false) SubscriptionStatus.Canceled else SubscriptionStatus.Active
     else -> SubscriptionStatus.Inactive

@@ -4,18 +4,26 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.double
 import me.santiagoreina.parcheu.api.platform.db.tables.Questions
+import me.santiagoreina.parcheu.api.platform.db.tables.Simulations
 import me.santiagoreina.parcheu.api.platform.db.tables.TwinAccuracy
 import me.santiagoreina.parcheu.api.platform.db.tables.TwinAnswers
+import me.santiagoreina.parcheu.api.platform.db.tables.TwinFeedback
+import me.santiagoreina.parcheu.api.platform.db.tables.TwinMemories
 import me.santiagoreina.parcheu.api.platform.db.tables.TwinVersions
 import me.santiagoreina.parcheu.api.platform.db.tables.Twins
 import me.santiagoreina.parcheu.api.platform.db.tables.Users
 import me.santiagoreina.parcheu.api.platform.errors.NotFound
+import me.santiagoreina.parcheu.contract.FeedbackKind
+import me.santiagoreina.parcheu.contract.MemoryStatus
+import me.santiagoreina.parcheu.contract.SimulationStatus
 import me.santiagoreina.parcheu.contract.TraitKey
 import me.santiagoreina.parcheu.contract.TwinAnswer
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
@@ -148,6 +156,32 @@ class ExposedTwinRepository(private val db: Database) : TwinRepository {
                 it[predictions] = point.predictions
             }
         }
+    }
+
+    /**
+     * Cuenta los eventos que dan XP (arquitectura.md §7.1, punto 6). Cada uno es una fila con clave única
+     * (memoria, calificación única por turno, control respondido una vez, simulación), así que nada se cuenta
+     * dos veces. Simulación propia: la pidió la persona, su gemelo participa (`user_a`/`user_b`; una
+     * presentación no cuenta para quien presenta) y quedó DONE.
+     */
+    override fun activity(userId: UUID): TwinActivity = transaction(db) {
+        TwinActivity(
+            acceptedMemories = TwinMemories.selectAll()
+                .where { (TwinMemories.userId eq userId) and (TwinMemories.status eq MemoryStatus.ACCEPTED) }
+                .count().toInt(),
+            ratings = TwinFeedback.selectAll()
+                .where { (TwinFeedback.userId eq userId) and (TwinFeedback.kind eq FeedbackKind.RATING) }
+                .count().toInt(),
+            controlAnswers = TwinFeedback.selectAll()
+                .where { (TwinFeedback.userId eq userId) and (TwinFeedback.kind eq FeedbackKind.CONTROL) and TwinFeedback.actual.isNotNull() }
+                .count().toInt(),
+            doneSimulations = Simulations.selectAll()
+                .where {
+                    (Simulations.requestedBy eq userId) and (Simulations.status eq SimulationStatus.DONE) and
+                        ((Simulations.userA eq userId) or (Simulations.userB eq userId))
+                }
+                .count().toInt(),
+        )
     }
 
     private fun lockUser(userId: UUID) {

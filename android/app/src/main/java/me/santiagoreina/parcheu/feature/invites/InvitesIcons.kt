@@ -2,17 +2,13 @@ package me.santiagoreina.parcheu.feature.invites
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
 /*
  * Iconos de C5 (E6.1) como vectores propios de 24dp con los trazados de Material Symbols, igual que
- * las
- * demás features mientras E1.2 no publique el set oficial, y el ícono de la app para el centro del
- * QR.
+ * las demás features mientras E1.2 no publique el set oficial. El centro del QR usa `ParcheUAppIcon`.
  */
 
 private fun icon(name: String, pathData: String): ImageVector =
@@ -68,30 +64,5 @@ internal object InvitesIcons {
                 "4 4,4zM6,10V7H4v3H1v2h3v3h2v-3h3v-2H6zM15,14c-2.67,0 -8,1.34" +
                 " -8,4v2h16v-2c0,-2.66 -5.33,-4 -8,-4z"
         )
-    }
-
-    /** Ícono de la app (inventario: AppIcon 96x96, rx 26, #6D4AFF, U blanca y nodo #FF8A3D). */
-    val AppIcon: ImageVector by lazy {
-        ImageVector.Builder("parcheu", 96.dp, 96.dp, 96f, 96f)
-            .addPath(
-                addPathNodes(
-                    "M26,0H70A26,26 0 0,1 96,26V70A26,26 0 0,1 70,96H26A26,26 0 0" +
-                        ",1 0,70V26A26,26 0 0,1 26,0Z"
-                ),
-                fill = SolidColor(Color(0xFF6D4AFF))
-            )
-            .addPath(
-                addPathNodes("M30,24L30,52L48,70L66,52L66,24"),
-                fill = null,
-                stroke = SolidColor(Color.White),
-                strokeLineWidth = 6f,
-                strokeLineCap = StrokeCap.Round,
-                strokeLineJoin = StrokeJoin.Round
-            )
-            .addPath(
-                addPathNodes("M48,61A9,9 0 1,1 47.99,61Z"),
-                fill = SolidColor(Color(0xFFFF8A3D))
-            )
-            .build()
     }
 }

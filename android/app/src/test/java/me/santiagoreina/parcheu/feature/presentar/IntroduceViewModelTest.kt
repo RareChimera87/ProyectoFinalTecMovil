@@ -159,5 +159,20 @@ class IntroduceViewModelTest {
         )
         val friends = RemoteIntroductionsRepository.friendsOf(graph, Mode.AMISTAD)
         assertEquals(listOf("u-vale", "u-sebas"), friends.map { it.id })
+
+        // Un amigo conectado por invitación sin simular va al final y sin afinidad (no 0 %).
+        val withInvite = graph.copy(
+            nodes =
+            graph.nodes +
+                node(
+                    "u-invitado",
+                    EdgeState.CONNECTED,
+                    affinity = 0
+                ).copy(affinityMeasured = false)
+        )
+        val all = RemoteIntroductionsRepository.friendsOf(withInvite, Mode.AMISTAD)
+        assertEquals(listOf("u-vale", "u-sebas", "u-invitado"), all.map { it.id })
+        assertNull(all.last().affinity)
+        assertEquals(90, all.first().affinity)
     }
 }

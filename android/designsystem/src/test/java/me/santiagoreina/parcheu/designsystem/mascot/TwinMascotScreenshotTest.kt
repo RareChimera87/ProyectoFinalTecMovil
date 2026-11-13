@@ -21,10 +21,13 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Capturas Roborazzi: 4 tamaños, 4 colores y estado de error, en ambos temas (ADR-0022). */
+/**
+ * Capturas Roborazzi de "La P que mira": 4 tamaños (S ya simplificada), 4 colores, error, pose de
+ * "conversando" y la fila del cupo a 24 dp sobre el héroe violeta, en ambos temas (ADR-0022).
+ */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w360dp-h400dp-xhdpi")
+@Config(sdk = [35], qualifiers = "w360dp-h560dp-xhdpi")
 class TwinMascotScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
@@ -77,6 +80,33 @@ class TwinMascotScreenshotTest {
                     error = true,
                     animationsEnabled = false
                 )
+                TwinMascot(size = TwinMascotSize.S, error = true, animationsEnabled = false)
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                TwinMascot(size = TwinMascotSize.L, talking = true, animationsEnabled = false)
+                TwinMascotGlyph(
+                    width = TwinMascotSize.L.width,
+                    color = ParcheUTheme.colors.study.solid,
+                    mouth = MascotMouth.Talking,
+                    mirrored = true
+                )
+                TwinMascot(size = TwinMascotSize.S, talking = true, animationsEnabled = false)
+            }
+            Row(
+                Modifier.background(ParcheUTheme.colors.hero).padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val c = ParcheUTheme.colors
+                repeat(5) { i ->
+                    TwinMascotGlyph(
+                        width = 24.dp,
+                        color = if (i < 2) c.onHero else c.heroQuiet,
+                        eyeColor = c.hero
+                    )
+                }
             }
         }
     }

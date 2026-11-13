@@ -7,5 +7,6 @@
   "mode": "AMISTAD",
   "state": "CONNECTED",
   "anonymous": false,
-  "isDemo": false
+  "isDemo": false,
+  "affinityMeasured": true
 }

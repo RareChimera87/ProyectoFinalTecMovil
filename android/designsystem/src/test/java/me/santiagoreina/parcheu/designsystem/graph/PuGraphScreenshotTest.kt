@@ -32,6 +32,7 @@ class PuGraphScreenshotTest {
     val composeRule = createComposeRule()
 
     private val all = PuGraphSamples.nodes
+    private val unmeasured = PuGraphSamples.withUnmeasured
 
     @Test fun allDark() = capture("g0_todos_dark", true) { PuGraph(all) }
 
@@ -65,6 +66,22 @@ class PuGraphScreenshotTest {
 
     @Test fun reducedLight() = capture("g0_count_reducido_light", false) { PuGraph(all.take(4)) }
 
+    @Test fun vividDark() = capture("g0_vivo_dark", true) { PuGraph(unmeasured, style = VIVO) }
+
+    @Test fun vividLight() = capture("g0_vivo_light", false) { PuGraph(unmeasured, style = VIVO) }
+
+    @Test fun vividFofDark() = capture("g0_vivo_fof_dark", true) {
+        PuGraph(unmeasured, fof = PuGraphSamples.fof, style = VIVO)
+    }
+
+    @Test fun vividFofLight() = capture("g0_vivo_fof_light", false) {
+        PuGraph(unmeasured, fof = PuGraphSamples.fof, style = VIVO)
+    }
+
+    @Test fun vividSelectedLight() = capture("g0_vivo_seleccionado_light", false) {
+        PuGraph(unmeasured, selectedId = "and", style = VIVO)
+    }
+
     private fun capture(name: String, darkTheme: Boolean, content: @Composable () -> Unit) {
         composeRule.setContent {
             ParcheUTheme(darkTheme = darkTheme) {
@@ -79,6 +96,7 @@ class PuGraphScreenshotTest {
 
     companion object {
         private val MINI: Dp = 160.dp
+        private val VIVO = PuGraphStyle.ParcheVivo
         private val ROBORAZZI_OPTIONS =
             RoborazziOptions(
                 compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.01f)

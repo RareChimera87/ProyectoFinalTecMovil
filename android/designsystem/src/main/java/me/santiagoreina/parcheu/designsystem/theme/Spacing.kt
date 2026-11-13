@@ -18,6 +18,8 @@ data class ParcheUSpacing(
     /** Separación entre bloques de una pantalla. */
     val blockGap: Dp = 14.dp,
     val cardPadding: Dp = 16.dp,
+    /** Separación compacta entre bloques de la dirección A (tiles, tarjetas con lomo). */
+    val blockGapTight: Dp = 10.dp,
     /** Footer de acciones: 12 arriba, 16 a los lados y 28 abajo. */
     val footer: PaddingValues =
         PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 28.dp),
@@ -40,4 +42,10 @@ object ParcheUSizes {
     val SwitchWidth: Dp = 52.dp
     val SwitchHeight: Dp = 32.dp
     val Field: Dp = 56.dp
+
+    /** Lomo de color del modo en `ModeSpineCard` (dirección A). */
+    val ModeSpine: Dp = 5.dp
+
+    /** Mascota del cupo semanal en `QuotaMascots` (usa la variante simplificada). */
+    val QuotaMascot: Dp = 24.dp
 }

@@ -28,135 +28,46 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.santiagoreina.parcheu.designsystem.brand.ParcheUAppIcon
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.SoraFontFamily
 
 /*
- * Arte de A1-A4 dibujado con los tokens. Wordmark, AppIcon y la mascota del gemelo tendrán su versión
- * oficial en :designsystem con E1.2 y E1.5; cuando se mezclen, estas versiones locales se reemplazan.
+ * Arte de A1-A4 dibujado con los tokens. El logo (`ParcheULogo`), el ícono y la mascota ("La P que mira",
+ * `TwinMascotGlyph`) vienen de :designsystem; aquí quedan el ícono de A1, los avatares, el indicador y los
+ * puntos de carga.
  */
 
-/** Wordmark "ParcheU": Sora 700, la U en naranja. */
-@Composable
-internal fun OnboardingWordmark(size: Dp, modifier: Modifier = Modifier) {
-    val text =
-        buildAnnotatedString {
-            withStyle(SpanStyle(color = ParcheUTheme.colors.wordmark)) { append("Parche") }
-            withStyle(SpanStyle(color = ParcheUPalette.Orange)) { append("U") }
-        }
-    Text(
-        text = text,
-        modifier = modifier.semantics { contentDescription = "ParcheU" },
-        style =
-        TextStyle(
-            fontFamily = SoraFontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = size.value.sp,
-            lineHeight = size.value.sp,
-            letterSpacing = (-size.value * 0.03f).sp
-        )
-    )
-}
-
-/** Ícono de la app (96 x 96, radio 26): polilínea en U con 5 nodos, el inferior naranja. */
+/** Ícono de la app: el `ParcheUAppIcon` de :designsystem ("La P que mira" blanca sobre violeta). */
 @Composable
 internal fun OnboardingAppIcon(size: Dp, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(size).clearAndSetSemantics { }) {
-        val k = this.size.width / 96f
-        drawRoundRect(ParcheUPalette.Violet, cornerRadius = CornerRadius(26f * k))
-        val points = listOf(30f to 24f, 30f to 52f, 48f to 70f, 66f to 52f, 66f to 24f).map {
-            Offset(it.first * k, it.second * k)
-        }
-        for (i in 0 until points.lastIndex) {
-            drawLine(
-                Color.White.copy(alpha = 0.7f),
-                points[i],
-                points[i + 1],
-                strokeWidth = 4f * k,
-                cap = StrokeCap.Round
-            )
-        }
-        val radii = listOf(7f, 6f, 8f, 6f, 7f)
-        points.forEachIndexed { i, p ->
-            drawCircle(
-                if (i ==
-                    2
-                ) {
-                    ParcheUPalette.Orange
-                } else {
-                    Color.White
-                },
-                radius = radii[i] * k,
-                center = p
-            )
-        }
-    }
+    ParcheUAppIcon(size = size, modifier = modifier)
 }
 
-/** Mascota del gemelo: antena y cuerpo de blob (alto = 1,125 x ancho) con ojos y boca en tinta. */
+/** Avatar con iniciales: violeta con blanco por defecto (sobre el héroe violeta se invierte). */
 @Composable
-internal fun OnboardingMascot(width: Dp, color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(width, width * 1.125f).clearAndSetSemantics { }) {
-        val w = size.width
-        val h = size.height
-        val bodyH = h * 0.825f
-        val bodyTop = h - bodyH
-        // Antena: palito y bolita.
-        drawRoundRect(
-            color,
-            topLeft = Offset(w / 2 - w * 0.04f, h * 0.053f),
-            size = Size(w * 0.08f, w * 0.16f),
-            cornerRadius = CornerRadius(w * 0.04f)
-        )
-        drawCircle(color, radius = w * 0.08f, center = Offset(w / 2, w * 0.08f))
-        // Cuerpo: elipse algo achatada abajo (aproxima el border-radius 48/52/44/46 del mockup).
-        drawRoundRect(
-            color,
-            topLeft = Offset(0f, bodyTop),
-            size = Size(w, bodyH),
-            cornerRadius = CornerRadius(w * 0.5f, bodyH * 0.55f)
-        )
-        val ink = ParcheUPalette.Ink
-        val eyeW = w * 0.13f
-        val eyeH = w * 0.17f
-        val eyeY = bodyTop + bodyH * 0.36f
-        drawOval(ink, topLeft = Offset(w * 0.27f, eyeY), size = Size(eyeW, eyeH))
-        drawOval(ink, topLeft = Offset(w * 0.73f - eyeW, eyeY), size = Size(eyeW, eyeH))
-        val mouthW = w * 0.18f
-        val mouthY = bodyTop + bodyH * 0.63f
-        drawArc(
-            ink.copy(alpha = 0.85f),
-            startAngle = 0f,
-            sweepAngle = 180f,
-            useCenter = true,
-            topLeft = Offset(w / 2 - mouthW / 2, mouthY - mouthW * 0.39f),
-            size = Size(mouthW, mouthW * 0.78f)
-        )
-    }
-}
-
-/** Avatar con iniciales sobre violeta. */
-@Composable
-internal fun InitialsAvatar(initials: String, size: Dp, modifier: Modifier = Modifier) {
+internal fun InitialsAvatar(
+    initials: String,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    background: Color = ParcheUPalette.Violet,
+    content: Color = Color.White
+) {
     Box(
-        modifier = modifier.size(size).background(ParcheUPalette.Violet, CircleShape),
+        modifier = modifier.size(size).background(background, CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = initials,
-            color = Color.White,
+            color = content,
             style = TextStyle(
                 fontFamily = SoraFontFamily,
                 fontWeight = FontWeight.SemiBold,

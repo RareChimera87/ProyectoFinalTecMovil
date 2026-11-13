@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -12,29 +13,45 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.contract.MatchChoice
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
+import me.santiagoreina.parcheu.designsystem.R as DsR
+import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
+import me.santiagoreina.parcheu.designsystem.components.base.ModeChipStyle
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PillChipVariant
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
-import me.santiagoreina.parcheu.designsystem.components.compound.AvatarInitials
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlockDefaults
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUSizes
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
+import me.santiagoreina.parcheu.feature.simulation.FacingTwins
 
 /** Etiquetas de prueba de F2. */
 object MatchFoundTags {
@@ -82,6 +99,7 @@ fun MatchFoundScreen(
                 ErrorState(
                     title = MatchStrings.QUEUE_TITLE,
                     message = MatchStrings.errorMessage(state.error),
+                    illustration = { StateIllustration(state.error.stateProp(), error = true) },
                     retryLabel = MatchStrings.RETRY,
                     onRetryClick = onRetry
                 )
@@ -91,7 +109,15 @@ fun MatchFoundScreen(
                         title = MatchStrings.MATCH_EXPIRED_TITLE,
                         message = MatchStrings.MATCH_EXPIRED_MESSAGE,
                         retryLabel = MatchStrings.SEARCH_AGAIN,
-                        onRetryClick = onSearchAgain
+                        onRetryClick = onSearchAgain,
+                        illustration = {
+                            FacingTwins(
+                                otherColor = state.match.mode.colors().solid,
+                                width = 64.dp,
+                                gap = 44.dp,
+                                error = true
+                            )
+                        }
                     )
                 } else {
                     LoadedBody(state, onSelect, onStart)
@@ -110,77 +136,92 @@ private fun LoadedBody(
     val colors = ParcheUTheme.colors
     val other = state.match.other
     val mode = state.match.mode
+    val modeColors = mode.colors()
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.blockGapTight)
         ) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                MatchStrings.FOUND,
-                style = ParcheUTheme.textStyles.overline,
-                color = mode.colors().text,
-                modifier = Modifier.testTag(MatchFoundTags.LABEL)
-            )
-            AvatarInitials(name = other.label, affinity = 0, size = 88.dp, anonymous = true)
-            Text(
-                other.label,
-                style = MaterialTheme.typography.titleLarge,
-                color = colors.tx,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                MatchStrings.ageRange(other.ageRange),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.mu
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                me.santiagoreina.parcheu.designsystem.components.base.ModeChip(
-                    label = MatchStrings.modeName(mode),
-                    mode = mode.colors()
+            // Las dos P se miran de pie sobre el héroe del modo: la tuya violeta y la de la otra persona
+            // espejada, del color del modo. El héroe dice a quién encontramos (anónimo) y en qué modo.
+            Column(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                FacingTwins(otherColor = modeColors.solid, width = 60.dp, gap = 28.dp)
+                HeroBlock(
+                    title = other.label,
+                    overline = MatchStrings.FOUND,
+                    subtitle = MatchStrings.ageRange(other.ageRange),
+                    titleSize = HeroTitleSize.Headline,
+                    colors = HeroBlockDefaults.modeColors(modeColors),
+                    badge = {
+                        ModeChip(
+                            label = MatchStrings.modeName(mode),
+                            mode = modeColors,
+                            style = ModeChipStyle.Tonal
+                        )
+                    },
+                    modifier = Modifier.testTag(MatchFoundTags.LABEL)
                 )
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 if (other.isDemo) {
                     PillChip(
                         MatchStrings.DEMO_BADGE,
                         modifier = Modifier.testTag(MatchFoundTags.DEMO_BADGE),
-                        variant = PillChipVariant.Neutral
+                        variant = PillChipVariant.Affinity
                     )
                 }
-            }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
                 other.interests.forEach {
                     PillChip(it, modifier = Modifier.testTag(MatchFoundTags.INTEREST))
                 }
             }
-            Spacer(Modifier.height(4.dp))
             Text(
                 MatchStrings.HOW_TO_MEET,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleMedium,
                 color = colors.tx,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).semantics { heading() }
             )
-            if (state.showScenario) {
+            Column(
+                Modifier.selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.blockGapTight)
+            ) {
+                if (state.showScenario) {
+                    ChoiceCard(
+                        title = MatchStrings.SCENARIO_TITLE,
+                        body = MatchStrings.SCENARIO_BODY,
+                        selected = state.selected == MatchChoice.SCENARIO,
+                        enabled = !state.waitingOther && !state.submitting,
+                        onClick = { onSelect(MatchChoice.SCENARIO) },
+                        modifier = Modifier.testTag(MatchFoundTags.SCENARIO_CARD)
+                    ) {
+                        Icon(
+                            painterResource(DsR.drawable.ic_forum),
+                            contentDescription = null,
+                            tint = it,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
                 ChoiceCard(
-                    title = MatchStrings.SCENARIO_TITLE,
-                    body = MatchStrings.SCENARIO_BODY,
-                    selected = state.selected == MatchChoice.SCENARIO,
+                    title = MatchStrings.SIMULATION_TITLE,
+                    body = MatchStrings.SIMULATION_BODY,
+                    selected = state.selected == MatchChoice.SIMULATION,
                     enabled = !state.waitingOther && !state.submitting,
-                    onClick = { onSelect(MatchChoice.SCENARIO) },
-                    modifier = Modifier.testTag(MatchFoundTags.SCENARIO_CARD)
-                )
+                    onClick = { onSelect(MatchChoice.SIMULATION) },
+                    modifier = Modifier.testTag(MatchFoundTags.SIMULATION_CARD)
+                ) {
+                    FacingTwins(
+                        otherColor = modeColors.solid,
+                        width = ParcheUSizes.QuotaMascot,
+                        gap = 0.dp
+                    )
+                }
             }
-            ChoiceCard(
-                title = MatchStrings.SIMULATION_TITLE,
-                body = MatchStrings.SIMULATION_BODY,
-                selected = state.selected == MatchChoice.SIMULATION,
-                enabled = !state.waitingOther && !state.submitting,
-                onClick = { onSelect(MatchChoice.SIMULATION) },
-                modifier = Modifier.testTag(MatchFoundTags.SIMULATION_CARD)
-            )
             state.actionError?.let {
                 Text(
                     MatchStrings.errorMessage(it),
@@ -188,6 +229,7 @@ private fun LoadedBody(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+            Spacer(Modifier.height(4.dp))
         }
         PrimaryButton(
             text = when {
@@ -205,7 +247,10 @@ private fun LoadedBody(
     }
 }
 
-/** Tarjeta de elección (ChoiceCard del inventario): radio 20, borde 2 violeta y fondo prc si está marcada. */
+/**
+ * Tarjeta de elección (ChoiceCard): radio 18, ilustración a la izquierda, título y apoyo, y un radio a la
+ * derecha. Marcada: fondo prc y borde de 2 dp violeta; sin marcar: s1 con borde ln.
+ */
 @Composable
 private fun ChoiceCard(
     title: String,
@@ -213,11 +258,12 @@ private fun ChoiceCard(
     selected: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    illustration: @Composable (tint: Color) -> Unit
 ) {
     val colors = ParcheUTheme.colors
-    val shape = RoundedCornerShape(20.dp)
-    Column(
+    val shape = ParcheUTheme.shapes.card
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
@@ -229,18 +275,43 @@ private fun ChoiceCard(
                 role = Role.RadioButton,
                 onClick = onClick
             )
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleSmall,
-            color = if (selected) colors.onprc else colors.tx
-        )
-        Text(
-            body,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (selected) colors.onprc else colors.mu
-        )
+        Box(
+            Modifier.size(width = 56.dp, height = 48.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (selected) colors.s1 else colors.s2),
+            contentAlignment = Alignment.Center
+        ) {
+            illustration(colors.prt)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (selected) colors.onprc else colors.tx
+            )
+            Text(
+                body,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (selected) colors.onprc else colors.mu
+            )
+        }
+        RadioDot(selected)
+    }
+}
+
+/** Radio visual de 22 dp: aro ln o, marcado, aro y centro violeta. La semántica la da la tarjeta. */
+@Composable
+private fun RadioDot(selected: Boolean) {
+    val colors = ParcheUTheme.colors
+    Box(
+        Modifier.size(22.dp)
+            .border(2.dp, if (selected) colors.prt else colors.mu, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) Box(Modifier.size(11.dp).background(colors.prt, CircleShape))
     }
 }

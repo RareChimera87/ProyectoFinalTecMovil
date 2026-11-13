@@ -8,8 +8,13 @@ import kotlinx.serialization.Serializable
 public enum class EdgeState { CONNECTED, SIMULATED, PENDING }
 
 /**
- * Nodo del grafo; `anonymous` = sin conexión mutua (sin nombre ni foto). `affinity` 0-100. `isDemo` marca un
- * perfil de demostración (ADR-0027): la UI muestra la insignia 'Perfil de demostración'.
+ * Nodo del grafo; `anonymous` = sin conexión mutua (sin nombre ni foto). `isDemo` marca un perfil de
+ * demostración (ADR-0027): la UI muestra la insignia 'Perfil de demostración'.
+ *
+ * Afinidad: `affinity` va de 0 a 100 y `affinityMeasured = false` dice que aún no se ha medido (por ejemplo,
+ * una conexión por invitación sin simulación). Entonces `affinity` vale 0 solo por compatibilidad con las
+ * apps 0.1/0.2, que exigen el número; el valor real es [measuredAffinity] (`null` = 'Sin simular'). Un
+ * backend anterior no envía `affinityMeasured` y el valor por defecto `true` conserva su comportamiento.
  */
 @Serializable
 public data class NodeDto(
@@ -22,16 +27,26 @@ public data class NodeDto(
     val state: EdgeState,
     val anonymous: Boolean = false,
     val isDemo: Boolean = false,
-)
+    val affinityMeasured: Boolean = true,
+) {
+    /** Afinidad 0-100 si se midió; `null` = sin simular. Es lo que deben mostrar y filtrar los clientes. */
+    public val measuredAffinity: Int? get() = affinity.takeIf { affinityMeasured }
+}
 
+/** Arista del ego-grafo; `affinity`/`affinityMeasured` siguen la misma regla que en [NodeDto]. */
 @Serializable
 public data class EdgeDto(
     val otherId: String,
     val mode: Mode,
     val state: EdgeState,
     val affinity: Int,
-)
+    val affinityMeasured: Boolean = true,
+) {
+    /** Afinidad 0-100 si se midió; `null` = sin simular. */
+    public val measuredAffinity: Int? get() = affinity.takeIf { affinityMeasured }
+}
 
+/** `avgAffinity` promedia solo afinidades medidas (0 si no hay ninguna). */
 @Serializable
 public data class GraphStats(
     val connections: Int,

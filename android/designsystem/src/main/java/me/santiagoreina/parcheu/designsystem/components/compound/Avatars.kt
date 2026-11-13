@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -29,8 +30,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.santiagoreina.parcheu.designsystem.theme.AFFINITY_ALPHA_UNMEASURED
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
-import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
+import me.santiagoreina.parcheu.designsystem.theme.affinityAlphaOrNeutral
 import me.santiagoreina.parcheu.designsystem.theme.avatarColors
 
 /** Descripción del avatar anónimo: no revela quién es (docs/mockups-inventario.md, AvatarInitials). */
@@ -49,28 +51,61 @@ object AvatarSizes {
     val Hero: Dp = 72.dp
 }
 
-/** Hasta dos iniciales en mayúsculas: primera letra de las dos primeras palabras. Vacío si no hay nombre. */
-fun initialsOf(name: String): String =
-    name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
-        .joinToString("") { it.first().uppercase() }
+/**
+ * Hasta dos iniciales en mayúsculas: primera letra de las dos primeras palabras que empiezan por letra o
+ * dígito. Se ignoran las que empiezan por puntuación o emoji, de modo que "Valentina (demo)" da "V" y no
+ * "V(". Vacío si no queda ninguna palabra.
+ */
+fun initialsOf(name: String): String = name.trim().split(Regex("\\s+"))
+    .filter { it.isNotEmpty() && Character.isLetterOrDigit(it.codePointAt(0)) }
+    .take(2)
+    .joinToString("") { String(Character.toChars(it.codePointAt(0))).uppercase() }
 
 /**
- * Avatar de iniciales. El relleno es violeta con el alpha de [affinityAlpha] (50 o menos da .22; 95 o más
- * da 1) y el color del texto sigue ADR-0030. Con [anonymous] se dibuja la variante anónima: s2, borde
+ * Iniciales para mostrar a partir de las que manda el servidor: conserva solo letras y dígitos (el servidor
+ * toma el primer carácter de cada palabra y con "Valentina (demo)" manda "V("). Si el servidor no mandó
+ * nada se calculan de [name] con [initialsOf]; si mandó solo signos (p. ej. "?" de una persona oculta) o
+ * no hay nombre, se devuelve [fallback].
+ */
+fun displayInitials(serverInitials: String, name: String, fallback: String = "?"): String {
+    val clean = buildString {
+        var i = 0
+        while (i < serverInitials.length) {
+            val cp = serverInitials.codePointAt(i)
+            if (Character.isLetterOrDigit(cp)) appendCodePoint(cp)
+            i += Character.charCount(cp)
+        }
+    }.uppercase()
+    return when {
+        clean.isNotEmpty() -> clean
+        serverInitials.isBlank() -> initialsOf(name).ifEmpty { fallback }
+        else -> fallback
+    }
+}
+
+/**
+ * Avatar de iniciales. El relleno es violeta con el alpha de [affinityAlphaOrNeutral] (50 o menos da .22;
+ * 95 o más da 1; `null` = sin medir, alpha neutro [AFFINITY_ALPHA_UNMEASURED]) y el color del texto sigue
+ * ADR-0030. Con [anonymous] se dibuja la variante anónima: s2, borde
  * discontinuo prt, icono de persona, **sin iniciales** y con la descripción [anonymousDescription]
  * ("Alguien"), de modo que ni la pantalla ni el lector revelan el nombre.
  *
  * [anonymousIcon] es el icono de persona (E1.2); si es nulo se dibuja una silueta propia.
+ * [initialsEndInset] corre el contenido a la izquierda para centrarlo en la parte visible cuando otro
+ * avatar tapa el borde derecho ([StackedAvatars]); [initialsSizeRatio] es el tamaño del texto respecto
+ * al círculo.
  */
 @Composable
 fun AvatarInitials(
     name: String,
-    affinity: Int,
+    affinity: Int?,
     modifier: Modifier = Modifier,
     size: Dp = AvatarSizes.List,
     anonymous: Boolean = false,
     anonymousIcon: Painter? = null,
-    anonymousDescription: String = ANONYMOUS_AVATAR_DESCRIPTION
+    anonymousDescription: String = ANONYMOUS_AVATAR_DESCRIPTION,
+    initialsEndInset: Dp = 0.dp,
+    initialsSizeRatio: Float = 0.38f
 ) {
     val colors = ParcheUTheme.colors
     if (anonymous) {
@@ -88,14 +123,17 @@ fun AvatarInitials(
                     painter = anonymousIcon,
                     contentDescription = null,
                     tint = colors.prt,
-                    modifier = Modifier.size(size * 0.55f)
+                    modifier = Modifier.padding(end = initialsEndInset).size(size * 0.55f)
                 )
             } else {
-                PersonSilhouette(colors.prt, Modifier.size(size * 0.55f))
+                PersonSilhouette(
+                    colors.prt,
+                    Modifier.padding(end = initialsEndInset).size(size * 0.55f)
+                )
             }
         }
     } else {
-        val palette = avatarColors(affinityAlpha(affinity), colors.isDark)
+        val palette = avatarColors(affinityAlphaOrNeutral(affinity), colors.isDark)
         Box(
             modifier = modifier
                 .size(size)
@@ -106,8 +144,9 @@ fun AvatarInitials(
         ) {
             Text(
                 text = initialsOf(name),
+                modifier = Modifier.padding(end = initialsEndInset),
                 style = ParcheUTheme.textStyles.initials.copy(
-                    fontSize = (size.value * 0.38f).coerceAtLeast(10f).sp,
+                    fontSize = (size.value * initialsSizeRatio).coerceAtLeast(10f).sp,
                     lineHeight = (size.value * 0.48f).coerceAtLeast(12f).sp,
                     fontWeight = FontWeight.SemiBold
                 ),
@@ -140,9 +179,12 @@ private fun PersonSilhouette(color: Color, modifier: Modifier) {
     }
 }
 
+/** Proporción del texto de las iniciales respecto al círculo en [StackedAvatars] (0,38 suelto). */
+private const val STACKED_INITIALS_RATIO = 0.31f
+
 /** Datos de un avatar dentro de [StackedAvatars]. */
 @Immutable
-data class AvatarSpec(val name: String, val affinity: Int, val anonymous: Boolean = false)
+data class AvatarSpec(val name: String, val affinity: Int?, val anonymous: Boolean = false)
 
 /**
  * Avatares apilados con solape (-10dp; -12dp en E3) y borde de 2-3dp del color de la superficie que hay
@@ -162,20 +204,28 @@ fun StackedAvatars(
     val colors = ParcheUTheme.colors
     val visible = avatars.take(maxVisible)
     val extra = avatars.size - visible.size
-    val ring = Modifier.border(borderWidth, borderColor, CircleShape)
+    // El fondo opaco debajo de cada círculo evita que el relleno con alpha deje ver al de al lado.
+    val ring = Modifier
+        .border(borderWidth, borderColor, CircleShape)
+        .background(borderColor, CircleShape)
     Row(
         modifier = modifier.semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.spacedBy(-overlap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        visible.forEach {
+        visible.forEachIndexed { index, avatar ->
+            // El siguiente círculo tapa los últimos [overlap] dp: las iniciales se centran en la parte
+            // que queda a la vista y bajan un poco de tamaño para que no se corten ("VR", "AM").
+            val covered = index < visible.lastIndex || extra > 0
             AvatarInitials(
-                name = it.name,
-                affinity = it.affinity,
-                anonymous = it.anonymous,
+                name = avatar.name,
+                affinity = avatar.affinity,
+                anonymous = avatar.anonymous,
                 anonymousIcon = anonymousIcon,
                 size = size,
-                modifier = ring
+                modifier = ring,
+                initialsEndInset = if (covered) overlap else 0.dp,
+                initialsSizeRatio = STACKED_INITIALS_RATIO
             )
         }
         if (extra > 0) {

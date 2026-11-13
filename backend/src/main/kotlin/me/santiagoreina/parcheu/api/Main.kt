@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.api
 import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import me.santiagoreina.parcheu.api.billing.ManualPlusJob
 import me.santiagoreina.parcheu.api.demo.DemoJobs
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
@@ -18,6 +19,10 @@ enum class Mode(val arg: String) {
     MIGRATE("migrate"),
     SEED_DEMO("seed-demo"),
     PURGE_DEMO("purge-demo"),
+
+    /** Plus manual acotado (enmienda de ADR-0013): Cloud Run Job `grant-plus`, sin ruta HTTP. */
+    GRANT_PLUS("grant-plus"),
+    REVOKE_PLUS("revoke-plus"),
     ;
 
     companion object {
@@ -52,5 +57,9 @@ fun main(args: Array<String>) {
         }
         Mode.SEED_DEMO -> DemoJobs.seed(config)
         Mode.PURGE_DEMO -> DemoJobs.purge(config)
+        Mode.GRANT_PLUS, Mode.REVOKE_PLUS -> {
+            val code = ManualPlusJob.run(config, revoke = mode == Mode.REVOKE_PLUS, args = args.drop(1))
+            if (code != ManualPlusJob.EXIT_OK) exitProcess(code)
+        }
     }
 }

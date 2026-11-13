@@ -26,6 +26,8 @@ Guía para preparar una máquina de desarrollo de ParcheU. Las decisiones de fon
 ```bash
 # Android
 cd android && ./gradlew :app:testDevDebugUnitTest
+# Instalar la variante por defecto (prodDebug, contra producción)
+cd android && ./gradlew :app:installProdDebug
 
 # Backend: sin contenedores en local (el backend tiene su propio wrapper)
 cd backend && ./gradlew build -PsinContenedores
@@ -37,9 +39,19 @@ cd backend && ./gradlew jibBuildTar
 scripts/test/commit-lint.test.sh
 ```
 
+## Ejecutar desde Android Studio: contra producción (por defecto)
+
+Desde el 13 nov 2026 la variante por defecto del proyecto es **`prodDebug`** (`isDefault` en el flavor `prod`): el botón Run instala `me.santiagoreina.parcheu` (mismo paquete que el APK de demo y Play), habla con la API de `parcheu-prod` (`https://api-n3yxvjziqq-uc.a.run.app/`) y usa el Firebase de `parcheu-prod`. El homeserver ya no es el entorno por defecto (sigue disponible, ver abajo).
+
+Pasos tras clonar o actualizar: `scripts/fetch-google-services.sh prod` (deja `android/app/src/prod/google-services.json`, no versionado), sincronizar Gradle y en **Build Variants** debe aparecer `prodDebug` para `:app`. Si Android Studio conserva una selección anterior (`devDebug`), elígela a mano una vez.
+
+**Login con Google.** Solo funciona si la huella SHA-1 del certificado con que se firma el APK está registrada en la app Android de Firebase prod. Hoy están las de la llave de subida. Por eso, si existe `~/.parcheu/upload-key.env` (fuera del repo, con `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS` y `UPLOAD_KEY_PASSWORD`; el keystore es `~/.parcheu/upload-keystore.jks` salvo que el archivo defina `UPLOAD_KEYSTORE_FILE`), el `prodDebug` se firma con esa llave; `-Pparcheu.localSigning.file=<ruta>` cambia el archivo. Sin él (CI, otros integrantes) el build no falla: firma con la llave de debug y el login con Google en prod no funciona hasta registrar tu huella (`firebase apps:android:sha:create 1:650971875793:android:ea80fae4a62a3eb6bb38f0 <SHA> --project parcheu-prod`, pasos del apartado de abajo con el proyecto prod) o hasta usar `devDebug`. La llave de subida solo firma `prodDebug` en la máquina del dueño; los release siguen leyéndola únicamente del entorno (`UPLOAD_*`).
+
+**Convivencia de APK.** `prodDebug` y el APK de demo comparten paquete y firma (con la llave local): se instalan uno sobre otro. Los builds debug locales (Run, `assemble*Debug`) sin `-Pparcheu.versionCode` llevan `versionCode` 900000 y `versionName` `0.0.1-local` (`0.0.1-dev-local` en `devDebug`), así que se instalan encima de cualquier APK de demo o release (23, 30...) sin `INSTALL_FAILED_VERSION_DOWNGRADE`. Con `-Pparcheu.versionCode=<n>` se respeta ese valor (y `-Pparcheu.versionName` el nombre); los release no cambian. En sentido contrario, instalar un APK de demo o release encima de un build local (900000) es un downgrade: usa `adb install -r -d app.apk` (`-d` se admite porque el paquete instalado es depurable) o desinstala antes (se pierde la sesión); el comando de instalación del APK de demo ya lo usa ([sustentacion.md](sustentacion.md#generar-el-apk-de-prod-instalable-sin-play)). Sin la llave local la firma difiere y falla con `INSTALL_FAILED_UPDATE_INCOMPATIBLE`: desinstala antes. `devDebug` usa `me.santiagoreina.parcheu.dev` y convive con ambos.
+
 ## Backend en el homeserver (ADR-0033)
 
-Para probar la app contra el backend de pruebas del homeserver (`deploy/homelab/README.md`), agrega a `android/local.properties` (no versionado):
+Para ejecutar contra el homeserver elige la variante **`devDebug`** en Build Variants (o `./gradlew :app:installDevDebug`). Para probar la app contra el backend de pruebas del homeserver (`deploy/homelab/README.md`), agrega a `android/local.properties` (no versionado):
 
 ```properties
 parcheu.apiUrl.dev=https://api-parcheu.homeserverlab.site/
@@ -137,6 +149,7 @@ Reglas del formato: mayúscula inicial, sin punto final, máximo 72 caracteres y
 
 - Con `ENV=local` y sin `AI_PROVIDER` el backend usa `FakeLlmClient` y guarda el uso en memoria: no se llama a Vertex ni se gasta nada.
 - Para probar con Vertex real en local: `gcloud auth application-default login` y luego `ENV=local AI_PROVIDER=gemini AI_VERTEX_PROJECT=parcheu-dev ./gradlew run`.
+- Con la API directa de Anthropic (gasta saldo de la clave): `ENV=local AI_PROVIDER=anthropic ANTHROPIC_API_KEY="$(cat ~/.parcheu/anthropic-api-key)" ./gradlew run`. `ANTHROPIC_API_KEY` solo se acepta con `ENV=local`; en dev y prod la clave sale del secreto `anthropic-api-key` (`SECRET_ANTHROPIC_API_KEY`). Las pruebas (`ClaudeApiClientTest`) usan un servidor HTTP falso y no necesitan clave. Humo real (centavos; texto con Haiku y el juez de la simulación con Sonnet): `cd backend && ANTHROPIC_API_KEY="$(cat ~/.parcheu/anthropic-api-key)" ./gradlew test -Panthropic -PsinContenedores --tests '*AnthropicSmokeTest*'` (el tag `anthropic` se excluye sin `-Panthropic`).
 - Humo manual (no corre en CI ni en `./gradlew test`; consume unos centavos de USD):
 
   ```bash

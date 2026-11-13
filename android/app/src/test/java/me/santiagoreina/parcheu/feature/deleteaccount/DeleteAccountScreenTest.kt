@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import kotlin.time.Instant
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import org.junit.Assert.assertEquals
@@ -101,5 +102,19 @@ class DeleteAccountScreenTest {
             .assert(
                 SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
             )
+    }
+
+    @Test
+    fun aPlusGrantedWithoutPlayDoesNotSendToGooglePlay() {
+        val expires = Instant.parse("2026-12-12T17:00:00Z")
+        show(
+            DeleteAccountUiState(plusNotice = DeletePlusNotice.Granted(expires)),
+            DeleteAccountActions()
+        )
+        composeRule.onNodeWithText(
+            "Tu ParcheU+ vence el 12 de diciembre de 2026 y no se renueva: no hay nada que cancelar."
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag(DeleteAccountTags.PLAY).assertDoesNotExist()
+        composeRule.onNodeWithText("Ir a Google Play").assertDoesNotExist()
     }
 }

@@ -49,7 +49,8 @@ class ResultsScreenTest {
     fun lockedReportHasNoShareAndOffersTheMonthlyReport() {
         var unlocks = 0
         show(content(), ResultsActions(onUnlock = { unlocks++ }))
-        composeRule.onNodeWithTag(ResultsTags.LOCKED).assertIsDisplayed()
+        // El héroe de afinidad va arriba: el informe bloqueado queda debajo y se alcanza con scroll.
+        composeRule.onNodeWithTag(ResultsTags.LOCKED).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag(ResultsTags.SHARE).assertDoesNotExist()
         composeRule.onNodeWithTag(ResultsTags.UNLOCK).performScrollTo().performClick()
         assertEquals(1, unlocks)
