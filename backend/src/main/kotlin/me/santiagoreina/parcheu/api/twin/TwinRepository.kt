@@ -34,4 +34,7 @@ interface TwinRepository {
 
     /** Inserta un punto de `twin_accuracy` (la usa el job semanal y las pruebas). */
     fun addAccuracyPoint(userId: UUID, point: AccuracyPoint)
+
+    /** Eventos que dan XP además de las respuestas (arquitectura.md §7.1, punto 6), contados en la base. */
+    fun activity(userId: UUID): TwinActivity
 }

@@ -9,6 +9,9 @@ import java.util.UUID
 class InMemoryTwinRepository(
     private val questions: List<WeightedQuestion> = SeedQuestions.all,
 ) : TwinRepository {
+    /** Eventos que dan XP por usuario (en memoria no hay tablas que contar: las pruebas los fijan aquí). */
+    val activities = HashMap<UUID, TwinActivity>()
+
     private class Row(
         var traits: List<Double>,
         var summary: String? = null,
@@ -46,6 +49,8 @@ class InMemoryTwinRepository(
     private fun stateOf(userId: UUID): TwinState? = twins[userId]?.let {
         TwinState(it.traits, it.ready, it.version, levelFor(it.xp), it.xp, accuracy[userId]?.maxByOrNull { p -> p.week }?.accuracy)
     }
+
+    @Synchronized override fun activity(userId: UUID) = activities[userId] ?: TwinActivity.NONE
 
     @Synchronized override fun accuracyPoints(userId: UUID) = accuracy[userId].orEmpty().sortedBy { it.week }
 
