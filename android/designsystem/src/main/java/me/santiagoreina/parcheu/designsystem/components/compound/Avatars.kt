@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -90,6 +91,9 @@ fun displayInitials(serverInitials: String, name: String, fallback: String = "?"
  * ("Alguien"), de modo que ni la pantalla ni el lector revelan el nombre.
  *
  * [anonymousIcon] es el icono de persona (E1.2); si es nulo se dibuja una silueta propia.
+ * [initialsEndInset] corre el contenido a la izquierda para centrarlo en la parte visible cuando otro
+ * avatar tapa el borde derecho ([StackedAvatars]); [initialsSizeRatio] es el tamaño del texto respecto
+ * al círculo.
  */
 @Composable
 fun AvatarInitials(
@@ -99,7 +103,9 @@ fun AvatarInitials(
     size: Dp = AvatarSizes.List,
     anonymous: Boolean = false,
     anonymousIcon: Painter? = null,
-    anonymousDescription: String = ANONYMOUS_AVATAR_DESCRIPTION
+    anonymousDescription: String = ANONYMOUS_AVATAR_DESCRIPTION,
+    initialsEndInset: Dp = 0.dp,
+    initialsSizeRatio: Float = 0.38f
 ) {
     val colors = ParcheUTheme.colors
     if (anonymous) {
@@ -117,10 +123,13 @@ fun AvatarInitials(
                     painter = anonymousIcon,
                     contentDescription = null,
                     tint = colors.prt,
-                    modifier = Modifier.size(size * 0.55f)
+                    modifier = Modifier.padding(end = initialsEndInset).size(size * 0.55f)
                 )
             } else {
-                PersonSilhouette(colors.prt, Modifier.size(size * 0.55f))
+                PersonSilhouette(
+                    colors.prt,
+                    Modifier.padding(end = initialsEndInset).size(size * 0.55f)
+                )
             }
         }
     } else {
@@ -135,8 +144,9 @@ fun AvatarInitials(
         ) {
             Text(
                 text = initialsOf(name),
+                modifier = Modifier.padding(end = initialsEndInset),
                 style = ParcheUTheme.textStyles.initials.copy(
-                    fontSize = (size.value * 0.38f).coerceAtLeast(10f).sp,
+                    fontSize = (size.value * initialsSizeRatio).coerceAtLeast(10f).sp,
                     lineHeight = (size.value * 0.48f).coerceAtLeast(12f).sp,
                     fontWeight = FontWeight.SemiBold
                 ),
@@ -169,6 +179,9 @@ private fun PersonSilhouette(color: Color, modifier: Modifier) {
     }
 }
 
+/** Proporción del texto de las iniciales respecto al círculo en [StackedAvatars] (0,38 suelto). */
+private const val STACKED_INITIALS_RATIO = 0.31f
+
 /** Datos de un avatar dentro de [StackedAvatars]. */
 @Immutable
 data class AvatarSpec(val name: String, val affinity: Int?, val anonymous: Boolean = false)
@@ -191,20 +204,28 @@ fun StackedAvatars(
     val colors = ParcheUTheme.colors
     val visible = avatars.take(maxVisible)
     val extra = avatars.size - visible.size
-    val ring = Modifier.border(borderWidth, borderColor, CircleShape)
+    // El fondo opaco debajo de cada círculo evita que el relleno con alpha deje ver al de al lado.
+    val ring = Modifier
+        .border(borderWidth, borderColor, CircleShape)
+        .background(borderColor, CircleShape)
     Row(
         modifier = modifier.semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.spacedBy(-overlap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        visible.forEach {
+        visible.forEachIndexed { index, avatar ->
+            // El siguiente círculo tapa los últimos [overlap] dp: las iniciales se centran en la parte
+            // que queda a la vista y bajan un poco de tamaño para que no se corten ("VR", "AM").
+            val covered = index < visible.lastIndex || extra > 0
             AvatarInitials(
-                name = it.name,
-                affinity = it.affinity,
-                anonymous = it.anonymous,
+                name = avatar.name,
+                affinity = avatar.affinity,
+                anonymous = avatar.anonymous,
                 anonymousIcon = anonymousIcon,
                 size = size,
-                modifier = ring
+                modifier = ring,
+                initialsEndInset = if (covered) overlap else 0.dp,
+                initialsSizeRatio = STACKED_INITIALS_RATIO
             )
         }
         if (extra > 0) {
