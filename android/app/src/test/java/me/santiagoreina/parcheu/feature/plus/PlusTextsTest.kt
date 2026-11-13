@@ -72,5 +72,7 @@ class PlusTextsTest {
             SubscriptionStatus.Canceled,
             PlusTestData.entitlement(autoRenewing = false).status()
         )
+        // Sin plan base de Play y sin renovación: ParcheU+ concedido, no una suscripción cancelada.
+        assertEquals(SubscriptionStatus.Granted, PlusTestData.manualGrant.status())
     }
 }
