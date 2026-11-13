@@ -51,7 +51,7 @@ class HomeScreenTest {
     @Test
     fun freeQuotaShowsThreeOfFiveAndBellBadge() {
         show(HomeSamples.freeThreeOfFive)
-        composeRule.onNodeWithText("3 de 5").assertIsDisplayed()
+        composeRule.onNodeWithText("2 libres de 5").assertIsDisplayed()
         composeRule.onNodeWithText("Te quedan 2 · se renuevan el lunes").assertIsDisplayed()
         composeRule.onNodeWithTag(HomeTags.BELL_BADGE).assertIsDisplayed()
         composeRule.onNodeWithText("¿Qué más, Mari?").assertIsDisplayed()
