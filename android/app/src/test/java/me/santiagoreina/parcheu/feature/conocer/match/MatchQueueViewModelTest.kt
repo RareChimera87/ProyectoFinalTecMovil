@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.feature.conocer.match
 
 import app.cash.turbine.test
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.contract.MatchStatus
@@ -80,6 +81,64 @@ class MatchQueueViewModelTest {
             assertEquals(1, repository.cancelCalls)
             assertEquals(MatchQueueEffect.Close, awaitItem())
         }
+    }
+
+    @Test
+    fun resumingAfterTheXReentersTheQueue() = runTest {
+        // Red de seguridad de A1: si la F1 cancelada se restaurara igual, no se queda "Buscando…" sin fila.
+        val vm = viewModel()
+        vm.effects.test {
+            vm.onCancel()
+            assertEquals(MatchQueueEffect.Close, awaitItem())
+            assertEquals(1, repository.enqueued.size)
+
+            vm.onResumed()
+
+            assertEquals(2, repository.enqueued.size)
+            assertEquals(QueuePhase.Searching, vm.state.value.phase)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun resumingWithALiveSearchDoesNothing() {
+        val vm = viewModel()
+        val ticketCalls = repository.currentTicketCalls
+
+        vm.onResumed()
+
+        assertEquals(1, repository.enqueued.size)
+        assertEquals(ticketCalls, repository.currentTicketCalls)
+        assertEquals(0, repository.cancelCalls)
+    }
+
+    @Test
+    fun resumingWhileTheDeleteIsInFlightDoesNotReenter() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        repository.cancelGate = gate
+        val vm = viewModel()
+        vm.effects.test {
+            vm.onCancel()
+            vm.onResumed()
+            assertEquals(1, repository.enqueued.size)
+
+            gate.complete(Unit)
+
+            assertEquals(MatchQueueEffect.Close, awaitItem())
+            assertEquals(1, repository.enqueued.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun resumingWithoutLiveSearchOutsideSearchingDoesNothing() {
+        repository.enqueueResult = ApiResult.Failure(AppError.Network)
+        val vm = viewModel()
+
+        vm.onResumed()
+
+        assertEquals(1, repository.enqueued.size)
+        assertTrue(vm.state.value.phase is QueuePhase.Error)
     }
 
     @Test

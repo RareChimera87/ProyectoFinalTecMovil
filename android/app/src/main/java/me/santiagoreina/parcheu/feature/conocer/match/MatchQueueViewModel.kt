@@ -97,6 +97,7 @@ class MatchQueueViewModel(
     val effects: Flow<MatchQueueEffect> = _effects.receiveAsFlow()
 
     private var searchJob: Job? = null
+    private var cancelJob: Job? = null
     private var opened = false
     private var modesLoaded = loadActiveModes == null
 
@@ -124,6 +125,17 @@ class MatchQueueViewModel(
     fun onRetry() = search(cancelPrevious = false)
 
     /**
+     * F1 vuelve a primer plano. Red de seguridad: si se muestra "Buscando…" pero no hay búsqueda viva (la X
+     * canceló la fila y la pantalla se restauró igual), se vuelve a entrar; si no, no hace nada. Con la
+     * búsqueda viva (cambio de pestaña sin cancelar) o con el DELETE de la X en curso, no toca nada.
+     */
+    fun onResumed() {
+        if (_state.value.phase != QueuePhase.Searching) return
+        if (searchJob?.isActive == true || cancelJob?.isActive == true) return
+        search(cancelPrevious = false)
+    }
+
+    /**
      * "Cancelar búsqueda" y la X: con búsqueda en curso, `DELETE /v1/match/queue` y vuelve a Inicio. Sin fila
      * viva (match encontrado o ya usado, vencido, error) no hay nada que cancelar: solo se sale, para que la X
      * nunca deje al usuario atrapado en F1 si el DELETE falla.
@@ -134,7 +146,7 @@ class MatchQueueViewModel(
             viewModelScope.launch { _effects.send(MatchQueueEffect.Close) }
             return
         }
-        viewModelScope.launch {
+        cancelJob = viewModelScope.launch {
             when (val result = repository.cancel()) {
                 is ApiResult.Success -> _effects.send(MatchQueueEffect.Close)
                 is ApiResult.Failure -> _state.update {
