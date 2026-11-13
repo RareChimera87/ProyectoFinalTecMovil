@@ -44,6 +44,8 @@ import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
 import me.santiagoreina.parcheu.designsystem.components.compound.LoadingDots
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 /** Etiquetas de prueba de B0. */
@@ -158,13 +160,21 @@ private fun FormContent(
             verticalArrangement = Arrangement.spacedBy(spacing.blockGap)
         ) {
             if (!state.edit) {
-                Spacer(Modifier.height(24.dp))
-                Text(
-                    text = "Tu perfil",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = colors.tx,
-                    modifier = Modifier.semantics { heading() }
-                )
+                Spacer(Modifier.height(16.dp))
+                // Dirección A: titular en Sora 800 28 y tu P al lado, mirando lo que vas a llenar.
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Tu perfil",
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = colors.tx,
+                        modifier = Modifier.weight(1f).semantics { heading() }
+                    )
+                    TwinMascot(size = TwinMascotSize.M)
+                }
                 Text(
                     text = "En un match al azar la otra persona solo ve tu rango de edad, " +
                         "tu universidad y tus intereses. Nunca tu nombre ni tu fecha exacta.",
