@@ -54,6 +54,10 @@ require(releaseVersionCode in 1..2_100_000_000) {
     "parcheu.versionCode=$releaseVersionCode fuera del rango que acepta Play (1..2100000000)"
 }
 
+// versionCode de los builds debug locales sin -Pparcheu.versionCode (ver androidComponents más abajo): por encima de
+// cualquier APK de demo o release (scripts/version-code.sh da 100 + 10 × ejecución: se necesitarían ~80 000 ejecuciones).
+val localDebugVersionCode = 900_000
+
 // R8 en release (fix/crash-r8-release). Solo para depurar o demos: -Pparcheu.release.minify=false construye el
 // release firmado sin minificar. Por defecto true; no lo usan android-ci ni android-release.
 val releaseMinify =
@@ -310,6 +314,21 @@ androidComponents {
     if (hasLocalUploadKey) {
         onVariants(selector().withName("prodDebug")) { variant ->
             variant.signingConfig.setConfig(android.signingConfigs.getByName("uploadLocal"))
+        }
+    }
+    // Builds debug locales (Run de Android Studio, assemble*Debug sin -Pparcheu.versionCode): versionCode alto fijo para
+    // instalarse siempre encima de cualquier APK de demo o release (23, 30...; mismo paquete y firma) sin
+    // INSTALL_FAILED_VERSION_DOWNGRADE. Con -Pparcheu.versionCode explícito se respeta ese valor; los release no cambian.
+    // El versionName lleva "-local" salvo que se pase -Pparcheu.versionName.
+    val versionCodeExplicito = providers.gradleProperty("parcheu.versionCode").isPresent
+    val versionNameExplicito = providers.gradleProperty("parcheu.versionName").isPresent
+    onVariants(selector().withBuildType("debug")) { variant ->
+        val sufijoFlavor = if (variant.flavorName == "dev") "-dev" else ""
+        variant.outputs.forEach { output ->
+            if (!versionCodeExplicito) output.versionCode.set(localDebugVersionCode)
+            if (!versionNameExplicito) {
+                output.versionName.set("$releaseVersionName$sufijoFlavor-local")
+            }
         }
     }
     onVariants(selector().withName("prodRelease")) { variant ->
