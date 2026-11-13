@@ -5,8 +5,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
+import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.Usage
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundScreen
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundUiState
@@ -57,7 +59,10 @@ class MatchScreenshotTest(private val dark: Boolean) {
     @Test
     fun f1Searching() = capture("f1_buscando") {
         MatchQueueScreen(
-            state = MatchQueueUiState(mode = Mode.AMISTAD),
+            state = MatchQueueUiState(
+                mode = Mode.AMISTAD,
+                dailyQuota = Usage(used = 0, limit = 1, resetsAt = Instant.fromEpochSeconds(0))
+            ),
             onModeSelected = {},
             onCancel = {},
             onRetry = {},

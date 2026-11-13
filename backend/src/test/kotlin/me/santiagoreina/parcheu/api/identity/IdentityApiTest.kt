@@ -18,8 +18,12 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
+import me.santiagoreina.parcheu.api.FIXED_CLOCK
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
+import me.santiagoreina.parcheu.api.platform.auth.FirebaseUser
+import me.santiagoreina.parcheu.api.quota.InMemoryDevEntitlementService
+import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
 import me.santiagoreina.parcheu.api.startApp
 import me.santiagoreina.parcheu.api.testContainer
 import me.santiagoreina.parcheu.contract.AcceptTerms
@@ -34,6 +38,8 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.OnboardingStep
 import me.santiagoreina.parcheu.contract.SessionDto
 import me.santiagoreina.parcheu.contract.UpdateMe
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 
@@ -87,6 +93,25 @@ class IdentityApiTest : FunSpec({
             client.session("lucia")
             repo.testUids shouldBe setOf("e2e-ana")
         }
+    }
+
+    test("plus de /v1/session y /v1/me sale del entitlement real: false sin él, true con él y false al vencer") {
+        val repo = InMemoryIdentityRepository().also { it.seedAcceptedUser("ana", TEST_LEGAL_VERSION) }
+        val entitlements = InMemoryDevEntitlementService()
+        val quota = inMemoryQuotaModule(FIXED_CLOCK, entitlements = entitlements)
+        testApplication {
+            val client = startApp(testContainer(repo = repo, quota = quota))
+            client.session("ana").me.plus shouldBe false
+            client.get("/v1/me") { auth("ana") }.body<MeDto>().plus shouldBe false
+
+            entitlements.grantPlus(repo.user("ana").id, days = 30, now = FIXED_CLOCK.instant())
+            client.session("ana").me.plus shouldBe true
+            client.get("/v1/me") { auth("ana") }.body<MeDto>().plus shouldBe true
+        }
+        // Con un reloj 31 días después la concesión ya venció.
+        val later = Clock.offset(FIXED_CLOCK, Duration.ofDays(31))
+        val vencido = IdentityService(repo, later, TEST_LEGAL_VERSION, entitlements)
+        vencido.session(FirebaseUser("ana", null, null)).me.plus shouldBe false
     }
 
     test("la sesión sin token responde 401") {

@@ -34,8 +34,12 @@ de la entidad (deduplicación).
 
 ## Contrato con el backend (E0.3)
 
-Cloud Run `api` (args `serve`) y los jobs `migrate`, `seed-demo` y `purge-demo` usan la **misma imagen**
-con distinto argumento y la identidad `sa-api`. Terraform crea todo con una imagen de ejemplo de Google e
+Cloud Run `api` (args `serve`) y los jobs `migrate`, `seed-demo`, `purge-demo` y `grant-plus` usan la **misma imagen**
+con distinto argumento y la identidad `sa-api`. `grant-plus` (Plus manual acotado, enmienda de ADR-0013) tiene como
+argumento por defecto solo `grant-plus`, que falla sin `--email` o `--uid`: se ejecuta con
+`gcloud run jobs execute grant-plus --args=grant-plus,--email=<correo>,--days=7` (exige `run.jobs.runWithOverrides`;
+comandos y revocación en [operacion.md](../../docs/operacion.md#parcheu-manual-para-una-demo-job-grant-plus)).
+`scripts/check-plan.sh` exige los cuatro jobs con su argumento y cuenta 2 conexiones por job en el presupuesto de Cloud SQL. Terraform crea todo con una imagen de ejemplo de Google e
 ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de entorno que reciben:
 
 | Variable | Valor |
@@ -51,7 +55,8 @@ ignora los cambios de imagen: el deploy de CI (E0.6) la reemplaza. Variables de 
 | `SERVICE_URL` | `https://api-<número de proyecto>.us-central1.run.app`: URL determinista de Cloud Run del servicio `api` (`local.service_url`). Es el destino de las tareas (`SERVICE_URL + /internal/tasks/<tarea>`, `CloudTasksQueue`) y de los trabajos de Scheduler; sin ella la API arranca pero no encola (`UnconfiguredTaskQueue`). Ver "SERVICE_URL" abajo |
 | `AI_DAILY_BUDGET_USD`, `AI_USER_DAILY_BUDGET_USD` | `var.ai_daily_budget_usd` y `var.ai_user_daily_budget_usd` (texto decimal con punto, > 0; `AiConfig.kt` los lee con `toBigDecimalOrNull`): tope diario de IA total y por persona en USD. Por defecto `3` y `0.75` (dev); prod del MVP, `1` y `0.25` |
 | `DEMO_USERS_ENABLED` | `var.demo_users_enabled`: `true` en dev; en prod `false` salvo durante la prueba cerrada (`-var demo_users_enabled=true`, ADR-0027, E4.9) |
-| `SECRET_HMAC_ANON_KEY`, `SECRET_PLAY_SA` | nombre del secreto; la API lee la versión `latest` con la API de Secret Manager (no se montan, para que Cloud Run no falle mientras el secreto no tenga valor) |
+| `AI_PROVIDER` | `var.ai_provider`: `gemini` (por defecto, Vertex), `claude` (Claude en Vertex) o `anthropic` (API directa de Anthropic con la clave de `SECRET_ANTHROPIC_API_KEY`; ADR-0008, enmienda del 12 nov 2026). En prod se cambia con `terraform apply -var ai_provider=anthropic` y se vuelve con `-var ai_provider=gemini` ([operacion.md](../../docs/operacion.md#cambiar-de-proveedor-de-ia)). `scripts/check-plan.sh` exige uno de los tres |
+| `SECRET_HMAC_ANON_KEY`, `SECRET_PLAY_SA`, `SECRET_ANTHROPIC_API_KEY` | nombre del secreto; la API lee la versión `latest` con la API de Secret Manager en el primer uso (no se montan, para que Cloud Run no falle mientras el secreto no tenga valor). `anthropic-api-key` solo se lee con `AI_PROVIDER=anthropic`; su valor se carga con `ANTHROPIC_KEY_FILE=<ruta> scripts/cargar-secretos.sh <env>` |
 | `PLAY_SERVICE_ACCOUNT` | solo prod (`play_service_account_enabled`): correo de `sa-play`, que la API suplanta para la API de Google Play Developer (E7.1); sin ella usa la llave de `SECRET_PLAY_SA` |
 
 Trabajos de Cloud Scheduler (hora de Bogotá) → `POST <SERVICE_URL>/internal/jobs/<nombre>` con OIDC de `sa-tasks`
@@ -85,7 +90,7 @@ hacer `SET ROLE` al usuario IAM (y `CREATEDB`), y fallan. Sin estos permisos el 
 
 | Cuenta | Dónde | Roles |
 |---|---|---|
-| `sa-api` | bootstrap (desde fix/wif-deployer-dev; la plataforma la lee con `data`) | `cloudsql.client`, `cloudsql.instanceUser`, `aiplatform.user`, `cloudtasks.enqueuer`, `datastore.user`, `firebaseauth.admin`, `firebasecloudmessaging.admin`, `logging.logWriter`, `monitoring.metricWriter`, `cloudtrace.agent` (bootstrap); `secretAccessor` solo sobre sus dos secretos (platform); `serviceAccountUser` sobre `sa-tasks` (bootstrap) |
+| `sa-api` | bootstrap (desde fix/wif-deployer-dev; la plataforma la lee con `data`) | `cloudsql.client`, `cloudsql.instanceUser`, `aiplatform.user`, `cloudtasks.enqueuer`, `datastore.user`, `firebaseauth.admin`, `firebasecloudmessaging.admin`, `logging.logWriter`, `monitoring.metricWriter`, `cloudtrace.agent` (bootstrap); `secretAccessor` solo sobre sus tres secretos (platform: `hmac-anon-key`, `play-sa`, `anthropic-api-key`); `serviceAccountUser` sobre `sa-tasks` (bootstrap) |
 | `sa-tasks` | bootstrap | `run.invoker` sobre `api` (platform) |
 | `sa-play` | platform (solo prod, `play_service_account_enabled`) | Ninguno de GCP: sus permisos se dan en Play Console (verificar compras para la API, E7.1; publicar para CI, E10.2). `sa-api` tiene `serviceAccountTokenCreator` sobre ella para suplantarla sin llaves. GitHub la suplanta por WIF (`play.tf`, `attribute.env_ref`): environment `play` desde `dev`, `main` o un tag `v*`; `play-alpha` desde `main` o un tag `v*` |
 | `sa-deployer` | bootstrap | `run.admin`, `artifactregistry.writer`, `firebasehosting.admin`, `firebaserules.admin`, `datastore.indexAdmin`, `serviceusage.serviceUsageConsumer`; `serviceAccountUser` sobre `sa-api`; en dev, `serviceAccountTokenCreator` sobre sí misma (smoke e2e). **Quién la usa:** en dev solo jobs de la rama `dev` (`attribute.ref/refs/heads/dev`; un PR no puede); en prod solo un job del environment `production` que corra sobre un tag `v*` (`attribute.env_ref/production@tag`) |

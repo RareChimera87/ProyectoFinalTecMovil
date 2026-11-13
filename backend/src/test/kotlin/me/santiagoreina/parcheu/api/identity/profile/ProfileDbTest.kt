@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import me.santiagoreina.parcheu.api.NO_PLUS
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
@@ -65,7 +66,7 @@ class ProfileDbTest : FunSpec({
             TestDatabase.withCleanDatabase { ds ->
                 runMigrations(ds)
                 val db = connectExposed(ds)
-                val identity = IdentityService(ExposedIdentityRepository(db), clock, TEST_LEGAL_VERSION)
+                val identity = IdentityService(ExposedIdentityRepository(db), clock, TEST_LEGAL_VERSION, NO_PLUS)
                 val profile = ProfileService(identity, ExposedProfileRepository(db), clock)
                 val container = AppContainer(
                     testConfig(), clock, FakeTokenVerifier(), FakeOidcVerifier("sa-tasks@parcheu-test.iam.gserviceaccount.com", TEST_OIDC_TOKEN),

@@ -112,7 +112,7 @@ class ModesScreenshotTest(private val dark: Boolean) {
     @Test
     fun b5() = capture("b5") {
         TwinReadyScreen(
-            TwinReadyUiState(listOf(Mode.AMISTAD, Mode.PAREJA, Mode.ESTUDIO)),
+            TwinReadyUiState(listOf(Mode.AMISTAD, Mode.PAREJA, Mode.ESTUDIO), twinLevel = 1),
             onViewParche = {},
             onGoHome = {}
         )

@@ -11,6 +11,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.NO_PLUS
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.IdentityService
@@ -65,7 +66,7 @@ class GraphApiTest : FunSpec({
         }
 
         fun container(): AppContainer {
-            val identity = IdentityService(identityRepo, FIXED_CLOCK, TEST_LEGAL_VERSION)
+            val identity = IdentityService(identityRepo, FIXED_CLOCK, TEST_LEGAL_VERSION, NO_PLUS)
             val profile = ProfileService(identity, InMemoryProfileRepository(identityRepo), FIXED_CLOCK)
             val graph = inMemoryGraphModule(FIXED_CLOCK, graphRepo)
             val quota = inMemoryQuotaModule(FIXED_CLOCK)

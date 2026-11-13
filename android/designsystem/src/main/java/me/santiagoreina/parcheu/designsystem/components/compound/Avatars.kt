@@ -29,8 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.santiagoreina.parcheu.designsystem.theme.AFFINITY_ALPHA_UNMEASURED
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
-import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
+import me.santiagoreina.parcheu.designsystem.theme.affinityAlphaOrNeutral
 import me.santiagoreina.parcheu.designsystem.theme.avatarColors
 
 /** Descripción del avatar anónimo: no revela quién es (docs/mockups-inventario.md, AvatarInitials). */
@@ -49,14 +50,42 @@ object AvatarSizes {
     val Hero: Dp = 72.dp
 }
 
-/** Hasta dos iniciales en mayúsculas: primera letra de las dos primeras palabras. Vacío si no hay nombre. */
-fun initialsOf(name: String): String =
-    name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
-        .joinToString("") { it.first().uppercase() }
+/**
+ * Hasta dos iniciales en mayúsculas: primera letra de las dos primeras palabras que empiezan por letra o
+ * dígito. Se ignoran las que empiezan por puntuación o emoji, de modo que "Valentina (demo)" da "V" y no
+ * "V(". Vacío si no queda ninguna palabra.
+ */
+fun initialsOf(name: String): String = name.trim().split(Regex("\\s+"))
+    .filter { it.isNotEmpty() && Character.isLetterOrDigit(it.codePointAt(0)) }
+    .take(2)
+    .joinToString("") { String(Character.toChars(it.codePointAt(0))).uppercase() }
 
 /**
- * Avatar de iniciales. El relleno es violeta con el alpha de [affinityAlpha] (50 o menos da .22; 95 o más
- * da 1) y el color del texto sigue ADR-0030. Con [anonymous] se dibuja la variante anónima: s2, borde
+ * Iniciales para mostrar a partir de las que manda el servidor: conserva solo letras y dígitos (el servidor
+ * toma el primer carácter de cada palabra y con "Valentina (demo)" manda "V("). Si el servidor no mandó
+ * nada se calculan de [name] con [initialsOf]; si mandó solo signos (p. ej. "?" de una persona oculta) o
+ * no hay nombre, se devuelve [fallback].
+ */
+fun displayInitials(serverInitials: String, name: String, fallback: String = "?"): String {
+    val clean = buildString {
+        var i = 0
+        while (i < serverInitials.length) {
+            val cp = serverInitials.codePointAt(i)
+            if (Character.isLetterOrDigit(cp)) appendCodePoint(cp)
+            i += Character.charCount(cp)
+        }
+    }.uppercase()
+    return when {
+        clean.isNotEmpty() -> clean
+        serverInitials.isBlank() -> initialsOf(name).ifEmpty { fallback }
+        else -> fallback
+    }
+}
+
+/**
+ * Avatar de iniciales. El relleno es violeta con el alpha de [affinityAlphaOrNeutral] (50 o menos da .22;
+ * 95 o más da 1; `null` = sin medir, alpha neutro [AFFINITY_ALPHA_UNMEASURED]) y el color del texto sigue
+ * ADR-0030. Con [anonymous] se dibuja la variante anónima: s2, borde
  * discontinuo prt, icono de persona, **sin iniciales** y con la descripción [anonymousDescription]
  * ("Alguien"), de modo que ni la pantalla ni el lector revelan el nombre.
  *
@@ -65,7 +94,7 @@ fun initialsOf(name: String): String =
 @Composable
 fun AvatarInitials(
     name: String,
-    affinity: Int,
+    affinity: Int?,
     modifier: Modifier = Modifier,
     size: Dp = AvatarSizes.List,
     anonymous: Boolean = false,
@@ -95,7 +124,7 @@ fun AvatarInitials(
             }
         }
     } else {
-        val palette = avatarColors(affinityAlpha(affinity), colors.isDark)
+        val palette = avatarColors(affinityAlphaOrNeutral(affinity), colors.isDark)
         Box(
             modifier = modifier
                 .size(size)
@@ -142,7 +171,7 @@ private fun PersonSilhouette(color: Color, modifier: Modifier) {
 
 /** Datos de un avatar dentro de [StackedAvatars]. */
 @Immutable
-data class AvatarSpec(val name: String, val affinity: Int, val anonymous: Boolean = false)
+data class AvatarSpec(val name: String, val affinity: Int?, val anonymous: Boolean = false)
 
 /**
  * Avatares apilados con solape (-10dp; -12dp en E3) y borde de 2-3dp del color de la superficie que hay

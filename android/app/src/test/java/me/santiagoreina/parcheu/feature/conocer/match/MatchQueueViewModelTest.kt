@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.feature.conocer.match
 
 import app.cash.turbine.test
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.contract.MatchStatus
@@ -9,6 +10,7 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.TicketDto
 import me.santiagoreina.parcheu.contract.TicketStatus
+import me.santiagoreina.parcheu.contract.Usage
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
@@ -79,6 +81,64 @@ class MatchQueueViewModelTest {
             assertEquals(1, repository.cancelCalls)
             assertEquals(MatchQueueEffect.Close, awaitItem())
         }
+    }
+
+    @Test
+    fun resumingAfterTheXReentersTheQueue() = runTest {
+        // Red de seguridad de A1: si la F1 cancelada se restaurara igual, no se queda "Buscando…" sin fila.
+        val vm = viewModel()
+        vm.effects.test {
+            vm.onCancel()
+            assertEquals(MatchQueueEffect.Close, awaitItem())
+            assertEquals(1, repository.enqueued.size)
+
+            vm.onResumed()
+
+            assertEquals(2, repository.enqueued.size)
+            assertEquals(QueuePhase.Searching, vm.state.value.phase)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun resumingWithALiveSearchDoesNothing() {
+        val vm = viewModel()
+        val ticketCalls = repository.currentTicketCalls
+
+        vm.onResumed()
+
+        assertEquals(1, repository.enqueued.size)
+        assertEquals(ticketCalls, repository.currentTicketCalls)
+        assertEquals(0, repository.cancelCalls)
+    }
+
+    @Test
+    fun resumingWhileTheDeleteIsInFlightDoesNotReenter() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        repository.cancelGate = gate
+        val vm = viewModel()
+        vm.effects.test {
+            vm.onCancel()
+            vm.onResumed()
+            assertEquals(1, repository.enqueued.size)
+
+            gate.complete(Unit)
+
+            assertEquals(MatchQueueEffect.Close, awaitItem())
+            assertEquals(1, repository.enqueued.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun resumingWithoutLiveSearchOutsideSearchingDoesNothing() {
+        repository.enqueueResult = ApiResult.Failure(AppError.Network)
+        val vm = viewModel()
+
+        vm.onResumed()
+
+        assertEquals(1, repository.enqueued.size)
+        assertTrue(vm.state.value.phase is QueuePhase.Error)
     }
 
     @Test
@@ -330,5 +390,93 @@ class MatchQueueViewModelTest {
             assertEquals(MatchQueueEffect.OpenMatch("m5"), awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    /** Fallo de 0.2.2: con el match del día ya resuelto, F1 decía "¡Encontramos a alguien!" y abría F2. */
+    @Test
+    fun resolvedMatchOnEnqueueShowsAlreadyUsedAndDoesNotOpenF2() = runTest {
+        repository.enqueueResult = ApiResult.Success(matchedTicket("m1"))
+        repository.matchResults = mutableListOf(
+            ApiResult.Success(
+                testMatch(status = MatchStatus.SIMULATION, myChoice = MatchChoice.SIMULATION)
+            )
+        )
+        val vm = viewModel()
+        vm.effects.test {
+            assertEquals(QueuePhase.AlreadyUsed("m1"), vm.state.value.phase)
+            // El listener repite el ticket: sigue "ya usado" y no abre F2.
+            repository.tickets.emit(matchedTicket("m1"))
+            expectNoEvents()
+            assertEquals(QueuePhase.AlreadyUsed("m1"), vm.state.value.phase)
+            // "Ver match" sí abre F2 a pedido.
+            vm.onOpenMatchAgain()
+            assertEquals(MatchQueueEffect.OpenMatch("m1"), awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun closeWithoutLiveSearchLeavesWithoutDelete() = runTest {
+        repository.enqueueResult = ApiResult.Success(matchedTicket("m1"))
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
+        repository.cancelResult = ApiResult.Failure(AppError.Network)
+        val vm = viewModel()
+        vm.effects.test {
+            vm.onCancel()
+            assertEquals(MatchQueueEffect.Close, awaitItem())
+            assertEquals(0, repository.cancelCalls)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun closeFromErrorLeaves() = runTest {
+        repository.enqueueResult = ApiResult.Failure(AppError.Network)
+        val vm = viewModel()
+        vm.effects.test {
+            assertTrue(vm.state.value.phase is QueuePhase.Error)
+            vm.onCancel()
+            assertEquals(MatchQueueEffect.Close, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private val resetsAt = Instant.fromEpochSeconds(0)
+
+    @Test
+    fun loadsTheRealDailyQuotaWithoutBlockingTheSearch() {
+        val quota = Usage(used = 1, limit = 3, resetsAt = resetsAt)
+        val vm = MatchQueueViewModel(Mode.AMISTAD, repository, loadDailyQuota = { quota })
+
+        assertEquals(quota, vm.state.value.dailyQuota)
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
+    }
+
+    @Test
+    fun withoutQuotaDataTheStateKeepsNull() {
+        val vm = MatchQueueViewModel(Mode.AMISTAD, repository, loadDailyQuota = { null })
+
+        assertNull(vm.state.value.dailyQuota)
+        assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
+    }
+
+    @Test
+    fun todayCountFollowsTheRealLimit() {
+        assertEquals("1 de 1", MatchStrings.todayCount(Usage(0, 1, resetsAt)))
+        assertEquals("2 de 3", MatchStrings.todayCount(Usage(1, 3, resetsAt)))
+        assertEquals(
+            MatchStrings.TODAY_UNLIMITED,
+            MatchStrings.todayCount(Usage(4, null, resetsAt))
+        )
+        // F1 en "ya usado": el backend ya cobró el match, `used` lo incluye.
+        assertEquals(
+            "1 de 1",
+            MatchStrings.todayCount(Usage(1, 1, resetsAt), alreadyCounted = true)
+        )
+        assertEquals(
+            "2 de 3",
+            MatchStrings.todayCount(Usage(2, 3, resetsAt), alreadyCounted = true)
+        )
     }
 }

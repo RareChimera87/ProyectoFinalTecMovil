@@ -58,6 +58,7 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
 import me.santiagoreina.parcheu.api.platform.config.Env
 import me.santiagoreina.parcheu.contract.ContractJson
+import me.santiagoreina.parcheu.api.quota.EntitlementService
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -80,6 +81,9 @@ fun testConfig() = AppConfig(
 )
 
 const val TEST_LEGAL_VERSION = "2026-10-29"
+
+/** Nadie tiene ParcheU+: para armar un `IdentityService` en pruebas que no tocan el plan. */
+val NO_PLUS = EntitlementService { _, _ -> false }
 
 /**
  * Contenedor con Fakes. El usuario `ana` ya existe con términos aceptados, así que las pruebas de
@@ -124,7 +128,7 @@ fun testContainer(
     // Último parámetro: los tests de E8.3 lo pasan como lambda final.
     account: (IdentityService) -> AccountModule = { identity -> inMemoryAccountModule(identity, graph, twin, clock) },
 ): AppContainer {
-    val identity = IdentityService(repo, clock, legalTextVersion)
+    val identity = IdentityService(repo, clock, legalTextVersion, quota.entitlements)
     val profile = ProfileService(identity, InMemoryProfileRepository(repo), clock)
     val accountModule = account(identity)
     return AppContainer(

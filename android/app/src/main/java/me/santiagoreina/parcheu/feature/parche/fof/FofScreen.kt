@@ -47,6 +47,7 @@ import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
 import me.santiagoreina.parcheu.designsystem.components.compound.LoadingDots
 import me.santiagoreina.parcheu.designsystem.components.compound.LockedOverlay
 import me.santiagoreina.parcheu.designsystem.components.compound.LockedPlaceholder
+import me.santiagoreina.parcheu.designsystem.components.compound.initialsOf
 import me.santiagoreina.parcheu.designsystem.graph.GraphFof
 import me.santiagoreina.parcheu.designsystem.graph.PU_GRAPH_DEFAULT_SIZE
 import me.santiagoreina.parcheu.designsystem.graph.PuGraph
@@ -86,7 +87,7 @@ fun FofCandidate.toGraphFof(): GraphFof = GraphFof(
     id = anonId,
     parentId = viaId,
     name = if (isAnonymous) ANON_LABEL else label,
-    initials = if (isAnonymous) "A" else label.firstOrNull()?.uppercase() ?: "A",
+    initials = if (isAnonymous) "A" else initialsOf(label).ifEmpty { "A" },
     affinity = estimatedAffinity,
     anonymous = isAnonymous
 )

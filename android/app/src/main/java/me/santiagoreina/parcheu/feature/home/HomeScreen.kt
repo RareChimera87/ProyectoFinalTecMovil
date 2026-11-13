@@ -439,7 +439,7 @@ private fun ReadyRow(item: SimulationSummary, onOpen: (SimulationSummary) -> Uni
     ) {
         AvatarInitials(
             name = item.other.label,
-            affinity = item.score ?: 50,
+            affinity = item.score,
             size = AvatarSizes.Md,
             anonymous = item.other.id == null
         )
@@ -504,7 +504,7 @@ private fun SuggestionCard(
     ) {
         AvatarInitials(
             name = suggestion.other.label,
-            affinity = suggestion.estimatedAffinity ?: 50,
+            affinity = suggestion.estimatedAffinity,
             size = AvatarSizes.List
         )
         Text(

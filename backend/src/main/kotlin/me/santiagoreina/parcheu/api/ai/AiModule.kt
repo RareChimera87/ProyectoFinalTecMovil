@@ -19,6 +19,7 @@ object AiModule {
     fun createClient(config: AiConfig): LlmClient = when (config.provider) {
         AiProvider.GEMINI -> GeminiVertexClient(requireNotNull(config.vertexProject), config.vertexLocation, config.geminiThinkingLevel)
         AiProvider.CLAUDE -> ClaudeVertexClient(requireNotNull(config.vertexProject), config.vertexLocation)
+        AiProvider.ANTHROPIC -> ClaudeApiClient(requireNotNull(config.anthropicApiKey))
         AiProvider.FAKE -> FakeLlmClient()
     }
 

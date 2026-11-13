@@ -9,6 +9,7 @@ import me.santiagoreina.parcheu.api.platform.errors.TermsRequired
 import me.santiagoreina.parcheu.api.platform.errors.Unauthenticated
 import me.santiagoreina.parcheu.api.platform.errors.Underage
 import me.santiagoreina.parcheu.api.platform.errors.ValidationFailed
+import me.santiagoreina.parcheu.api.quota.EntitlementService
 import me.santiagoreina.parcheu.contract.AcceptTerms
 import me.santiagoreina.parcheu.contract.ConsentChange
 import me.santiagoreina.parcheu.contract.ConsentKind
@@ -29,11 +30,14 @@ import java.time.Instant
  *
  * [legalTextVersion] es `LEGAL_TEXT_VERSION`: el texto vigente de Términos y Política. Un usuario
  * está al día solo si la última fila de TERMS y de PRIVACY está concedida con esa versión.
+ *
+ * `MeDto.plus` sale de [entitlements], la misma fuente de ParcheU+ que usan cuotas y billing (E7.1).
  */
 class IdentityService(
     internal val repo: IdentityRepository,
     internal val clock: Clock,
     val legalTextVersion: String,
+    private val entitlements: EntitlementService,
 ) {
     /** Alta o login idempotente por `firebase_uid`. No exige términos: es la puerta de entrada. */
     suspend fun session(firebase: FirebaseUser): SessionDto {
@@ -183,8 +187,7 @@ class IdentityService(
         parejaConfirmed = user.parejaConfirmedAt != null,
         visibility = user.visibility,
         modes = repo.modes(user.id),
-        // El plan Plus llega con la facturación (E7.x); hasta entonces nadie lo tiene.
-        plus = false,
+        plus = entitlements.isPlus(user.id, clock.instant()),
         isDemo = user.isDemo,
         suspendedUntil = user.suspendedUntil?.toKotlin(),
         createdAt = user.createdAt.toKotlin(),
