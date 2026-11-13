@@ -8,7 +8,7 @@ import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
 import javax.sql.DataSource
 
-/** Conexiones de los jobs (`migrate`, `seed-demo`, `purge-demo`): trabajan en serie, con dos sobra. */
+/** Conexiones de los jobs (`migrate`, `seed-demo`, `purge-demo`, `grant-plus`): trabajan en serie, con dos sobra. */
 const val JOB_POOL_SIZE = 2
 
 /** Conexiones que el pool mantiene abiertas sin uso: pocas, para no acaparar el límite de Cloud SQL (db-f1-micro). */
