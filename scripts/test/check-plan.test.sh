@@ -59,6 +59,16 @@ expect fail "secreto con secret_data" "$ROOT/scripts/check-plan.sh" \
   "$(add plan-dev.json '{"address":"x","type":"google_secret_manager_secret_version","name":"x","values":{"secret_data":"no"}}')"
 expect fail "falta el secreto play-sa" "$ROOT/scripts/check-plan.sh" \
   "$(drop plan-dev.json '.type=="google_secret_manager_secret" and .values.secret_id=="play-sa"')"
+expect fail "falta el secreto anthropic-api-key" "$ROOT/scripts/check-plan.sh" \
+  "$(drop plan-prod.json '.type=="google_secret_manager_secret" and .values.secret_id=="anthropic-api-key"')"
+expect ok   "prod con AI_PROVIDER=anthropic" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(if .name=="AI_PROVIDER" then .value="anthropic" else . end) else . end')"
+expect fail "AI_PROVIDER=fake en la api" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(if .name=="AI_PROVIDER" then .value="fake" else . end) else . end')"
+expect fail "la api sin AI_PROVIDER" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(select(.name!="AI_PROVIDER")) else . end')"
+expect fail "la api sin SECRET_ANTHROPIC_API_KEY" "$ROOT/scripts/check-plan.sh" \
+  "$(mutate plan-prod.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].containers[0].env |= map(select(.name!="SECRET_ANTHROPIC_API_KEY")) else . end')"
 expect fail "dev con min_instance_count=1" "$ROOT/scripts/check-plan.sh" \
   "$(mutate plan-dev.json 'if .type=="google_cloud_run_v2_service" then .values.template[0].scaling[0].min_instance_count=1 else . end')"
 expect fail "prod con máximo 10" "$ROOT/scripts/check-plan.sh" \
