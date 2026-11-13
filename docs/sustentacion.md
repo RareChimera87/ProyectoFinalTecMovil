@@ -43,19 +43,27 @@ Hay dos entornos posibles y la recomendación es usar los dos con funciones dist
 | ParcheU+ | Sí: `grant-plus` existe en dev | No: en prod no existe `/internal/dev/grant-plus` y no hay compra posible sin la app en Play |
 | Qué muestra | Todo el flujo, incluida F8 | Evidencia de producción real: health, Hosting con términos y privacidad, login |
 
-**Recomendación:** demo principal en A, porque enseña el producto completo; B como evidencia de que existe un
-despliegue real (`curl https://api-n3yxvjziqq-uc.a.run.app/v1/health`, <https://parcheu-prod.web.app> con las páginas legales y un
-inicio de sesión desde el APK). No se promete ParcheU+ ni el flujo de pago en B. Prod corre el MVP de costo mínimo:
-Cloud Run con mínimo 0 instancias, `DEMO_USERS_ENABLED=false` y tope de IA de 1 USD/día en total y 0,25 USD/día por
-persona.
+**Recomendación (plan decidido el 12 nov):** demo principal en B (prod) con los perfiles de demostración encendidos, un
+teléfono y el emulador. A (homeserver) queda como respaldo si prod falla en la sala. En B se muestra el despliegue real
+(`curl https://api-n3yxvjziqq-uc.a.run.app/v1/health`, <https://parcheu-prod.web.app> con las páginas legales y un
+inicio de sesión desde el APK). ParcheU+ no se muestra ni se promete, y tampoco el flujo de pago. Para la demo, prod
+tiene `DEMO_USERS_ENABLED=true` y un tope de IA temporal de 5 USD/día en total y 1,5 USD/día por persona; el costo
+mínimo (1 USD/día y 0,25 USD/día por persona, `DEMO_USERS_ENABLED=false`) vuelve con los pasos de
+[pendientes-humanos.md](pendientes-humanos.md#después-de-la-demo-pendiente) tras la sustentación.
 
 **Preparación la víspera (entorno B):**
 
-- [ ] Dos cuentas reales, conectadas entre sí por QR, con onboarding y gemelo listos. Simular exige una arista
-      `CONNECTED`; con una sola cuenta no hay demo, y en prod no hay usuarios demo que la reemplacen.
+- [ ] Dos cuentas reales, una en el teléfono y otra en el emulador, conectadas entre sí por QR, con onboarding y gemelo
+      listos. Simular exige una arista `CONNECTED`; con una sola cuenta no hay demo.
+- [ ] Volver a ejecutar `seed-demo` el día de la demo, antes de empezar:
+      `gcloud run jobs execute seed-demo --region us-central1 --project parcheu-prod --wait`. Un demo da como máximo un
+      match al día y vuelve a la fila solo al repetir el job (sección E4.9, paso 2, de
+      [pendientes-humanos.md](pendientes-humanos.md#e49--usuarios-semilla-de-demo)).
+- [ ] Añadir una cuenta de Google al emulador para la segunda cuenta de la demo.
+- [ ] Recordar que ParcheU+ no se muestra en la demo: no hay `grant-plus` ni compra posible en prod.
 - [ ] Abrir la app 15 minutos antes de empezar: Cloud Run con mínimo 0 tiene arranque en frío en la primera petición.
 - [ ] No gastar el tope de IA de prod el mismo día: ensayar la víspera con una o dos simulaciones, no más, y dejar el
-      resto del cupo (1 USD/día en total) para la sustentación.
+      resto del cupo (5 USD/día en total mientras el tope temporal esté puesto) para la sustentación.
 - [ ] El APK instalado y con la sesión iniciada en ambos teléfonos antes de entrar a la sala.
 
 **Generar el APK de prod instalable sin Play** (desde `android/`; los nombres salen de `android/app/build.gradle.kts`):
