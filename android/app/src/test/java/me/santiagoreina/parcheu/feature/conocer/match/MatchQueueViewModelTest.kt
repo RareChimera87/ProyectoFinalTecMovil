@@ -411,7 +411,13 @@ class MatchQueueViewModelTest {
             MatchStrings.todayCount(Usage(4, null, resetsAt))
         )
         // F1 en "ya usado": el backend ya cobró el match, `used` lo incluye.
-        assertEquals("1 de 1", MatchStrings.todayCount(Usage(1, 1, resetsAt), alreadyCounted = true))
-        assertEquals("2 de 3", MatchStrings.todayCount(Usage(2, 3, resetsAt), alreadyCounted = true))
+        assertEquals(
+            "1 de 1",
+            MatchStrings.todayCount(Usage(1, 1, resetsAt), alreadyCounted = true)
+        )
+        assertEquals(
+            "2 de 3",
+            MatchStrings.todayCount(Usage(2, 3, resetsAt), alreadyCounted = true)
+        )
     }
 }

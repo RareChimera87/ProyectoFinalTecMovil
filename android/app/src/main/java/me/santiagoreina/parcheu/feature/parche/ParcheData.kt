@@ -5,6 +5,7 @@ import me.santiagoreina.parcheu.contract.EdgeState
 import me.santiagoreina.parcheu.contract.GraphDto
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.NodeDto
+import me.santiagoreina.parcheu.designsystem.components.compound.displayInitials
 import me.santiagoreina.parcheu.designsystem.graph.GraphEdgeState
 import me.santiagoreina.parcheu.designsystem.graph.GraphMode
 import me.santiagoreina.parcheu.designsystem.graph.GraphNode
@@ -38,7 +39,7 @@ fun EdgeState.toGraphState(): GraphEdgeState = GraphEdgeState.valueOf(name)
 fun NodeDto.toGraphNode(): GraphNode = GraphNode(
     id = id,
     name = label,
-    initials = initials,
+    initials = displayInitials(initials, label),
     affinity = measuredAffinity,
     mode = mode.toGraphMode(),
     state = state.toGraphState(),

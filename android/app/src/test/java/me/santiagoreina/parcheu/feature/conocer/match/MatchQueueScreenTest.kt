@@ -24,7 +24,11 @@ class MatchQueueScreenTest {
         composeRule.setContent {
             ParcheUTheme {
                 MatchQueueScreen(
-                    state = MatchQueueUiState(mode = Mode.AMISTAD, phase = phase, dailyQuota = quota),
+                    state = MatchQueueUiState(
+                        mode = Mode.AMISTAD,
+                        phase = phase,
+                        dailyQuota = quota
+                    ),
                     onModeSelected = {},
                     onCancel = {},
                     onRetry = {},
