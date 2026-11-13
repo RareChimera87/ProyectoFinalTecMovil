@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.core.error.AppError
+import me.santiagoreina.parcheu.core.ui.DestructiveButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCheckbox
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
@@ -111,7 +112,7 @@ private fun ConfirmScreen(
         ) {
             Text(
                 "¿Borrar tu cuenta?",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineLarge,
                 color = colors.tx,
                 modifier = Modifier.semantics { heading() }
             )
@@ -190,7 +191,7 @@ private fun ConfirmScreen(
                         .semantics { liveRegion = LiveRegionMode.Polite }
                 )
             }
-            PrimaryButton(
+            DestructiveButton(
                 text = if (state.deleting) "Borrando…" else "Borrar mi cuenta",
                 onClick = actions.onDelete,
                 enabled = state.canDelete,
@@ -220,7 +221,7 @@ private fun DeletedScreen(onDone: () -> Unit, modifier: Modifier) {
             )
             Text(
                 "Borramos tu cuenta",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineLarge,
                 color = colors.tx,
                 modifier = Modifier.semantics { heading() }
             )
