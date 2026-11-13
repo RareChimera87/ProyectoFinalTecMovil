@@ -29,8 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.CommunityDto
 import me.santiagoreina.parcheu.contract.PersonRef
+import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
-import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUPlusBadge
 import me.santiagoreina.parcheu.designsystem.components.base.PillChip
@@ -38,14 +38,17 @@ import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
 import me.santiagoreina.parcheu.designsystem.components.compound.AvatarSpec
 import me.santiagoreina.parcheu.designsystem.components.compound.EmptyState
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
 import me.santiagoreina.parcheu.designsystem.components.compound.LoadingDots
-import me.santiagoreina.parcheu.designsystem.components.compound.LockedOverlay
-import me.santiagoreina.parcheu.designsystem.components.compound.LockedPlaceholder
 import me.santiagoreina.parcheu.designsystem.components.compound.StackedAvatars
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.parche.ParcheIcon
+import me.santiagoreina.parcheu.feature.parche.ParchePlusHero
+import me.santiagoreina.parcheu.feature.parche.PlusPeopleIllustration
 import me.santiagoreina.parcheu.feature.parche.fof.FofIcons
 import me.santiagoreina.parcheu.feature.parche.parcheIconPainter
+import me.santiagoreina.parcheu.feature.parche.parcheSpine
 
 /** Etiquetas de prueba de D8. */
 object CommunitiesTags {
@@ -141,16 +144,15 @@ private fun LockedContent(state: CommunitiesUiState.Locked, callbacks: Communiti
             .padding(top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        LockedOverlay(
+        ParchePlusHero(
             title = communitiesLockedTitle(state.count),
-            actionLabel = "Ver ParcheU+",
-            onActionClick = callbacks.onUnlock,
-            lockIcon = parcheIconPainter(ParcheIcon.Lock),
-            placeholder = LockedPlaceholder.List,
-            modifier = Modifier.height(320.dp).testTag(CommunitiesTags.LOCKED)
+            body = "Con ParcheU+ ves tus comunidades, quiénes las forman y las abres en tu grafo.",
+            onUnlock = callbacks.onUnlock,
+            modifier = Modifier.testTag(CommunitiesTags.LOCKED),
+            illustration = { PlusPeopleIllustration(others = 4, linked = false) }
         )
         Text(
-            text = "Con ParcheU+ ves tus comunidades, quiénes las forman y las abres en tu grafo.",
+            text = "Una comunidad es un grupo de tus conexiones que también se conocen entre sí.",
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
             color = colors.mu,
             textAlign = TextAlign.Center,
@@ -170,11 +172,16 @@ private fun LoadedContent(state: CommunitiesUiState.Loaded, callbacks: Communiti
             .padding(top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            text = "Tus parches",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = colors.tx
-        )
+        val count = state.content.items.size
+        HeroBlock(
+            title = "$count",
+            titleSuffix = if (count == 1) "comunidad en tu red" else "comunidades en tu red",
+            overline = "Tus parches",
+            titleSize = HeroTitleSize.NumberCompact,
+            subtitle = "Grupos de tus conexiones que también se conocen entre sí"
+        ) {
+            PlusPeopleIllustration(others = 4, linked = false, mascot = 28.dp)
+        }
         Column(
             modifier = Modifier.testTag(CommunitiesTags.LIST),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -206,10 +213,13 @@ private fun LoadedContent(state: CommunitiesUiState.Loaded, callbacks: Communiti
 @Composable
 private fun CommunityCard(community: CommunityDto, onViewInGraph: () -> Unit) {
     val colors = ParcheUTheme.colors
-    ParcheUCard(modifier = Modifier.fillMaxWidth().testTag(CommunitiesTags.card(community.id))) {
+    ModeSpineCard(
+        mode = parcheSpine(),
+        modifier = Modifier.fillMaxWidth().testTag(CommunitiesTags.card(community.id))
+    ) {
         Text(
             text = community.name,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
             color = colors.tx,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -240,8 +250,8 @@ private fun CommunityCard(community: CommunityDto, onViewInGraph: () -> Unit) {
         TonalButton(
             text = "Ver en el grafo",
             onClick = onViewInGraph,
-            size = ParcheUButtonSize.Small,
-            modifier = Modifier.fillMaxWidth()
+            size = ParcheUButtonSize.Medium,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
         )
     }
 }
