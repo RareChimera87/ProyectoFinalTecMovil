@@ -33,6 +33,7 @@ Algunas carpetas solo tienen un README hasta que llega su feature (ver `docs/bac
 - [docs/operacion.md](docs/operacion.md): runbook de alertas y operación del backend de dev en el homeserver
 - [docs/sustentacion.md](docs/sustentacion.md): guion de 10 minutos, demo de mutación de privacidad y costo de IA
 - [docs/creditos-imagenes.md](docs/creditos-imagenes.md): autor, fuente y licencia (CC0) de las fotos de B1
+- [docs/ui/parche-vivo.md](docs/ui/parche-vivo.md): dirección visual "Parche Vivo", tokens, mascota "La P que mira" y componentes para rediseñar pantallas
 - [docs/play-console.md](docs/play-console.md) y [docs/pendientes-humanos.md](docs/pendientes-humanos.md): publicación en Play y pasos que solo hace una persona
 
 ## Git flow en breve
