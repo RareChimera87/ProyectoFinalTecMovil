@@ -79,6 +79,23 @@ Los pasos 7 a 10 están hechos (ver la tabla). `DESPLEGAR_API_PROD` quedó en `t
 32. **Prueba cerrada 0.1:** tras la aprobación, 'Publicar cambios' y desactivar la publicación administrada; solo entonces enviar el enlace de inscripción y mantener ≥ 12 inscritos durante 14 días seguidos; después, solicitud de acceso a producción. Depende de 24, 30 y 31. Detalle: `docs/play-console.md` §12.9 pasos 2-4; § "E10.3", paso 8; `docs/PLAN.md` §9 "Producción".
 33. **Verificación de compra de punta a punta con license tester en la 0.3.** Depende de 12, 13, 22, 23 y de la 0.3 publicada. Detalle: § "E7.1", pasos 4-5.
 
+### ParcheU+ manual para la demo (I1)
+
+Sirve para mostrar ParcheU+ contra prod mientras Play esté bloqueado (pasos 15 a 23). Es el job `grant-plus`, y la
+enmienda de ADR-0013 explica por qué es seguro.
+
+1. **Integrar y desplegar.** Tras mezclar `feature/plus-manual`:
+   - Aplica Terraform en prod para crear el job: `cd infra/terraform/envs/prod && terraform plan -var 'alert_emails=[...]'`
+     debe crear solo `google_cloud_run_v2_job.this["grant-plus"]`. Después, `terraform apply` con los mismos `-var`.
+   - Haz un nuevo despliegue de la API. El workflow le pone al job la imagen del despliegue: sin él, el job usa la
+     imagen de relleno y falla.
+2. **Concede Plus a la cuenta de la demo**, iniciando sesión en la app con ella al menos una vez:
+   `gcloud run jobs execute grant-plus --project parcheu-prod --region us-central1 --wait --args=grant-plus,--email=<correo>,--days=1`.
+   Comprueba en la app que Perfil dice "ParcheU+ activo".
+3. **Al terminar la demo, revócalo:**
+   `gcloud run jobs execute grant-plus --project parcheu-prod --region us-central1 --wait --args=revoke-plus,--email=<correo>`.
+   Comandos de comprobación y códigos de salida: [operacion.md](operacion.md#parcheu-manual-para-una-demo-job-grant-plus).
+
 ### Después de la demo (pendiente)
 
 Para la sustentación del 13 nov, prod se dejó con los usuarios demo encendidos y con el tope de IA subido (5 USD/día y 1,5 USD/persona, puesto con `gcloud run services update`, fuera de Terraform). Estos pasos lo devuelven a su estado de costo mínimo, en orden:
@@ -87,6 +104,7 @@ Para la sustentación del 13 nov, prod se dejó con los usuarios demo encendidos
 2. Borra los demo: `gcloud run jobs execute purge-demo --region us-central1 --project parcheu-prod --wait`. Comprueba en los logs `purge-demo: 20 demos`.
 3. Si no se van a conservar, borra las cuentas creadas en vivo desde la app: Ajustes → Borrar cuenta.
 4. Verifica la API: `curl https://api-n3yxvjziqq-uc.a.run.app/v1/health` debe responder 200.
+5. Si se concedió ParcheU+ manual, revócalo: `gcloud run jobs execute grant-plus --project parcheu-prod --region us-central1 --wait --args=revoke-plus,--email=<correo>`. Si no lo revocas, vence solo, como mucho a los 30 días.
 
 Los comandos y la lógica de los demo están en § "E4.9 · Usuarios semilla de demo" y en [operacion.md](operacion.md#correr-un-job-a-mano).
 

@@ -40,13 +40,14 @@ Hay dos entornos posibles y la recomendación es usar los dos con funciones dist
 |---|---|---|
 | Qué se instala | APK `dev` (paquete `me.santiagoreina.parcheu.dev`) | APK `prodRelease` firmado con la llave de subida (paquete `me.santiagoreina.parcheu`), instalado a mano porque no hay app en Play |
 | Red | El homeserver solo se alcanza por LAN o Tailscale: los teléfonos de la demo deben estar en la LAN o con Tailscale conectado | Internet normal |
-| ParcheU+ | Sí: `grant-plus` existe en dev | No: en prod no existe `/internal/dev/grant-plus` y no hay compra posible sin la app en Play |
+| ParcheU+ | Sí: `grant-plus` existe en dev | Sí, con el job `grant-plus` (Plus manual, acotado y auditado; [ver abajo](#parcheu-en-la-demo-entorno-b)). `/internal/dev/grant-plus` sigue sin existir y no hay compra posible sin la app en Play |
 | Qué muestra | Todo el flujo, incluida F8 | Evidencia de producción real: health, Hosting con términos y privacidad, login |
 
 **Recomendación (plan decidido el 12 nov):** demo principal en B (prod) con los perfiles de demostración encendidos, un
 teléfono y el emulador. A (homeserver) queda como respaldo si prod falla en la sala. En B se muestra el despliegue real
 (`curl https://api-n3yxvjziqq-uc.a.run.app/v1/health`, <https://parcheu-prod.web.app> con las páginas legales y un
-inicio de sesión desde el APK). ParcheU+ no se muestra ni se promete, y tampoco el flujo de pago. Para la demo, prod
+inicio de sesión desde el APK). ParcheU+ se muestra con el Plus manual del job `grant-plus`, una vez aplicado y desplegado
+([ver abajo](#parcheu-en-la-demo-entorno-b)). El flujo de pago no se muestra porque depende de Play. Para la demo, prod
 tiene `DEMO_USERS_ENABLED=true` y un tope de IA temporal de 5 USD/día en total y 1,5 USD/día por persona; el costo
 mínimo (1 USD/día y 0,25 USD/día por persona, `DEMO_USERS_ENABLED=false`) vuelve con los pasos de
 [pendientes-humanos.md](pendientes-humanos.md#después-de-la-demo-pendiente) tras la sustentación.
@@ -60,7 +61,10 @@ mínimo (1 USD/día y 0,25 USD/día por persona, `DEMO_USERS_ENABLED=false`) vue
       match al día y vuelve a la fila solo al repetir el job (sección E4.9, paso 2, de
       [pendientes-humanos.md](pendientes-humanos.md#e49--usuarios-semilla-de-demo)).
 - [ ] Añadir una cuenta de Google al emulador para la segunda cuenta de la demo.
-- [ ] Recordar que ParcheU+ no se muestra en la demo: no hay `grant-plus` ni compra posible en prod.
+- [ ] ParcheU+ para la cuenta del teléfono: conceder 1 día con el job `grant-plus` la víspera o esa mañana
+      ([cómo](#parcheu-en-la-demo-entorno-b)). Comprobar que Perfil dice "ParcheU+ activo". La otra cuenta queda gratis
+      para mostrar la diferencia.
+- [ ] Revocarlo al terminar (`revoke-plus`, [operacion.md](operacion.md#parcheu-manual-para-una-demo-job-grant-plus)).
 - [ ] Abrir la app 15 minutos antes de empezar: Cloud Run con mínimo 0 tiene arranque en frío en la primera petición.
 - [ ] No gastar el tope de IA de prod el mismo día: ensayar la víspera con una o dos simulaciones, no más, y dejar el
       resto del cupo (5 USD/día en total mientras el tope temporal esté puesto) para la sustentación.
@@ -104,6 +108,44 @@ Lista general (entorno A). Hacerlo 30 minutos antes. Cada punto tiene su respons
       restaura el archivo pero exige árbol limpio en él.
 - [ ] **Todos:** modo avión desactivado, pantalla sin suspensión, notificaciones silenciadas salvo las de ParcheU.
 - [ ] **Todos:** [c4.md](c4.md) y [adr/README.md](adr/README.md) abiertos en el navegador.
+
+### ParcheU+ en la demo (entorno B)
+
+Prod no vende ParcheU+ mientras la app no esté en Play. Para la demo, I1 lo activa a mano para la cuenta del teléfono
+con el job `grant-plus`. Comandos, comprobación y revocación están en
+[operacion.md](operacion.md#parcheu-manual-para-una-demo-job-grant-plus):
+
+```bash
+gcloud run jobs execute grant-plus --project parcheu-prod --region us-central1 --wait \
+  --args=grant-plus,--email=<correo de la cuenta del teléfono>,--days=1
+```
+
+El servidor es el único que decide el acceso en todas las pantallas, así que el Plus manual vale como una compra. La
+app no consulta Play para abrir o cerrar contenido; solo lo usa para los precios, comprar y "Restaurar". Con Plus activo:
+
+| Pantalla | Qué se ve |
+|---|---|
+| C1 Inicio | "Simulaciones" sin el contador "3 de 5" y sin el chip ni la invitación a ParcheU+ (`plus` de `GET /v1/home`) |
+| D1 Parche | Sin el banner de amigos de amigos y comunidades; los accesos van directo a D8 y D9 |
+| D7 Amigos de amigos | La lista completa, sin borroso ni candado (`items` de `GET /v1/graph/fof`) |
+| D8 Comunidades | Las comunidades con sus miembros (`items` de `GET /v1/communities`) |
+| D9 Evolución de la red | El historial; sin Plus responde 402 y se ve bloqueado (`GET /v1/graph/history`) |
+| F8 Resultados | El informe completo con razones, fricciones y dimensiones, la transcripción y la insignia ParcheU+ |
+| C2 Notificaciones | "Quieren conectar contigo" con la lista, sin candado |
+| Perfil | "ParcheU+ activo" |
+| Presentar, fila y escenarios | Pedir presentación habilitado; en el servidor, prioridad en la fila y escenarios premium; cupos sin límite visible |
+
+Lo que no cambia, o se ve raro, porque depende de Play:
+
+- **G1 Paywall.** Dice "No pudimos cargar los precios" porque los precios salen de Play. Con Plus activo, G1 pasa sola
+  a G4 en cuanto el servidor confirma el derecho, así que el error solo se ve un instante. No hay que abrir G1 en la demo.
+- **G4 Gestionar suscripción.** La muestra como una suscripción mensual de Google Play cancelada que termina en la fecha
+  de vencimiento. Ofrece "Reactivar en Google Play", y "Restaurar" dice que no pudo restaurar. El acceso funciona, pero
+  el texto no corresponde a un Plus manual: no la muestres, y si la preguntan, explica que es la activación manual.
+- **G2 Límite alcanzado.** Mientras no se haya abierto G1 o G4 en la sesión, la hoja usa el último derecho que conoce la
+  capa de compras y puede mostrar la versión gratis ("Ver ParcheU+") en lugar de la de uso justo. Es poco probable que
+  aparezca, porque Plus tiene límites diarios altos.
+- **G3 Compra exitosa.** No aplica, porque no hay compra.
 
 ## 3. Guion minuto a minuto
 
@@ -293,7 +335,7 @@ Decir esto antes de que lo pregunten. Actualizar esta tabla el día antes con el
 | Publicación en Play | Prioridad del usuario del 27 oct: la app funcional en `dev` va primero. Pipeline de release, ficha y Data safety están como código y documentos; la ejecución en Play Console (prueba cerrada, acceso a producción) depende de pasos humanos en [pendientes-humanos.md](pendientes-humanos.md) y [play-console.md](play-console.md). **Registrar aquí la fecha real antes de sustentar.** |
 | Prod en GCP | Aplicado el 4 nov 2026: plataforma y bootstrap de prod, API v0.1.0 en Cloud Run y Hosting en parcheu-prod.web.app. El desarrollo sigue en el homeserver |
 | Fuera de alcance de la sustentación | E10.8 (acceso a producción y login desde una instalación de Play) y E10.9 (release 1.0 en Play): no hay app en Play porque la verificación de identidad de la cuenta de desarrollador está pendiente, y la regla de 12 testers durante 14 días hace imposible una 1.0 en Play antes de fin de noviembre. No se presentan como cumplidos |
-| Qué sí está en producción | GCP `parcheu-prod` con la API v0.1.0 (<https://api-n3yxvjziqq-uc.a.run.app>) y Hosting (<https://parcheu-prod.web.app>); MVP de costo mínimo. ParcheU+ no se puede activar en prod (sin `grant-plus` ni app en Play); se muestra en dev |
+| Qué sí está en producción | GCP `parcheu-prod` con la API v0.1.0 (<https://api-n3yxvjziqq-uc.a.run.app>) y Hosting (<https://parcheu-prod.web.app>); MVP de costo mínimo. ParcheU+ se activa en prod solo a mano, con el job `grant-plus` (con vencimiento, auditado y sin ruta HTTP; enmienda de [ADR-0013](adr/0013-billing-servidor-rtdn.md)). Sin app en Play no se puede comprar |
 | Compras | Verificación en servidor lista; en dev se prueba con `grant-plus` y sin RTDN |
 | Notificaciones push | Reales con `PARCHEU_ENV=dev`; no hay RTDN de renovaciones en el homeserver |
 | ADR-0029 (texto del ahorro del plan anual) | Propuesta, pendiente de confirmación del usuario |

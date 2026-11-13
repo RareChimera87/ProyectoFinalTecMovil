@@ -205,7 +205,7 @@ mientras `api` exista (lo crea Terraform con una imagen de relleno). Cuando `dep
 # API (últimas 2 h, solo errores)
 gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="api" AND severity>=ERROR' \
   --project $P --freshness 2h --limit 50 --format 'value(timestamp,jsonPayload.message,jsonPayload.traceId)'
-# Un job (migrate, seed-demo o purge-demo)
+# Un job (migrate, seed-demo, purge-demo o grant-plus)
 gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="migrate"' --project $P --freshness 1d --limit 100
 gcloud run jobs executions list --job migrate --region $R --project $P
 ```
@@ -224,6 +224,40 @@ Los jobs usan la imagen del último despliegue. Antes del **primer** `migrate`, 
 permisos sobre el esquema `public` (`GRANT`, ver [infra/terraform/README.md](../infra/terraform/README.md)). Para
 encender o apagar los demo cambia `demo_users_enabled` en Terraform (`terraform apply -var demo_users_enabled=true`
 en `envs/prod`): una variable puesta con `gcloud run services update --update-env-vars` la borra el siguiente `apply`.
+
+### ParcheU+ manual para una demo (job `grant-plus`)
+
+Plus sin pasar por Play, acotado y auditado (enmienda de [ADR-0013](adr/0013-billing-servidor-rtdn.md)). No hay ruta
+HTTP. Solo lo ejecuta quien tiene `run.jobs.runWithOverrides` en `parcheu-prod` (el propietario). El job existe
+tras el `terraform apply` que lo declara, y tiene la imagen del último despliegue. Sin argumentos falla a propósito.
+
+```bash
+# Conceder (1..30 días, 7 por defecto). Correo exacto (sin comodines) o, mejor, el uid de Firebase.
+gcloud run jobs execute grant-plus --project $P --region $R --wait \
+  --args=grant-plus,--email=<correo>,--days=7
+gcloud run jobs execute grant-plus --project $P --region $R --wait --args=grant-plus,--uid=<firebase uid>,--days=1
+
+# Comprobar: el log del resultado (uuid interno y vencimiento, nunca el correo) y, en la app, Perfil dice "ParcheU+ activo".
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="grant-plus" AND (jsonPayload.event="plus_granted_manual" OR jsonPayload.event="plus_revoked_manual" OR jsonPayload.event="plus_manual_refused" OR severity>=ERROR)' \
+  --project $P --freshness 1d --limit 20
+
+# Revocar (inmediato; repetirlo no hace nada). --days=0 hace lo mismo.
+gcloud run jobs execute grant-plus --project $P --region $R --wait --args=revoke-plus,--email=<correo>
+```
+
+Cómo se comporta:
+- `--wait` termina con error si el job sale distinto de 0. El código 2 es un argumento inválido. El código 3 es un
+  rechazo: usuario inexistente, correo repetido (usa `--uid`), cuenta borrada, suspendida o demo, una suscripción
+  de Play vigente que no se toca, o un `revoke-plus` sobre un derecho que no es manual.
+- Repetir `grant-plus` no duplica nada. Extiende el vencimiento o lo deja igual, nunca lo acorta y nunca pasa de
+  hoy + 30 días.
+- Al vencer, la persona vuelve a gratis sola, sin hacer nada.
+- Cada ejecución deja una fila en `purchase_events` (`message_id` `manual-grant:…`, `payload.source = MANUAL`).
+
+**Tras la demo, revócalo** el mismo día; no esperes a que venza.
+
+Ten en cuenta dónde queda el correo. Los argumentos de `--args` se guardan en la ejecución del job: se ven en
+`gcloud run jobs executions describe` y en los registros de auditoría de Cloud Run. Con `--uid` no queda el correo.
 
 ### Reintentar un despliegue
 
