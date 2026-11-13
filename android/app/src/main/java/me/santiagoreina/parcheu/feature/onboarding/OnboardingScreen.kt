@@ -28,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -52,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.R
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.data.auth.SignInErrors
+import me.santiagoreina.parcheu.designsystem.brand.ParcheULogo
+import me.santiagoreina.parcheu.designsystem.brand.WordmarkSize
 import me.santiagoreina.parcheu.designsystem.components.base.GoogleSignInButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
@@ -62,6 +66,8 @@ import me.santiagoreina.parcheu.designsystem.graph.GraphEdgeState
 import me.santiagoreina.parcheu.designsystem.graph.GraphMode
 import me.santiagoreina.parcheu.designsystem.graph.GraphNode
 import me.santiagoreina.parcheu.designsystem.graph.PuGraph
+import me.santiagoreina.parcheu.designsystem.mascot.MascotMouth
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
@@ -98,11 +104,7 @@ object OnboardingTags {
 }
 
 /** Texto legal de A4 (ficha E2.2, ADR-0017 y ADR-0020). */
-internal fun legalNotice(
-    termsUrl: String,
-    privacyUrl: String,
-    linkColor: androidx.compose.ui.graphics.Color
-): AnnotatedString {
+internal fun legalNotice(termsUrl: String, privacyUrl: String, linkColor: Color): AnnotatedString {
     val linkStyle =
         TextLinkStyles(
             SpanStyle(
@@ -173,7 +175,7 @@ fun OnboardingScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OnboardingWordmark(size = 20.dp)
+                ParcheULogo(size = WordmarkSize.Small)
                 Spacer(Modifier.weight(1f))
                 if (!isLoginPage) {
                     ParcheUTextButton(
@@ -312,6 +314,14 @@ private fun OnboardingPage(index: Int) {
                 "Arma tu parche" to
                     "Activa Amistad, Pareja o Estudio y mira cómo crece tu red de personas afines."
         }
+    // Dirección A: cada página tiene un bloque protagonista (radio 24, sin sombra). A2 es el héroe violeta con
+    // tu P; A3, el contenedor de Amistad con las dos P frente a frente; A4, el grafo sobre s1.
+    val panel =
+        when (index) {
+            0 -> colors.hero
+            1 -> colors.friendship.container
+            else -> colors.s1
+        }
     Column(
         modifier =
         Modifier
@@ -319,12 +329,14 @@ private fun OnboardingPage(index: Int) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
             .testTag(OnboardingTags.page(index)),
-        verticalArrangement = Arrangement.spacedBy(28.dp)
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(
-                330.dp
-            ).background(colors.s1, RoundedCornerShape(28.dp)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(330.dp)
+                .clip(ParcheUTheme.shapes.hero)
+                .background(panel),
             contentAlignment = Alignment.Center
         ) {
             when (index) {
@@ -332,18 +344,17 @@ private fun OnboardingPage(index: Int) {
                 1 -> SimulationIllustration()
                 else -> {
                     PuGraph(nodes = ONBOARDING_GRAPH_NODES, size = 260.dp)
-                    ExampleCaption(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
+                    ExampleCaption(
+                        color = colors.mu,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
+                    )
                 }
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 27.sp,
-                    lineHeight = 34.sp,
-                    letterSpacing = (-0.4).sp
-                ),
+                style = MaterialTheme.typography.headlineLarge,
                 color = colors.tx,
                 modifier = Modifier.semantics { heading() }
             )
@@ -352,37 +363,53 @@ private fun OnboardingPage(index: Int) {
     }
 }
 
+/** A2 sobre el héroe violeta: tú (iniciales) y tu gemelo, la P blanca grande, con lo que aprende alrededor. */
 @Composable
 private fun TwinIllustration() {
+    val colors = ParcheUTheme.colors
     Box(Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.align(Alignment.Center),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(26.dp)
         ) {
-            InitialsAvatar("MG", 72.dp)
+            InitialsAvatar(
+                "MG",
+                72.dp,
+                background = colors.onHero,
+                content = colors.hero
+            )
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("✦", color = ParcheUPalette.Orange, fontSize = 26.sp)
-                OnboardingMascot(width = 104.dp, color = ParcheUPalette.Violet)
+                TwinMascotGlyph(width = 112.dp, color = colors.onHero, eyeColor = colors.hero)
             }
         }
-        PillChip("Cómo hablas", Modifier.align(Alignment.TopStart).offset(28.dp, 34.dp))
-        PillChip("Qué te gusta", Modifier.align(Alignment.TopEnd).offset((-24).dp, 70.dp))
-        PillChip("Cómo resuelves", Modifier.align(Alignment.BottomStart).offset(44.dp, (-36).dp))
+        PillChip("Cómo hablas", Modifier.align(Alignment.TopStart).offset(24.dp, 30.dp))
+        PillChip("Qué te gusta", Modifier.align(Alignment.TopEnd).offset((-20).dp, 52.dp))
+        PillChip("Cómo resuelves", Modifier.align(Alignment.BottomStart).offset(36.dp, (-30).dp))
     }
 }
 
+/**
+ * A3 sobre el contenedor de Amistad: tu P violeta y la P menta de la otra persona se miran (`mirrored`) y
+ * conversan; abajo, la afinidad de ejemplo.
+ */
 @Composable
 private fun SimulationIllustration() {
-    Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    val colors = ParcheUTheme.colors
+    Column(Modifier.width(272.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            OnboardingMascot(width = 56.dp, color = ParcheUPalette.Violet)
+            TwinMascotGlyph(
+                width = 60.dp,
+                color = ParcheUPalette.Violet,
+                mouth = MascotMouth.Talking
+            )
             Bubble(
                 "¿Un plan el sábado? Yo propongo la Mesa.",
                 RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp)
@@ -398,24 +425,31 @@ private fun SimulationIllustration() {
                 RoundedCornerShape(18.dp, 18.dp, 6.dp, 18.dp),
                 Modifier.weight(1f, fill = false)
             )
-            OnboardingMascot(width = 56.dp, color = ParcheUPalette.Mint)
+            TwinMascotGlyph(
+                width = 60.dp,
+                color = colors.friendship.solid,
+                mirrored = true
+            )
         }
         PillChip(
             "Afinidad 84 %",
             Modifier.align(Alignment.CenterHorizontally),
             variant = PillChipVariant.Affinity
         )
-        ExampleCaption(Modifier.align(Alignment.CenterHorizontally))
+        ExampleCaption(
+            color = colors.friendship.onContainer,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
     }
 }
 
 /** Rótulo discreto: los nombres, la conversación y la afinidad de A2-A4 son un ejemplo, no datos reales. */
 @Composable
-private fun ExampleCaption(modifier: Modifier = Modifier) {
+private fun ExampleCaption(color: Color, modifier: Modifier = Modifier) {
     Text(
         text = stringResource(R.string.onboarding_example_label),
         style = MaterialTheme.typography.labelSmall,
-        color = ParcheUTheme.colors.mu,
+        color = color,
         modifier = modifier.testTag(OnboardingTags.EXAMPLE)
     )
 }

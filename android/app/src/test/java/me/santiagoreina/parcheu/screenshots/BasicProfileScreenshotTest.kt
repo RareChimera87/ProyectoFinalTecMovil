@@ -12,6 +12,7 @@ import me.santiagoreina.parcheu.feature.basicprofile.BasicProfileForm
 import me.santiagoreina.parcheu.feature.basicprofile.BasicProfileSamples
 import me.santiagoreina.parcheu.feature.basicprofile.BasicProfileScreen
 import me.santiagoreina.parcheu.feature.basicprofile.BasicProfileUiState
+import me.santiagoreina.parcheu.feature.suspended.SuspendedScreen
 import me.santiagoreina.parcheu.feature.underage.UnderageScreen
 import org.junit.Rule
 import org.junit.Test
@@ -22,8 +23,8 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Capturas de B0 'Tu perfil' (vacío, completo, modo edición, error al guardar) y del bloqueo por edad
- * ('error de menor') en ambos temas (ADR-0022). B0 no tiene mockup: I2 las revisa contra el sistema de
- * diseño. Grabar con `./gradlew :app:recordRoborazziDevDebug`.
+ * ('error de menor') y de la cuenta suspendida en ambos temas (ADR-0022). B0 no tiene mockup: I2 las
+ * revisa contra el sistema de diseño. Grabar con `./gradlew :app:recordRoborazziDevDebug`.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -103,6 +104,11 @@ class BasicProfileScreenshotTest(private val dark: Boolean) {
     @Test
     fun b0Underage() = capture("b0_error_menor") {
         UnderageScreen(onDeleteAccount = {}, onSignOut = {})
+    }
+
+    @Test
+    fun suspended() = capture("cuenta_suspendida") {
+        SuspendedScreen(onExportData = {}, onDeleteAccount = {}, onSignOut = {})
     }
 
     companion object {

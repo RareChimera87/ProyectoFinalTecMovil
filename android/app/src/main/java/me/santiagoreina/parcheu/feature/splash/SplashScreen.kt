@@ -19,12 +19,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.core.error.AppError
+import me.santiagoreina.parcheu.designsystem.brand.ParcheULogo
+import me.santiagoreina.parcheu.designsystem.brand.WordmarkSize
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.onboarding.LoadingDots
 import me.santiagoreina.parcheu.feature.onboarding.OnboardingAppIcon
-import me.santiagoreina.parcheu.feature.onboarding.OnboardingWordmark
 
 object SplashTags {
     const val SCREEN = "splash"
@@ -40,7 +41,11 @@ fun splashErrorMessage(error: AppError): String = when (error) {
     else -> "No pudimos abrir tu sesión. Inténtalo de nuevo."
 }
 
-/** A1 sin estado: ícono, wordmark 44 y lema con un brillo violeta; abajo, puntos de carga o el error. */
+/**
+ * A1 sin estado (dirección A): el ícono en el mismo lugar que el splash del sistema (continuidad al pasar de
+ * uno a otro), debajo el logo con "La P que mira" integrada (`ParcheULogo` grande, el mismo dibujo del ícono) y
+ * el lema, sobre un brillo violeta; abajo, puntos de carga o el error.
+ */
 @Composable
 fun SplashScreen(
     state: SplashUiState,
@@ -66,7 +71,7 @@ fun SplashScreen(
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
             OnboardingAppIcon(size = 104.dp)
-            OnboardingWordmark(size = 44.dp)
+            ParcheULogo(size = WordmarkSize.Large)
             Text(
                 "Tu gemelo conoce gente por ti",
                 style = MaterialTheme.typography.bodyMedium,
