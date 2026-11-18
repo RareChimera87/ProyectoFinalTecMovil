@@ -53,6 +53,7 @@ object MatchQueueTags {
     const val CANCEL = "match_queue_cancel"
     const val RETRY = "match_queue_retry"
     const val TODAY_COUNT = "match_queue_today_count"
+    const val SEARCH = "match_queue_search"
 }
 
 /** F1 · Match al azar, en la fila (13a). El match diario agotado abre la G2 de E7.3 desde la ruta. */
@@ -64,7 +65,8 @@ fun MatchQueueScreen(
     onRetry: () -> Unit,
     onOpenMatch: () -> Unit,
     modifier: Modifier = Modifier,
-    animate: Boolean = true
+    animate: Boolean = true,
+    onSearch: () -> Unit = {}
 ) {
     val colors = ParcheUTheme.colors
     Column(modifier = modifier.fillMaxSize().background(colors.bg)) {
@@ -103,7 +105,7 @@ fun MatchQueueScreen(
                         TwinMascot(size = TwinMascotSize.L, tone = state.mode.mascotTone)
                     }
                 )
-            else -> QueueBody(state, onModeSelected, onCancel, onOpenMatch, animate)
+            else -> QueueBody(state, onModeSelected, onCancel, onOpenMatch, onSearch, animate)
         }
     }
 }
@@ -114,9 +116,11 @@ private fun QueueBody(
     onModeSelected: (Mode) -> Unit,
     onCancel: () -> Unit,
     onOpenMatch: () -> Unit,
+    onSearch: () -> Unit,
     animate: Boolean
 ) {
     val colors = ParcheUTheme.colors
+    val idle = state.phase == QueuePhase.Idle
     val used = state.phase is QueuePhase.AlreadyUsed
     val matched = state.phase is QueuePhase.Matched || used
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
@@ -126,8 +130,9 @@ private fun QueueBody(
         ) {
             ModeSelector(state, onModeSelected)
             SearchStage(state, matched = matched, used = used, animate = animate)
-            // Cupo real del día (`GET /v1/home`); sin dato (cargando o con error) se omite la tarjeta.
-            state.dailyQuota?.let { quota -> DailyQuotaCard(quota, used) }
+            // Cupo real del día (`GET /v1/home`); sin dato (cargando o con error) se omite la tarjeta. En
+            // "listo para buscar" el dato es del match anterior, así que tampoco se muestra.
+            state.dailyQuota?.takeIf { !idle }?.let { quota -> DailyQuotaCard(quota, used) }
             Spacer(Modifier.height(8.dp))
         }
         Column(
@@ -135,7 +140,13 @@ private fun QueueBody(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (matched) {
+            if (idle) {
+                PrimaryButton(
+                    MatchStrings.SEARCH,
+                    onSearch,
+                    Modifier.fillMaxWidth().testTag(MatchQueueTags.SEARCH)
+                )
+            } else if (matched) {
                 PrimaryButton(MatchStrings.SEE_MATCH, onOpenMatch, Modifier.fillMaxWidth())
             } else {
                 OutlineButton(
@@ -166,6 +177,7 @@ private fun SearchStage(
     animate: Boolean
 ) {
     val mode = state.mode.colors()
+    val idle = state.phase == QueuePhase.Idle
     val noOne = state.noOneYet && !matched
     Column(
         Modifier.fillMaxWidth()
@@ -189,7 +201,9 @@ private fun SearchStage(
             }
         }
         Text(
-            text = if (used) {
+            text = if (idle) {
+                MatchStrings.IDLE_MESSAGE
+            } else if (used) {
                 MatchStrings.ALREADY_USED_MESSAGE
             } else if (matched) {
                 MatchStrings.MATCHED_MESSAGE
@@ -210,6 +224,7 @@ private fun SearchStage(
         )
         Text(
             text = when {
+                idle -> MatchStrings.IDLE_NOTE
                 used -> MatchStrings.ALREADY_USED_NOTE
                 noOne -> MatchStrings.NO_ONE_NOTE
                 else -> MatchStrings.COMPARING

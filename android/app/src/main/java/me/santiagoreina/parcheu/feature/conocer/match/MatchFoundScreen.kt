@@ -95,6 +95,20 @@ fun MatchFoundScreen(
                     modifier = Modifier.padding(24.dp),
                     color = ParcheUTheme.colors.mu
                 )
+            MatchFoundUiState.Resolved ->
+                ErrorState(
+                    title = MatchStrings.RESOLVED_TITLE,
+                    message = MatchStrings.RESOLVED_MESSAGE,
+                    retryLabel = MatchStrings.BACK,
+                    onRetryClick = onClose,
+                    illustration = {
+                        FacingTwins(
+                            otherColor = ParcheUTheme.colors.mu,
+                            width = 64.dp,
+                            gap = 44.dp
+                        )
+                    }
+                )
             is MatchFoundUiState.Error ->
                 ErrorState(
                     title = MatchStrings.QUEUE_TITLE,

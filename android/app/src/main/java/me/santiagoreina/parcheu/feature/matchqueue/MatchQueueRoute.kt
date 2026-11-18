@@ -48,6 +48,7 @@ fun MatchQueueRoute(
         onCancel = viewModel::onCancel,
         onRetry = viewModel::onRetry,
         onOpenMatch = viewModel::onOpenMatchAgain,
+        onSearch = viewModel::onSearch,
         modifier = modifier
     )
 }

@@ -62,6 +62,9 @@ class FakeMatchRepository : MatchRepository {
 
     /** Si no es nulo, `cancel()` espera a que la prueba lo complete (DELETE en vuelo). */
     var cancelGate: CompletableDeferred<Unit>? = null
+
+    /** Si no es nulo, `match()` espera a que la prueba lo complete (consulta en vuelo). */
+    var matchGate: CompletableDeferred<Unit>? = null
     var currentTicketCalls = 0
     var failListener = false
     override var lastMode: Mode? = null
@@ -90,6 +93,7 @@ class FakeMatchRepository : MatchRepository {
 
     override suspend fun match(id: String): ApiResult<MatchDto> {
         matchCalls++
+        matchGate?.await()
         return if (matchResults.size > 1) matchResults.removeAt(0) else matchResults.first()
     }
 

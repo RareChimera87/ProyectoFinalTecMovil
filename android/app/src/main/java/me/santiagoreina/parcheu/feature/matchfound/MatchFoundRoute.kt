@@ -39,8 +39,11 @@ fun MatchFoundRoute(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is MatchFoundEffect.OpenScenario -> navigator.navigate(ScenarioChat(effect.chatId))
-                is MatchFoundEffect.OpenSimulation -> navigator.navigate(Simulation(effect.matchId))
+                // Reemplazan a F2: ya no tiene nada que mostrar y "atrás" no debe volver a ella.
+                is MatchFoundEffect.OpenScenario ->
+                    navigator.navigateReplacing(ScenarioChat(effect.chatId), MatchFound::class)
+                is MatchFoundEffect.OpenSimulation ->
+                    navigator.navigateReplacing(Simulation(effect.matchId), MatchFound::class)
                 is MatchFoundEffect.SearchAgain ->
                     navigator.navigateReplacing(MatchQueue(mode = effect.mode), MatchQueue::class)
                 MatchFoundEffect.Close ->

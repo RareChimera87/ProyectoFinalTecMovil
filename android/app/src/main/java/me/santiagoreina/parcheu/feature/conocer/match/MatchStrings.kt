@@ -28,6 +28,13 @@ internal object MatchStrings {
         "En Pareja solo te emparejamos con personas reales, nunca con perfiles de demostración. " +
             "Puedes seguir esperando, te avisamos cuando alguien entre, o probar Amistad o Estudio."
     const val SEE_MATCH = "Ver match"
+    const val SEARCH = "Buscar"
+    const val IDLE_MESSAGE = "¿Listo para conocer a alguien más?"
+    const val IDLE_NOTE = "Elige el modo y toca Buscar cuando quieras."
+    const val RESOLVED_TITLE = "Este match ya se resolvió"
+    const val RESOLVED_MESSAGE =
+        "Ya se eligió cómo conocerse. Puedes volver y buscar a alguien más."
+    const val BACK = "Volver"
 
     const val FOUND = "¡ENCONTRAMOS A ALGUIEN!"
     const val DEMO_BADGE = "Perfil de demostración"

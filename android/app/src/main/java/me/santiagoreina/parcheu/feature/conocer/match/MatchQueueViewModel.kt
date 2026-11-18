@@ -30,6 +30,12 @@ const val PAYWALL_SOURCE_MATCH_LIMIT = "match_limit"
 
 /** Fase de F1. */
 sealed interface QueuePhase {
+    /**
+     * Listo para buscar: el match anterior ya se resolvió y no hay fila viva. Se muestra el selector de modo
+     * y el botón de buscar; no se encola nada hasta que el usuario lo pida.
+     */
+    data object Idle : QueuePhase
+
     /** Buscando (ticket `WAITING` o POST en curso). */
     data object Searching : QueuePhase
 
@@ -105,6 +111,7 @@ class MatchQueueViewModel(
 
     private var searchJob: Job? = null
     private var cancelJob: Job? = null
+    private var recheckJob: Job? = null
     private var noOneHintJob: Job? = null
     private var opened = false
     private var modesLoaded = loadActiveModes == null
@@ -130,20 +137,52 @@ class MatchQueueViewModel(
     fun onModeSelected(mode: Mode) {
         if (mode == _state.value.mode) return
         _state.update { it.copy(mode = mode) }
+        // En "listo para buscar" solo se cambia el modo: buscar es decisión del usuario.
+        if (_state.value.phase == QueuePhase.Idle) return
         search(cancelPrevious = true)
+    }
+
+    /** Botón "Buscar" de [QueuePhase.Idle]. */
+    fun onSearch() {
+        if (_state.value.phase != QueuePhase.Idle) return
+        search(cancelPrevious = false)
     }
 
     fun onRetry() = search(cancelPrevious = false)
 
     /**
-     * F1 vuelve a primer plano. Red de seguridad: si se muestra "Buscando…" pero no hay búsqueda viva (la X
-     * canceló la fila y la pantalla se restauró igual), se vuelve a entrar; si no, no hace nada. Con la
-     * búsqueda viva (cambio de pestaña sin cancelar) o con el DELETE de la X en curso, no toca nada.
+     * F1 vuelve a primer plano. Dos redes de seguridad:
+     * - Con "Buscando…" pero sin búsqueda viva (la X canceló la fila y la pantalla se restauró igual), se
+     *   vuelve a entrar. Con la búsqueda viva (cambio de pestaña sin cancelar) o con el DELETE de la X en
+     *   curso, no toca nada.
+     * - Con "match encontrado", el match pudo resolverse mientras F1 estaba en segundo plano (la pestaña
+     *   conserva su estado): se vuelve a consultar y, si ya no espera elección, F1 queda en
+     *   [QueuePhase.Idle] sin encolar nada. Si la consulta falla no cambia nada.
      */
     fun onResumed() {
-        if (_state.value.phase != QueuePhase.Searching) return
-        if (searchJob?.isActive == true || cancelJob?.isActive == true) return
-        search(cancelPrevious = false)
+        when (val phase = _state.value.phase) {
+            QueuePhase.Searching -> {
+                if (searchJob?.isActive == true || cancelJob?.isActive == true) return
+                search(cancelPrevious = false)
+            }
+            is QueuePhase.Matched -> recheckMatch(phase.matchId)
+            else -> Unit
+        }
+    }
+
+    private fun recheckMatch(matchId: String) {
+        if (recheckJob?.isActive == true) return
+        recheckJob = viewModelScope.launch {
+            val match = (repository.match(matchId) as? ApiResult.Success)?.value ?: return@launch
+            if (match.status == MatchStatus.PENDING_CHOICE) return@launch
+            // Pudo cambiar de fase mientras se consultaba (otra búsqueda, cancelar).
+            if (_state.value.phase != QueuePhase.Matched(matchId)) return@launch
+            // La escucha del ticket sigue viva y repetiría MATCHED: se corta antes de soltar el estado.
+            searchJob?.cancel()
+            opened = false
+            resetNoOneHint(start = false)
+            _state.update { it.copy(phase = QueuePhase.Idle) }
+        }
     }
 
     /**

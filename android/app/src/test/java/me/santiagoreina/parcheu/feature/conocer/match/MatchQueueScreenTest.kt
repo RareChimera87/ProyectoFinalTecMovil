@@ -85,4 +85,13 @@ class MatchQueueScreenTest {
         composeRule.onNodeWithText(MatchStrings.NO_ONE_NOTE).assertIsDisplayed()
         composeRule.onNodeWithTag(MatchQueueTags.CANCEL).assertIsDisplayed()
     }
+
+    @Test
+    fun idleOffersSearchAndHidesTheQuotaAndTheCancelButton() {
+        show(Usage(used = 1, limit = 1, resetsAt = resetsAt), phase = QueuePhase.Idle)
+
+        composeRule.onNodeWithTag(MatchQueueTags.SEARCH).assertIsDisplayed()
+        composeRule.onNodeWithTag(MatchQueueTags.TODAY_COUNT).assertDoesNotExist()
+        composeRule.onNodeWithTag(MatchQueueTags.CANCEL).assertDoesNotExist()
+    }
 }

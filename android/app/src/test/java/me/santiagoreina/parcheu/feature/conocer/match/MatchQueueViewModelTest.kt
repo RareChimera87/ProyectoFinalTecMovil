@@ -131,6 +131,104 @@ class MatchQueueViewModelTest {
         }
     }
 
+    private fun matchedVm(): MatchQueueViewModel {
+        repository.enqueueResult = ApiResult.Success(matchedTicket("m1"))
+        return viewModel()
+    }
+
+    @Test
+    fun resumingMatchedWithAResolvedMatchReturnsToIdleWithoutEnqueuing() = runTest {
+        val vm = matchedVm()
+        vm.effects.test {
+            assertEquals(MatchQueueEffect.OpenMatch("m1"), awaitItem())
+            assertEquals(QueuePhase.Matched("m1"), vm.state.value.phase)
+            repository.matchResults = mutableListOf(
+                ApiResult.Success(
+                    testMatch(status = MatchStatus.SIMULATION, myChoice = MatchChoice.SIMULATION)
+                )
+            )
+
+            vm.onResumed()
+
+            assertEquals(QueuePhase.Idle, vm.state.value.phase)
+            assertEquals(1, repository.enqueued.size)
+            // La escucha ya no devuelve el estado a "encontrado".
+            repository.tickets.emit(matchedTicket("m1"))
+            assertEquals(QueuePhase.Idle, vm.state.value.phase)
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun resumingMatchedWithAnExpiredMatchReturnsToIdle() {
+        val vm = matchedVm()
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
+
+        vm.onResumed()
+
+        assertEquals(QueuePhase.Idle, vm.state.value.phase)
+        assertEquals(1, repository.enqueued.size)
+    }
+
+    @Test
+    fun resumingMatchedWithAPendingMatchChangesNothing() {
+        val vm = matchedVm()
+
+        vm.onResumed()
+
+        assertEquals(QueuePhase.Matched("m1"), vm.state.value.phase)
+        assertEquals(1, repository.enqueued.size)
+    }
+
+    @Test
+    fun resumingMatchedWithANetworkFailureChangesNothing() {
+        val vm = matchedVm()
+        repository.matchResults = mutableListOf(ApiResult.Failure(AppError.Network))
+
+        vm.onResumed()
+
+        assertEquals(QueuePhase.Matched("m1"), vm.state.value.phase)
+        assertEquals(1, repository.enqueued.size)
+    }
+
+    @Test
+    fun resumingMatchedDoesNotOverlapChecks() = runTest {
+        val vm = matchedVm()
+        val gate = CompletableDeferred<Unit>()
+        repository.matchGate = gate
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
+        val calls = repository.matchCalls
+
+        vm.onResumed()
+        vm.onResumed()
+
+        assertEquals(calls + 1, repository.matchCalls)
+        gate.complete(Unit)
+        assertEquals(QueuePhase.Idle, vm.state.value.phase)
+    }
+
+    @Test
+    fun searchFromIdleEnqueuesOnlyWhenTheUserAsks() {
+        val vm = matchedVm()
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
+        vm.onResumed()
+        repository.enqueueResult = ApiResult.Success(waitingTicket())
+
+        // Cambiar de modo en "listo para buscar" no busca.
+        vm.onModeSelected(Mode.ESTUDIO)
+        assertEquals(QueuePhase.Idle, vm.state.value.phase)
+        assertEquals(1, repository.enqueued.size)
+
+        vm.onSearch()
+
+        assertEquals(listOf(Mode.AMISTAD, Mode.ESTUDIO), repository.enqueued)
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+    }
+
     @Test
     fun resumingWithoutLiveSearchOutsideSearchingDoesNothing() {
         repository.enqueueResult = ApiResult.Failure(AppError.Network)
