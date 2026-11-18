@@ -125,9 +125,11 @@ class MatchFoundViewModel(
         val choice = match.myChoice ?: selected ?: defaultChoice(match)
         when (match.status) {
             MatchStatus.SIMULATION -> {
+                clearSubmitting()
                 _effects.send(MatchFoundEffect.OpenSimulation(match.id))
             }
             MatchStatus.SCENARIO -> {
+                clearSubmitting()
                 _effects.send(MatchFoundEffect.OpenScenario(match.chatId ?: match.id))
             }
             MatchStatus.EXPIRED ->
@@ -138,6 +140,11 @@ class MatchFoundViewModel(
                 if (waiting) startPolling()
             }
         }
+    }
+
+    /** La elección ya se resolvió: al volver de F3/F4 el botón no debe quedarse en "Empezando…". */
+    private fun clearSubmitting() {
+        _state.update { (it as? MatchFoundUiState.Loaded)?.copy(submitting = false) ?: it }
     }
 
     private fun defaultChoice(match: MatchDto) =
