@@ -15,8 +15,8 @@ import me.santiagoreina.parcheu.navigation.MatchQueue
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
-/** F1 (E4.4): ver `feature/conocer/match`. Cancelar o cerrar vuelve a donde estaba, o a Inicio (C1)
- * descartando la pila de Conocer. */
+/** F1 (E4.4): ver `feature/conocer/match`. La X vuelve a donde estaba, o a Inicio (C1) descartando la pila
+ * de Conocer; "Cancelar búsqueda" deja F1 en "listo para buscar". */
 @Composable
 fun MatchQueueRoute(
     route: MatchQueue,
@@ -49,6 +49,7 @@ fun MatchQueueRoute(
         onRetry = viewModel::onRetry,
         onOpenMatch = viewModel::onOpenMatchAgain,
         onSearch = viewModel::onSearch,
+        onCancelSearch = viewModel::onCancelSearch,
         modifier = modifier
     )
 }

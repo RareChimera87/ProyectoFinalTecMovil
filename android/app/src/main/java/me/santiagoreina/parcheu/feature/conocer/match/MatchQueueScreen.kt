@@ -66,7 +66,9 @@ fun MatchQueueScreen(
     onOpenMatch: () -> Unit,
     modifier: Modifier = Modifier,
     animate: Boolean = true,
-    onSearch: () -> Unit = {}
+    onSearch: () -> Unit = {},
+    /** "Cancelar búsqueda"; por defecto igual que la X ([onCancel]). */
+    onCancelSearch: () -> Unit = onCancel
 ) {
     val colors = ParcheUTheme.colors
     Column(modifier = modifier.fillMaxSize().background(colors.bg)) {
@@ -105,7 +107,7 @@ fun MatchQueueScreen(
                         TwinMascot(size = TwinMascotSize.L, tone = state.mode.mascotTone)
                     }
                 )
-            else -> QueueBody(state, onModeSelected, onCancel, onOpenMatch, onSearch, animate)
+            else -> QueueBody(state, onModeSelected, onCancelSearch, onOpenMatch, onSearch, animate)
         }
     }
 }

@@ -149,6 +149,64 @@ class MatchFoundViewModelTest {
         }
     }
 
+    private fun resolvedMatch(status: MatchStatus = MatchStatus.SIMULATION) =
+        ApiResult.Success(testMatch(status = status, myChoice = MatchChoice.SIMULATION))
+
+    @Test
+    fun resumingWithTheMatchResolvedElsewhereShowsResolvedWithoutNavigating() = runTest {
+        val vm = viewModel()
+        vm.effects.test {
+            repository.matchResults = mutableListOf(resolvedMatch())
+
+            vm.onResumed()
+
+            assertEquals(MatchFoundUiState.Resolved, vm.state.value)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun resumingWithAResolvedScenarioMatchShowsResolved() {
+        val vm = viewModel()
+        repository.matchResults = mutableListOf(resolvedMatch(MatchStatus.SCENARIO))
+
+        vm.onResumed()
+
+        assertEquals(MatchFoundUiState.Resolved, vm.state.value)
+    }
+
+    @Test
+    fun resumingWithAPendingMatchKeepsTheCards() {
+        val vm = viewModel()
+        val before = vm.loaded()
+
+        vm.onResumed()
+
+        assertEquals(before, vm.loaded())
+    }
+
+    @Test
+    fun resumingWithAFailedCheckKeepsTheCards() {
+        val vm = viewModel()
+        val before = vm.loaded()
+        repository.matchResults = mutableListOf(ApiResult.Failure(AppError.Network))
+
+        vm.onResumed()
+
+        assertEquals(before, vm.loaded())
+    }
+
+    @Test
+    fun resumingWithAnExpiredMatchShowsExpired() {
+        val vm = viewModel()
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
+
+        vm.onResumed()
+
+        assertTrue(vm.loaded().expired)
+    }
+
     @Test
     fun conflictOnChoiceWithAResolvedMatchContinuesToTheSimulation() = runTest {
         repository.chooseResult = ApiResult.Failure(AppError.Conflict)

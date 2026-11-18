@@ -18,9 +18,12 @@ val conocerMatchDataModule =
             )
         }
         single<MatchRepository> { MatchRepositoryImpl(get(), get(), get()) }
-        // Cerrar sesión olvida el último modo de F1: es de la persona, no del teléfono.
+        // Cerrar sesión olvida el último modo de F1 y la marca de búsqueda cancelada: son de la persona.
         single<SessionCleaner>(named("match-last-mode")) {
             val repository = get<MatchRepository>()
-            SessionCleaner { repository.lastMode = null }
+            SessionCleaner {
+                repository.lastMode = null
+                repository.searchCancelledAt = null
+            }
         }
     }

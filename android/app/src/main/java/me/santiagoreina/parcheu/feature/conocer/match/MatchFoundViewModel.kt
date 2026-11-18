@@ -78,6 +78,7 @@ class MatchFoundViewModel(
     val effects: Flow<MatchFoundEffect> = _effects.receiveAsFlow()
 
     private var pollJob: Job? = null
+    private var recheckJob: Job? = null
 
     init {
         load()
@@ -89,6 +90,31 @@ class MatchFoundViewModel(
             when (val result = repository.match(matchId)) {
                 is ApiResult.Failure -> _state.value = MatchFoundUiState.Error(result.error)
                 is ApiResult.Success -> apply(result.value, selected = null)
+            }
+        }
+    }
+
+    /**
+     * F2 vuelve a primer plano. Con las tarjetas a la vista se vuelve a consultar el match: si ya no espera
+     * mi elección (se resolvió por otra ruta) pasa a [MatchFoundUiState.Resolved] sin navegar, y nunca se
+     * ofrece "Empezar" sobre él. Si falla la consulta, o mientras se envía la elección, no cambia nada.
+     */
+    fun onResumed() {
+        val loaded = _state.value as? MatchFoundUiState.Loaded ?: return
+        if (loaded.expired || loaded.submitting || recheckJob?.isActive == true) return
+        recheckJob = viewModelScope.launch {
+            val match = (repository.match(matchId) as? ApiResult.Success)?.value ?: return@launch
+            val current = _state.value as? MatchFoundUiState.Loaded ?: return@launch
+            if (current.submitting) return@launch
+            when (match.status) {
+                MatchStatus.SIMULATION, MatchStatus.SCENARIO -> {
+                    pollJob?.cancel()
+                    _state.value = MatchFoundUiState.Resolved
+                }
+                MatchStatus.EXPIRED -> apply(match, selected = null)
+                // Sigue esperando elección; si ya elegí y falta la otra persona, retoma el sondeo.
+                MatchStatus.PENDING_CHOICE ->
+                    if (match.myChoice != null && !current.waitingOther) apply(match, null)
             }
         }
     }

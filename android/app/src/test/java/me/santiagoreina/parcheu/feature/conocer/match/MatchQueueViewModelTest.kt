@@ -84,6 +84,95 @@ class MatchQueueViewModelTest {
         }
     }
 
+    private var clock = 1_000_000L
+
+    private fun clockedVm(mode: Mode? = null) =
+        MatchQueueViewModel(mode, repository, now = { clock })
+
+    @Test
+    fun cancelSearchLeavesIdleWithoutClosingAndRemembersIt() = runTest {
+        val vm = clockedVm(Mode.PAREJA)
+        vm.effects.test {
+            vm.onCancelSearch()
+
+            assertEquals(1, repository.cancelCalls)
+            assertEquals(QueuePhase.Idle, vm.state.value.phase)
+            assertEquals(Mode.PAREJA, vm.state.value.mode)
+            assertEquals(clock, repository.searchCancelledAt)
+            expectNoEvents()
+            // Volver a primer plano no la reactiva.
+            vm.onResumed()
+            assertEquals(1, repository.enqueued.size)
+            assertEquals(QueuePhase.Idle, vm.state.value.phase)
+        }
+    }
+
+    @Test
+    fun cancelSearchFailureShowsErrorAndKeepsNoMark() {
+        repository.cancelResult = ApiResult.Failure(AppError.Network)
+        val vm = clockedVm(Mode.PAREJA)
+
+        vm.onCancelSearch()
+
+        assertEquals(QueuePhase.Error(AppError.Network), vm.state.value.phase)
+        assertNull(repository.searchCancelledAt)
+    }
+
+    @Test
+    fun aNewScreenAfterACancelDoesNotEnqueueByItself() {
+        repository.lastMode = Mode.PAREJA
+        repository.searchCancelledAt = clock - 60_000
+
+        val vm = clockedVm()
+
+        assertEquals(QueuePhase.Idle, vm.state.value.phase)
+        assertEquals(Mode.PAREJA, vm.state.value.mode)
+        assertTrue(repository.enqueued.isEmpty())
+        assertEquals(0, repository.currentTicketCalls)
+    }
+
+    @Test
+    fun searchFromIdleAfterACancelClearsTheMark() {
+        repository.searchCancelledAt = clock - 1
+        val vm = clockedVm()
+
+        vm.onSearch()
+
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+        assertEquals(1, repository.enqueued.size)
+        assertNull(repository.searchCancelledAt)
+    }
+
+    @Test
+    fun anOldCancelMarkIsIgnored() {
+        repository.searchCancelledAt = clock - MatchQueueViewModel.CANCEL_MEMORY_MS - 1
+
+        val vm = clockedVm()
+
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+        assertEquals(1, repository.enqueued.size)
+    }
+
+    @Test
+    fun anExplicitModeSearchesEvenWithARecentCancel() {
+        repository.searchCancelledAt = clock - 1
+
+        val vm = clockedVm(Mode.ESTUDIO)
+
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+        assertEquals(listOf(Mode.ESTUDIO), repository.enqueued)
+    }
+
+    @Test
+    fun theXAfterSearchingAlsoRemembersTheCancel() = runTest {
+        val vm = clockedVm(Mode.AMISTAD)
+        vm.effects.test {
+            vm.onCancel()
+            assertEquals(MatchQueueEffect.Close, awaitItem())
+            assertEquals(clock, repository.searchCancelledAt)
+        }
+    }
+
     @Test
     fun resumingAfterTheXReentersTheQueue() = runTest {
         // Red de seguridad de A1: si la F1 cancelada se restaurara igual, no se queda "Buscando…" sin fila.

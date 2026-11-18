@@ -93,10 +93,21 @@ class MatchQueueViewModel(
     private val loadDailyQuota: (suspend () -> Usage?)? = null,
     private val pollIntervalMs: Long = POLL_INTERVAL_MS,
     /** Espera antes del aviso "aún no hay nadie" en Pareja; inyectable para pruebas. */
-    private val noOneHintMs: Long = NO_ONE_HINT_MS
+    private val noOneHintMs: Long = NO_ONE_HINT_MS,
+    /** Reloj (ms de época) para la marca de búsqueda cancelada; inyectable para pruebas. */
+    private val now: () -> Long = System::currentTimeMillis
 ) : ViewModel() {
+    /**
+     * Sin modo explícito, F1 no entra sola a la fila si el usuario canceló hace poco: arranca en
+     * [QueuePhase.Idle]. Con modo explícito (buscar de nuevo tras un match vencido) siempre busca.
+     */
+    private val startIdle = initialMode == null && repository.searchCancelledAt?.let {
+        now() - it in 0 until CANCEL_MEMORY_MS
+    } == true
+
     private val _state = MutableStateFlow(
         MatchQueueUiState(
+            phase = if (startIdle) QueuePhase.Idle else QueuePhase.Searching,
             mode = initialMode
                 ?: repository.lastMode?.takeIf { it in activeModes }
                 ?: activeModes.firstOrNull()
@@ -117,7 +128,7 @@ class MatchQueueViewModel(
     private var modesLoaded = loadActiveModes == null
 
     init {
-        search(cancelPrevious = false)
+        if (!startIdle) search(cancelPrevious = false)
         loadDailyQuota?.let { load ->
             viewModelScope.launch {
                 val quota = load() ?: return@launch
@@ -132,6 +143,9 @@ class MatchQueueViewModel(
 
         /** Tras cuánto buscando en Pareja sin match se avisa que aún no hay nadie (45 s). */
         const val NO_ONE_HINT_MS = 45_000L
+
+        /** Cuánto se recuerda que el usuario canceló la búsqueda (30 min). */
+        const val CANCEL_MEMORY_MS = 30 * 60_000L
     }
 
     fun onModeSelected(mode: Mode) {
@@ -185,12 +199,20 @@ class MatchQueueViewModel(
         }
     }
 
+    /** La X: cancela la búsqueda si la hay y sale de F1. */
+    fun onCancel() = cancel(leave = true)
+
+    /** "Cancelar búsqueda": cancela y deja F1 en [QueuePhase.Idle], lista para buscar de nuevo. */
+    fun onCancelSearch() = cancel(leave = false)
+
     /**
-     * "Cancelar búsqueda" y la X: con búsqueda en curso, `DELETE /v1/match/queue` y vuelve a Inicio. Sin fila
-     * viva (match encontrado o ya usado, vencido, error) no hay nada que cancelar: solo se sale, para que la X
-     * nunca deje al usuario atrapado en F1 si el DELETE falla.
+     * Con búsqueda en curso, `DELETE /v1/match/queue`; si sale bien se recuerda la cancelación (una F1 nueva
+     * no vuelve a encolar sola) y, con [leave], vuelve a Inicio. Sin fila viva (match encontrado o ya usado,
+     * vencido, error) no hay nada que cancelar: la X solo sale, para que nunca deje al usuario atrapado en
+     * F1 si el DELETE falla.
      */
-    fun onCancel() {
+    private fun cancel(leave: Boolean) {
+        if (!leave && _state.value.phase != QueuePhase.Searching) return
         searchJob?.cancel()
         resetNoOneHint(start = false)
         if (_state.value.phase != QueuePhase.Searching) {
@@ -199,7 +221,15 @@ class MatchQueueViewModel(
         }
         cancelJob = viewModelScope.launch {
             when (val result = repository.cancel()) {
-                is ApiResult.Success -> _effects.send(MatchQueueEffect.Close)
+                is ApiResult.Success -> {
+                    repository.searchCancelledAt = now()
+                    if (leave) {
+                        _effects.send(MatchQueueEffect.Close)
+                    } else {
+                        opened = false
+                        _state.update { it.copy(phase = QueuePhase.Idle) }
+                    }
+                }
                 is ApiResult.Failure -> _state.update {
                     it.copy(phase = QueuePhase.Error(result.error))
                 }
@@ -223,6 +253,7 @@ class MatchQueueViewModel(
     private fun search(cancelPrevious: Boolean) {
         searchJob?.cancel()
         opened = false
+        repository.searchCancelledAt = null
         _state.update { it.copy(phase = QueuePhase.Searching) }
         resetNoOneHint(start = true)
         searchJob = viewModelScope.launch {

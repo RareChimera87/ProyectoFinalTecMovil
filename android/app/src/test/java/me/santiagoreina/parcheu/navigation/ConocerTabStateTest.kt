@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.navigation
 
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -17,10 +18,12 @@ import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.conocer.match.FakeMatchRepository
 import me.santiagoreina.parcheu.feature.conocer.match.MatchQueueTags
 import me.santiagoreina.parcheu.feature.conocer.match.MatchQueueViewModel
+import me.santiagoreina.parcheu.feature.conocer.match.MatchStrings
 import me.santiagoreina.parcheu.feature.conocer.match.QueuePhase
 import me.santiagoreina.parcheu.feature.conocer.match.matchedTicket
 import me.santiagoreina.parcheu.feature.matchqueue.MatchQueueRoute
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -62,6 +65,7 @@ class ConocerTabStateTest {
                         MatchQueueRoute(route, navigator, viewModel = vm)
                     }
                     composable<MatchFound> { Text("F2") }
+                    composable<Simulation> { Text("F4") }
                     composable<ChatList> { Text("Chats") }
                     composable<Profile> { Text("C3") }
                 }
@@ -85,12 +89,49 @@ class ConocerTabStateTest {
     }
 
     @Test
-    fun laXYLuegoConocerAbreUnaF1NuevaQueBusca() {
+    fun alAbrirLaSimulacionNingunaF2QuedaEnLaPila() {
         go { navigateToTopLevel(MatchQueue()) }
-        assertEquals(1, created.size)
+        // F2 duplicada (p. ej. abierta por "Ver match" y luego por un aviso).
+        go { navigate(MatchFound("m1")) }
+        go { navigate(MatchFound("m2")) }
+
+        go { navigateReplacingAll(Simulation("m2"), MatchFound::class) }
+
+        assertCurrent(Simulation::class)
+        assertFalse(
+            runCatching { navController.getBackStackEntry(MatchFound::class) }.isSuccess
+        )
+        go { back() }
+        assertCurrent(MatchQueue::class)
+    }
+
+    @Test
+    fun cancelarBusquedaDejaConocerListoParaBuscarYNoVuelveAEncolar() {
+        go { navigateToTopLevel(MatchQueue()) }
         assertEquals(listOf(Mode.AMISTAD), repository.enqueued)
 
         composeRule.onNodeWithTag(MatchQueueTags.CANCEL).performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(1, repository.cancelCalls)
+        assertCurrent(MatchQueue::class)
+        assertEquals(QueuePhase.Idle, created.single().state.value.phase)
+        composeRule.onNodeWithTag(MatchQueueTags.SEARCH).assertExists()
+
+        // Cambiar de pestaña y volver conserva la pantalla en "listo para buscar", sin encolar.
+        go { navigateToTopLevel(ChatList) }
+        go { navigateToTopLevel(MatchQueue()) }
+        assertEquals(1, created.size)
+        assertEquals(1, repository.enqueued.size)
+        assertEquals(QueuePhase.Idle, created.single().state.value.phase)
+    }
+
+    @Test
+    fun laXLuegoConocerAbreUnaF1NuevaListaParaBuscarSinEncolar() {
+        go { navigateToTopLevel(MatchQueue()) }
+        assertEquals(1, created.size)
+
+        composeRule.onNodeWithContentDescription(MatchStrings.CLOSE).performClick()
         composeRule.waitForIdle()
         assertEquals(1, repository.cancelCalls)
         assertCurrent(Home::class)
@@ -99,11 +140,13 @@ class ConocerTabStateTest {
         assertCurrent(MatchQueue::class)
         assertEquals("F1 debe tener un ViewModel nuevo", 2, created.size)
         assertNotSame(created[0], created[1])
-        assertEquals(
-            "la F1 nueva entra a la fila",
-            listOf(Mode.AMISTAD, Mode.AMISTAD),
-            repository.enqueued
-        )
+        assertEquals("canceló a propósito: no encola sola", 1, repository.enqueued.size)
+        assertEquals(QueuePhase.Idle, created[1].state.value.phase)
+
+        // "Buscar" es la decisión explícita: encola y limpia la marca.
+        composeRule.onNodeWithTag(MatchQueueTags.SEARCH).performClick()
+        composeRule.waitForIdle()
+        assertEquals(2, repository.enqueued.size)
         assertEquals(QueuePhase.Searching, created[1].state.value.phase)
         composeRule.onNodeWithTag(MatchQueueTags.SEARCHING).assertExists()
     }

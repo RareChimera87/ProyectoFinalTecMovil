@@ -29,6 +29,13 @@ interface MatchRepository {
     /** Último modo con el que el usuario entró a la fila en esta sesión, para preseleccionarlo. */
     var lastMode: Mode?
 
+    /**
+     * Instante (ms de época) en que el usuario canceló la búsqueda a propósito, o `null`. Mientras sea
+     * reciente, una F1 nueva sin modo explícito no vuelve a entrar sola a la fila. Vive en memoria, como
+     * [lastMode]; empezar una búsqueda lo borra.
+     */
+    var searchCancelledAt: Long?
+
     /** `DELETE /v1/match/queue`. */
     suspend fun cancel(): ApiResult<Unit>
 
@@ -50,6 +57,7 @@ class MatchRepositoryImpl(
     private val tickets: MatchTicketSource
 ) : MatchRepository {
     override var lastMode: Mode? = null
+    override var searchCancelledAt: Long? = null
 
     override suspend fun enqueue(mode: Mode): ApiResult<TicketDto> {
         lastMode = mode

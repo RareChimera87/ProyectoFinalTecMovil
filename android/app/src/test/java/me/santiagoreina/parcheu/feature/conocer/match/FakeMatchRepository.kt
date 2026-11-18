@@ -68,6 +68,7 @@ class FakeMatchRepository : MatchRepository {
     var currentTicketCalls = 0
     var failListener = false
     override var lastMode: Mode? = null
+    override var searchCancelledAt: Long? = null
     val chosen = mutableListOf<MatchChoice>()
     var matchCalls = 0
 
