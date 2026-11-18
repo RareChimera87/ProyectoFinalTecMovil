@@ -137,7 +137,7 @@ fun HomeScreen(
     val loaded = state as? HomeUiState.Loaded
     Column(modifier.fillMaxSize().background(colors.bg).testTag(HomeTags.ROOT)) {
         ParcheUHomeTopBar(
-            wordmark = { ParcheULogo() },
+            wordmark = { ParcheULogo(plus = loaded?.home?.plus == true) },
             actions = {
                 Bell(unread = loaded?.home?.unread ?: 0, onClick = callbacks.onBell)
                 ProfileAvatar(name = loaded?.firstName ?: "Tú", onClick = callbacks.onAvatar)

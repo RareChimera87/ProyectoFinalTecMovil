@@ -36,18 +36,21 @@ import me.santiagoreina.parcheu.designsystem.theme.SoraFontFamily
  *
  * La P mide 0,956 × el tamaño de la letra (39 px de mascota para 40,8 px de texto en la propuesta) y su
  * pie se apoya en la línea base. "arche" toma [ParcheUTheme.colors]`.wordmark` (blanco en oscuro y
- * violeta en claro); la P es violeta en ambos temas con el ojo en tinta.
+ * violeta en claro); la P es violeta en ambos temas con el ojo en tinta. Con [plus] (cuenta ParcheU+) se
+ * añade un "+" naranja de acento pegado a la "U" y TalkBack lee "ParcheU+".
  */
 @Composable
 fun ParcheULogo(
     modifier: Modifier = Modifier,
     size: WordmarkSize = WordmarkSize.Medium,
     textColor: Color = ParcheUTheme.colors.wordmark,
-    mascotColor: Color = ParcheUPalette.Violet
+    mascotColor: Color = ParcheUPalette.Violet,
+    plus: Boolean = false
 ) {
+    val accent = ParcheUTheme.colors.ort
     val mascotWidth: Dp = with(LocalDensity.current) { size.fontSize.toDp() } * LOGO_MASCOT_RATIO
     Row(
-        modifier.clearAndSetSemantics { contentDescription = "ParcheU" },
+        modifier.clearAndSetSemantics { contentDescription = if (plus) "ParcheU+" else "ParcheU" },
         verticalAlignment = Alignment.Bottom
     ) {
         TwinMascotGlyph(
@@ -73,6 +76,10 @@ fun ParcheULogo(
             buildAnnotatedString {
                 withStyle(SpanStyle(color = textColor)) { append("arche") }
                 withStyle(SpanStyle(color = WordmarkColors.Orange)) { append("U") }
+                if (plus) {
+                    // Mismo naranja de acento que el "+" de la pastilla ParcheU+.
+                    withStyle(SpanStyle(color = accent)) { append("+") }
+                }
             },
             style =
             TextStyle(
