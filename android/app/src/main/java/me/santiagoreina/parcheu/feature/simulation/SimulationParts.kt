@@ -22,11 +22,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.designsystem.mascot.MascotMouth
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
+import me.santiagoreina.parcheu.designsystem.mascot.rememberAnimationsEnabled
 import me.santiagoreina.parcheu.designsystem.theme.ModeColors
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUColors
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 /** Nombre del modo en español para el encabezado de F4 y las filas de la lista. */
 internal fun Mode.label(): String = when (this) {
@@ -42,67 +49,119 @@ internal fun ParcheUColors.forMode(mode: Mode): ModeColors = when (mode) {
 }
 
 /**
- * Gemelo de las escenas F4-F6: blob con antena, ojos y boca #14111F, alto 1,125 x ancho. Con [error] baja la
- * opacidad a .5 y apaga la saturación (inventario §3). Es la versión local de F4-F6 mientras el
- * `TwinMascot` de E1.5 no está en `dev`.
+ * Gemelo de las escenas F4-F6, F8 e intro: "La P que mira" (`TwinMascotGlyph`) del [color] dado, alto
+ * 1,125 x ancho. Con [error] la pasa a gris y baja la opacidad a .5 (inventario §3). Con [mirrored] mira
+ * hacia la izquierda (la otra persona frente a ti).
+ *
+ * Con [talking] abre la boca; si además [animate] y el sistema permite animaciones, la boca abre y cierra
+ * y la P se balancea unos grados sobre el pie (la que habla). Con "reducir animaciones" queda quieta con
+ * la boca abierta.
  */
 @Composable
 internal fun SimulationMascot(
     color: Color,
     width: Dp,
     modifier: Modifier = Modifier,
-    error: Boolean = false
+    error: Boolean = false,
+    mirrored: Boolean = false,
+    talking: Boolean = false,
+    animate: Boolean = true,
+    eyeColor: Color = ParcheUPalette.Ink
 ) {
-    val ink = Color(0xFF14111F)
-    val tint = if (error) grayscale(color) else color
-    val height = width * 1.125f
-    Box(modifier.size(width, height).alpha(if (error) 0.5f else 1f)) {
-        Box(
-            Modifier.align(Alignment.TopCenter)
-                .offset(y = height * 0.054f)
-                .size(width * 0.08f, height * 0.142f)
-                .clip(RoundedCornerShape(50))
-                .background(tint)
-        )
-        Box(
-            Modifier.align(Alignment.BottomCenter)
-                .size(width, height * 0.89f)
-                .clip(
-                    RoundedCornerShape(
-                        topStartPercent = 48,
-                        topEndPercent = 52,
-                        bottomEndPercent = 44,
-                        bottomStartPercent = 46
-                    )
-                )
-                .background(tint)
-        )
-        Row(
-            Modifier.align(Alignment.Center).offset(y = -height * 0.04f),
-            horizontalArrangement = Arrangement.spacedBy(width * 0.2f)
-        ) {
-            repeat(2) {
-                Box(
-                    Modifier.size(
-                        width * 0.1f,
-                        height * 0.12f
-                    ).clip(CircleShape).background(ink.copy(alpha = .85f))
-                )
-            }
+    val systemAllows = rememberAnimationsEnabled()
+    val moving = talking && animate && systemAllows && !error
+    val phase =
+        if (moving) {
+            val transition = rememberInfiniteTransition(label = "simTalk")
+            transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec =
+                infiniteRepeatable(
+                    tween(TALK_PERIOD_MS, easing = LinearEasing),
+                    RepeatMode.Reverse
+                ),
+                label = "simTalkPhase"
+            ).value
+        } else {
+            0.5f
         }
-        Box(
-            Modifier.align(Alignment.Center)
-                .offset(y = height * 0.17f)
-                .width(width * 0.22f)
-                .size(width * 0.22f, height * 0.05f)
-                .clip(RoundedCornerShape(50))
-                .background(ink.copy(alpha = .85f))
+    val mouth =
+        when {
+            !talking -> MascotMouth.Quiet
+            moving && phase < MOUTH_CLOSED_BELOW -> MascotMouth.Quiet
+            else -> MascotMouth.Talking
+        }
+    val sway = (phase - 0.5f) * 2f * SWAY_DEGREES * if (mirrored) -1f else 1f
+    TwinMascotGlyph(
+        width = width,
+        color = if (error) grayscale(color) else color,
+        eyeColor = eyeColor,
+        mouth = mouth,
+        mirrored = mirrored,
+        modifier =
+        modifier
+            .graphicsLayer {
+                rotationZ = sway
+                // Pivote en el pie del tallo (22, 86 de la caja 80 × 90), espejado si mira a la izquierda.
+                transformOrigin = TransformOrigin(if (mirrored) 1f - FOOT_X else FOOT_X, FOOT_Y)
+            }
+            .alpha(if (error) 0.5f else 1f)
+    )
+}
+
+/** Quién habla en una escena de dos gemelos. */
+internal enum class TwinSpeaker { Me, Other, Nobody }
+
+/**
+ * Las dos P frente a frente: la tuya en violeta mirando a la derecha y la de la otra persona espejada,
+ * del color de su modo ([otherColor]), mirando hacia ti. Anima solo la que habla ([speaker]).
+ * Es decorativa: quien la usa describe la escena.
+ */
+@Composable
+internal fun FacingTwins(
+    otherColor: Color,
+    width: Dp,
+    modifier: Modifier = Modifier,
+    speaker: TwinSpeaker = TwinSpeaker.Nobody,
+    gap: Dp = 20.dp,
+    error: Boolean = false,
+    animate: Boolean = true,
+    myColor: Color = ParcheUTheme.colors.primary,
+    otherEyeColor: Color = ParcheUPalette.Ink
+) {
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(gap),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        SimulationMascot(
+            myColor,
+            width,
+            error = error,
+            talking = speaker == TwinSpeaker.Me,
+            animate = animate
+        )
+        SimulationMascot(
+            otherColor,
+            width,
+            error = error,
+            mirrored = true,
+            talking = speaker == TwinSpeaker.Other,
+            animate = animate,
+            eyeColor = otherEyeColor
         )
     }
 }
 
+private const val TALK_PERIOD_MS = 260
+private const val MOUTH_CLOSED_BELOW = 0.35f
+private const val SWAY_DEGREES = 4f
+private const val FOOT_X = 22f / 80f
+private const val FOOT_Y = 86f / 90f
+
 private fun grayscale(color: Color): Color {
-    val luminance = 0.299f * color.red + 0.587f * color.green + 0.114f * color.blue
+    val luminance = 0.2126f * color.red + 0.7152f * color.green + 0.0722f * color.blue
     return Color(luminance, luminance, luminance, color.alpha)
 }
 

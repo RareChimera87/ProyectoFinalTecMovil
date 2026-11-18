@@ -13,6 +13,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.EntitlementDto
 import me.santiagoreina.parcheu.contract.QuotaKind
+import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.components.compound.ParcheUModalDialogContent
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.plus.CancelDialogBody
@@ -158,6 +159,14 @@ class PlusScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun manageCanceled() = capture("g4_cancelada", manage(PlusTestData.canceled))
+
+    @Test
+    fun manageManualGrant() = capture("g4_plus_sin_play", manage(PlusTestData.manualGrant))
+
+    @Test
+    fun manageError() = capture("g4_error") {
+        ManageSubscriptionScreen(ManageUiState.Error(AppError.Network), ManageSubscriptionActions())
+    }
 
     @Test
     fun manageGrace() = capture("g4_gracia", manage(PlusTestData.grace))

@@ -13,6 +13,7 @@ import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.TwinAnswer
 import me.santiagoreina.parcheu.data.results.lockedReport
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.home.HomeCallbacks
@@ -32,6 +33,10 @@ import me.santiagoreina.parcheu.feature.results.ResultsActions
 import me.santiagoreina.parcheu.feature.results.ResultsContent
 import me.santiagoreina.parcheu.feature.results.ResultsScreen
 import me.santiagoreina.parcheu.feature.results.ResultsUiState
+import me.santiagoreina.parcheu.feature.twinquestions.TwinQuestionsContent
+import me.santiagoreina.parcheu.feature.twinquestions.TwinQuestionsPhase
+import me.santiagoreina.parcheu.feature.twinquestions.TwinQuestionsUiState
+import me.santiagoreina.parcheu.feature.twinquestions.seedQuestions
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,7 +45,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * E10.4: C1, D1, F7 y G1 con `fontScale = 1,3` en ambos temas. Cada captura se versiona (regresión,
+ * E10.4: C1, D1, F7, G1 y B1 con `fontScale = 1,3` en ambos temas. Cada captura se versiona (regresión,
  * `changeThreshold` 0,01) y además se verifica por semántica que ningún texto se recorte, que las
  * áreas táctiles midan al menos 48dp y que todo elemento accionable tenga etiqueta para TalkBack.
  */
@@ -124,6 +129,21 @@ class FontScaleScreenshotTest(private val dark: Boolean) {
         PaywallScreen(
             PaywallUiState(plans = PlansUi.Loaded(PlusTestData.plans)),
             PaywallActions()
+        )
+    }
+
+    /** B1 con la pregunta más larga de la semilla (5) y sus fotos: la foto cede altura, el texto no se corta. */
+    @Test
+    fun b1TwinQuestions() = capture("b1_preguntas") {
+        TwinQuestionsContent(
+            state = TwinQuestionsUiState(
+                phase = TwinQuestionsPhase.Answering,
+                questions = seedQuestions,
+                answers = (1..4).associateWith { TwinAnswer.A }
+            ),
+            onAnswer = {},
+            onClose = {},
+            onRetry = {}
         )
     }
 

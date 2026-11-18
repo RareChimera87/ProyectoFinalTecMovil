@@ -2,7 +2,7 @@ name: desplegar-api
 
 # E0.6 + ADR-0011. Flujo reutilizable de deploy-dev y deploy-prod:
 #   Jib -> Artifact Registry -> Cloud Run Job `migrate` (si falla, se detiene aquí y la API
-#   no se despliega) -> imagen de los jobs seed-demo/purge-demo -> servicio `api` -> humo de
+#   no se despliega) -> imagen de los jobs seed-demo/purge-demo/grant-plus -> servicio `api` -> humo de
 #   /v1/health, que debe responder con el SHA del commit (APP_VERSION lo fija Jib).
 # Autenticación con WIF (sa-deployer): sin llaves JSON.
 on:
@@ -83,11 +83,17 @@ jobs:
           gcloud run jobs update migrate --project "$PROYECTO" --region "$REGION" --image "$IMAGEN:$GITHUB_SHA" --quiet
           # --wait devuelve error si la ejecución falla: el job se detiene y la API no se despliega.
           gcloud run jobs execute migrate --project "$PROYECTO" --region "$REGION" --wait
-      - name: Imagen de seed-demo y purge-demo
+      - name: Imagen de seed-demo, purge-demo y grant-plus
         run: |
           for job in seed-demo purge-demo; do
             gcloud run jobs update "$job" --project "$PROYECTO" --region "$REGION" --image "$IMAGEN:$GITHUB_SHA" --quiet
           done
+          # grant-plus (Plus manual, enmienda de ADR-0013) existe solo tras el apply que lo declara: hasta entonces se avisa y se sigue.
+          if gcloud run jobs describe grant-plus --project "$PROYECTO" --region "$REGION" --format='value(name)' >/dev/null 2>&1; then
+            gcloud run jobs update grant-plus --project "$PROYECTO" --region "$REGION" --image "$IMAGEN:$GITHUB_SHA" --quiet
+          else
+            echo "::warning::El job grant-plus no existe todavía en $PROYECTO (falta terraform apply); no se actualiza su imagen."
+          fi
       - name: Despliega la API
         run: |
           # Variables, cuenta de servicio y escalado vienen de Terraform; aquí solo cambia la imagen.

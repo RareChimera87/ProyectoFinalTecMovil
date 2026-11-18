@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.feature.conocer.scenario
 
+import me.santiagoreina.parcheu.core.error.AI_BUDGET_MESSAGE
 import me.santiagoreina.parcheu.core.error.AppError
 
 /** Textos de F3 (los afina I2 con ux-copy). */
@@ -21,6 +22,7 @@ internal object ScenarioStrings {
     fun error(error: AppError): String = when (error) {
         AppError.ScenarioEnded -> ENDED_ACTION
         AppError.Network -> "Sin conexión. Revisa tu internet e inténtalo de nuevo."
+        is AppError.AiBudget -> AI_BUDGET_MESSAGE
         else -> "Algo salió mal. Inténtalo de nuevo."
     }
 }

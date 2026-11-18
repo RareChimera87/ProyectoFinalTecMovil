@@ -13,6 +13,7 @@ import me.santiagoreina.parcheu.contract.SimulationStatus
 import me.santiagoreina.parcheu.contract.SimulationSummary
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
+import me.santiagoreina.parcheu.designsystem.components.compound.initialsOf
 
 /** Datos de D1 del mockup 08a: los mismos 9 nodos de PU Grafo. */
 object ParcheSamples {
@@ -23,7 +24,7 @@ object ParcheSamples {
         mode: Mode,
         state: EdgeState,
         anonymous: Boolean = false
-    ) = NodeDto(id, label, label.take(1), null, affinity, mode, state, anonymous)
+    ) = NodeDto(id, label, initialsOf(label), null, affinity, mode, state, anonymous)
 
     val me = node("me", "Tú", 100, Mode.AMISTAD, EdgeState.CONNECTED)
 

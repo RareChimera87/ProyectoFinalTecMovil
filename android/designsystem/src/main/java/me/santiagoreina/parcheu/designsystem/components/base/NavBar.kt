@@ -48,7 +48,9 @@ data class NavBarItem(
     val activeIcon: Painter = icon,
     val unread: Int = 0,
     /** Texto de TalkBack para el estado del badge, p. ej. "3 sin leer"; si es nulo se usa el número. */
-    val unreadDescription: String? = null
+    val unreadDescription: String? = null,
+    /** Etiqueta de prueba del ítem (la pestaña completa); si es nula no se pone ninguna. */
+    val testTag: String? = null
 )
 
 /** Etiqueta de prueba del badge de un ítem de la NavBar. */
@@ -116,7 +118,8 @@ private fun NavBarEntry(
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .semantics(mergeDescendants = true) {
                 if (item.unread > 0) stateDescription = badgeText
-            },
+            }
+            .then(if (item.testTag != null) Modifier.testTag(item.testTag) else Modifier),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

@@ -63,12 +63,12 @@ interface IntroductionsRepository {
     suspend fun unlock(simulationId: String): ApiResult<ReportDto>
 }
 
-/** Un amigo elegible en E1. */
+/** Un amigo elegible en E1. [affinity] es `null` si aún no han simulado (conexión por invitación). */
 data class FriendOption(
     val id: String,
     val label: String,
     val initials: String,
-    val affinity: Int,
+    val affinity: Int?,
     val isDemo: Boolean = false
 )
 
@@ -99,7 +99,7 @@ class RemoteIntroductionsRepository(
     companion object {
         /**
          * Amigos de E1: nodos CONNECTED del modo con nombre (las conexiones mutuas llegan con su
-         * `users.id`), ordenados por afinidad y nombre.
+         * `users.id`), ordenados por afinidad medida (los aún sin simular al final) y nombre.
          */
         fun friendsOf(graph: GraphDto, mode: Mode): List<FriendOption> = graph.nodes
             .filter {
@@ -107,7 +107,11 @@ class RemoteIntroductionsRepository(
                     !it.anonymous
             }
             .distinctBy { it.id }
-            .sortedWith(compareByDescending<NodeDto> { it.affinity }.thenBy { it.label })
-            .map { FriendOption(it.id, it.label, it.initials, it.affinity, it.isDemo) }
+            .sortedWith(
+                compareByDescending<NodeDto> {
+                    it.measuredAffinity ?: -1
+                }.thenBy { it.label }
+            )
+            .map { FriendOption(it.id, it.label, it.initials, it.measuredAffinity, it.isDemo) }
     }
 }

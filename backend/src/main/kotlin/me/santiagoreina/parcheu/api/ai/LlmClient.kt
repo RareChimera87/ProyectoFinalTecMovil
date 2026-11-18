@@ -2,10 +2,14 @@ package me.santiagoreina.parcheu.api.ai
 
 import kotlinx.serialization.json.JsonObject
 
-/** Proveedores de LLM (ADR-0008). `FAKE` solo se admite con `ENV=local` y en los tests. */
+/**
+ * Proveedores de LLM (ADR-0008). `CLAUDE` es Claude en Vertex; `ANTHROPIC`, Claude por la API directa de
+ * Anthropic con clave. `FAKE` solo se admite con `ENV=local` y en los tests.
+ */
 enum class AiProvider(val id: String) {
     GEMINI("gemini"),
     CLAUDE("claude"),
+    ANTHROPIC("anthropic"),
     FAKE("fake"),
     ;
 

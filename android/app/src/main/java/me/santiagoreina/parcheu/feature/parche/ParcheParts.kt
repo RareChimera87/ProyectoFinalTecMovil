@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -51,20 +53,26 @@ import me.santiagoreina.parcheu.contract.NodeDto
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChipSize
+import me.santiagoreina.parcheu.designsystem.components.base.ModeChipStyle
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUPlusBadge
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
+import me.santiagoreina.parcheu.designsystem.components.compound.displayInitials
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
+import me.santiagoreina.parcheu.designsystem.theme.AFFINITY_UNMEASURED_LABEL
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
-import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
-import me.santiagoreina.parcheu.designsystem.theme.avatarColors
 import me.santiagoreina.parcheu.feature.safety.ReportOrBlockAction
+import me.santiagoreina.parcheu.feature.simulation.forMode
 
 const val PARCHE_SHEET_TAG = "parche_sheet"
 const val PARCHE_BANNER_TAG = "parche_banner"
 const val PARCHE_SKELETON_TAG = "parche_skeleton"
 const val PARCHE_DEMO_TAG = "parche_demo"
+const val PARCHE_AFFINITY_TAG = "parche_affinity"
 
 /** Insignia de D2 cuando el nodo es un perfil de demostración (ADR-0027). */
 const val PARCHE_DEMO_BADGE = "Perfil de demostración"
@@ -118,19 +126,26 @@ fun NodeAvatar(node: NodeDto, size: Dp, modifier: Modifier = Modifier) {
             )
         }
     } else {
-        val avatar = avatarColors(affinityAlpha(node.affinity), colors.isDark)
+        // Parche Vivo: el avatar lleva el pleno del modo (tinta encima, ≥ 5,3:1). Sin simular va hueco,
+        // con borde punteado del modo, igual que su nodo en el grafo.
+        val mode = colors.forMode(node.mode)
+        val unmeasured = node.measuredAffinity == null
         Box(
-            modifier = modifier.size(size).clip(CircleShape).background(avatar.fill),
+            modifier = modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(if (unmeasured) colors.s2 else mode.solid)
+                .then(if (unmeasured) Modifier.dashedBorder(mode.solid, size / 2) else Modifier),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = node.initials,
+                text = displayInitials(node.initials, node.label),
                 style =
                 MaterialTheme.typography.titleLarge.copy(
                     fontSize = (size.value * 0.37f).sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Bold
                 ),
-                color = avatar.content
+                color = if (unmeasured) colors.tx else mode.onSolid
             )
         }
     }
@@ -143,53 +158,99 @@ private fun Modifier.dashedBorder(color: androidx.compose.ui.graphics.Color, rad
             cornerRadius = CornerRadius(radius.toPx()),
             style =
             Stroke(
-                width = 1.5.dp.toPx(),
+                width = 2.dp.toPx(),
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))
             )
         )
     }
 
-/** Leyenda de aristas del grafo: sólida, punteada y tenue (inventario §3, GraphEdgeLegend). */
+/** Texto de TalkBack de la leyenda de D1. */
+const val GRAPH_LEGEND_DESCRIPTION =
+    "Conectados, simularon, pendiente y sin simular. Más cerca del centro, más afinidad."
+
+/**
+ * Leyenda de D1 (inventario §3, GraphEdgeLegend): las tres aristas, el nodo hueco "Sin simular" de
+ * Parche Vivo y cómo se leen los anillos. Se lee como un solo nodo.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GraphEdgeLegend(modifier: Modifier = Modifier) {
     val colors = ParcheUTheme.colors
-    Row(
-        modifier = modifier.fillMaxWidth().clearAndSetSemantics {
-            contentDescription = "Conectados, simularon y pendiente"
-        },
-        horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clearAndSetSemantics { contentDescription = GRAPH_LEGEND_DESCRIPTION },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        listOf("Conectados" to 0, "Simularon" to 1, "Pendiente" to 2).forEach { (label, kind) ->
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            LegendEdges()
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Canvas(Modifier.size(width = 22.dp, height = 4.dp)) {
-                    val y = size.height / 2
-                    when (kind) {
-                        0 -> drawLine(
-                            colors.tx,
-                            Offset(0f, y),
-                            Offset(size.width, y),
-                            2.5.dp.toPx()
-                        )
-                        1 -> drawLine(
-                            colors.tx,
-                            Offset(0f, y),
-                            Offset(size.width, y),
-                            2.dp.toPx(),
+                Canvas(Modifier.size(12.dp)) {
+                    drawCircle(
+                        color = colors.mu,
+                        radius = size.minDimension / 2 - 1.dp.toPx(),
+                        style = Stroke(
+                            width = 1.5.dp.toPx(),
                             pathEffect = PathEffect.dashPathEffect(
-                                floatArrayOf(4.dp.toPx(), 3.dp.toPx())
+                                floatArrayOf(2.5.dp.toPx(), 2.dp.toPx())
                             )
                         )
-                        else -> drawLine(
-                            colors.tx.copy(alpha = 0.35f),
-                            Offset(0f, y),
-                            Offset(size.width, y),
-                            1.5.dp.toPx()
-                        )
-                    }
+                    )
                 }
                 Spacer(Modifier.width(6.dp))
-                Text(label, style = MaterialTheme.typography.labelSmall, color = colors.mu)
+                Text(
+                    AFFINITY_UNMEASURED_LABEL,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.mu
+                )
             }
+        }
+        Text(
+            "Más cerca del centro, más afinidad",
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.mu
+        )
+    }
+}
+
+@Composable
+private fun LegendEdges() {
+    val colors = ParcheUTheme.colors
+    listOf("Conectados" to 0, "Simularon" to 1, "Pendiente" to 2).forEach { (label, kind) ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Canvas(Modifier.size(width = 22.dp, height = 4.dp)) {
+                val y = size.height / 2
+                when (kind) {
+                    0 -> drawLine(
+                        colors.tx,
+                        Offset(0f, y),
+                        Offset(size.width, y),
+                        2.5.dp.toPx()
+                    )
+                    1 -> drawLine(
+                        colors.tx,
+                        Offset(0f, y),
+                        Offset(size.width, y),
+                        2.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(
+                            floatArrayOf(4.dp.toPx(), 3.dp.toPx())
+                        )
+                    )
+                    else -> drawLine(
+                        colors.tx.copy(alpha = 0.35f),
+                        Offset(0f, y),
+                        Offset(size.width, y),
+                        1.5.dp.toPx()
+                    )
+                }
+            }
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall, color = colors.mu)
         }
     }
 }
@@ -197,79 +258,29 @@ fun GraphEdgeLegend(modifier: Modifier = Modifier) {
 /** Etiqueta de la entrada a amigos de amigos (D6) para ParcheU+. */
 const val PARCHE_FOF_ENTRY_TAG = "parche_fof_entry"
 
-/** Entrada de ParcheU+ a D6 (E6.3): misma forma que el banner, sin candado. */
+/** Entrada de ParcheU+ a D6 (E6.3): tarjeta de acceso tonal con la P, sin candado. */
 @Composable
 fun FriendsOfFriendsEntry(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = ParcheUTheme.colors
-    Row(
-        modifier =
-        modifier
-            .fillMaxWidth()
-            .testTag(PARCHE_FOF_ENTRY_TAG)
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.s1)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(
-            painter = parcheIconPainter(ParcheIcon.Friends),
-            contentDescription = null,
-            tint = colors.prt,
-            modifier = Modifier.size(20.dp)
-        )
-        Text(
-            text = "Amigos de amigos: personas afines a 2 pasos",
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.tx,
-            modifier = Modifier.weight(1f)
-        )
-        ParcheUPlusBadge()
-    }
+    ParchePlusEntry(
+        title = "Amigos de amigos: personas afines a 2 pasos",
+        subtitle = null,
+        locked = false,
+        onClick = onClick,
+        modifier = modifier,
+        tag = PARCHE_FOF_ENTRY_TAG
+    )
 }
 
 /** Banner de bloqueo para gratis: candado, texto y la insignia ParcheU+; lleva a D7 (y de ahí a G1). */
 @Composable
 fun LockedFeatureBanner(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = ParcheUTheme.colors
-    Row(
-        modifier =
-        modifier
-            .fillMaxWidth()
-            .testTag(PARCHE_BANNER_TAG)
-            .clip(RoundedCornerShape(16.dp))
-            .dashedBorderBox(colors.ln)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(
-            painter = parcheIconPainter(ParcheIcon.Lock),
-            contentDescription = null,
-            tint = colors.mu,
-            modifier = Modifier.size(20.dp)
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.tx,
-            modifier = Modifier.weight(1f)
-        )
-        ParcheUPlusBadge()
-    }
-}
-
-private fun Modifier.dashedBorderBox(color: androidx.compose.ui.graphics.Color) = drawBehind {
-    drawRoundRect(
-        color = color,
-        cornerRadius = CornerRadius(16.dp.toPx()),
-        style =
-        Stroke(
-            width = 1.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))
-        )
+    ParchePlusEntry(
+        title = text,
+        subtitle = "Personas afines a 2 pasos y tus grupos",
+        locked = true,
+        onClick = onClick,
+        modifier = modifier,
+        tag = PARCHE_BANNER_TAG
     )
 }
 
@@ -355,15 +366,13 @@ fun ParcheEmptyState(
                         )
                     )
                 }
-                drawCircle(colors.primary, 26.dp.toPx(), center)
+                drawCircle(colors.hero, 30.dp.toPx(), center)
             }
+            TwinMascotGlyph(width = 34.dp, color = colors.onHero, eyeColor = colors.hero)
         }
         Text(
             "Tu parche está por armarse",
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            ),
+            style = MaterialTheme.typography.headlineMedium,
             color = colors.tx,
             textAlign = TextAlign.Center
         )
@@ -395,23 +404,23 @@ fun ParcheErrorState(error: AppError, onRetry: () -> Unit, modifier: Modifier = 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically)
     ) {
-        Box(
-            Modifier.size(72.dp).clip(CircleShape).background(colors.s2),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = parcheIconPainter(ParcheIcon.CloudOff),
-                contentDescription = null,
-                tint = colors.mu,
-                modifier = Modifier.size(36.dp)
-            )
+        Box(contentAlignment = Alignment.BottomEnd) {
+            TwinMascot(size = TwinMascotSize.L, error = true, animationsEnabled = false)
+            Box(
+                Modifier.size(36.dp).clip(CircleShape).background(colors.s2),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = parcheIconPainter(ParcheIcon.CloudOff),
+                    contentDescription = null,
+                    tint = colors.mu,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
         Text(
             "No pudimos cargar tu parche",
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            ),
+            style = MaterialTheme.typography.headlineMedium,
             color = colors.tx,
             textAlign = TextAlign.Center
         )
@@ -491,31 +500,46 @@ fun NodeDetailSheet(
                     )
                     ModeChip(
                         label = node.mode.label(),
-                        mode =
-                        when (node.mode) {
-                            Mode.AMISTAD -> colors.friendship
-                            Mode.PAREJA -> colors.couple
-                            Mode.ESTUDIO -> colors.study
-                        },
+                        mode = colors.forMode(node.mode),
                         size = ModeChipSize.S,
-                        icon = parcheIconPainter(node.mode.icon())
+                        icon = parcheIconPainter(node.mode.icon()),
+                        style = ModeChipStyle.Tonal
                     )
                     if (node.isDemo) PillChip(PARCHE_DEMO_BADGE, Modifier.testTag(PARCHE_DEMO_TAG))
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${node.affinity} %",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = colors.prt
-                    )
-                    Text(
-                        "afinidad",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                        color = colors.mu
-                    )
+                val affinity = node.measuredAffinity
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier
+                        .testTag(PARCHE_AFFINITY_TAG)
+                        .clearAndSetSemantics { contentDescription = affinityDescription(affinity) }
+                ) {
+                    if (affinity != null) {
+                        Text(
+                            "$affinity %",
+                            style = MaterialTheme.typography.displaySmall.copy(fontSize = 30.sp),
+                            color = colors.prt,
+                            maxLines = 1
+                        )
+                        Text(
+                            "afinidad",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            color = colors.mu
+                        )
+                    } else {
+                        // Sin simular no es "0 %" ni una afinidad baja: pastilla hueca punteada, como
+                        // su nodo en el grafo.
+                        Text(
+                            AFFINITY_UNMEASURED_LABEL,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = colors.tx,
+                            modifier = Modifier
+                                .dashedBorder(colors.mu, 14.dp)
+                                .padding(horizontal = 12.dp, vertical = 7.dp)
+                        )
+                    }
                 }
             }
             SheetStatusRow(
@@ -535,8 +559,9 @@ fun NodeDetailSheet(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (node.state) {
                     EdgeState.CONNECTED -> {
+                        // Si aún no han simulado (conexión por invitación) no hay un "de nuevo".
                         TonalButton(
-                            "Simular de nuevo",
+                            if (node.measuredAffinity == null) "Simular" else "Simular de nuevo",
                             onSimulateAgain,
                             Modifier.fillMaxWidth(),
                             enabled = !sheet.starting,

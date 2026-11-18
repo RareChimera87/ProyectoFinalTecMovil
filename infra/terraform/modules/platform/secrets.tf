@@ -3,7 +3,9 @@
 # Terraform ni por el repo. scripts/check-plan.sh falla si aparece secret_data.
 
 locals {
-  secrets = toset(["hmac-anon-key", "play-sa"])
+  # anthropic-api-key: clave de la API directa de Anthropic, solo se usa con ai_provider = "anthropic"
+  # (ADR-0008, enmienda del 12 nov 2026). El contenedor existe siempre; sin versión no afecta a gemini.
+  secrets = toset(["hmac-anon-key", "play-sa", "anthropic-api-key"])
 }
 
 resource "google_secret_manager_secret" "this" {

@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -22,15 +24,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.Speaker
+import me.santiagoreina.parcheu.core.error.AI_BUDGET_MESSAGE
 import me.santiagoreina.parcheu.core.error.AppError
-import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
+import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
@@ -39,9 +44,13 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PillChip
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlockDefaults
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.safety.REPORT_TURN_INDEX
 import me.santiagoreina.parcheu.feature.safety.ReportAiContentAction
+import me.santiagoreina.parcheu.feature.simulation.FacingTwins
 import me.santiagoreina.parcheu.feature.simulation.SimulationIcons
 import me.santiagoreina.parcheu.feature.simulation.SimulationMascot
 import me.santiagoreina.parcheu.feature.simulation.forMode
@@ -134,16 +143,9 @@ private fun Loaded(content: ResultsContent, actions: ResultsActions) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .testTag(if (content.full) ResultsTags.FULL else ResultsTags.LOCKED + ":screen"),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.blockGapTight)
         ) {
             Header(content)
-            Text(
-                content.report.summary,
-                style = MaterialTheme.typography.bodyMedium,
-                color = ParcheUTheme.colors.mu,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.CenterHorizontally).widthIn(max = 280.dp)
-            )
             if (content.full) FullReport(content, actions) else Locked(content, actions)
             content.notice?.let { Notice(it, actions.onDismissNotice) }
         }
@@ -155,44 +157,67 @@ private fun Loaded(content: ResultsContent, actions: ResultsActions) {
 private fun Header(content: ResultsContent) {
     val colors = ParcheUTheme.colors
     val mode = colors.forMode(content.mode)
+    val score = content.report.score
+    val heroColors = HeroBlockDefaults.modeColors(mode)
+    // Las dos P, ya sin hablar, se miran de pie sobre el héroe: la tuya violeta y la otra espejada del
+    // color del modo. Debajo, la afinidad como número héroe en Sora 800 sobre el pleno del modo.
     Column(
-        Modifier.fillMaxWidth().padding(top = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        FacingTwins(otherColor = mode.solid, width = HEADER_MASCOT, gap = 30.dp)
+        HeroBlock(
+            title = "$score %",
+            overline = "Afinidad en ${content.mode.label()}",
+            subtitle = content.report.summary,
+            titleSize = HeroTitleSize.Number,
+            colors = heroColors
         ) {
-            SimulationMascot(colors.primary, 48.dp)
-            AffinityRing(content.report.score)
-            SimulationMascot(mode.solid, 48.dp)
-        }
-        Text(
-            "Tú y ${content.displayName} · afinidad ${affinityWord(content.report.score)}",
-            style = MaterialTheme.typography.titleLarge,
-            color = colors.tx,
-            textAlign = TextAlign.Center
-        )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ModeChip(label = content.mode.label(), mode = mode)
+            AffinityMeter(score, heroColors.content)
+            Text(
+                "Tú y ${content.displayName} · afinidad ${affinityWord(score)}",
+                style = MaterialTheme.typography.titleMedium,
+                color = heroColors.content,
+                modifier = Modifier.padding(top = 4.dp)
+            )
             if (content.isDemo) PillChip(DEMO_BADGE_TEXT, Modifier.testTag(ResultsTags.DEMO))
         }
     }
 }
 
+/** Barra de la afinidad dentro del héroe: pista tinta al 18 % y relleno tinta. Decorativa (el número la dice). */
+@Composable
+private fun AffinityMeter(score: Int, ink: Color) {
+    val shape = RoundedCornerShape(4.dp)
+    Box(
+        Modifier.fillMaxWidth()
+            .padding(top = 2.dp)
+            .height(8.dp)
+            .clip(shape)
+            .background(ink.copy(alpha = 0.18f))
+            .clearAndSetSemantics { }
+    ) {
+        Box(
+            Modifier.fillMaxHeight()
+                .fillMaxWidth(score.coerceIn(0, 100) / 100f)
+                .clip(shape)
+                .background(ink)
+        )
+    }
+}
+
+private val HEADER_MASCOT = 64.dp
+
 @Composable
 private fun FullReport(content: ResultsContent, actions: ResultsActions) {
     val colors = ParcheUTheme.colors
+    val mode = colors.forMode(content.mode)
     val reasons = content.report.reasons.orEmpty()
     val frictions = content.report.frictions.orEmpty()
     if (reasons.isNotEmpty()) {
-        ParcheUCard(Modifier.fillMaxWidth()) {
+        ModeSpineCard(mode = mode, modifier = Modifier.fillMaxWidth()) {
             CardOverline("Por qué son compatibles")
-            reasons.forEach { ReportRow(it, rememberResultsIcon(ResultsIcons.Reason), colors.prt) }
+            reasons.forEach { ReportRow(it, rememberResultsIcon(ResultsIcons.Reason), mode.text) }
         }
     }
     if (frictions.isNotEmpty()) {
@@ -381,6 +406,7 @@ private fun errorText(error: AppError): String = when (error) {
     AppError.Network -> "Sin conexión. Inténtalo de nuevo."
     AppError.Blocked -> "No puedes conectar con esta persona."
     AppError.NotFound -> "Este resultado ya no está disponible."
+    is AppError.AiBudget -> AI_BUDGET_MESSAGE
     else -> "Algo salió mal. Inténtalo de nuevo."
 }
 
@@ -409,9 +435,10 @@ private fun TranscriptScreen(
     modifier: Modifier
 ) {
     val colors = ParcheUTheme.colors
+    val mode = colors.forMode(content.mode)
     Column(modifier.fillMaxSize().background(colors.bg).testTag(ResultsTags.TRANSCRIPT)) {
         ParcheUChildTopBar(
-            title = "Conversación de los gemelos",
+            title = "Conversación",
             navigationIcon = rememberIcon(SimulationIcons.ArrowBack),
             navigationContentDescription = "Volver",
             onNavigationClick = actions.onCloseTranscript
@@ -430,9 +457,13 @@ private fun TranscriptScreen(
                 ).padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                TranscriptLegend(content)
                 var turnIndex = 0
                 transcript.transcript.scenarios.forEachIndexed { index, scenario ->
-                    CardOverline("Escenario ${index + 1} · ${scenario.title}")
+                    CardOverline(
+                        "Escenario ${index + 1} · ${scenario.title}",
+                        Modifier.padding(top = 8.dp)
+                    )
                     scenario.turns.forEach { turn ->
                         val mine = turn.speaker == Speaker.ME
                         val thisTurn = turnIndex++
@@ -450,10 +481,10 @@ private fun TranscriptScreen(
                             Text(
                                 turn.text,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (mine) colors.onprc else colors.tx,
+                                color = if (mine) colors.onprc else mode.onContainer,
                                 modifier = Modifier.widthIn(max = 280.dp)
                                     .clip(RoundedCornerShape(16.dp))
-                                    .background(if (mine) colors.prc else colors.s1)
+                                    .background(if (mine) colors.prc else mode.container)
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                             if (!mine && !content.fromScenario) {
@@ -462,13 +493,38 @@ private fun TranscriptScreen(
                         }
                     }
                 }
-                Text(
-                    "Tu gemelo a la derecha; el de ${content.displayName} a la izquierda.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.mu,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
             }
         }
     }
 }
+
+/**
+ * Cabecera de la conversación: el gemelo de la otra persona a la izquierda (color del modo, mirando a la
+ * derecha) y el tuyo a la derecha (violeta, espejado), como van los globos, con la leyenda en texto.
+ */
+@Composable
+private fun TranscriptLegend(content: ResultsContent) {
+    val colors = ParcheUTheme.colors
+    val mode = colors.forMode(content.mode)
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(ParcheUTheme.shapes.card)
+            .background(colors.s1)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            SimulationMascot(mode.solid, LEGEND_MASCOT)
+            SimulationMascot(colors.primary, LEGEND_MASCOT, mirrored = true)
+        }
+        Text(
+            "Tu gemelo a la derecha; el de ${content.displayName} a la izquierda.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.mu,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+private val LEGEND_MASCOT = 28.dp

@@ -76,6 +76,17 @@ variable "ai_user_daily_budget_usd" {
   default     = "0.75"
 }
 
+variable "ai_provider" {
+  description = "Proveedor de IA de la API (AI_PROVIDER): gemini (Vertex), claude (Claude en Vertex) o anthropic (API directa de Anthropic con la clave del secreto anthropic-api-key)."
+  type        = string
+  default     = "gemini"
+
+  validation {
+    condition     = contains(["gemini", "claude", "anthropic"], var.ai_provider)
+    error_message = "ai_provider debe ser gemini, claude o anthropic (fake solo existe con ENV=local)."
+  }
+}
+
 variable "api_cpu" {
   type    = string
   default = "1"

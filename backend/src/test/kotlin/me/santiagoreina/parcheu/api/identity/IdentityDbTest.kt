@@ -31,7 +31,10 @@ import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
 import me.santiagoreina.parcheu.api.identity.profile.ExposedProfileRepository
 import me.santiagoreina.parcheu.api.identity.profile.ProfileService
 import me.santiagoreina.parcheu.api.platform.AppContainer
-import me.santiagoreina.parcheu.api.quota.inMemoryQuotaModule
+import me.santiagoreina.parcheu.api.billing.ExposedBillingStore
+import me.santiagoreina.parcheu.api.billing.StoredEntitlementService
+import me.santiagoreina.parcheu.api.platform.config.Env
+import me.santiagoreina.parcheu.api.quota.quotaModule
 import me.santiagoreina.parcheu.api.ai.testGateway
 import me.santiagoreina.parcheu.api.twin.inMemoryTwinModule
 import me.santiagoreina.parcheu.api.platform.allDomains
@@ -76,9 +79,10 @@ class IdentityDbTest : FunSpec({
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")
 
     fun container(db: Database, version: String): AppContainer {
-        val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, version)
+        // Cuotas como en producción: `StoredEntitlementService` sobre la tabla `entitlements`.
+        val quota = quotaModule(Env.DEV, db, FIXED_CLOCK)
+        val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, version, quota.entitlements)
         val profile = ProfileService(identity, ExposedProfileRepository(db), FIXED_CLOCK)
-        val quota = inMemoryQuotaModule(FIXED_CLOCK)
         val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())
         return AppContainer(
             config = testConfig(),
@@ -125,6 +129,20 @@ class IdentityDbTest : FunSpec({
                         .awaitAll().map { it.id }.toSet().size shouldBe 1
                 }
                 transaction(db) { Users.selectAll().where { Users.firebaseUid eq "carrera" }.count() } shouldBe 1L
+            }
+        }
+
+    test("plus de /v1/session y /v1/me refleja la fila de entitlements (sin fila, ACTIVE vigente)")
+        .config(enabled = TestDatabase.enabled) {
+            withApp { client, db ->
+                val ana = client.session("ana").me
+                ana.plus shouldBe false
+                client.terms("ana", TEST_LEGAL_VERSION)
+                client.get("/v1/me") { auth("ana") }.body<MeDto>().plus shouldBe false
+
+                StoredEntitlementService(ExposedBillingStore(db)).grantPlus(UUID.fromString(ana.id), days = 30, now = FIXED_CLOCK.instant())
+                client.session("ana").me.plus shouldBe true
+                client.get("/v1/me") { auth("ana") }.body<MeDto>().plus shouldBe true
             }
         }
 

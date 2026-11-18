@@ -19,6 +19,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.NO_PLUS
 import me.santiagoreina.parcheu.api.TASKS_ACCOUNT
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
@@ -73,7 +74,7 @@ class ModesDbTest : FunSpec({
     fun HttpRequestBuilder.auth(uid: String) = header(HttpHeaders.Authorization, "Bearer ${FakeTokenVerifier.tokenFor(uid)}")
 
     fun container(db: Database): AppContainer {
-        val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, TEST_LEGAL_VERSION)
+        val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, TEST_LEGAL_VERSION, NO_PLUS)
         val profile = ProfileService(identity, ExposedProfileRepository(db), FIXED_CLOCK)
         val quota = inMemoryQuotaModule(FIXED_CLOCK)
         val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())

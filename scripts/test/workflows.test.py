@@ -334,6 +334,17 @@ class AndroidReleaseUrlsProd(unittest.TestCase):
         self.assertNotIn("hostingRelleno", gradle)
         self.assertIn('prodApiRelleno = "https://api-parcheu-prod.us-central1.run.app/"', gradle)
 
+    def test_api_de_prod_por_defecto_es_la_real(self):
+        """Desde 0.2.2 el valor por defecto de la API de prod es la URL real (la de PARCHEU_API_URL_PROD en
+        docs/pendientes-humanos.md), no el relleno: un APK construido sin -P no puede quedar apuntando a un 404."""
+        gradle = (RAIZ / "android" / "app" / "build.gradle.kts").read_text(encoding="utf-8")
+        real = "https://api-n3yxvjziqq-uc.a.run.app/"
+        self.assertIn(f'prodApiDefecto = "{real}"', gradle)
+        self.assertIn('urlProperty("parcheu.apiUrl.prod", prodApiDefecto)', gradle)
+        self.assertNotIn('urlProperty("parcheu.apiUrl.prod", prodApiRelleno)', gradle)
+        pendientes = (RAIZ / "docs" / "pendientes-humanos.md").read_text(encoding="utf-8")
+        self.assertIn(f"PARCHEU_API_URL_PROD={real}", pendientes)
+
     def test_hosting_sin_barra_final(self):
         run = next(p for p in self.pasos if p.get("name", "").startswith("Validar las URLs de prod"))["run"]
         self.assertIn('"$HOSTING_URL_PROD" != */', run)

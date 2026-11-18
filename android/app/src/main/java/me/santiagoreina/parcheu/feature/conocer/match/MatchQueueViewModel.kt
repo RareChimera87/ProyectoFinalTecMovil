@@ -19,6 +19,7 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.contract.TicketDto
 import me.santiagoreina.parcheu.contract.TicketStatus
+import me.santiagoreina.parcheu.contract.Usage
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.plus.PlusErrorRouter
@@ -35,6 +36,12 @@ sealed interface QueuePhase {
     /** Ticket `MATCHED`: F2 ya se abrió o está por abrirse. */
     data class Matched(val matchId: String) : QueuePhase
 
+    /**
+     * El match del día ya se resolvió (se eligió simulación o escenario, o venció): F1 no lo presenta como
+     * nuevo ni abre F2 sola; dice que ya se usó y ofrece verlo.
+     */
+    data class AlreadyUsed(val matchId: String) : QueuePhase
+
     /** El ticket venció a las 24 h sin match. */
     data object Expired : QueuePhase
 
@@ -45,7 +52,9 @@ data class MatchQueueUiState(
     val mode: Mode,
     /** Modos que el usuario puede elegir (los que tiene activos). */
     val activeModes: List<Mode> = Mode.entries,
-    val phase: QueuePhase = QueuePhase.Searching
+    val phase: QueuePhase = QueuePhase.Searching,
+    /** Cupo diario de match al azar (`GET /v1/home`); `null` mientras carga o si falló. */
+    val dailyQuota: Usage? = null
 )
 
 sealed interface MatchQueueEffect {
@@ -69,6 +78,8 @@ class MatchQueueViewModel(
     activeModes: List<Mode> = Mode.entries,
     /** Modos que el usuario tiene encendidos (`GET /v1/me`); `null` si no se pudieron leer. */
     private val loadActiveModes: (suspend () -> List<Mode>?)? = null,
+    /** Cupo diario de match al azar (el mismo dato de C1 Inicio); `null` si no se pudo leer. */
+    private val loadDailyQuota: (suspend () -> Usage?)? = null,
     private val pollIntervalMs: Long = POLL_INTERVAL_MS
 ) : ViewModel() {
     private val _state = MutableStateFlow(
@@ -86,11 +97,18 @@ class MatchQueueViewModel(
     val effects: Flow<MatchQueueEffect> = _effects.receiveAsFlow()
 
     private var searchJob: Job? = null
+    private var cancelJob: Job? = null
     private var opened = false
     private var modesLoaded = loadActiveModes == null
 
     init {
         search(cancelPrevious = false)
+        loadDailyQuota?.let { load ->
+            viewModelScope.launch {
+                val quota = load() ?: return@launch
+                _state.update { it.copy(dailyQuota = quota) }
+            }
+        }
     }
 
     companion object {
@@ -106,10 +124,29 @@ class MatchQueueViewModel(
 
     fun onRetry() = search(cancelPrevious = false)
 
-    /** "Cancelar búsqueda": `DELETE /v1/match/queue` y vuelve a Inicio. */
+    /**
+     * F1 vuelve a primer plano. Red de seguridad: si se muestra "Buscando…" pero no hay búsqueda viva (la X
+     * canceló la fila y la pantalla se restauró igual), se vuelve a entrar; si no, no hace nada. Con la
+     * búsqueda viva (cambio de pestaña sin cancelar) o con el DELETE de la X en curso, no toca nada.
+     */
+    fun onResumed() {
+        if (_state.value.phase != QueuePhase.Searching) return
+        if (searchJob?.isActive == true || cancelJob?.isActive == true) return
+        search(cancelPrevious = false)
+    }
+
+    /**
+     * "Cancelar búsqueda" y la X: con búsqueda en curso, `DELETE /v1/match/queue` y vuelve a Inicio. Sin fila
+     * viva (match encontrado o ya usado, vencido, error) no hay nada que cancelar: solo se sale, para que la X
+     * nunca deje al usuario atrapado en F1 si el DELETE falla.
+     */
     fun onCancel() {
         searchJob?.cancel()
-        viewModelScope.launch {
+        if (_state.value.phase != QueuePhase.Searching) {
+            viewModelScope.launch { _effects.send(MatchQueueEffect.Close) }
+            return
+        }
+        cancelJob = viewModelScope.launch {
             when (val result = repository.cancel()) {
                 is ApiResult.Success -> _effects.send(MatchQueueEffect.Close)
                 is ApiResult.Failure -> _state.update {
@@ -120,9 +157,12 @@ class MatchQueueViewModel(
     }
 
     fun onOpenMatchAgain() {
-        (_state.value.phase as? QueuePhase.Matched)?.let {
-            viewModelScope.launch { _effects.send(MatchQueueEffect.OpenMatch(it.matchId)) }
+        val id = when (val phase = _state.value.phase) {
+            is QueuePhase.Matched -> phase.matchId
+            is QueuePhase.AlreadyUsed -> phase.matchId
+            else -> return
         }
+        viewModelScope.launch { _effects.send(MatchQueueEffect.OpenMatch(id)) }
     }
 
     /**
@@ -229,6 +269,12 @@ class MatchQueueViewModel(
         }
     }
 
+    /** `true` si el match ya no espera la elección propia (se eligió, está en simulación o venció). */
+    private suspend fun isResolved(matchId: String): Boolean {
+        val match = (repository.match(matchId) as? ApiResult.Success)?.value ?: return false
+        return match.status != MatchStatus.PENDING_CHOICE || match.myChoice != null
+    }
+
     private suspend fun onTicket(ticket: TicketDto) {
         // Un ticket de otro modo es de una fila anterior (cambio de modo en curso).
         if (ticket.mode != _state.value.mode) return
@@ -237,6 +283,13 @@ class MatchQueueViewModel(
             TicketStatus.EXPIRED -> _state.update { it.copy(phase = QueuePhase.Expired) }
             TicketStatus.MATCHED -> {
                 val id = ticket.matchId ?: return
+                // El listener repite el ticket: un match ya marcado como usado sigue así.
+                if (_state.value.phase == QueuePhase.AlreadyUsed(id)) return
+                if (!opened && isResolved(id)) {
+                    opened = true
+                    _state.update { it.copy(phase = QueuePhase.AlreadyUsed(id)) }
+                    return
+                }
                 _state.update { it.copy(phase = QueuePhase.Matched(id)) }
                 if (!opened) {
                     opened = true

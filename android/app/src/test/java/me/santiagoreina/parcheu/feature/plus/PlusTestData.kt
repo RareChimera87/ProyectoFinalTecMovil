@@ -54,4 +54,10 @@ object PlusTestData {
     val grace = entitlement(EntitlementState.IN_GRACE_PERIOD, autoRenewing = true)
     val paused = entitlement(EntitlementState.PAUSED, autoRenewing = false)
     val free = EntitlementDto(plus = false, state = EntitlementState.NONE)
+
+    /**
+     * ParcheU+ concedido a mano en el servidor (`product_id = 'manual-grant'`): así lo serializa
+     * `BillingService.toDto`, sin plan base y sin renovación automática.
+     */
+    val manualGrant = entitlement(basePlan = null, autoRenewing = false)
 }

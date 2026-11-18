@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -21,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
@@ -29,10 +29,17 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 /** Proporción alto / ancho de la mascota (docs/mockups-inventario.md, "Dimensión de mascota"). */
 const val MASCOT_ASPECT_RATIO = 1.125f
+
+/**
+ * Ancho máximo al que se dibuja la variante simplificada de "La P que mira": sin boca ni brillo del
+ * tallo y con el ojo más grande, para que a 24-30 dp se siga leyendo (docs/ui/parche-vivo.md).
+ */
+val MASCOT_SIMPLIFIED_MAX_WIDTH: Dp = 30.dp
 
 /** Tamaños oficiales de la mascota: ancho en dp. El alto siempre es 1,125 × el ancho. */
 enum class TwinMascotSize(val width: Dp) {
@@ -47,10 +54,21 @@ enum class TwinMascotSize(val width: Dp) {
 /** Color de la mascota por rol: violeta para el usuario; el color del modo para el otro. */
 enum class TwinMascotTone { User, Friendship, Couple, Study }
 
+/** Descripción sugerida para TalkBack cuando la mascota no es decorativa. */
+const val TWIN_MASCOT_DESCRIPTION = "Tu gemelo, la P de ParcheU"
+
 /**
- * Gemelo digital dibujado en Canvas: blob, antena, ojos y boca. Con [talking] mueve la antena y abre y
- * cierra la boca; si el sistema tiene la escala de animaciones en 0 (o [animationsEnabled] es falso)
- * se dibuja quieta. En [error] se muestra con opacidad .5 y en escala de grises.
+ * Gemelo digital "La P que mira" (dirección A "Parche Vivo"): el monograma P de ParcheU cuya
+ * contraforma es un ojo grande con brillo y, debajo, una boca de media luna. Se tiñe con el color del
+ * rol ([tone]); el ojo y la boca van en tinta #14111F.
+ *
+ * - A [TwinMascotSize.S] (30 dp, ≤ [MASCOT_SIMPLIFIED_MAX_WIDTH]) se dibuja la variante simplificada.
+ * - Con [talking] la boca se abre y cierra, el brillo del ojo mira de lado a lado y la P se balancea
+ *   unos grados; si el sistema tiene la escala de animaciones en 0 (o [animationsEnabled] es falso)
+ *   queda quieta en la pose de "conversando" (boca abierta).
+ * - En [error] se dibuja en escala de grises con opacidad .5.
+ * - Sin [contentDescription] es decorativa (TalkBack la salta); para anunciarla usa, por ejemplo,
+ *   [TWIN_MASCOT_DESCRIPTION].
  */
 @Composable
 fun TwinMascot(
@@ -71,7 +89,6 @@ fun TwinMascot(
             TwinMascotTone.Study -> colors.study.solid
         }
     val body = if (error) base.toGray() else base
-    val features = colors.onMode.copy(alpha = FEATURE_ALPHA)
 
     val phase =
         if (talking && animationsEnabled) {
@@ -101,13 +118,58 @@ fun TwinMascot(
             Modifier.clearAndSetSemantics { mascotPhase = phase }
         }
 
+    val simplified = size.width <= MASCOT_SIMPLIFIED_MAX_WIDTH
     Canvas(
         modifier
             .size(size.width, size.height)
             .then(if (error) Modifier.alpha(ERROR_ALPHA) else Modifier)
             .then(semanticsModifier)
     ) {
-        drawMascot(body, features, phase)
+        drawPMascot(
+            body = body,
+            eye = colors.onMode,
+            simplified = simplified,
+            mouth = if (talking) MascotMouth.Talking else MascotMouth.Quiet,
+            phase = phase
+        )
+    }
+}
+
+/** Boca de la mascota: media luna quieta u óvalo de "conversando". */
+enum class MascotMouth { Quiet, Talking }
+
+/**
+ * La misma P sin animación ni semántica, a cualquier ancho y con colores libres: para el cupo semanal
+ * (`QuotaMascots`), el logo (`ParcheULogo`), el ícono de la app y las ilustraciones locales. Sigue la
+ * regla de la mascota pequeña: con [width] ≤ [MASCOT_SIMPLIFIED_MAX_WIDTH] se dibuja simplificada.
+ *
+ * [eyeColor] es el color de la contraforma: tinta por defecto; sobre un bloque de color (p. ej. una P
+ * blanca sobre el héroe violeta) pasa el color de ese fondo para que el ojo se lea como un hueco.
+ * Es decorativa: el llamador pone la descripción accesible en el contenedor.
+ *
+ * [lookingLeft] (experimental, sin uso en pantallas) deja la P sin espejar pero corre el brillo al lado
+ * izquierdo del ojo, para que "mire" hacia una P que está a su izquierda: alternativa a [mirrored], que
+ * hace que la P del otro se lea como una "q". Por defecto es `false` y la mascota no cambia.
+ */
+@Composable
+fun TwinMascotGlyph(
+    width: Dp,
+    color: Color,
+    modifier: Modifier = Modifier,
+    eyeColor: Color = ParcheUPalette.Ink,
+    mouth: MascotMouth = MascotMouth.Quiet,
+    simplified: Boolean = width <= MASCOT_SIMPLIFIED_MAX_WIDTH,
+    mirrored: Boolean = false,
+    lookingLeft: Boolean = false
+) {
+    val lookLeft = if (simplified) LOOK_LEFT_SIMPLIFIED else LOOK_LEFT_UNITS
+    val glance = if (lookingLeft) -lookLeft else 0f
+    Canvas(modifier.size(width, width * MASCOT_ASPECT_RATIO).clearAndSetSemantics { }) {
+        if (mirrored) {
+            scale(-1f, 1f) { drawPMascot(color, eyeColor, simplified, mouth, 0f, glance) }
+        } else {
+            drawPMascot(color, eyeColor, simplified, mouth, 0f, glance)
+        }
     }
 }
 
@@ -134,84 +196,106 @@ internal fun Color.toGray(): Color {
     return Color(l, l, l, alpha)
 }
 
-private fun DrawScope.drawMascot(body: Color, features: Color, phase: Float) {
-    val w = size.width
-    val h = size.height
-    // Cuerpo: ocupa el 81,7 % inferior del alto; la antena el resto.
-    val top = h * ANTENNA_AREA
-    val bodyH = h - top
-    drawPath(blobPath(w, bodyH, top), body)
+/*
+ * Geometría de "La P que mira" en una caja de 80 × 90 unidades (la de los SVG de la propuesta,
+ * gen_mascotas2.py, tarjeta 02). Todo se escala con k = ancho / 80.
+ *
+ *   P:      M10 20 Q10 8 22 8 H44 A28 28 0 0 1 44 64 H34 V76 Q34 86 22 86 Q10 86 10 76 Z
+ *   Tallo:  M10 20 Q10 8 22 8 H34 V76 Q34 86 22 86 Q10 86 10 76 Z  (blanco al 24 %, solo completa)
+ *   Ojo:    elipse (47, 32) 10 × 12,5 y brillo blanco (51, 26,5) r 3,4
+ *   Boca:   media elipse (47, 51) 6,5 × 5,5 (quieta) u óvalo (47, 54) 5 × 4,2 (conversando)
+ *   Simplificada (≤ 30 dp): sin tallo claro ni boca; ojo (47, 35) 13 × 16 y brillo (52, 28) r 4,5.
+ */
+internal fun DrawScope.drawPMascot(
+    body: Color,
+    eye: Color,
+    simplified: Boolean,
+    mouth: MascotMouth,
+    phase: Float,
+    glanceUnits: Float = 0f
+) {
+    val k = size.width / VIEW_W
+    val animating = phase != 0f
+    // Balanceo leve con pivote en el pie del tallo: -1 a 1 según la fase.
+    val swing = if (animating) (phase - 0.5f) * 2f else 0f
+    rotate(swing * SWAY_DEGREES, pivot = Offset(22f * k, 86f * k)) {
+        drawPath(pPath(k), body)
+        if (!simplified) drawPath(stemPath(k), Color.White.copy(alpha = STEM_HIGHLIGHT_ALPHA))
 
-    // Antena: tallo tipo píldora y bola maciza del color del cuerpo; en 'conversando' se balancea.
-    val baseX = w * 0.5f
-    val sway = (phase - 0.5f) * 2f * ANTENNA_SWAY_DEGREES * (if (phase == 0f) 0f else 1f)
-    rotate(sway, pivot = Offset(baseX, top)) {
-        val ballR = w * 0.07f
-        val ballCy = ballR
-        val stalkW = w * 0.06f
-        drawRoundRect(
-            body,
-            topLeft = Offset(baseX - stalkW / 2f, ballCy),
-            size = Size(stalkW, top - ballCy + bodyH * 0.02f),
-            cornerRadius = CornerRadius(stalkW / 2f)
+        val eyeCx = 47f * k
+        val eyeCy = (if (simplified) 35f else 32f) * k
+        val eyeRx = (if (simplified) 13f else 10f) * k
+        val eyeRy = (if (simplified) 16f else 12.5f) * k
+        drawOval(
+            eye,
+            topLeft = Offset(eyeCx - eyeRx, eyeCy - eyeRy),
+            size = Size(eyeRx * 2, eyeRy * 2)
         )
-        drawCircle(body, radius = ballR, center = Offset(baseX, ballCy))
-    }
+        // Brillo: al conversar "mira" de lado a lado dentro del ojo.
+        val glance = (swing * GLANCE_UNITS + glanceUnits) * k
+        val glintX = (if (simplified) 52f else 51f) * k + glance
+        val glintY = (if (simplified) 28f else 26.5f) * k
+        val glintR = (if (simplified) 4.5f else 3.4f) * k
+        drawCircle(Color.White, radius = glintR, center = Offset(glintX, glintY))
 
-    // Ojos ovalados opacos: 0,13 w x 0,18 del alto del cuerpo, a 36 % de alto y 27 % de ancho.
-    val eyeW = w * 0.13f
-    val eyeH = bodyH * 0.18f
-    val eyeY = top + bodyH * 0.36f
-    drawOval(features, Offset(w * 0.27f, eyeY), Size(eyeW, eyeH))
-    drawOval(features, Offset(w * 0.73f - eyeW, eyeY), Size(eyeW, eyeH))
-
-    // Boca: media elipse rellena (0,18 w, a 63 %); al conversar se abre y cierra.
-    val mouthW = w * 0.18f
-    val mouthTop = top + bodyH * 0.63f
-    val openH = mouthW * (0.5f + 0.5f * phase)
-    val path = Path().apply {
-        arcTo(
-            Rect(
-                w * 0.5f - mouthW / 2f,
-                mouthTop - openH,
-                w * 0.5f + mouthW / 2f,
-                mouthTop + openH
-            ),
-            0f,
-            180f,
-            true
-        )
-        close()
-    }
-    drawPath(path, features)
-}
-
-/** Blob con radios elípticos "48% 52% 44% 46% / 56% 54% 46% 44%" del inventario. */
-private fun blobPath(w: Float, h: Float, yOffset: Float): Path {
-    val tlx = w * 0.48f
-    val trx = w * 0.52f
-    val brx = w * 0.44f
-    val blx = w * 0.46f
-    val tly = h * 0.56f
-    val topRightY = h * 0.54f
-    val bry = h * 0.46f
-    val bly = h * 0.44f
-    return Path().apply {
-        moveTo(tlx, yOffset)
-        lineTo(w - trx, yOffset)
-        arcTo(Rect(w - 2 * trx, yOffset, w, yOffset + 2 * topRightY), -90f, 90f, false)
-        lineTo(w, yOffset + h - bry)
-        arcTo(Rect(w - 2 * brx, yOffset + h - 2 * bry, w, yOffset + h), 0f, 90f, false)
-        lineTo(blx, yOffset + h)
-        arcTo(Rect(0f, yOffset + h - 2 * bly, 2 * blx, yOffset + h), 90f, 90f, false)
-        lineTo(0f, yOffset + tly)
-        arcTo(Rect(0f, yOffset, 2 * tlx, yOffset + 2 * tly), 180f, 90f, false)
-        close()
+        if (!simplified) {
+            when (mouth) {
+                MascotMouth.Quiet -> drawPath(smilePath(k), eye)
+                MascotMouth.Talking -> {
+                    val open = if (animating) 0.35f + 0.65f * phase else 1f
+                    val rx = 5f * k
+                    val ry = 4.2f * k * open
+                    drawOval(
+                        eye,
+                        topLeft = Offset(47f * k - rx, 54f * k - ry),
+                        size = Size(rx * 2, ry * 2)
+                    )
+                }
+            }
+        }
     }
 }
 
-private const val FEATURE_ALPHA = 0.85f
+private fun pPath(k: Float): Path = Path().apply {
+    moveTo(10f * k, 20f * k)
+    quadraticTo(10f * k, 8f * k, 22f * k, 8f * k)
+    lineTo(44f * k, 8f * k)
+    // Arco de 28 alrededor de (44, 36): de arriba (44, 8) a abajo (44, 64) por la derecha.
+    arcTo(Rect(16f * k, 8f * k, 72f * k, 64f * k), -90f, 180f, false)
+    lineTo(34f * k, 64f * k)
+    lineTo(34f * k, 76f * k)
+    quadraticTo(34f * k, 86f * k, 22f * k, 86f * k)
+    quadraticTo(10f * k, 86f * k, 10f * k, 76f * k)
+    close()
+}
+
+private fun stemPath(k: Float): Path = Path().apply {
+    moveTo(10f * k, 20f * k)
+    quadraticTo(10f * k, 8f * k, 22f * k, 8f * k)
+    lineTo(34f * k, 8f * k)
+    lineTo(34f * k, 76f * k)
+    quadraticTo(34f * k, 86f * k, 22f * k, 86f * k)
+    quadraticTo(10f * k, 86f * k, 10f * k, 76f * k)
+    close()
+}
+
+private fun smilePath(k: Float): Path = Path().apply {
+    val rx = 6.5f * k
+    val ry = 5.5f * k
+    val cx = 47f * k
+    val cy = 51f * k
+    moveTo(cx + rx, cy)
+    arcTo(Rect(cx - rx, cy - ry, cx + rx, cy + ry), 0f, 180f, false)
+    close()
+}
+
+private const val VIEW_W = 80f
 private const val ERROR_ALPHA = 0.5f
-private const val ANTENNA_AREA = 0.183f
-private const val ANTENNA_SWAY_DEGREES = 12f
+private const val STEM_HIGHLIGHT_ALPHA = 0.24f
+private const val SWAY_DEGREES = 4f
+private const val GLANCE_UNITS = 2.5f
+
+/** Corrimiento del brillo con `lookingLeft`: al lado izquierdo del ojo (51 → 43; simplificada 52 → 42). */
+private const val LOOK_LEFT_UNITS = 8f
+private const val LOOK_LEFT_SIMPLIFIED = 10f
 private const val TALK_PERIOD_MS = 420

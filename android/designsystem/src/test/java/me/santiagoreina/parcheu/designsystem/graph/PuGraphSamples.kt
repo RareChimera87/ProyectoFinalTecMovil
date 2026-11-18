@@ -21,6 +21,15 @@ object PuGraphSamples {
         GraphNode("nico", "Nico", "N", 50, AMISTAD, PENDING, anonymous = true)
     )
 
+    /** Como [nodes], con dos conexiones aún sin simular (afinidad `null`) para Parche Vivo. */
+    val withUnmeasured = nodes.map {
+        when (it.id) {
+            "juli" -> it.copy(affinity = null)
+            "dan" -> it.copy(affinity = null, state = CONNECTED)
+            else -> it
+        }
+    }
+
     val fof = listOf(
         GraphFof("f1", "val", "", "", 87),
         GraphFof("f2", "val", "", "", 82),

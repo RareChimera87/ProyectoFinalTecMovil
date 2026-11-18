@@ -10,6 +10,16 @@ import org.junit.Test
 class RadialLayoutTest {
     private val modes = listOf("ESTUDIO", "DEPORTE", "AMISTAD", "PAREJA")
 
+    @Test
+    fun unmeasuredAffinityGoesToTheOuterRing() {
+        assertEquals(3, RadialLayout.ringOf(null))
+        val layout = RadialLayout.compute(
+            listOf(LayoutNode("a", "AMISTAD", 90), LayoutNode("b", "AMISTAD", null)),
+            RadialLayout.BASE_SIZE
+        )
+        assertEquals(3, layout.nodes.single { it.id == "b" }.ring)
+    }
+
     private fun sample(n: Int, affinity: (Int) -> Int = { 95 - (it * 7) % 40 }) =
         (0 until n).map { LayoutNode("u$it", modes[it % modes.size], affinity(it)) }
 

@@ -6,8 +6,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -43,9 +46,11 @@ import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.SimulationSummary
 import me.santiagoreina.parcheu.contract.Suggestion
 import me.santiagoreina.parcheu.contract.Usage
-import me.santiagoreina.parcheu.designsystem.brand.Wordmark
+import me.santiagoreina.parcheu.designsystem.brand.ParcheULogo
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChipSize
+import me.santiagoreina.parcheu.designsystem.components.base.ModeChipStyle
+import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCardVariant
@@ -59,8 +64,12 @@ import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.SectionHeader
 import me.santiagoreina.parcheu.designsystem.components.base.SegmentedQuota
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
+import me.santiagoreina.parcheu.designsystem.components.compound.AccessTile
 import me.santiagoreina.parcheu.designsystem.components.compound.AvatarInitials
 import me.santiagoreina.parcheu.designsystem.components.compound.AvatarSizes
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
+import me.santiagoreina.parcheu.designsystem.components.compound.QuotaMascots
 import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
 import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
 import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotTone
@@ -108,9 +117,11 @@ data class HomeCallbacks(
 )
 
 /**
- * C1 Inicio (oscuro) e I1 (claro): cupo semanal con [SegmentedQuota], simulación en curso, resultados
- * listos, sugerencias y match al azar; estados vacío, 0 restantes y ParcheU+. La NavBar la pone la
- * raíz de la app. [now] fija el "hace X" en pruebas y capturas.
+ * C1 Inicio (oscuro) e I1 (claro), pantalla de referencia de la dirección A "Parche Vivo"
+ * (docs/ui/parche-vivo.md): el cupo semanal es un [HeroBlock] violeta con [QuotaMascots]; la simulación
+ * en curso, los resultados listos y las sugerencias son [ModeSpineCard] con el lomo del modo; el match al
+ * azar es un [AccessTile]. Estados vacío, 0 restantes y ParcheU+. La NavBar la pone la raíz de la app.
+ * [now] fija el "hace X" en pruebas y capturas.
  */
 @Composable
 fun HomeScreen(
@@ -124,7 +135,7 @@ fun HomeScreen(
     val loaded = state as? HomeUiState.Loaded
     Column(modifier.fillMaxSize().background(colors.bg).testTag(HomeTags.ROOT)) {
         ParcheUHomeTopBar(
-            wordmark = { Wordmark(darkTheme = colors.isDark) },
+            wordmark = { ParcheULogo() },
             actions = {
                 Bell(unread = loaded?.home?.unread ?: 0, onClick = callbacks.onBell)
                 ProfileAvatar(name = loaded?.firstName ?: "Tú", onClick = callbacks.onAvatar)
@@ -234,12 +245,13 @@ private fun LoadedContent(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
             .padding(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.blockGapTight)
     ) {
         Text(
             text = state.firstName?.let { "¿Qué más, $it?" } ?: "¿Qué más?",
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = colors.tx
+            style = MaterialTheme.typography.headlineLarge,
+            color = colors.tx,
+            modifier = Modifier.semantics { heading() }
         )
         QuotaCard(home, callbacks.onPlus)
         if (state.isEmpty) {
@@ -276,44 +288,20 @@ private fun LoadedContent(
 
 @Composable
 private fun QuotaCard(home: HomeDto, onPlus: () -> Unit) {
-    val colors = ParcheUTheme.colors
     val usage = home.quota.simulations
     val limit = usage.limit
-    ParcheUCard(Modifier.fillMaxWidth().testTag(HomeTags.QUOTA)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = if (home.plus) "Simulaciones" else "Simulaciones de esta semana",
-                style = MaterialTheme.typography.titleSmall,
-                color = colors.tx,
-                modifier = Modifier.weight(1f)
-            )
-            if (limit != null) {
-                Text(
-                    text = "${usage.used.coerceAtMost(limit)} de $limit",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = colors.tx
-                )
+    val left = usage.remaining() ?: 0
+    HeroBlock(
+        title = if (limit != null) left.toString() else "Sin límite",
+        titleSuffix = limit?.let { "libres de $it" },
+        titleSize = if (limit != null) HeroTitleSize.NumberCompact else HeroTitleSize.Headline,
+        overline = if (home.plus) "Simulaciones" else "Simulaciones · esta semana",
+        subtitle = quotaFootnote(usage),
+        modifier = Modifier.testTag(HomeTags.QUOTA),
+        badge = {
+            if (home.plus) {
+                ParcheUPlusBadge(onHero = true)
             } else {
-                ParcheUPlusBadge()
-            }
-        }
-        if (limit != null && limit > 0) {
-            SegmentedQuota(
-                used = usage.used,
-                total = limit,
-                contentDescription = "Usaste ${usage.used.coerceAtMost(
-                    limit
-                )} de $limit simulaciones esta semana"
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = quotaFootnote(usage),
-                style = MaterialTheme.typography.bodySmall,
-                color = if (usage.remaining() == 0) colors.tx else colors.mu,
-                modifier = Modifier.weight(1f)
-            )
-            if (!home.plus) {
                 Box(
                     Modifier
                         .clip(ParcheUTheme.shapes.pill)
@@ -321,16 +309,34 @@ private fun QuotaCard(home: HomeDto, onPlus: () -> Unit) {
                         .semantics { contentDescription = "Conoce ParcheU+" }
                         .testTag(HomeTags.PLUS_CHIP)
                 ) {
-                    ParcheUPlusBadge()
+                    ParcheUPlusBadge(onHero = true)
                 }
             }
+        },
+        action =
+        if (limit != null && left == 0) {
+            {
+                TonalButton(
+                    text = "Simula sin límite con ParcheU+",
+                    onClick = onPlus,
+                    size = ParcheUButtonSize.Small,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        } else {
+            null
         }
-        if (usage.remaining() == 0) {
-            TonalButton(
-                text = "Simula sin límite con ParcheU+",
-                onClick = onPlus,
-                size = ParcheUButtonSize.Small,
-                modifier = Modifier.fillMaxWidth()
+    ) {
+        if (limit == null || limit > 0) {
+            QuotaMascots(
+                used = usage.used,
+                limit = limit,
+                contentDescription =
+                if (limit != null) {
+                    "Usaste ${usage.used.coerceAtMost(limit)} de $limit simulaciones esta semana"
+                } else {
+                    "Simulaciones sin límite con ParcheU+"
+                }
             )
         }
     }
@@ -345,15 +351,16 @@ private fun PendingCard(
 ) {
     val colors = ParcheUTheme.colors
     val running = state.home.running
-    ParcheUCard(Modifier.fillMaxWidth()) {
+    Column(verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.blockGapTight)) {
         if (running != null) {
-            RunningRow(running, state.progress, onOpen, animate)
-        }
-        state.home.ready.forEachIndexed { index, item ->
-            if (running != null || index > 0) {
-                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.ln))
+            ModeSpineCard(mode = colors.forMode(running.mode), modifier = Modifier.fillMaxWidth()) {
+                RunningRow(running, state.progress, onOpen, animate)
             }
-            ReadyRow(item, onOpen, now)
+        }
+        state.home.ready.forEach { item ->
+            ModeSpineCard(mode = colors.forMode(item.mode), modifier = Modifier.fillMaxWidth()) {
+                ReadyRow(item, onOpen, now)
+            }
         }
     }
 }
@@ -387,7 +394,7 @@ private fun RunningRow(
                     size = TwinMascotSize.S,
                     tone = toneFor(running.mode),
                     animationsEnabled = animate,
-                    modifier = Modifier.offset(x = (-6).dp)
+                    modifier = Modifier.offset(x = (-9).dp)
                 )
             }
             Column(Modifier.weight(1f)) {
@@ -410,8 +417,8 @@ private fun RunningRow(
             if (progress != null) {
                 Text(
                     text = "${progress.percent} %",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = colors.prt
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = colors.forMode(running.mode).text
                 )
             }
         }
@@ -420,7 +427,8 @@ private fun RunningRow(
         if (progress != null) {
             ParcheULinearProgress(
                 progress = progress.percent / 100f,
-                contentDescription = "Avance de la simulación: ${progress.percent} %"
+                contentDescription = "Avance de la simulación: ${progress.percent} %",
+                color = colors.forMode(running.mode).solid
             )
         }
     }
@@ -439,7 +447,7 @@ private fun ReadyRow(item: SimulationSummary, onOpen: (SimulationSummary) -> Uni
     ) {
         AvatarInitials(
             name = item.other.label,
-            affinity = item.score ?: 50,
+            affinity = item.score,
             size = AvatarSizes.Md,
             anonymous = item.other.id == null
         )
@@ -462,7 +470,8 @@ private fun ReadyRow(item: SimulationSummary, onOpen: (SimulationSummary) -> Uni
         ModeChip(
             label = item.mode.label(),
             mode = colors.forMode(item.mode),
-            size = ModeChipSize.S
+            size = ModeChipSize.S,
+            style = ModeChipStyle.Tonal
         )
     }
 }
@@ -470,7 +479,7 @@ private fun ReadyRow(item: SimulationSummary, onOpen: (SimulationSummary) -> Uni
 @Composable
 private fun Suggestions(state: HomeUiState.Loaded, callbacks: HomeCallbacks) {
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        Modifier.fillMaxWidth().height(IntrinsicSize.Max).horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         state.home.suggestions.forEach { suggestion ->
@@ -496,15 +505,16 @@ private fun SuggestionCard(
     onSimulate: (Suggestion) -> Unit
 ) {
     val colors = ParcheUTheme.colors
-    ParcheUCard(
-        Modifier.width(
-            SuggestionWidth
-        ).testTag(HomeTags.suggestion(suggestion.other.id ?: suggestion.other.label)),
-        variant = ParcheUCardVariant.Suggestion
+    ModeSpineCard(
+        mode = colors.forMode(suggestion.mode),
+        modifier =
+        Modifier.width(SuggestionWidth)
+            .fillMaxHeight()
+            .testTag(HomeTags.suggestion(suggestion.other.id ?: suggestion.other.label))
     ) {
         AvatarInitials(
             name = suggestion.other.label,
-            affinity = suggestion.estimatedAffinity ?: 50,
+            affinity = suggestion.estimatedAffinity,
             size = AvatarSizes.List
         )
         Text(
@@ -526,7 +536,8 @@ private fun SuggestionCard(
         ModeChip(
             label = suggestion.mode.label(),
             mode = colors.forMode(suggestion.mode),
-            size = ModeChipSize.S
+            size = ModeChipSize.S,
+            style = ModeChipStyle.Tonal
         )
         if (suggestion.other.isDemo) DemoBadge(compact = true)
         TonalButton(
@@ -541,31 +552,13 @@ private fun SuggestionCard(
 
 @Composable
 private fun RandomMatchCard(usage: Usage, onRandomMatch: () -> Unit) {
-    val colors = ParcheUTheme.colors
-    ParcheUCard(
-        Modifier.width(SuggestionWidth).testTag(HomeTags.RANDOM_MATCH),
-        variant = ParcheUCardVariant.Suggestion
+    AccessTile(
+        title = "Match al azar",
+        subtitle = randomMatchFootnote(usage),
+        icon = rememberIcon(HomeIcons.Shuffle),
+        modifier = Modifier.width(SuggestionWidth).fillMaxHeight().testTag(HomeTags.RANDOM_MATCH)
     ) {
-        Box(
-            Modifier.size(AvatarSizes.List).clip(CircleShape).background(colors.s2),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = rememberIcon(HomeIcons.Shuffle),
-                contentDescription = null,
-                tint = colors.tx,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-        Text("Match al azar", style = MaterialTheme.typography.titleSmall, color = colors.tx)
-        Text(
-            text = randomMatchFootnote(usage),
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.mu,
-            minLines = 2,
-            maxLines = 4
-        )
-        Spacer(Modifier.height(ParcheUSizes.ModeChipSmall))
+        Spacer(Modifier.weight(1f))
         PrimaryButton(
             text = "Buscar",
             onClick = onRandomMatch,

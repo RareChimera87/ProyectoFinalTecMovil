@@ -28,15 +28,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.PersonRef
-import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
-import me.santiagoreina.parcheu.designsystem.components.base.PillChip
-import me.santiagoreina.parcheu.designsystem.components.base.PillChipVariant
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
-import me.santiagoreina.parcheu.designsystem.components.compound.AvatarInitials
-import me.santiagoreina.parcheu.designsystem.components.compound.AvatarSizes
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlockDefaults
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.results.ReportRow
 import me.santiagoreina.parcheu.feature.results.ResultsIcons
@@ -113,37 +111,20 @@ private fun Loaded(content: IntroProposalContent, actions: IntroProposalActions)
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
-                Modifier.fillMaxWidth().padding(top = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+            // E3 en Parche Vivo: héroe del color del modo con quién te presenta a quién, la
+            // afinidad en el overline y tu P frente a la de la otra persona.
+            HeroBlock(
+                title = "${firstName(intro.introducer)} quiere presentarte a ${intro.other.label}",
+                titleSize = HeroTitleSize.Headline,
+                overline = intro.mode.label() + (report?.let { " · ${it.score} % afines" } ?: ""),
+                subtitle = report?.let {
+                    "Sus gemelos simularon una conversación y salieron con afinidad " +
+                        "${affinityWord(it.score)}."
+                } ?: "Sus gemelos simularon una conversación.",
+                colors = HeroBlockDefaults.modeColors(mode),
+                modifier = Modifier.padding(top = 8.dp).testTag(IntroProposalTags.TITLE)
             ) {
-                Avatars(intro.introducer, intro.other, report?.score ?: 0)
-                Text(
-                    "${firstName(intro.introducer)} quiere presentarte a ${intro.other.label}",
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = colors.tx,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.testTag(IntroProposalTags.TITLE)
-                )
-                Text(
-                    report?.let {
-                        "Sus gemelos simularon una conversación y salieron con afinidad " +
-                            "${affinityWord(it.score)}."
-                    } ?: "Sus gemelos simularon una conversación.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.mu,
-                    textAlign = TextAlign.Center
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ModeChip(label = intro.mode.label(), mode = mode)
-                    report?.let {
-                        PillChip("${it.score} % afines", variant = PillChipVariant.Affinity)
-                    }
-                }
+                FacingMascots(first = "Tú", second = intro.other.label, mode = mode)
             }
             val reasons = report?.reasons.orEmpty()
             if (reasons.isNotEmpty()) {
@@ -162,27 +143,6 @@ private fun Loaded(content: IntroProposalContent, actions: IntroProposalActions)
             content.error?.let { PresentarNotice(presentarErrorText(it), actions.onDismissError) }
         }
         Footer(content, actions)
-    }
-}
-
-@Composable
-private fun Avatars(introducer: PersonRef, other: PersonRef, score: Int) {
-    val colors = ParcheUTheme.colors
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        AvatarInitials(introducer.label, 100, size = AvatarSizes.Lg)
-        Box(
-            Modifier.offset(x = (-12).dp)
-                .clip(CircleShape)
-                .border(3.dp, colors.bg, CircleShape)
-                .padding(3.dp)
-        ) {
-            AvatarInitials(
-                other.label,
-                score,
-                size = AvatarSizes.Hero,
-                anonymous = other.id == null && other.label.startsWith("Alguien")
-            )
-        }
     }
 }
 

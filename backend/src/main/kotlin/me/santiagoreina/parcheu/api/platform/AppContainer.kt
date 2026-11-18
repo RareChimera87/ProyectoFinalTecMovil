@@ -285,9 +285,9 @@ class AppContainer(
                 "El servicio necesita la base de datos: define DB_NAME y CLOUD_SQL_INSTANCE (o DB_URL en local)"
             }
             val database = connectExposed(createDataSource(dbConfig, failFast = false))
-            val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion)
-            val profile = ProfileService(identity, ExposedProfileRepository(database), clock)
             val quota = quotaModule(config.env, database, clock)
+            val identity = IdentityService(ExposedIdentityRepository(database), clock, config.legalTextVersion, quota.entitlements)
+            val profile = ProfileService(identity, ExposedProfileRepository(database), clock)
             val ai = aiGateway(config, vars, clock) { database }
             val mode = TasksMode.fromEnv(config.env, vars)
             val inlineQueue = if (mode == TasksMode.INLINE) InProcessTaskQueue(clock) else null

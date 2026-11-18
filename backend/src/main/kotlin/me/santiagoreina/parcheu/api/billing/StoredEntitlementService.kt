@@ -13,7 +13,7 @@ import java.util.UUID
 
 /**
  * Implementación real de [EntitlementService] (E7.1): Plus sale de la fila de `entitlements` que
- * mantienen `verify` y las RTDN, con las reglas de arquitectura.md §9 ([grantsPlus]). Es la misma en
+ * mantienen `verify` y las RTDN (o el job `grant-plus`, [ManualPlusService]), con las reglas de arquitectura.md §9 ([grantsPlus]). Es la misma en
  * dev y en prod; solo fuera de prod se expone además como [DevPlusGranter] (`grant-plus`).
  */
 class StoredEntitlementService(private val store: BillingStore) : EntitlementService, DevPlusGranter {

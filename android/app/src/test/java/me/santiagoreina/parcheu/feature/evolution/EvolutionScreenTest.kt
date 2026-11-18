@@ -57,9 +57,9 @@ class EvolutionScreenTest {
     fun selectedMonthShowsItsDetail() {
         show(EvolutionUiState.Content(EvolutionSamples.full, selected = "2026-10"))
         composeRule.onNodeWithTag(EvolutionTags.DETAIL).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(
-            "3 conexiones nuevas · 12 personas en tu parche"
-        ).assertIsDisplayed()
+        // Parche Vivo: el detalle es un héroe con el número en Sora 800 y las nuevas debajo.
+        composeRule.onNodeWithText("12 personas en tu parche").assertIsDisplayed()
+        composeRule.onNodeWithText("3 conexiones nuevas").assertIsDisplayed()
     }
 
     @Test

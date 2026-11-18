@@ -27,6 +27,8 @@ import me.santiagoreina.parcheu.api.platform.auth.FakeTokenVerifier
 import me.santiagoreina.parcheu.api.platform.notifier.FakeNotifier
 import me.santiagoreina.parcheu.api.platform.notifier.NoopNotifier
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
+import me.santiagoreina.parcheu.api.quota.EntitlementService
+import me.santiagoreina.parcheu.api.quota.InMemoryDevEntitlementService
 import me.santiagoreina.parcheu.api.safety.InMemorySafetyRepository
 import me.santiagoreina.parcheu.api.safety.asReportedText
 import me.santiagoreina.parcheu.api.safety.inMemorySafetyModule
@@ -50,7 +52,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * Mundo en memoria donde **todas** las superficies premium tienen algo que mostrarle a `ana` (la
  * observadora). Con [plus] = false ana es gratis; con true tiene ParcheU+ (`grant-plus` de dev). La
- * auditoría (E7.4) compara las dos: lo que ParcheU+ recibe y gratis no.
+ * auditoría (E7.4) compara las dos: lo que ParcheU+ recibe y gratis no. Con [plusSource] el Plus de ana sale de
+ * otra fuente (p. ej. la activación manual del job `grant-plus` sobre `entitlements`): recibe el id de ana.
  *
  * - **Grafo:** ana, beto, caro y dani forman una clique de Amistad (comunidad y sugerencias de Inicio
  *   con amigos en común); eva es amiga de beto en Estudio y no de ana (amiga de amigos); gabi y hugo
@@ -63,9 +66,13 @@ import java.util.concurrent.CopyOnWriteArrayList
  * - **Escenarios:** a los de serie se suman [EXTRA_PREMIUM] escenarios premium de Amistad para que la
  *   prueba de `POST /v1/simulations` con ParcheU+ vea uno casi con certeza.
  */
-class PremiumWorld(val plus: Boolean) {
+class PremiumWorld(
+    val plus: Boolean,
+    entitlements: EntitlementService = InMemoryDevEntitlementService(),
+    private val plusSource: ((UUID) -> Unit)? = null,
+) {
     val identity = InMemoryIdentityRepository().also { repo -> UIDS.forEach { repo.seedAcceptedUser(it, TEST_LEGAL_VERSION) } }
-    val sim = SimFixture(repo = InMemorySimulationRepository(SCENARIOS))
+    val sim = SimFixture(repo = InMemorySimulationRepository(SCENARIOS), entitlements = entitlements)
     val ids: Map<String, UUID> = UIDS.associateWith { uid -> sim.person(uid, id = identity.user(uid).id) }
     val push = FakeNotifier()
     val introductionStore = InMemoryIntroductionRepository()
@@ -134,7 +141,10 @@ class PremiumWorld(val plus: Boolean) {
             ),
             Instant.parse("2026-10-25T11:00:00Z"),
         )
-        if (plus) sim.plus(id("ana"))
+        if (plus) {
+            val source = plusSource
+            if (source != null) source(id("ana")) else sim.plus(id("ana"))
+        }
         franSimulation = runBlocking { simulation.service.createRandom(id("ana"), id("fran")).id.toString() }
         runBlocking { communities.service.runWeekly() }
     }

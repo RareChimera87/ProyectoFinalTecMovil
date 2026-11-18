@@ -19,6 +19,7 @@ import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.NO_PLUS
 import me.santiagoreina.parcheu.api.TASKS_ACCOUNT
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.TEST_OIDC_TOKEN
@@ -75,7 +76,7 @@ class ChatApiTest : FunSpec({
         val chat = inMemoryChatModule(FIXED_CLOCK, graph.policy, notifier, repo, mirror)
 
         fun container(): AppContainer {
-            val identity = IdentityService(identityRepo, FIXED_CLOCK, TEST_LEGAL_VERSION)
+            val identity = IdentityService(identityRepo, FIXED_CLOCK, TEST_LEGAL_VERSION, NO_PLUS)
             val profile = ProfileService(identity, InMemoryProfileRepository(identityRepo), FIXED_CLOCK)
             val quota = inMemoryQuotaModule(FIXED_CLOCK)
             val twin = inMemoryTwinModule(FIXED_CLOCK, testGateway())

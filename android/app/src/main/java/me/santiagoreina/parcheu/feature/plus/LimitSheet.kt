@@ -9,31 +9,34 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.R
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
-import me.santiagoreina.parcheu.designsystem.components.base.SegmentedQuota
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlock
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroTitleSize
 import me.santiagoreina.parcheu.designsystem.components.compound.ParcheUBottomSheetContent
-import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
-import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
+import me.santiagoreina.parcheu.designsystem.components.compound.QuotaMascots
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
-/** Píldoras de la barra de cupo agotado (decorativa: indica "cupo lleno", no un conteo). */
+/** P apagadas del uso justo de ParcheU+ (decorativas: indican "cupo lleno", no un conteo). */
 private const val LIMIT_SEGMENTS = 5
+
+/** Cupo gratis de cada tipo, el mismo de la tabla de G1: 5 simulaciones por semana, 1 match al día, 1 informe al mes. */
+private fun freeLimit(kind: QuotaKind): Int = when (kind) {
+    QuotaKind.SIMULATION -> 5
+    QuotaKind.RANDOM_MATCH -> 1
+    QuotaKind.FULL_REPORT -> 1
+}
 
 /**
  * G2 Límite alcanzado: hoja sobre un fondo atenuado con el cupo agotado de [kind] (simulaciones, match
@@ -65,40 +68,28 @@ fun LimitSheet(
                 .clearAndSetSemantics { }
         )
         ParcheUBottomSheetContent(Modifier.align(Alignment.BottomCenter)) {
-            TwinMascot(
-                size = TwinMascotSize.M,
-                error = false,
-                animationsEnabled = false,
-                modifier = Modifier.alpha(0.85f)
-            )
-            Text(
+            // Dirección A: el cupo agotado es el protagonista, en un héroe violeta con las P apagadas.
+            HeroBlock(
+                title =
                 stringResource(
                     if (fairUse) R.string.plus_limit_title_fair_use else limitTitle(kind)
                 ),
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                ),
-                color = colors.tx,
-                textAlign = TextAlign.Center
-            )
-            Text(
+                titleSize = HeroTitleSize.Headline,
+                subtitle =
                 if (fairUse) {
-                    stringResource(
-                        R.string.plus_limit_body_fair_use
-                    )
+                    stringResource(R.string.plus_limit_body_fair_use)
                 } else {
                     limitBody(kind, resetsAt)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.mu,
-                textAlign = TextAlign.Center
-            )
-            SegmentedQuota(
-                used = LIMIT_SEGMENTS,
-                total = LIMIT_SEGMENTS,
-                contentDescription = stringResource(R.string.plus_limit_quota_description),
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
+                }
+            ) {
+                val slots = if (fairUse) LIMIT_SEGMENTS else freeLimit(kind)
+                QuotaMascots(
+                    used = slots,
+                    limit = slots,
+                    contentDescription = stringResource(R.string.plus_limit_quota_description),
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 if (!fairUse) {
                     PrimaryButton(

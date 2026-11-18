@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.designsystem.components.base.ModeSegment
 import me.santiagoreina.parcheu.designsystem.components.base.ModeSegmentedControl
+import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCheckbox
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
@@ -118,7 +121,17 @@ fun IntroduceScreen(
                     color = colors.mu,
                     modifier = Modifier.testTag(IntroduceTags.EMPTY)
                 )
-                else -> Column {
+                // La lista es de amigos de un modo: va en una tarjeta con el lomo de ese modo (Parche Vivo).
+                else -> ModeSpineCard(
+                    mode = colors.forMode(state.mode),
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(
+                        start = 14.dp,
+                        end = 10.dp,
+                        top = 4.dp,
+                        bottom = 4.dp
+                    )
+                ) {
                     state.friends.forEach { friend ->
                         FriendSelectRow(
                             friend = friend,
@@ -143,35 +156,43 @@ fun IntroduceScreen(
     }
 }
 
+/**
+ * La pareja elegida en un bloque tonal del modo (radio de héroe), con el conector y el ícono en el pleno
+ * del modo: el protagonista de E1, coherente con el héroe de E2.
+ */
 @Composable
 private fun PairPreview(state: IntroduceContent) {
-    val colors = ParcheUTheme.colors
+    val mode = ParcheUTheme.colors.forMode(state.mode)
     val chosen = state.chosen
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 10.dp).testTag(IntroduceTags.PAIR),
+        Modifier.fillMaxWidth()
+            .clip(ParcheUTheme.shapes.hero)
+            .background(mode.container)
+            .padding(vertical = 18.dp)
+            .testTag(IntroduceTags.PAIR),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.Top
     ) {
-        PairSlot(chosen.getOrNull(0))
-        Box(Modifier.padding(top = 27.dp).size(36.dp, 2.dp).background(colors.ln))
+        PairSlot(chosen.getOrNull(0), mode.onContainer)
+        Box(Modifier.padding(top = 27.dp).size(36.dp, 2.dp).background(mode.solid))
         Box(
-            Modifier.padding(top = 10.dp).size(36.dp).clip(CircleShape).background(colors.prc),
+            Modifier.padding(top = 10.dp).size(36.dp).clip(CircleShape).background(mode.solid),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 rememberPresentarIcon(PresentarIcons.People),
                 contentDescription = null,
-                tint = colors.onprc,
+                tint = mode.onSolid,
                 modifier = Modifier.size(20.dp)
             )
         }
-        Box(Modifier.padding(top = 27.dp).size(36.dp, 2.dp).background(colors.ln))
-        PairSlot(chosen.getOrNull(1))
+        Box(Modifier.padding(top = 27.dp).size(36.dp, 2.dp).background(mode.solid))
+        PairSlot(chosen.getOrNull(1), mode.onContainer)
     }
 }
 
 @Composable
-private fun PairSlot(friend: FriendOption?) {
+private fun PairSlot(friend: FriendOption?, textColor: Color) {
     Column(
         Modifier.width(88.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -185,7 +206,7 @@ private fun PairSlot(friend: FriendOption?) {
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 ),
-                color = ParcheUTheme.colors.tx,
+                color = textColor,
                 maxLines = 1
             )
         } else {
@@ -199,7 +220,7 @@ private fun PairSlot(friend: FriendOption?) {
             Text(
                 "Elige",
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
-                color = ParcheUTheme.colors.mu
+                color = textColor
             )
         }
     }
@@ -233,7 +254,7 @@ private fun FriendSelectRow(
                 color = colors.tx
             )
             Text(
-                "Afinidad ${friend.affinity} % contigo",
+                friend.affinity?.let { "Afinidad $it % contigo" } ?: "Aún no han simulado",
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
                 color = colors.mu
             )

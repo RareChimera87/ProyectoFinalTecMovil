@@ -10,4 +10,5 @@
     <string name="push_channel_social_desc">Conexiones, presentaciones e invitaciones</string>
     <string name="push_channel_cuenta">Cuenta</string>
     <string name="push_channel_cuenta_desc">Avisos sobre tu gemelo y tu cuenta</string>
+    <string name="onboarding_example_label">Ejemplo ilustrativo</string>
 </resources>

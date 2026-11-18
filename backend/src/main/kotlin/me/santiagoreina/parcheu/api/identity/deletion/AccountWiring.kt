@@ -48,7 +48,7 @@ fun accountModule(
     val retentionMirror = if (cloud) FirestoreRetentionMirror.forProject(requireNotNull(firebaseProjectId)) else NoopRetentionMirror
     return AccountModule(
         deletion = deletion,
-        export = AccountExportService(identity, ExposedExportRepository(database), graph.anonIds, twin.repository::state, clock),
+        export = AccountExportService(identity, ExposedExportRepository(database), graph.anonIds, twin.service::progress, clock),
         retention = RetentionService(ExposedRetentionRepository(database), retentionMirror, deletion::sweepStalled, clock),
     )
 }
@@ -71,7 +71,7 @@ fun inMemoryAccountModule(
     val deletion = AccountDeletionService(identity.repo, purge, mirror, auth, tasks, clock, closedMatches)
     return AccountModule(
         deletion = deletion,
-        export = AccountExportService(identity, exportRepository, graph.anonIds, twin.repository::state, clock),
+        export = AccountExportService(identity, exportRepository, graph.anonIds, twin.service::progress, clock),
         retention = RetentionService(retentionRepository, retentionMirror, deletion::sweepStalled, clock),
     )
 }

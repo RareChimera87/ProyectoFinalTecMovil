@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.feature.consent
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
@@ -27,7 +28,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
@@ -84,7 +84,7 @@ fun ConsentScreen(
             }
             Text(
                 "Tus chats ayudan a que tu gemelo te conozca mejor",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 color = colors.tx,
                 modifier = Modifier.semantics { heading() }
             )
@@ -100,7 +100,7 @@ fun ConsentScreen(
             )
             ListCard(
                 "Qué aprende",
-                colors.prt,
+                tonal = true,
                 listOf(
                     FlowIcons.Edit to "Tu forma de escribir",
                     FlowIcons.Star to "Temas y gustos",
@@ -109,7 +109,7 @@ fun ConsentScreen(
             )
             ListCard(
                 "Qué nunca hace",
-                colors.mu,
+                tonal = false,
                 listOf(
                     FlowIcons.Block to "Mostrar tus mensajes a otras personas",
                     FlowIcons.Block to "Escribir por ti en un chat real"
@@ -151,12 +151,27 @@ fun ConsentScreen(
     }
 }
 
+/**
+ * Lista de B4 con los tres pesos de la dirección A: lo que aprende va en una tarjeta tonal (prc, el acceso que
+ * importa) y lo que nunca hace en una con borde de 1 dp (s1), para que no pesen igual.
+ */
 @Composable
-private fun ListCard(title: String, tint: Color, items: List<Pair<ImageVector, String>>) {
+private fun ListCard(title: String, tonal: Boolean, items: List<Pair<ImageVector, String>>) {
     val colors = ParcheUTheme.colors
-    ParcheUCard(Modifier.fillMaxWidth()) {
-        Text(title.uppercase(), style = ParcheUTheme.textStyles.overline, color = colors.mu)
-        items.forEach { (icon, text) ->
+    val shape = ParcheUTheme.shapes.card
+    val text = if (tonal) colors.onprc else colors.tx
+    val support = if (tonal) colors.onprc else colors.mu
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (tonal) colors.prc else colors.s1, shape)
+            .then(if (tonal) Modifier else Modifier.border(1.dp, colors.ln, shape))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(title.uppercase(), style = ParcheUTheme.textStyles.overline, color = support)
+        items.forEach { (icon, label) ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -164,10 +179,10 @@ private fun ListCard(title: String, tint: Color, items: List<Pair<ImageVector, S
                 Icon(
                     rememberVectorPainter(icon),
                     contentDescription = null,
-                    tint = tint,
+                    tint = support,
                     modifier = Modifier.size(20.dp)
                 )
-                Text(text, style = MaterialTheme.typography.bodyMedium, color = colors.tx)
+                Text(label, style = MaterialTheme.typography.bodyMedium, color = text)
             }
         }
     }

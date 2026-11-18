@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.NO_PLUS
 import me.santiagoreina.parcheu.api.chat.ChatModule
 import me.santiagoreina.parcheu.api.chat.ExposedChatRepository
 import me.santiagoreina.parcheu.api.chat.InMemoryChatMirror
@@ -122,7 +123,7 @@ class AdminDbTest : FunSpec({
             suspended.suspendedUntil shouldBe env.clock.instant().plus(Duration.ofHours(24))
             val write = runCatching { env.chat.service.send(suspended, chat.id, SendMessage("b-2", "sigo")) }.exceptionOrNull()
             (write is Suspended) shouldBe true
-            val session = runCatching { IdentityService(env.identity, env.clock, "v1").requireFullAccess(FirebaseUser(beto.firebaseUid, null, null)) }.exceptionOrNull()
+            val session = runCatching { IdentityService(env.identity, env.clock, "v1", NO_PLUS).requireFullAccess(FirebaseUser(beto.firebaseUid, null, null)) }.exceptionOrNull()
             (session is Suspended) shouldBe true
             env.identity.findByFirebaseUid(ana.firebaseUid)!!.suspendedUntil.shouldBeNull()
 

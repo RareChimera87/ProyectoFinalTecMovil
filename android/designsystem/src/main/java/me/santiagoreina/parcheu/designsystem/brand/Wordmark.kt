@@ -10,6 +10,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import me.santiagoreina.parcheu.designsystem.theme.SoraFontFamily
 
 /** Colores de marca del wordmark (mockups-inventario.md, sección Wordmark ParcheU). */
 object WordmarkColors {
@@ -35,7 +36,7 @@ enum class WordmarkSize(val fontSize: TextUnit) {
 
 /**
  * Wordmark "ParcheU": Sora 700 con la "U" en #FF8A3D. "Parche" es blanco en oscuro y #6D4AFF en claro.
- * La fuente Sora llega con E1.1 (tipografía); mientras tanto usa la fuente por defecto en negrita.
+ * Para la marca con la mascota como P usa `ParcheULogo`.
  *
  * [darkTheme] es obligatorio a propósito: el tema de la app tiene preferencia propia en DataStore y
  * puede diferir del sistema, así que el llamador pasa el valor del tema de la app (el de `ParcheUTheme`
@@ -56,6 +57,7 @@ fun Wordmark(
         },
         modifier = modifier,
         fontSize = size.fontSize,
+        fontFamily = SoraFontFamily,
         fontWeight = FontWeight.Bold,
         letterSpacing = 0.sp
     )

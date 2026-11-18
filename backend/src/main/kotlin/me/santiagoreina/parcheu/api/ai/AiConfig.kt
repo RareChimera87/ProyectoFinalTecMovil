@@ -13,8 +13,9 @@ data class AiModels(val chat: String, val judge: String, val lite: String) {
  * Configuración de la pasarela de IA (ADR-0008, ADR-0010). Variables de entorno, con
  * prioridad sobre `ai/modelos.properties`:
  *
- * - `AI_PROVIDER`: `gemini` (predeterminado) o `claude`; `fake` solo con `ENV=local`. Un valor
- *   inválido hace fallar el arranque. Con `ENV=local` y sin `AI_PROVIDER` se usa `fake`.
+ * - `AI_PROVIDER`: `gemini` (predeterminado, Vertex), `claude` (Claude en Vertex) o `anthropic` (Claude por la
+ *   API directa de Anthropic con clave); `fake` solo con `ENV=local`. Un valor inválido hace fallar el arranque.
+ *   Con `ENV=local` y sin `AI_PROVIDER` se usa `fake`.
  * - `AI_MODEL_CHAT`, `AI_MODEL_JUDGE`, `AI_MODEL_LITE`: IDs de modelo; por defecto los del
  *   proveedor en el archivo de propiedades.
  * - `AI_DAILY_BUDGET_USD`: presupuesto diario (> 0).
@@ -22,11 +23,13 @@ data class AiModels(val chat: String, val judge: String, val lite: String) {
  *   `budget.user.daily.usd` del archivo (0,75 USD, un cuarto del total de 3 USD). La moderación no cuenta.
  * - `AI_USER_DAILY_MODERATION_USD`: sub-techo diario de moderación por autor (> 0); al pasarlo se muestrea
  *   en vez de moderar todo (ADR-0026). Por defecto `budget.user.moderation.daily.usd` (0,25 USD).
- * - `AI_VERTEX_PROJECT` (o `GCP_PROJECT`): proyecto de Vertex; obligatorio fuera de `fake`.
+ * - `AI_VERTEX_PROJECT` (o `GCP_PROJECT`): proyecto de Vertex; obligatorio con `gemini` y `claude`.
  * - `AI_VERTEX_LOCATION`: ubicación de Vertex (`us` por defecto, multirregión de EE. UU.).
+ * - `SECRET_ANTHROPIC_API_KEY` (dev/prod) o `ANTHROPIC_API_KEY` (solo `ENV=local`): clave de la API de Anthropic,
+ *   obligatoria con `anthropic` ([AnthropicApiKey.fromEnv]); sin ella el arranque falla.
  *
- * Todos los modelos configurados deben tener precio en la tabla para esa ubicación: sin precio
- * el guard no vería el gasto, así que el arranque falla.
+ * Todos los modelos configurados deben tener precio en la tabla para esa ubicación (con `anthropic`, la
+ * "ubicación" de precios es `anthropic`): sin precio el guard no vería el gasto, así que el arranque falla.
  */
 data class AiConfig(
     val provider: AiProvider,
@@ -41,9 +44,16 @@ data class AiConfig(
     /** Nivel de razonamiento de Gemini 3.x (`LOW`, `MEDIUM`...); null = el del modelo. */
     val geminiThinkingLevel: String?,
     val prices: PriceTable,
+    /** Solo con `AI_PROVIDER=anthropic`; su `toString` no muestra la clave. */
+    val anthropicApiKey: AnthropicApiKey? = null,
 ) {
     companion object {
         const val PROPERTIES_RESOURCE = "/ai/modelos.properties"
+
+        /** "Ubicación" de los precios de la API directa de Anthropic en `ai/modelos.properties` (`price.anthropic.*`). */
+        const val ANTHROPIC_PRICE_LOCATION = "anthropic"
+
+        private val VERTEX_PROVIDERS = setOf(AiProvider.GEMINI, AiProvider.CLAUDE)
 
         fun loadDefaults(): Map<String, String> {
             val props = Properties()
@@ -58,12 +68,16 @@ data class AiConfig(
 
             val rawProvider = v("AI_PROVIDER") ?: if (env == Env.LOCAL) AiProvider.FAKE.id else defaults["provider"] ?: "gemini"
             val provider = AiProvider.parse(rawProvider)
-                ?: throw IllegalArgumentException("AI_PROVIDER inválido: '$rawProvider' (se espera gemini o claude)")
+                ?: throw IllegalArgumentException("AI_PROVIDER inválido: '$rawProvider' (se espera gemini, claude o anthropic)")
             require(provider != AiProvider.FAKE || env == Env.LOCAL) {
                 "AI_PROVIDER=fake solo se admite con ENV=local (ENV=$env)"
             }
             // El Fake usa los IDs de Gemini para que los costos se calculen con precios reales.
-            val prefix = if (provider == AiProvider.CLAUDE) "claude" else "gemini"
+            val prefix = when (provider) {
+                AiProvider.CLAUDE -> "claude"
+                AiProvider.ANTHROPIC -> "anthropic"
+                AiProvider.GEMINI, AiProvider.FAKE -> "gemini"
+            }
             fun model(envName: String, key: String): String =
                 v(envName) ?: defaults["$prefix.model.$key"] ?: error("Falta $envName y $prefix.model.$key")
             val models = AiModels(
@@ -86,13 +100,27 @@ data class AiConfig(
 
             val location = v("AI_VERTEX_LOCATION") ?: defaults["vertex.location"] ?: "us"
             val project = v("AI_VERTEX_PROJECT") ?: v("GCP_PROJECT")
-            require(provider == AiProvider.FAKE || project != null) {
+            require(provider !in VERTEX_PROVIDERS || project != null) {
                 "AI_VERTEX_PROJECT (o GCP_PROJECT) es obligatorio con AI_PROVIDER=${provider.id}"
             }
-            val prices = PriceTable.fromProperties(defaults, location)
+            val apiKey = if (provider == AiProvider.ANTHROPIC) {
+                requireNotNull(AnthropicApiKey.fromEnv(env, vars)) {
+                    if (env == Env.LOCAL) {
+                        "AI_PROVIDER=anthropic necesita la clave de Anthropic: define ANTHROPIC_API_KEY o SECRET_ANTHROPIC_API_KEY"
+                    } else {
+                        "AI_PROVIDER=anthropic necesita SECRET_ANTHROPIC_API_KEY (secreto anthropic-api-key) con ENV=$env; " +
+                            "ANTHROPIC_API_KEY solo se admite con ENV=local"
+                    }
+                }
+            } else {
+                null
+            }
+            // La API directa de Anthropic no tiene ubicación de Vertex: sus precios van bajo `price.anthropic.*`.
+            val priceLocation = if (provider == AiProvider.ANTHROPIC) ANTHROPIC_PRICE_LOCATION else location
+            val prices = PriceTable.fromProperties(defaults, priceLocation)
             val missing = models.all().filterNot(prices::hasPrice)
             require(missing.isEmpty()) {
-                "Sin precio en ai/modelos.properties para ${missing.joinToString()} en la ubicación '$location'"
+                "Sin precio en ai/modelos.properties para ${missing.joinToString()} en la ubicación '$priceLocation'"
             }
             return AiConfig(
                 provider = provider,
@@ -104,6 +132,7 @@ data class AiConfig(
                 vertexLocation = location,
                 geminiThinkingLevel = v("AI_GEMINI_THINKING_LEVEL") ?: defaults["gemini.thinking.level"],
                 prices = prices,
+                anthropicApiKey = apiKey,
             )
         }
     }

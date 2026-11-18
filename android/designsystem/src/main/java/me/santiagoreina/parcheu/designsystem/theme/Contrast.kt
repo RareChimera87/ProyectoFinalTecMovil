@@ -76,7 +76,17 @@ fun ParcheUColors.declaredTextPairs(): List<TextColorPair> {
             TextColorPair("onMode/couple", couple.onSolid, couple.solid),
             TextColorPair("onMode/study", study.onSolid, study.solid),
             TextColorPair("onMode/accent", accent.onSolid, accent.solid),
-            TextColorPair("wordmark/bg", wordmark, bg)
+            TextColorPair("wordmark/bg", wordmark, bg),
+            // Dirección A "Parche Vivo": texto del bloque héroe y de los contenedores tonales de modo.
+            TextColorPair("onHero/hero", onHero, hero),
+            TextColorPair("onContainer/friendship", friendship.onContainer, friendship.container),
+            TextColorPair("onContainer/couple", couple.onContainer, couple.container),
+            TextColorPair("onContainer/study", study.onContainer, study.container),
+            TextColorPair("onContainer/accent", accent.onContainer, accent.container),
+            TextColorPair("tx/friendshipContainer", tx, friendship.container),
+            TextColorPair("tx/coupleContainer", tx, couple.container),
+            TextColorPair("tx/studyContainer", tx, study.container),
+            TextColorPair("tx/accentContainer", tx, accent.container)
         )
     return onSurfaces + onFills
 }

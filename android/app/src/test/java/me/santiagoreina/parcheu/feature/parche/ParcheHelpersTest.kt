@@ -4,6 +4,9 @@ import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.designsystem.graph.GraphMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ParcheHelpersTest {
@@ -27,5 +30,25 @@ class ParcheHelpersTest {
             me.santiagoreina.parcheu.designsystem.graph.graphNodeDescription(node)
         )
         assertEquals("Amistad", Mode.AMISTAD.label())
+    }
+
+    @Test
+    fun unmeasuredNodeIsNeitherZeroNorInsideTheAffinityFilter() {
+        val unmeasured = ParcheSamples.nodes.first {
+            it.id == "val"
+        }.copy(affinity = 0, affinityMeasured = false)
+        val node = unmeasured.toGraphNode()
+        assertNull(node.affinity)
+        assertEquals(
+            "Valentina, sin simular, Amistad, conectados",
+            me.santiagoreina.parcheu.designsystem.graph.graphNodeDescription(node)
+        )
+        val nodes = ParcheSamples.nodes.map { if (it.id == "val") unmeasured else it }
+        val filtered = ParcheFilters(minAffinity = true).visibleNodes(nodes)
+        assertFalse(filtered.any { it.id == "val" })
+        assertTrue(filtered.all { (it.measuredAffinity ?: 0) >= MIN_AFFINITY_FILTER })
+        assertEquals(nodes, ParcheFilters().visibleNodes(nodes))
+        assertEquals("Afinidad: sin simular", affinityDescription(null))
+        assertEquals("Afinidad 87 %", affinityDescription(87))
     }
 }

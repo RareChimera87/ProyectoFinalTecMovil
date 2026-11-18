@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,7 +30,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.designsystem.theme.ModeColors
-import me.santiagoreina.parcheu.designsystem.theme.ParcheURadius
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUSizes
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
@@ -47,21 +45,31 @@ enum class ModeChipSize(
     S(ParcheUSizes.ModeChipSmall, 6.dp, 9.dp, 14.dp, 11)
 }
 
-/** Píldora con el color pleno del modo y texto #14111F. No es interactiva. */
+/** Estilo de [ModeChip]: pleno (color del modo + tinta) o tonal (contenedor del modo + su texto AA). */
+enum class ModeChipStyle { Solid, Tonal }
+
+/**
+ * Píldora con el color pleno del modo y texto #14111F. Con [ModeChipStyle.Tonal] usa el contenedor
+ * tonal del modo (más calmo, para filas con lomo de color donde el pleno ya está en el lomo). No es
+ * interactiva.
+ */
 @Composable
 fun ModeChip(
     label: String,
     mode: ModeColors,
     modifier: Modifier = Modifier,
     size: ModeChipSize = ModeChipSize.M,
-    icon: Painter? = null
+    icon: Painter? = null,
+    style: ModeChipStyle = ModeChipStyle.Solid
 ) {
+    val container = if (style == ModeChipStyle.Solid) mode.solid else mode.container
+    val content = if (style == ModeChipStyle.Solid) mode.onSolid else mode.onContainer
     Row(
         modifier =
         modifier
             .height(size.height)
             .clip(ParcheUTheme.shapes.pill)
-            .background(mode.solid)
+            .background(container)
             .padding(start = size.startPadding, end = size.endPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -69,7 +77,7 @@ fun ModeChip(
             Icon(
                 painter = icon,
                 contentDescription = null,
-                tint = mode.onSolid,
+                tint = content,
                 modifier = Modifier.size(size.iconSize)
             )
             Spacer(Modifier.width(4.dp))
@@ -81,14 +89,18 @@ fun ModeChip(
                 fontSize = size.textSizeSp.sp,
                 fontWeight = FontWeight.SemiBold
             ),
-            color = mode.onSolid,
+            color = content,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
 }
 
-/** Filtro de modo (Todos / Amistad / Pareja / Estudio): 32dp, radio 12; activo prc/onprc, inactivo con borde ln. */
+/**
+ * Filtro de modo (Todos / Amistad / Pareja / Estudio): píldora de 32dp (dirección A); activo prc/onprc,
+ * inactivo con borde ln. Con [dotColor] (el `solid` del modo) se antepone un punto de 7dp del color del
+ * modo, como en el mockup A · Tu parche.
+ */
 @Composable
 fun ModeFilterChip(
     label: String,
@@ -96,7 +108,8 @@ fun ModeFilterChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    icon: Painter? = null
+    icon: Painter? = null,
+    dotColor: Color? = null
 ) {
     val colors = ParcheUTheme.colors
     OutlinedChipFrame(
@@ -115,7 +128,8 @@ fun ModeFilterChip(
         icon = icon,
         iconSize = 16.dp,
         selectedContainer = colors.prc,
-        selectedContent = colors.onprc
+        selectedContent = colors.onprc,
+        dotColor = dotColor
     )
 }
 
@@ -145,7 +159,7 @@ fun SecondaryFilterChip(
     )
 }
 
-/** Chip de interés (F2): outline de 32dp, radio 12, icono de 16. Seleccionable (casilla). */
+/** Chip de interés (F2): píldora outline de 32dp, icono de 16. Seleccionable (casilla). */
 @Composable
 fun InterestChip(
     label: String,
@@ -185,10 +199,12 @@ private fun OutlinedChipFrame(
     icon: Painter?,
     iconSize: Dp,
     selectedContainer: Color,
-    selectedContent: Color
+    selectedContent: Color,
+    dotColor: Color? = null
 ) {
     val colors = ParcheUTheme.colors
-    val shape = RoundedCornerShape(ParcheURadius.ButtonCompact)
+    // Dirección A: los chips de filtro son píldoras (antes radio 12).
+    val shape = ParcheUTheme.shapes.pill
     val container = if (selected) selectedContainer else Color.Transparent
     val rawContent = if (selected) selectedContent else colors.tx
     val content = if (enabled) rawContent else rawContent.disabled()
@@ -213,6 +229,15 @@ private fun OutlinedChipFrame(
                 .padding(PaddingValues(horizontal = 12.dp)),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (dotColor != null) {
+                Box(
+                    Modifier
+                        .size(7.dp)
+                        .clip(ParcheUTheme.shapes.pill)
+                        .background(if (enabled) dotColor else dotColor.disabled())
+                )
+                Spacer(Modifier.width(6.dp))
+            }
             if (icon != null) {
                 Icon(
                     painter = icon,
