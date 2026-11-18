@@ -77,6 +77,21 @@ class MatchFoundViewModelTest {
     }
 
     @Test
+    fun submittingIsClearedOnceTheChoiceOpensSimulationOrScenario() = runTest {
+        val vm = viewModel()
+        vm.onSelect(MatchChoice.SIMULATION)
+        vm.onStart()
+        assertFalse(vm.loaded().submitting)
+
+        repository.chooseResult = ApiResult.Success(
+            testMatch(myChoice = MatchChoice.SCENARIO, status = MatchStatus.SCENARIO)
+        )
+        val scenarioVm = viewModel()
+        scenarioVm.onStart()
+        assertFalse(scenarioVm.loaded().submitting)
+    }
+
+    @Test
     fun startWithScenarioOpensScenario() = runTest {
         repository.chooseResult = ApiResult.Success(
             testMatch(myChoice = MatchChoice.SCENARIO, status = MatchStatus.SCENARIO)

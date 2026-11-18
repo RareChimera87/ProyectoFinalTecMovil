@@ -193,6 +193,7 @@ internal object ParcheVivoGallery {
         ) {
             ParcheULogo(size = WordmarkSize.Medium)
             ParcheULogo(size = WordmarkSize.Small)
+            ParcheULogo(size = WordmarkSize.Medium, plus = true)
         }
         Row(
             verticalAlignment = Alignment.Bottom,

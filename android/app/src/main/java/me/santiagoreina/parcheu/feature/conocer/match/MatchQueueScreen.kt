@@ -166,6 +166,7 @@ private fun SearchStage(
     animate: Boolean
 ) {
     val mode = state.mode.colors()
+    val noOne = state.noOneYet && !matched
     Column(
         Modifier.fillMaxWidth()
             .clip(ParcheUTheme.shapes.hero)
@@ -192,6 +193,8 @@ private fun SearchStage(
                 MatchStrings.ALREADY_USED_MESSAGE
             } else if (matched) {
                 MatchStrings.MATCHED_MESSAGE
+            } else if (noOne) {
+                MatchStrings.NO_ONE_TITLE
             } else {
                 MatchStrings.searching(MatchStrings.modeName(state.mode))
             },
@@ -206,7 +209,11 @@ private fun SearchStage(
                 }
         )
         Text(
-            text = if (used) MatchStrings.ALREADY_USED_NOTE else MatchStrings.COMPARING,
+            text = when {
+                used -> MatchStrings.ALREADY_USED_NOTE
+                noOne -> MatchStrings.NO_ONE_NOTE
+                else -> MatchStrings.COMPARING
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = mode.onContainer,
             textAlign = TextAlign.Center

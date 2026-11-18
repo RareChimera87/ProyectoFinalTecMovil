@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.HomeDto
@@ -135,7 +137,7 @@ fun HomeScreen(
     val loaded = state as? HomeUiState.Loaded
     Column(modifier.fillMaxSize().background(colors.bg).testTag(HomeTags.ROOT)) {
         ParcheUHomeTopBar(
-            wordmark = { ParcheULogo() },
+            wordmark = { ParcheULogo(plus = loaded?.home?.plus == true) },
             actions = {
                 Bell(unread = loaded?.home?.unread ?: 0, onClick = callbacks.onBell)
                 ProfileAvatar(name = loaded?.firstName ?: "Tú", onClick = callbacks.onAvatar)
@@ -263,7 +265,11 @@ private fun LoadedContent(
                     actionLabel = "Ver todas",
                     onActionClick = callbacks.onSeeAll
                 )
-                PendingCard(state, callbacks.onOpenSimulation, now, animate)
+                // El botón "Ver todas" ocupa 48 dp de área táctil (36 dp visibles): se recorta el sobrante
+                // para que el hueco hasta la tarjeta sea el mismo que en las secciones sin acción.
+                Box(Modifier.pullUp(HeaderTouchSlack)) {
+                    PendingCard(state, callbacks.onOpenSimulation, now, animate)
+                }
             }
             SectionHeader(title = "Sugerencias para ti")
             Suggestions(state, callbacks)
@@ -456,7 +462,7 @@ private fun ReadyRow(item: SimulationSummary, onOpen: (SimulationSummary) -> Uni
                 text = "Resultado listo con ${item.other.label}",
                 style = MaterialTheme.typography.titleSmall,
                 color = colors.tx,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             val score = item.score?.let { "$it % afines · " }.orEmpty()
@@ -491,6 +497,15 @@ private fun Suggestions(state: HomeUiState.Loaded, callbacks: HomeCallbacks) {
         }
         RandomMatchCard(state.home.quota.randomMatch, callbacks.onRandomMatch)
     }
+}
+
+private val HeaderTouchSlack = 6.dp
+
+/** Sube el contenido [by] y reduce su alto en lo mismo, para que el hueco visual se acorte sin solaparse. */
+private fun Modifier.pullUp(by: Dp): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val shift = by.roundToPx()
+    layout(placeable.width, placeable.height - shift) { placeable.place(0, -shift) }
 }
 
 private val SuggestionWidth = 164.dp

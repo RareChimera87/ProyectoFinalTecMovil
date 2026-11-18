@@ -17,6 +17,7 @@ import me.santiagoreina.parcheu.feature.MainDispatcherRule
 import me.santiagoreina.parcheu.feature.plus.PlusSources
 import me.santiagoreina.parcheu.navigation.Paywall
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -478,5 +479,95 @@ class MatchQueueViewModelTest {
             "2 de 3",
             MatchStrings.todayCount(Usage(2, 3, resetsAt), alreadyCounted = true)
         )
+    }
+
+    private fun advance(ms: Long) = with(mainRule.dispatcher.scheduler) {
+        advanceTimeBy(ms)
+        runCurrent()
+    }
+
+    @Test
+    fun coupleShowsNoOneHintAfter45SecondsWithoutCancelingTheTicket() {
+        val vm = viewModel(Mode.PAREJA)
+
+        advance(MatchQueueViewModel.NO_ONE_HINT_MS - 1)
+        assertFalse(vm.state.value.noOneYet)
+        advance(1)
+
+        assertTrue(vm.state.value.noOneYet)
+        assertEquals(QueuePhase.Searching, vm.state.value.phase)
+        assertEquals(0, repository.cancelCalls)
+    }
+
+    @Test
+    fun friendshipAndStudyNeverShowNoOneHint() {
+        listOf(Mode.AMISTAD, Mode.ESTUDIO).forEach { mode ->
+            val vm = viewModel(mode)
+            advance(MatchQueueViewModel.NO_ONE_HINT_MS * 2)
+            assertFalse(vm.state.value.noOneYet)
+        }
+    }
+
+    @Test
+    fun noOneHintDisappearsWhenAMatchArrives() = runTest {
+        val vm = viewModel(Mode.PAREJA)
+        vm.effects.test {
+            advance(MatchQueueViewModel.NO_ONE_HINT_MS)
+            assertTrue(vm.state.value.noOneYet)
+
+            repository.tickets.emit(matchedTicket("m9", Mode.PAREJA))
+
+            assertEquals(MatchQueueEffect.OpenMatch("m9"), awaitItem())
+            assertFalse(vm.state.value.noOneYet)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun noOneHintDoesNotAppearIfAMatchArrivesBefore45Seconds() = runTest {
+        val vm = viewModel(Mode.PAREJA)
+        vm.effects.test {
+            repository.tickets.emit(matchedTicket("m9", Mode.PAREJA))
+            awaitItem()
+
+            advance(MatchQueueViewModel.NO_ONE_HINT_MS * 2)
+
+            assertFalse(vm.state.value.noOneYet)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun cancelingResetsTheNoOneHintAndTimer() {
+        val vm = viewModel(Mode.PAREJA)
+        advance(MatchQueueViewModel.NO_ONE_HINT_MS)
+        assertTrue(vm.state.value.noOneYet)
+
+        vm.onCancel()
+        assertFalse(vm.state.value.noOneYet)
+
+        // Vuelve a entrar (red de seguridad): el reloj arranca de cero.
+        vm.onResumed()
+        advance(MatchQueueViewModel.NO_ONE_HINT_MS - 1)
+        assertFalse(vm.state.value.noOneYet)
+        advance(1)
+        assertTrue(vm.state.value.noOneYet)
+    }
+
+    @Test
+    fun switchingModeResetsTheNoOneHint() {
+        val vm = viewModel(Mode.PAREJA)
+        advance(MatchQueueViewModel.NO_ONE_HINT_MS - 10_000)
+
+        vm.onModeSelected(Mode.AMISTAD)
+        advance(MatchQueueViewModel.NO_ONE_HINT_MS * 2)
+        assertFalse(vm.state.value.noOneYet)
+
+        // De vuelta a Pareja el conteo empieza otra vez desde cero.
+        vm.onModeSelected(Mode.PAREJA)
+        advance(MatchQueueViewModel.NO_ONE_HINT_MS - 1)
+        assertFalse(vm.state.value.noOneYet)
+        advance(1)
+        assertTrue(vm.state.value.noOneYet)
     }
 }

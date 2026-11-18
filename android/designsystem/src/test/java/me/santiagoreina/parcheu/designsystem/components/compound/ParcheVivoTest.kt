@@ -81,6 +81,12 @@ class ParcheVivoTest {
     }
 
     @Test
+    fun logoWithPlusIsReadAsParcheUPlus() {
+        composeRule.setContent { ParcheUTheme { ParcheULogo(Modifier.testTag("l"), plus = true) } }
+        composeRule.onNodeWithTag("l").assertContentDescriptionEquals("ParcheU+")
+    }
+
+    @Test
     fun duotoneMapsBlackToShadowAndWhiteToHighlight() {
         val shadow = Color(0xFF14111F)
         val highlight = LightParcheUColors.study.solid
