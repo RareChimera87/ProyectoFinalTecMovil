@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Usage
@@ -20,14 +21,19 @@ class MatchQueueScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun show(quota: Usage?, phase: QueuePhase = QueuePhase.Searching) {
+    private fun show(
+        quota: Usage?,
+        phase: QueuePhase = QueuePhase.Searching,
+        noOneYet: Boolean = false
+    ) {
         composeRule.setContent {
             ParcheUTheme {
                 MatchQueueScreen(
                     state = MatchQueueUiState(
                         mode = Mode.AMISTAD,
                         phase = phase,
-                        dailyQuota = quota
+                        dailyQuota = quota,
+                        noOneYet = noOneYet
                     ),
                     onModeSelected = {},
                     onCancel = {},
@@ -68,5 +74,15 @@ class MatchQueueScreenTest {
         show(Usage(used = 2, limit = 3, resetsAt = resetsAt), phase = QueuePhase.AlreadyUsed("m1"))
 
         composeRule.onNodeWithTag(MatchQueueTags.TODAY_COUNT).assertTextEquals("2 de 3")
+    }
+
+    @Test
+    fun noOneHintReplacesTheSearchingTextAndKeepsCancel() {
+        show(null, noOneYet = true)
+
+        composeRule.onNodeWithTag(MatchQueueTags.SEARCHING)
+            .assertTextEquals(MatchStrings.NO_ONE_TITLE)
+        composeRule.onNodeWithText(MatchStrings.NO_ONE_NOTE).assertIsDisplayed()
+        composeRule.onNodeWithTag(MatchQueueTags.CANCEL).assertIsDisplayed()
     }
 }

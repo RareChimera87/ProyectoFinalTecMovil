@@ -54,7 +54,12 @@ data class MatchQueueUiState(
     val activeModes: List<Mode> = Mode.entries,
     val phase: QueuePhase = QueuePhase.Searching,
     /** Cupo diario de match al azar (`GET /v1/home`); `null` mientras carga o si falló. */
-    val dailyQuota: Usage? = null
+    val dailyQuota: Usage? = null,
+    /**
+     * Solo en Pareja: pasaron [MatchQueueViewModel.NO_ONE_HINT_MS] buscando sin resultado. Es un aviso: la
+     * fila y la escucha siguen vivas.
+     */
+    val noOneYet: Boolean = false
 )
 
 sealed interface MatchQueueEffect {
@@ -80,7 +85,9 @@ class MatchQueueViewModel(
     private val loadActiveModes: (suspend () -> List<Mode>?)? = null,
     /** Cupo diario de match al azar (el mismo dato de C1 Inicio); `null` si no se pudo leer. */
     private val loadDailyQuota: (suspend () -> Usage?)? = null,
-    private val pollIntervalMs: Long = POLL_INTERVAL_MS
+    private val pollIntervalMs: Long = POLL_INTERVAL_MS,
+    /** Espera antes del aviso "aún no hay nadie" en Pareja; inyectable para pruebas. */
+    private val noOneHintMs: Long = NO_ONE_HINT_MS
 ) : ViewModel() {
     private val _state = MutableStateFlow(
         MatchQueueUiState(
@@ -98,6 +105,7 @@ class MatchQueueViewModel(
 
     private var searchJob: Job? = null
     private var cancelJob: Job? = null
+    private var noOneHintJob: Job? = null
     private var opened = false
     private var modesLoaded = loadActiveModes == null
 
@@ -114,6 +122,9 @@ class MatchQueueViewModel(
     companion object {
         /** Cada cuánto se consulta `GET /v1/match/queue` si el listener de Firestore falla. */
         const val POLL_INTERVAL_MS = 10_000L
+
+        /** Tras cuánto buscando en Pareja sin match se avisa que aún no hay nadie (45 s). */
+        const val NO_ONE_HINT_MS = 45_000L
     }
 
     fun onModeSelected(mode: Mode) {
@@ -142,6 +153,7 @@ class MatchQueueViewModel(
      */
     fun onCancel() {
         searchJob?.cancel()
+        resetNoOneHint(start = false)
         if (_state.value.phase != QueuePhase.Searching) {
             viewModelScope.launch { _effects.send(MatchQueueEffect.Close) }
             return
@@ -173,6 +185,7 @@ class MatchQueueViewModel(
         searchJob?.cancel()
         opened = false
         _state.update { it.copy(phase = QueuePhase.Searching) }
+        resetNoOneHint(start = true)
         searchJob = viewModelScope.launch {
             applyActiveModes()
             if (cancelPrevious) {
@@ -187,6 +200,27 @@ class MatchQueueViewModel(
                     onEnqueueFailed(result.error)
                 }
                 is ApiResult.Success -> follow(result.value)
+            }
+        }
+    }
+
+    /**
+     * Reinicia el aviso de Pareja sin gente: apaga el actual y, con [start] y modo Pareja, arma uno nuevo.
+     * No toca el ticket ni la escucha.
+     */
+    private fun resetNoOneHint(start: Boolean) {
+        noOneHintJob?.cancel()
+        noOneHintJob = null
+        _state.update { it.copy(noOneYet = false) }
+        if (!start || _state.value.mode != Mode.PAREJA) return
+        noOneHintJob = viewModelScope.launch {
+            delay(noOneHintMs)
+            _state.update {
+                if (it.phase == QueuePhase.Searching && it.mode == Mode.PAREJA) {
+                    it.copy(noOneYet = true)
+                } else {
+                    it
+                }
             }
         }
     }
@@ -234,6 +268,7 @@ class MatchQueueViewModel(
             }
         }
         _state.update { it.copy(mode = ticket.mode) }
+        resetNoOneHint(start = true)
         follow(ticket)
         return true
     }
@@ -265,6 +300,7 @@ class MatchQueueViewModel(
         if (limitRoute != null) {
             viewModelScope.launch { _effects.send(MatchQueueEffect.OpenLimit(limitRoute)) }
         } else {
+            resetNoOneHint(start = false)
             _state.update { it.copy(phase = QueuePhase.Error(error)) }
         }
     }
@@ -280,9 +316,13 @@ class MatchQueueViewModel(
         if (ticket.mode != _state.value.mode) return
         when (ticket.status) {
             TicketStatus.WAITING -> _state.update { it.copy(phase = QueuePhase.Searching) }
-            TicketStatus.EXPIRED -> _state.update { it.copy(phase = QueuePhase.Expired) }
+            TicketStatus.EXPIRED -> {
+                resetNoOneHint(start = false)
+                _state.update { it.copy(phase = QueuePhase.Expired) }
+            }
             TicketStatus.MATCHED -> {
                 val id = ticket.matchId ?: return
+                resetNoOneHint(start = false)
                 // El listener repite el ticket: un match ya marcado como usado sigue así.
                 if (_state.value.phase == QueuePhase.AlreadyUsed(id)) return
                 if (!opened && isResolved(id)) {

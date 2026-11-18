@@ -23,6 +23,10 @@ internal object MatchStrings {
     const val MATCHED_MESSAGE = "¡Encontramos a alguien!"
     const val ALREADY_USED_MESSAGE = "Ya usaste tu match al azar de hoy"
     const val ALREADY_USED_NOTE = "Mañana te buscamos a alguien nuevo."
+    const val NO_ONE_TITLE = "Aún no hay nadie buscando pareja"
+    const val NO_ONE_NOTE =
+        "En Pareja solo te emparejamos con personas reales, nunca con perfiles de demostración. " +
+            "Puedes seguir esperando, te avisamos cuando alguien entre, o probar Amistad o Estudio."
     const val SEE_MATCH = "Ver match"
 
     const val FOUND = "¡ENCONTRAMOS A ALGUIEN!"
