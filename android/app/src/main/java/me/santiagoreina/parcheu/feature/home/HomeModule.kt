@@ -14,6 +14,6 @@ val homeModule = module {
     single<HomeRepository> { RemoteHomeRepository(get(), get()) }
     viewModel {
         val auth = get<FirebaseAuthSource>()
-        HomeViewModel(get(), get()) { auth.authOrNull()?.currentUser?.displayName }
+        HomeViewModel(get(), get(), displayName = { auth.authOrNull()?.currentUser?.displayName })
     }
 }

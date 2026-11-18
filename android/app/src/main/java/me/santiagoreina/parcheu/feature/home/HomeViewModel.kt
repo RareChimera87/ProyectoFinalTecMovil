@@ -2,7 +2,9 @@ package me.santiagoreina.parcheu.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,7 +62,10 @@ sealed interface HomeEffect {
 class HomeViewModel(
     private val repository: HomeRepository,
     private val simulations: SimulationRepository,
-    private val displayName: () -> String? = { null }
+    private val displayName: () -> String? = { null },
+    /** Reloj y cadencia del refresco silencioso; inyectables para pruebas. */
+    private val nowMs: () -> Long = System::currentTimeMillis,
+    private val pollIntervalMs: Long = POLL_INTERVAL_MS
 ) : ViewModel() {
     private val _state = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
@@ -68,28 +73,77 @@ class HomeViewModel(
     private val _effects = Channel<HomeEffect>(Channel.BUFFERED)
     val effects: Flow<HomeEffect> = _effects.receiveAsFlow()
 
-    /** Carga o refresca. Con datos en pantalla refresca en silencio; un error solo reemplaza la carga inicial. */
+    private var loadJob: Job? = null
+    private var pollJob: Job? = null
+    private var lastLoadAtMs: Long? = null
+    private var resumed = false
+
+    /**
+     * Carga o refresca. Con datos en pantalla refresca en silencio; un error solo reemplaza la carga inicial.
+     * No solapa: si ya hay una carga en vuelo no hace nada.
+     */
     fun load() {
+        if (loadJob?.isActive == true) return
         val current = _state.value
         if (current !is HomeUiState.Loaded) _state.value = HomeUiState.Loading
-        viewModelScope.launch {
-            when (val result = repository.home()) {
-                is ApiResult.Failure ->
-                    if (current !is HomeUiState.Loaded) {
-                        _state.value =
-                            HomeUiState.Error(result.error)
+        loadJob =
+            viewModelScope.launch {
+                when (val result = repository.home()) {
+                    is ApiResult.Failure ->
+                        if (current !is HomeUiState.Loaded) {
+                            _state.value =
+                                HomeUiState.Error(result.error)
+                        }
+                    is ApiResult.Success -> {
+                        val loaded = HomeUiState.Loaded(
+                            home = result.value,
+                            firstName = firstNameOf(displayName())
+                        )
+                        _state.value = loaded
+                        loadProgress(loaded.home)
                     }
-                is ApiResult.Success -> {
-                    val loaded = HomeUiState.Loaded(
-                        home = result.value,
-                        firstName = firstNameOf(displayName())
-                    )
-                    _state.value = loaded
-                    loadProgress(loaded.home)
+                }
+                lastLoadAtMs = nowMs()
+                startPolling()
+            }
+    }
+
+    /**
+     * Cada ON_RESUME de la ruta (también al volver de otra pestaña, donde la composición se recrea pero este
+     * ViewModel sobrevive): recarga en silencio si la última carga terminó hace más de
+     * [MIN_REFRESH_INTERVAL_MS], y mientras esté a la vista sondea si hay una simulación en curso.
+     */
+    fun onResumed() {
+        resumed = true
+        startPolling()
+        val last = lastLoadAtMs ?: return
+        if (_state.value !is HomeUiState.Loaded) return
+        if (nowMs() - last < MIN_REFRESH_INTERVAL_MS) return
+        load()
+    }
+
+    /** Inicio sale de primer plano: se detiene el sondeo. */
+    fun onPaused() {
+        resumed = false
+        pollJob?.cancel()
+        pollJob = null
+    }
+
+    /** Un solo sondeo vivo; termina solo cuando ya no hay simulación en curso y nunca muestra errores. */
+    private fun startPolling() {
+        if (!resumed || pollJob?.isActive == true || !hasRunning()) return
+        pollJob =
+            viewModelScope.launch {
+                while (hasRunning()) {
+                    delay(pollIntervalMs)
+                    // La carga anterior pudo terminar la simulación mientras esperábamos.
+                    if (!hasRunning()) break
+                    load()
                 }
             }
-        }
     }
+
+    private fun hasRunning() = (_state.value as? HomeUiState.Loaded)?.home?.running != null
 
     private suspend fun loadProgress(home: HomeDto) {
         val running = home.running ?: return
@@ -128,6 +182,11 @@ class HomeViewModel(
     }
 
     fun onDismissError() = update { it.copy(actionError = null) }
+
+    companion object {
+        const val MIN_REFRESH_INTERVAL_MS = 3_000L
+        const val POLL_INTERVAL_MS = 5_000L
+    }
 
     private fun update(block: (HomeUiState.Loaded) -> HomeUiState.Loaded) {
         val current = _state.value as? HomeUiState.Loaded ?: return

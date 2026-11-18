@@ -1,8 +1,14 @@
 package me.santiagoreina.parcheu.feature.home
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
+import me.santiagoreina.parcheu.contract.HomeDto
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Progress
 import me.santiagoreina.parcheu.contract.QuotaKind
@@ -19,6 +25,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
     @get:Rule
     val mainRule = MainDispatcherRule()
@@ -31,10 +38,9 @@ class HomeViewModelTest {
             FakeHomeRepository(
                 *(results as Array<ApiResult<me.santiagoreina.parcheu.contract.HomeDto>>)
             ),
-            simulations
-        ) {
-            name
-        }
+            simulations,
+            displayName = { name }
+        )
 
     @Test
     fun loadsHomeWithGreetingAndRunningProgress() = runTest {
@@ -117,6 +123,157 @@ class HomeViewModelTest {
         assertEquals(AppError.Network, (vm.state.value as HomeUiState.Loaded).actionError)
         vm.onDismissError()
         assertNull((vm.state.value as HomeUiState.Loaded).actionError)
+    }
+
+    private var clock = 1_000_000L
+
+    private fun refreshingVm(repo: HomeRepository, pollMs: Long = 5_000L) =
+        HomeViewModel(repo, simulations, { "Mariana" }, { clock }, pollMs)
+
+    private val runningHome = HomeSamples.inProgress.home
+    private val doneHome = HomeSamples.resultReady.home.copy(running = null)
+
+    @Test
+    fun resumeReloadsSilentlyOnlyAfterTheInterval() = runTest {
+        val repo = FakeHomeRepository(ApiResult.Success(doneHome))
+        val vm = refreshingVm(repo)
+        vm.load()
+        vm.onResumed()
+        clock += 2_999
+        vm.onResumed()
+        assertEquals(1, repo.calls)
+        clock += 1
+        vm.onResumed()
+        assertEquals(2, repo.calls)
+        assertTrue(vm.state.value is HomeUiState.Loaded)
+    }
+
+    @Test
+    fun resumeBeforeTheFirstLoadDoesNothing() = runTest {
+        val repo = FakeHomeRepository(ApiResult.Success(doneHome))
+        val vm = refreshingVm(repo)
+        clock += 10_000
+        vm.onResumed()
+        assertEquals(0, repo.calls)
+    }
+
+    @Test
+    fun resumeDoesNotOverlapAnInFlightLoad() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var calls = 0
+        val repo =
+            object : HomeRepository {
+                override suspend fun home(): ApiResult<HomeDto> {
+                    calls++
+                    if (calls > 1) gate.await()
+                    return ApiResult.Success(doneHome)
+                }
+            }
+        val vm = refreshingVm(repo)
+        vm.load()
+        clock += 10_000
+        vm.onResumed()
+        clock += 10_000
+        vm.onResumed()
+        vm.load()
+        assertEquals(2, calls)
+        gate.complete(Unit)
+        assertEquals(doneHome, (vm.state.value as HomeUiState.Loaded).home)
+    }
+
+    @Test
+    fun failedResumeKeepsDataWithoutSpinnerOrError() = runTest {
+        val repo =
+            FakeHomeRepository(ApiResult.Success(doneHome), ApiResult.Failure(AppError.Network))
+        val vm = refreshingVm(repo)
+        vm.load()
+        clock += 5_000
+        vm.onResumed()
+        assertEquals(2, repo.calls)
+        assertEquals(doneHome, (vm.state.value as HomeUiState.Loaded).home)
+    }
+
+    /** Siempre pausa al final: un sondeo vivo haría que runTest avance el reloj virtual sin fin. */
+    private fun pollTest(
+        repo: FakeHomeRepository,
+        body: suspend TestScope.(HomeViewModel, FakeHomeRepository) -> Unit
+    ) = runTest {
+        val vm = refreshingVm(repo)
+        try {
+            body(vm, repo)
+        } finally {
+            vm.onPaused()
+        }
+    }
+
+    @Test
+    fun pollsOnlyWhileRunningAndStopsWhenItFinishes() = pollTest(
+        FakeHomeRepository(
+            ApiResult.Success(runningHome),
+            ApiResult.Success(runningHome),
+            ApiResult.Success(doneHome)
+        )
+    ) { vm, repo ->
+        vm.load()
+        vm.onResumed()
+        assertEquals(1, repo.calls)
+        advanceTimeBy(4_999)
+        runCurrent()
+        assertEquals(1, repo.calls)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(2, repo.calls)
+        advanceTimeBy(5_000)
+        runCurrent()
+        // Terminó: la tarjeta pasa a "resultado listo" y el sondeo se detiene.
+        assertEquals(3, repo.calls)
+        assertNull((vm.state.value as HomeUiState.Loaded).home.running)
+        assertEquals(1, (vm.state.value as HomeUiState.Loaded).home.ready.size)
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(3, repo.calls)
+    }
+
+    @Test
+    fun noPollingWithoutARunningSimulation() = pollTest(
+        FakeHomeRepository(ApiResult.Success(doneHome))
+    ) { vm, repo ->
+        vm.load()
+        vm.onResumed()
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(1, repo.calls)
+    }
+
+    @Test
+    fun pausingStopsThePollingAndResumingRestartsIt() = pollTest(
+        FakeHomeRepository(ApiResult.Success(runningHome))
+    ) { vm, repo ->
+        vm.load()
+        vm.onResumed()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(2, repo.calls)
+        vm.onPaused()
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(2, repo.calls)
+        clock += 10_000
+        vm.onResumed()
+        assertEquals(3, repo.calls)
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(4, repo.calls)
+    }
+
+    @Test
+    fun pollingNeverStartsInTheBackground() = pollTest(
+        FakeHomeRepository(ApiResult.Success(runningHome))
+    ) { vm, repo ->
+        vm.load()
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals(1, repo.calls)
     }
 
     @Test

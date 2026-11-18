@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.time.Clock
 import me.santiagoreina.parcheu.contract.SimulationStatus
@@ -34,6 +35,11 @@ fun HomeRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) { viewModel.load() }
+    // La decisión vive en el ViewModel (sobrevive al cambio de pestaña; la composición no).
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onResumed()
+        onPauseOrDispose { viewModel.onPaused() }
+    }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
