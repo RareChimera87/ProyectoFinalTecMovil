@@ -82,6 +82,18 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
         load(useCache = community == null)
     }
 
+    /**
+     * Al volver a la pestaña (ON_RESUME): recarga sin caché y sin tocar lo que ya se ve (grafo, filtros, hoja
+     * abierta); un fallo deja el grafo anterior. No hace nada antes de la primera carga ni mientras otra
+     * carga sigue en curso, así que el ON_RESUME inicial no duplica la llamada.
+     */
+    fun refresh() {
+        if (!started || loadJob?.isActive == true) return
+        val current = _state.value
+        if (current !is ParcheUiState.Loaded && current !is ParcheUiState.Empty) return
+        load(useCache = false, silent = true)
+    }
+
     /** "Reintentar" de D5. */
     fun retry() {
         _state.value = ParcheUiState.Loading
@@ -158,7 +170,7 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
         _state.value = loaded.copy(sheet = change(sheet))
     }
 
-    private fun load(useCache: Boolean) {
+    private fun load(useCache: Boolean, silent: Boolean = false) {
         loadJob?.cancel()
         loadJob =
             viewModelScope.launch {
@@ -167,7 +179,7 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
                 when (val result = repository.graph(filters.communityId)) {
                     is ApiResult.Success -> show(result.value)
                     // Con grafo guardado a la vista, un fallo de red no lo reemplaza por D5.
-                    is ApiResult.Failure -> if (cached == null) {
+                    is ApiResult.Failure -> if (cached == null && !silent) {
                         _state.value = ParcheUiState.Error(result.error)
                     }
                 }

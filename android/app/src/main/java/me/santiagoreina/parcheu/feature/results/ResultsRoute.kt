@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.santiagoreina.parcheu.feature.safety.reportAiContent
 import me.santiagoreina.parcheu.navigation.AppNavigator
@@ -26,6 +27,12 @@ fun ResultsRoute(
         koinViewModel(key = route.simulationId) { parametersOf(route.simulationId) }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // En 'esperando a la otra persona' se refresca al volver y se sondea mientras la pantalla está a la vista.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onResume()
+        onPauseOrDispose { viewModel.onPause() }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->

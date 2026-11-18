@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import java.util.Calendar
 import java.util.TimeZone
 import kotlin.time.Instant
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -104,7 +106,9 @@ sealed interface ResultsEffect {
  */
 class ResultsViewModel(
     private val simulationId: String,
-    private val repository: ResultsRepository
+    private val repository: ResultsRepository,
+    /** Cada cuánto se consulta el informe en WAITING; inyectable para pruebas. */
+    private val pollIntervalMs: Long = POLL_INTERVAL_MS
 ) : ViewModel() {
     private val _state = MutableStateFlow<ResultsUiState>(ResultsUiState.Loading)
     val state: StateFlow<ResultsUiState> = _state.asStateFlow()
@@ -112,9 +116,44 @@ class ResultsViewModel(
     private val _effects = Channel<ResultsEffect>(Channel.BUFFERED)
     val effects: Flow<ResultsEffect> = _effects.receiveAsFlow()
 
+    private var pollJob: Job? = null
+    private var resumed = false
+
     init {
         load()
     }
+
+    /**
+     * La pantalla vuelve a primer plano: si la decisión está en WAITING refresca el informe al instante y
+     * sigue sondeándolo mientras siga a la vista.
+     */
+    fun onResume() {
+        resumed = true
+        startPolling(immediate = true)
+    }
+
+    /** La pantalla sale de primer plano: se detiene el sondeo. */
+    fun onPause() {
+        resumed = false
+        pollJob?.cancel()
+        pollJob = null
+    }
+
+    /** Un solo sondeo vivo a la vez; termina solo al salir de WAITING y no muestra errores de red. */
+    private fun startPolling(immediate: Boolean) {
+        if (!resumed || pollJob?.isActive == true || !isWaiting()) return
+        pollJob =
+            viewModelScope.launch {
+                var skipDelay = immediate
+                while (isWaiting()) {
+                    if (!skipDelay) delay(pollIntervalMs)
+                    skipDelay = false
+                    refreshReport(quiet = true)
+                }
+            }
+    }
+
+    private fun isWaiting() = loaded()?.decision == DecisionState.WAITING
 
     fun onRetry() = load()
 
@@ -154,6 +193,7 @@ class ResultsViewModel(
                     fromScenario = summary.origin == SimulationOrigin.SCENARIO
                 )
             )
+            startPolling(immediate = false)
         }
     }
 
@@ -208,6 +248,7 @@ class ResultsViewModel(
                             busy = null
                         )
                     }
+                    startPolling(immediate = false)
                     if (decision == DecisionState.CONNECTED) {
                         // Con la conexión mutua el servidor ya revela el nombre: se refresca el
                         // informe.
@@ -233,7 +274,8 @@ class ResultsViewModel(
         }
     }
 
-    private suspend fun refreshReport() {
+    /** [quiet]: un fallo (sondeo o al volver) no cambia el estado ni muestra aviso. */
+    private suspend fun refreshReport(quiet: Boolean = false) {
         when (val result = repository.report(simulationId)) {
             is ApiResult.Success -> update {
                 it.copy(
@@ -243,8 +285,8 @@ class ResultsViewModel(
                     busy = null
                 )
             }
-            is ApiResult.Failure -> update {
-                it.copy(busy = null, notice = ResultsNotice.Failed(result.error))
+            is ApiResult.Failure -> if (!quiet) {
+                update { it.copy(busy = null, notice = ResultsNotice.Failed(result.error)) }
             }
         }
     }
@@ -291,6 +333,9 @@ class ResultsViewModel(
     }
 
     companion object {
+        /** Cada cuánto se consulta el informe mientras se espera a la otra persona. */
+        const val POLL_INTERVAL_MS = 5_000L
+
         private val MONTHS = listOf(
             "enero", "febrero", "marzo", "abril", "mayo", "junio",
             "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"

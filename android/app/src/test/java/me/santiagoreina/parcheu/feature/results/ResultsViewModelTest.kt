@@ -202,4 +202,67 @@ class ResultsViewModelTest {
         viewModel.onRetry()
         assertTrue(viewModel.state.value is ResultsUiState.Loaded)
     }
+
+    private fun waiting() = lockedReport().copy(myDecision = true)
+
+    private fun connected() =
+        lockedReport().copy(myDecision = true, otherName = "Laura", chatId = "chat-9")
+
+    @Test
+    fun onResumeWhileWaitingPicksUpTheConnection() = runTest {
+        repository.reportResult = ApiResult.Success(waiting())
+        val viewModel = viewModel()
+        repository.reportResult = ApiResult.Success(connected())
+
+        viewModel.onResume()
+
+        assertEquals(DecisionState.CONNECTED, viewModel.content().decision)
+        assertEquals("chat-9", viewModel.content().chatId)
+        viewModel.onPause()
+    }
+
+    @Test
+    fun pollingWhileWaitingTurnsConnectedAndStops() = runTest {
+        repository.reportResult = ApiResult.Success(waiting())
+        val viewModel = ResultsViewModel("sim-1", repository, pollIntervalMs = 100)
+        viewModel.onResume()
+        repository.reportResult = ApiResult.Success(connected())
+
+        mainRule.dispatcher.scheduler.advanceTimeBy(150)
+        assertEquals(DecisionState.CONNECTED, viewModel.content().decision)
+        val calls = repository.reportCalls
+        mainRule.dispatcher.scheduler.advanceTimeBy(1_000)
+        assertEquals(calls, repository.reportCalls)
+    }
+
+    @Test
+    fun pollingFailureKeepsWaitingWithoutNotice() = runTest {
+        repository.reportResult = ApiResult.Success(waiting())
+        val viewModel = ResultsViewModel("sim-1", repository, pollIntervalMs = 100)
+        viewModel.onResume()
+        repository.reportResult = ApiResult.Failure(AppError.Network)
+
+        mainRule.dispatcher.scheduler.advanceTimeBy(250)
+
+        assertEquals(DecisionState.WAITING, viewModel.content().decision)
+        assertNull(viewModel.content().notice)
+        viewModel.onPause()
+    }
+
+    @Test
+    fun doesNotPollOutsideWaitingOrWhenPaused() = runTest {
+        val viewModel = ResultsViewModel("sim-1", repository, pollIntervalMs = 100)
+        viewModel.onResume()
+        val calls = repository.reportCalls
+        mainRule.dispatcher.scheduler.advanceTimeBy(500)
+        assertEquals(calls, repository.reportCalls)
+
+        // En WAITING pero en segundo plano tampoco.
+        repository.reportResult = ApiResult.Success(waiting())
+        val paused = ResultsViewModel("sim-1", repository, pollIntervalMs = 100)
+        val before = repository.reportCalls
+        mainRule.dispatcher.scheduler.advanceTimeBy(500)
+        assertEquals(before, repository.reportCalls)
+        assertEquals(DecisionState.WAITING, paused.content().decision)
+    }
 }
