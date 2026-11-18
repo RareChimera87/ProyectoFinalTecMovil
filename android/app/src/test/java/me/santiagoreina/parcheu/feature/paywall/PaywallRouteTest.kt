@@ -6,12 +6,12 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import kotlin.reflect.KClass
 import kotlinx.coroutines.CompletableDeferred
+import me.santiagoreina.parcheu.contract.MeDto
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.data.billing.FakeBillingRepository
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
-import me.santiagoreina.parcheu.contract.MeDto
 import me.santiagoreina.parcheu.feature.basicprofile.BasicProfileRepository
 import me.santiagoreina.parcheu.feature.basicprofile.BasicProfileSamples
 import me.santiagoreina.parcheu.feature.basicprofile.FakeBasicProfileRepository
