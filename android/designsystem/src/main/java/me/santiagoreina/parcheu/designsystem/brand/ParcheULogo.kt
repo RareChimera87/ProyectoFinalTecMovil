@@ -32,8 +32,6 @@ import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.SoraFontFamily
-import me.santiagoreina.parcheu.designsystem.theme.Wcag
-import me.santiagoreina.parcheu.designsystem.theme.contrastRatio
 
 /**
  * Lockup horizontal de la dirección A: "La P que mira" hace de P y sigue "arche" en Sora 700 con la "U"
@@ -42,7 +40,7 @@ import me.santiagoreina.parcheu.designsystem.theme.contrastRatio
  * La P mide 0,956 × el tamaño de la letra (39 px de mascota para 40,8 px de texto en la propuesta) y su
  * pie se apoya en la línea base. "arche" toma [ParcheUTheme.colors]`.wordmark` (blanco en oscuro y
  * violeta en claro); la P es violeta en ambos temas con el ojo en tinta. Con [plus] (cuenta ParcheU+) se
- * añade una insignia "+" (círculo naranja con "+" blanco) pegada a la "U" y TalkBack lee "ParcheU+".
+ * añade una insignia "+" (círculo violeta primario con "+" blanco) pegada a la "U" y TalkBack lee "ParcheU+".
  */
 @Composable
 fun ParcheULogo(
@@ -97,7 +95,8 @@ fun ParcheULogo(
             Spacer(Modifier.width(fontDp * PLUS_GAP_RATIO))
             PlusBadge(
                 diameter = diameter,
-                fill = plusBadgeFill(),
+                fill = ParcheUTheme.colors.primary,
+                plusColor = ParcheUTheme.colors.onPrimary,
                 modifier =
                 Modifier.alignBy { it.measuredHeight + lift }
             )
@@ -105,33 +104,23 @@ fun ParcheULogo(
     }
 }
 
-/**
- * Relleno de la insignia "+": el naranja vivo de la "U" ([ParcheUPalette.Orange]) si el "+" blanco llega
- * al mínimo de elementos gráficos ([Wcag.AA_LARGE_TEXT], 3:1); si no, el naranja oscuro del sistema
- * ([ParcheUPalette.LightOrangeText]). El naranja vivo da 2,3:1 con blanco, así que hoy cae en el oscuro.
- */
-internal fun plusBadgeFill(): Color =
-    listOf(ParcheUPalette.Orange, ParcheUPalette.LightOrangeText).first {
-        contrastRatio(ParcheUPalette.White, it) >= Wcag.AA_LARGE_TEXT
-    }
-
 /** Círculo relleno con un "+" blanco grueso dibujado con trazos (no depende de ningún glifo). */
 @Composable
-private fun PlusBadge(diameter: Dp, fill: Color, modifier: Modifier = Modifier) {
+private fun PlusBadge(diameter: Dp, fill: Color, plusColor: Color, modifier: Modifier = Modifier) {
     Canvas(modifier.size(diameter)) {
         drawCircle(fill)
         val c = center
         val arm = size.minDimension * PLUS_ARM_RATIO
         val stroke = size.minDimension * PLUS_STROKE_RATIO
         drawLine(
-            ParcheUPalette.White,
+            plusColor,
             Offset(c.x - arm, c.y),
             Offset(c.x + arm, c.y),
             stroke,
             StrokeCap.Round
         )
         drawLine(
-            ParcheUPalette.White,
+            plusColor,
             Offset(c.x, c.y - arm),
             Offset(c.x, c.y + arm),
             stroke,
@@ -171,12 +160,15 @@ fun ParcheUAppIcon(
 private const val LOGO_MASCOT_RATIO = 0.956f
 private const val GAP_RATIO = 0.06f
 
-/** Insignia "+": diámetro ~66 % de la altura de la "U" (mayúscula ~0,7 em), elevada como superíndice. */
-private const val PLUS_DIAMETER_RATIO = 0.56f
-private const val PLUS_LIFT_RATIO = 0.16f
-private const val PLUS_GAP_RATIO = 0.12f
+/**
+ * Insignia "+": diámetro 0,70 em (≈ la altura de la "U"), con su borde superior a la altura de las letras
+ * (el pie queda casi en la línea base, sin salirse de la altura del logo).
+ */
+private const val PLUS_DIAMETER_RATIO = 0.70f
+private const val PLUS_LIFT_RATIO = 0.02f
+private const val PLUS_GAP_RATIO = 0.11f
 private const val PLUS_ARM_RATIO = 0.25f
-private const val PLUS_STROKE_RATIO = 0.2f
+private const val PLUS_STROKE_RATIO = 0.24f
 private const val SIDE_LEFT = 10f / 80f
 private const val SIDE_RIGHT = 8f / 80f
 

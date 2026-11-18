@@ -82,6 +82,18 @@ class ContrastTest {
         assertEquals(Color(0xFFB6A6FF), LightParcheUColors.toColorScheme().inversePrimary)
     }
 
+    /** La insignia del logo ParcheU+ lleva "+" onPrimary sobre primary: debe pasar 3:1 en ambos temas. */
+    @Test
+    fun plusBadgeOfLogoPassesGraphicContrastInBothThemes() {
+        for ((name, colors) in listOf(
+            "oscuro" to DarkParcheUColors,
+            "claro" to LightParcheUColors
+        )) {
+            val ratio = contrastRatio(colors.onPrimary, colors.primary)
+            assertTrue("insignia $name = $ratio", ratio >= Wcag.AA_LARGE_TEXT)
+        }
+    }
+
     /** primary es solo relleno: como texto falla AA, lo que justifica que :designsystem use prt. */
     @Test
     fun primaryFailsAsTextOnDarkContainerSoItIsFillOnly() {
