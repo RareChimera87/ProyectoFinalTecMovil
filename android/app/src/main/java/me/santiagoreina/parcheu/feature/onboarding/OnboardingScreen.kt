@@ -7,29 +7,31 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -327,33 +329,29 @@ private fun OnboardingPage(index: Int) {
         modifier =
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
             .testTag(OnboardingTags.page(index)),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        Box(
+        // El texto y los controles mandan: la ilustración toma el alto que sobre (entre 120 y 330 dp) y, si es
+        // menor que el de diseño, se escala entera para no recortarse en pantallas bajas.
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(330.dp)
+                .weight(1f)
+                .heightIn(min = ART_MIN_HEIGHT, max = ART_DESIGN_HEIGHT)
                 .clip(ParcheUTheme.shapes.hero)
                 .background(panel),
             contentAlignment = Alignment.Center
         ) {
-            when (index) {
-                0 -> TwinIllustration()
-                1 -> SimulationIllustration()
-                else -> {
-                    PuGraph(
-                        nodes = ONBOARDING_GRAPH_NODES,
-                        size = 260.dp,
-                        style = PuGraphStyle.ParcheVivo
-                    )
-                    ExampleCaption(
-                        color = colors.mu,
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
-                    )
-                }
+            val fit = (maxHeight / ART_DESIGN_HEIGHT).coerceIn(0.3f, 1f)
+            Box(
+                modifier = Modifier
+                    .requiredSize(width = maxWidth / fit, height = ART_DESIGN_HEIGHT)
+                    .graphicsLayer(scaleX = fit, scaleY = fit),
+                contentAlignment = Alignment.Center
+            ) {
+                PageArt(index)
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -367,6 +365,9 @@ private fun OnboardingPage(index: Int) {
         }
     }
 }
+
+private val ART_DESIGN_HEIGHT = 330.dp
+private val ART_MIN_HEIGHT = 120.dp
 
 /** A2 sobre el héroe violeta: tú (iniciales) y tu gemelo, la P blanca grande, con lo que aprende alrededor. */
 @Composable
@@ -551,6 +552,26 @@ private fun TermsSheet(
                 onClick = onDecline,
                 enabled = !sheet.submitting,
                 modifier = Modifier.fillMaxWidth().testTag(OnboardingTags.TERMS_DECLINE)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.PageArt(index: Int) {
+    val colors = ParcheUTheme.colors
+    when (index) {
+        0 -> TwinIllustration()
+        1 -> SimulationIllustration()
+        else -> {
+            PuGraph(
+                nodes = ONBOARDING_GRAPH_NODES,
+                size = 260.dp,
+                style = PuGraphStyle.ParcheVivo
+            )
+            ExampleCaption(
+                color = colors.mu,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
             )
         }
     }
