@@ -324,4 +324,17 @@ class ParcheViewModelTest {
         vm.refresh()
         assertTrue(fake.graphCalls.isEmpty())
     }
+
+    @Test
+    fun refreshKeepsTheActiveCommunityFilter() {
+        val fake =
+            repo(ApiResult.Success(ParcheSamples.content), ApiResult.Success(ParcheSamples.content))
+        val vm = ParcheViewModel(fake)
+        vm.start(community = "c1")
+
+        vm.refresh()
+
+        assertEquals(listOf<String?>("c1", "c1"), fake.graphCalls)
+        assertEquals("c1", loaded(vm).filters.communityId)
+    }
 }

@@ -41,8 +41,15 @@ fun ParcheRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var safetyTarget by remember { mutableStateOf<SafetyTarget?>(null) }
     LaunchedEffect(route.community) { viewModel.start(route.community) }
-    // Al volver a la pestaña tras conectar con alguien se recarga el grafo (la carga inicial ya la hace start).
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
+    // Solo se refresca al volver de una pausa real: el ON_RESUME de la entrada ya lo cubre start.
+    var paused by remember { mutableStateOf(false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { paused = true }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (paused) {
+            paused = false
+            viewModel.refresh()
+        }
+    }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
