@@ -87,12 +87,23 @@ class PaywallViewModel(
         billing.acknowledgePurchaseState()
         viewModelScope.launch { billing.purchaseState.collect(::onPurchaseState) }
         loadPlans()
+        checkEntitlement()
+    }
+
+    /** Si el derecho ya es Plus, G1 no vende lo que ya se tiene y abre G4. */
+    private fun checkEntitlement() {
         viewModelScope.launch {
             val result = billing.refreshEntitlement()
             if (result is ApiResult.Success && result.value.plus) {
                 _effects.send(PaywallEffect.OpenManage)
             }
         }
+    }
+
+    /** "Reintentar" de G1: vuelve a pedir los planes y también el derecho, para poder llegar a G4. */
+    fun retry() {
+        loadPlans()
+        checkEntitlement()
     }
 
     fun loadPlans() {

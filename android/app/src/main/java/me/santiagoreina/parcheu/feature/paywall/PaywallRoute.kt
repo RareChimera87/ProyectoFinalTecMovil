@@ -21,8 +21,9 @@ import org.koin.compose.koinInject
  *
  * La hoja G2 elige entre la versión gratis y la de uso justo con el `plus` que confirma el servidor en
  * `GET /v1/me` (el mismo dato de Inicio y Perfil). El derecho en memoria de [BillingRepository] está vacío
- * hasta abrir G1 o G4, así que solo sirve de respaldo si `/v1/me` falla. Mientras `/v1/me` responde, la hoja
- * no se dibuja, para no mostrar un instante la versión equivocada.
+ * hasta abrir G1 o G4, así que solo sirve de respaldo mientras `/v1/me` responde o si falla. La hoja se
+ * dibuja de inmediato (sin Plus si no hay dato) para no dejar la pantalla en blanco en un arranque en frío
+ * del backend, y se actualiza cuando llega `/v1/me`.
  */
 @Composable
 fun PaywallRoute(
@@ -43,15 +44,13 @@ fun PaywallRoute(
                     is ApiResult.Failure -> ServerPlus.Unavailable
                 }
         }
-    val plus: Boolean? =
+    val plus: Boolean =
         when (val known = serverPlus) {
             is ServerPlus.Known -> known.plus
             ServerPlus.Unavailable -> entitlement?.plus == true
-            ServerPlus.Unknown -> if (isLimit) null else entitlement?.plus == true
+            ServerPlus.Unknown -> entitlement?.plus == true
         }
-    if (plus != null) {
-        PaywallEntry(route = route, navigator = navigator, modifier = modifier, isPlus = plus)
-    }
+    PaywallEntry(route = route, navigator = navigator, modifier = modifier, isPlus = plus)
 }
 
 /** Lo que se sabe de `MeDto.plus` mientras se abre la ruta. */

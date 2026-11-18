@@ -5,11 +5,14 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import kotlin.reflect.KClass
+import kotlinx.coroutines.CompletableDeferred
 import me.santiagoreina.parcheu.contract.QuotaKind
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.data.billing.FakeBillingRepository
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.contract.MeDto
+import me.santiagoreina.parcheu.feature.basicprofile.BasicProfileRepository
 import me.santiagoreina.parcheu.feature.basicprofile.BasicProfileSamples
 import me.santiagoreina.parcheu.feature.basicprofile.FakeBasicProfileRepository
 import me.santiagoreina.parcheu.feature.plus.PlusSources
@@ -93,5 +96,54 @@ class PaywallRouteTest {
         val profile = FakeBasicProfileRepository(meResult = ApiResult.Failure(AppError.Network))
         open(billing, profile)
         composeRule.onNodeWithText("Llegaste al uso justo de hoy").assertIsDisplayed()
+    }
+
+    private fun pendingProfile(answer: CompletableDeferred<ApiResult<MeDto>>) =
+        object : BasicProfileRepository by FakeBasicProfileRepository() {
+            override suspend fun me(): ApiResult<MeDto> = answer.await()
+        }
+
+    private fun openPending(
+        billing: FakeBillingRepository,
+        answer: CompletableDeferred<ApiResult<MeDto>>
+    ) {
+        composeRule.setContent {
+            ParcheUTheme(darkTheme = true) {
+                PaywallRoute(
+                    route = limitRoute,
+                    navigator = NoopNavigator,
+                    billing = billing,
+                    profile = pendingProfile(answer)
+                )
+            }
+        }
+    }
+
+    @Test
+    fun theSheetIsDrawnAsFreeWhileTheServerHasNotAnswered() {
+        val answer = CompletableDeferred<ApiResult<MeDto>>()
+        openPending(FakeBillingRepository(), answer)
+        composeRule.onNodeWithText("Ya usaste tus simulaciones de esta semana").assertIsDisplayed()
+        composeRule.onNodeWithTag(PlusTags.LIMIT_SEE_PLUS).assertIsDisplayed()
+    }
+
+    @Test
+    fun theSheetUpdatesWhenTheServerConfirmsPlus() {
+        val answer = CompletableDeferred<ApiResult<MeDto>>()
+        openPending(FakeBillingRepository(), answer)
+        composeRule.onNodeWithText("Ya usaste tus simulaciones de esta semana").assertIsDisplayed()
+        answer.complete(ApiResult.Success(BasicProfileSamples.newUser.copy(plus = true)))
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Llegaste al uso justo de hoy").assertIsDisplayed()
+    }
+
+    @Test
+    fun theSheetStaysUsableWhenTheServerFails() {
+        val answer = CompletableDeferred<ApiResult<MeDto>>()
+        openPending(FakeBillingRepository(), answer)
+        answer.complete(ApiResult.Failure(AppError.Network))
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Ya usaste tus simulaciones de esta semana").assertIsDisplayed()
+        composeRule.onNodeWithTag(PlusTags.LIMIT_SEE_PLUS).assertIsDisplayed()
     }
 }
