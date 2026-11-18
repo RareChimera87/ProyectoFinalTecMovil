@@ -3,6 +3,7 @@ package me.santiagoreina.parcheu.feature.conocer.match
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
@@ -58,5 +59,13 @@ class MatchFoundScreenTest {
         show(MatchFoundUiState.Loaded(testMatch(isDemo = false), MatchChoice.SCENARIO))
 
         composeRule.onNodeWithTag(MatchFoundTags.DEMO_BADGE).assertDoesNotExist()
+    }
+
+    @Test
+    fun resolvedMatchExplainsItAndOffersToGoBack() {
+        show(MatchFoundUiState.Resolved)
+
+        composeRule.onNodeWithText(MatchStrings.RESOLVED_TITLE).assertIsDisplayed()
+        composeRule.onNodeWithText(MatchStrings.BACK).assertIsDisplayed()
     }
 }

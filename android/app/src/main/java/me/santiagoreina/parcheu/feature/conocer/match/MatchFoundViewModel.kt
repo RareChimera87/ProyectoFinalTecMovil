@@ -25,6 +25,12 @@ sealed interface MatchFoundUiState {
     data class Error(val error: AppError) : MatchFoundUiState
 
     /**
+     * El match ya se resolvió (simulación o escenario) y F2 se abrió sin haber elegido en esta pantalla. La
+     * ruta ya navega al destino; este estado evita quedarse en "Cargando…" si regresa a F2.
+     */
+    data object Resolved : MatchFoundUiState
+
+    /**
      * Match cargado. [selected] es la tarjeta marcada; [submitting] mientras va la elección; [waitingOther]
      * cuando ya elegí y falta la otra persona; [expired] si nadie eligió a tiempo.
      */
@@ -72,6 +78,7 @@ class MatchFoundViewModel(
     val effects: Flow<MatchFoundEffect> = _effects.receiveAsFlow()
 
     private var pollJob: Job? = null
+    private var recheckJob: Job? = null
 
     init {
         load()
@@ -83,6 +90,31 @@ class MatchFoundViewModel(
             when (val result = repository.match(matchId)) {
                 is ApiResult.Failure -> _state.value = MatchFoundUiState.Error(result.error)
                 is ApiResult.Success -> apply(result.value, selected = null)
+            }
+        }
+    }
+
+    /**
+     * F2 vuelve a primer plano. Con las tarjetas a la vista se vuelve a consultar el match: si ya no espera
+     * mi elección (se resolvió por otra ruta) pasa a [MatchFoundUiState.Resolved] sin navegar, y nunca se
+     * ofrece "Empezar" sobre él. Si falla la consulta, o mientras se envía la elección, no cambia nada.
+     */
+    fun onResumed() {
+        val loaded = _state.value as? MatchFoundUiState.Loaded ?: return
+        if (loaded.expired || loaded.submitting || recheckJob?.isActive == true) return
+        recheckJob = viewModelScope.launch {
+            val match = (repository.match(matchId) as? ApiResult.Success)?.value ?: return@launch
+            val current = _state.value as? MatchFoundUiState.Loaded ?: return@launch
+            if (current.submitting) return@launch
+            when (match.status) {
+                MatchStatus.SIMULATION, MatchStatus.SCENARIO -> {
+                    pollJob?.cancel()
+                    _state.value = MatchFoundUiState.Resolved
+                }
+                MatchStatus.EXPIRED -> apply(match, selected = null)
+                // Sigue esperando elección; si ya elegí y falta la otra persona, retoma el sondeo.
+                MatchStatus.PENDING_CHOICE ->
+                    if (match.myChoice != null && !current.waitingOther) apply(match, null)
             }
         }
     }
@@ -102,14 +134,34 @@ class MatchFoundViewModel(
         viewModelScope.launch {
             when (val result = repository.choose(matchId, loaded.selected)) {
                 is ApiResult.Success -> apply(result.value, loaded.selected)
-                is ApiResult.Failure -> _state.update {
-                    (it as? MatchFoundUiState.Loaded)?.copy(
-                        submitting = false,
-                        actionError = result.error
-                    ) ?: it
-                }
+                is ApiResult.Failure ->
+                    if (result.error == AppError.Conflict) {
+                        onChoiceAlreadyRegistered(loaded)
+                    } else {
+                        showActionError(result.error)
+                    }
             }
         }
+    }
+
+    /**
+     * 409: el servidor ya tiene una elección (p. ej. la respuesta anterior se perdió por la red). Se consulta
+     * el match y, si ya se resolvió, se sigue como si la elección hubiera salido bien; si no se puede
+     * confirmar, se muestra el error.
+     */
+    private suspend fun onChoiceAlreadyRegistered(loaded: MatchFoundUiState.Loaded) {
+        val match = (repository.match(matchId) as? ApiResult.Success)?.value
+        if (match != null &&
+            (match.status != MatchStatus.PENDING_CHOICE || match.myChoice != null)
+        ) {
+            apply(match, loaded.selected)
+        } else {
+            showActionError(AppError.Conflict)
+        }
+    }
+
+    private fun showActionError(error: AppError) = _state.update {
+        (it as? MatchFoundUiState.Loaded)?.copy(submitting = false, actionError = error) ?: it
     }
 
     fun onSearchAgain() {
@@ -125,11 +177,11 @@ class MatchFoundViewModel(
         val choice = match.myChoice ?: selected ?: defaultChoice(match)
         when (match.status) {
             MatchStatus.SIMULATION -> {
-                clearSubmitting()
+                markResolved()
                 _effects.send(MatchFoundEffect.OpenSimulation(match.id))
             }
             MatchStatus.SCENARIO -> {
-                clearSubmitting()
+                markResolved()
                 _effects.send(MatchFoundEffect.OpenScenario(match.chatId ?: match.id))
             }
             MatchStatus.EXPIRED ->
@@ -142,9 +194,16 @@ class MatchFoundViewModel(
         }
     }
 
-    /** La elección ya se resolvió: al volver de F3/F4 el botón no debe quedarse en "Empezando…". */
-    private fun clearSubmitting() {
-        _state.update { (it as? MatchFoundUiState.Loaded)?.copy(submitting = false) ?: it }
+    /**
+     * El match ya se resolvió. Con las tarjetas a la vista (elegí aquí) solo se apaga "Empezando…"; si F2
+     * aún no cargaba nada (abierta sobre un match resuelto) pasa a [MatchFoundUiState.Resolved] en vez de
+     * quedarse en "Cargando…".
+     */
+    private fun markResolved() {
+        _state.update {
+            (it as? MatchFoundUiState.Loaded)?.copy(submitting = false)
+                ?: MatchFoundUiState.Resolved
+        }
     }
 
     private fun defaultChoice(match: MatchDto) =

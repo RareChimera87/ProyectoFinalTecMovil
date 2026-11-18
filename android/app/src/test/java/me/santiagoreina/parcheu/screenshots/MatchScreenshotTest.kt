@@ -107,6 +107,11 @@ class MatchScreenshotTest(private val dark: Boolean) {
     }
 
     @Test
+    fun f1Idle() = capture("f1_listo") {
+        Queue(MatchQueueUiState(mode = Mode.PAREJA, phase = QueuePhase.Idle, dailyQuota = quota))
+    }
+
+    @Test
     fun f1Error() = capture("f1_error") {
         Queue(MatchQueueUiState(mode = Mode.PAREJA, phase = QueuePhase.Error(AppError.Underage)))
     }
@@ -126,6 +131,9 @@ class MatchScreenshotTest(private val dark: Boolean) {
             )
         )
     }
+
+    @Test
+    fun f2Resolved() = capture("f2_resuelto") { Found(MatchFoundUiState.Resolved) }
 
     @Test
     fun f2WithScenario() = capture("f2_con_escenario") {

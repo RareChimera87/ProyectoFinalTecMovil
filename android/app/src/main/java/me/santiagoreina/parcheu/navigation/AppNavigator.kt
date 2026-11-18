@@ -20,6 +20,13 @@ interface AppNavigator {
     fun navigateReplacing(route: AppRoute, replacing: KClass<out AppRoute>) = navigate(route)
 
     /**
+     * Como [navigateReplacing], pero quita TODAS las entradas de [replacing] de la pila, no solo la más
+     * cercana (una pantalla puede estar duplicada, p. ej. F2 abierta por un aviso encima de otra F2).
+     */
+    fun navigateReplacingAll(route: AppRoute, replacing: KClass<out AppRoute>) =
+        navigateReplacing(route, replacing)
+
+    /**
      * Quita de la pila [replacing] y todo lo que haya encima (si no está, solo la pantalla actual) y abre
      * [route] como entrada nueva, sin reutilizar ninguna (con su propio ViewModel). Para destinos cuyo
      * argumento debe aplicarse siempre, p. ej. D8 -> D1 filtrado. Por defecto solo navega.
@@ -71,6 +78,16 @@ class NavControllerNavigator(private val navController: NavHostController) : App
             popUpTo(replacing) { inclusive = true }
             launchSingleTop = true
         }
+    }
+
+    override fun navigateReplacingAll(route: AppRoute, replacing: KClass<out AppRoute>) {
+        // Cada pop quita la entrada más cercana de [replacing]; se repite hasta que no quede ninguna.
+        while (runCatching { navController.getBackStackEntry(replacing) }.isSuccess &&
+            navController.popBackStack(replacing, inclusive = true)
+        ) {
+            // sigue
+        }
+        navController.navigate(route) { launchSingleTop = true }
     }
 
     override fun navigateAsNew(route: AppRoute, replacing: KClass<out AppRoute>) {

@@ -11,6 +11,7 @@ import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -127,6 +128,122 @@ class MatchFoundViewModelTest {
     fun conflictOnChoiceShowsActionErrorAndKeepsCards() {
         repository.chooseResult = ApiResult.Failure(AppError.Conflict)
         val vm = viewModel()
+
+        vm.onStart()
+
+        assertEquals(AppError.Conflict, vm.loaded().actionError)
+        assertFalse(vm.loaded().submitting)
+    }
+
+    @Test
+    fun alreadyResolvedSimulationMatchDoesNotStayLoading() = runTest {
+        repository.matchResults = mutableListOf(
+            ApiResult.Success(
+                testMatch(status = MatchStatus.SIMULATION, myChoice = MatchChoice.SIMULATION)
+            )
+        )
+        val vm = viewModel()
+        vm.effects.test {
+            assertEquals(MatchFoundEffect.OpenSimulation("m1"), awaitItem())
+            assertEquals(MatchFoundUiState.Resolved, vm.state.value)
+        }
+    }
+
+    private fun resolvedMatch(status: MatchStatus = MatchStatus.SIMULATION) =
+        ApiResult.Success(testMatch(status = status, myChoice = MatchChoice.SIMULATION))
+
+    @Test
+    fun resumingWithTheMatchResolvedElsewhereShowsResolvedWithoutNavigating() = runTest {
+        val vm = viewModel()
+        vm.effects.test {
+            repository.matchResults = mutableListOf(resolvedMatch())
+
+            vm.onResumed()
+
+            assertEquals(MatchFoundUiState.Resolved, vm.state.value)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun resumingWithAResolvedScenarioMatchShowsResolved() {
+        val vm = viewModel()
+        repository.matchResults = mutableListOf(resolvedMatch(MatchStatus.SCENARIO))
+
+        vm.onResumed()
+
+        assertEquals(MatchFoundUiState.Resolved, vm.state.value)
+    }
+
+    @Test
+    fun resumingWithAPendingMatchKeepsTheCards() {
+        val vm = viewModel()
+        val before = vm.loaded()
+
+        vm.onResumed()
+
+        assertEquals(before, vm.loaded())
+    }
+
+    @Test
+    fun resumingWithAFailedCheckKeepsTheCards() {
+        val vm = viewModel()
+        val before = vm.loaded()
+        repository.matchResults = mutableListOf(ApiResult.Failure(AppError.Network))
+
+        vm.onResumed()
+
+        assertEquals(before, vm.loaded())
+    }
+
+    @Test
+    fun resumingWithAnExpiredMatchShowsExpired() {
+        val vm = viewModel()
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(status = MatchStatus.EXPIRED)))
+
+        vm.onResumed()
+
+        assertTrue(vm.loaded().expired)
+    }
+
+    @Test
+    fun conflictOnChoiceWithAResolvedMatchContinuesToTheSimulation() = runTest {
+        repository.chooseResult = ApiResult.Failure(AppError.Conflict)
+        val vm = viewModel()
+        repository.matchResults = mutableListOf(
+            ApiResult.Success(
+                testMatch(status = MatchStatus.SIMULATION, myChoice = MatchChoice.SIMULATION)
+            )
+        )
+        vm.effects.test {
+            vm.onSelect(MatchChoice.SIMULATION)
+            vm.onStart()
+
+            assertEquals(MatchFoundEffect.OpenSimulation("m1"), awaitItem())
+            assertFalse(vm.loaded().submitting)
+            assertNull(vm.loaded().actionError)
+        }
+    }
+
+    @Test
+    fun conflictOnChoiceWithAChoiceRegisteredWaitsForTheOther() {
+        repository.chooseResult = ApiResult.Failure(AppError.Conflict)
+        val vm = viewModel()
+        repository.matchResults =
+            mutableListOf(ApiResult.Success(testMatch(myChoice = MatchChoice.SIMULATION)))
+
+        vm.onStart()
+
+        assertTrue(vm.loaded().waitingOther)
+        assertNull(vm.loaded().actionError)
+    }
+
+    @Test
+    fun conflictOnChoiceWhenTheMatchCannotBeConfirmedShowsTheError() {
+        repository.chooseResult = ApiResult.Failure(AppError.Conflict)
+        val vm = viewModel()
+        repository.matchResults = mutableListOf(ApiResult.Failure(AppError.Network))
 
         vm.onStart()
 

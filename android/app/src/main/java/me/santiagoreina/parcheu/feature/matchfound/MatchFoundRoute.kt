@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundEffect
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundScreen
@@ -36,11 +37,20 @@ fun MatchFoundRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var safetyTarget by remember { mutableStateOf<SafetyTarget?>(null) }
+    // F2 puede volver a primer plano con el match ya resuelto por otra ruta (Simulaciones pendientes, un
+    // aviso, otra pestaña): se vuelve a consultar para no ofrecer "Empezar" sobre un match usado.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onResumed()
+        onPauseOrDispose {}
+    }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is MatchFoundEffect.OpenScenario -> navigator.navigate(ScenarioChat(effect.chatId))
-                is MatchFoundEffect.OpenSimulation -> navigator.navigate(Simulation(effect.matchId))
+                // Reemplazan a F2: ya no tiene nada que mostrar y "atrás" no debe volver a ella.
+                is MatchFoundEffect.OpenScenario ->
+                    navigator.navigateReplacingAll(ScenarioChat(effect.chatId), MatchFound::class)
+                is MatchFoundEffect.OpenSimulation ->
+                    navigator.navigateReplacingAll(Simulation(effect.matchId), MatchFound::class)
                 is MatchFoundEffect.SearchAgain ->
                     navigator.navigateReplacing(MatchQueue(mode = effect.mode), MatchQueue::class)
                 MatchFoundEffect.Close ->
