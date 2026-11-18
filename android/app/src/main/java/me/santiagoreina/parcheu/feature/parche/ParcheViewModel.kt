@@ -59,7 +59,11 @@ sealed interface ParcheEffect {
  * D1-D5 (E3.4). Al abrir pinta al instante el último grafo guardado (si existe) y lo refresca en segundo
  * plano; sin grafo guardado muestra D4 hasta que llegue la respuesta. "Reintentar" vuelve a D4.
  */
-class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
+class ParcheViewModel(
+    private val repository: GraphRepository,
+    /** Reloj en milisegundos; inyectable para pruebas deterministas. */
+    private val nowMs: () -> Long = System::currentTimeMillis
+) : ViewModel() {
     private val _state = MutableStateFlow<ParcheUiState>(ParcheUiState.Loading)
     val state: StateFlow<ParcheUiState> = _state.asStateFlow()
 
@@ -69,6 +73,7 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
     private var filters = ParcheFilters()
     private var loadJob: Job? = null
     private var started = false
+    private var lastLoadAtMs: Long? = null
 
     /**
      * Primera carga; [community] llega de D8 ("Ver en el grafo"), que abre D1 como entrada nueva (con su
@@ -83,14 +88,18 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
     }
 
     /**
-     * Al volver a la pestaña (ON_RESUME): recarga sin caché y sin tocar lo que ya se ve (grafo, filtros, hoja
-     * abierta); un fallo deja el grafo anterior. No hace nada antes de la primera carga ni mientras otra
-     * carga sigue en curso, así que el ON_RESUME inicial no duplica la llamada.
+     * Cada ON_RESUME de la ruta (también al volver a la pestaña, donde la composición se recrea pero este
+     * ViewModel sobrevive): recarga sin caché y sin tocar lo que ya se ve (grafo, filtros, hoja abierta); un
+     * fallo deja el grafo anterior. No hace nada antes de la primera carga terminada, mientras otra carga
+     * sigue en curso ni si la última terminó hace menos de [MIN_REFRESH_INTERVAL_MS], así que el ON_RESUME
+     * inicial no duplica la llamada.
      */
-    fun refresh() {
+    fun onResumed() {
         if (!started || loadJob?.isActive == true) return
         val current = _state.value
         if (current !is ParcheUiState.Loaded && current !is ParcheUiState.Empty) return
+        val last = lastLoadAtMs ?: return
+        if (nowMs() - last < MIN_REFRESH_INTERVAL_MS) return
         load(useCache = false, silent = true)
     }
 
@@ -176,7 +185,9 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
             viewModelScope.launch {
                 val cached = if (useCache) repository.cached() else null
                 if (cached != null) show(cached)
-                when (val result = repository.graph(filters.communityId)) {
+                val result = repository.graph(filters.communityId)
+                lastLoadAtMs = nowMs()
+                when (result) {
                     is ApiResult.Success -> show(result.value)
                     // Con grafo guardado a la vista, un fallo de red no lo reemplaza por D5.
                     is ApiResult.Failure -> if (cached == null && !silent) {
@@ -194,5 +205,10 @@ class ParcheViewModel(private val repository: GraphRepository) : ViewModel() {
                 val previous = _state.value as? ParcheUiState.Loaded
                 ParcheUiState.Loaded(content, filters, previous?.sheet)
             }
+    }
+
+    private companion object {
+        /** Mínimo entre dos cargas para que el ON_RESUME no repita la que acaba de terminar. */
+        const val MIN_REFRESH_INTERVAL_MS = 3_000L
     }
 }
