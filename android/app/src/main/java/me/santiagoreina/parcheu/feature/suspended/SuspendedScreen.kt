@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.designsystem.components.base.OutlineButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 object SuspendedTags {
@@ -65,9 +67,11 @@ fun SuspendedScreen(
             )
         ) {
             Spacer(Modifier.height(48.dp))
+            // La P en gris: el estado de error de la dirección A (mismo esquema que UnderageScreen).
+            TwinMascot(size = TwinMascotSize.L, error = true)
             Text(
                 text = "Tu cuenta está suspendida",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 color = colors.tx,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.semantics { heading() }

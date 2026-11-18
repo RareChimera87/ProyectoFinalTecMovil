@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.designsystem.components.base.OutlineButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.compound.InfoNote
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascot
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotSize
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
 object UnderageTags {
@@ -65,18 +67,26 @@ fun UnderageScreen(
             )
         ) {
             Spacer(Modifier.height(48.dp))
-            Box(
-                Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(colors.prc),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("18+", style = MaterialTheme.typography.titleLarge, color = colors.onprc)
+            // La P en gris (estado de error de la dirección A) con la marca de 18+ al lado del ojo.
+            Box(contentAlignment = Alignment.TopEnd) {
+                TwinMascot(
+                    size = TwinMascotSize.L,
+                    error = true,
+                    modifier = Modifier.padding(end = 22.dp, top = 12.dp)
+                )
+                Text(
+                    "18+",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.onprc,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(colors.prc)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                )
             }
             Text(
                 text = "ParcheU es solo para mayores de 18",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 color = colors.tx,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.semantics { heading() }

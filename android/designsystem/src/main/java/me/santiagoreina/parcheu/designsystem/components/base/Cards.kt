@@ -18,15 +18,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.santiagoreina.parcheu.designsystem.theme.ModeColors
 import me.santiagoreina.parcheu.designsystem.theme.ParcheURadius
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUSizes
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 
-/** Variantes de tarjeta del inventario: estándar (radio 20, padding 16), estadística (16, 12x14), sugerencia (padding 14) y plan activo (radio 24, borde degradado). */
+/** Variantes de tarjeta del inventario: estándar (radio 18 desde la dirección A, padding 16), estadística (16, 12x14), sugerencia (padding 14) y plan activo (radio 24, borde degradado). */
 enum class ParcheUCardVariant(val radius: Dp, val padding: PaddingValues) {
     Standard(ParcheURadius.Card, PaddingValues(16.dp)),
     Stat(ParcheURadius.FieldLarge, PaddingValues(horizontal = 14.dp, vertical = 12.dp)),
@@ -72,6 +76,58 @@ fun ParcheUCard(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         content = content
     )
+}
+
+/**
+ * Tarjeta de "estado" de la dirección A "Parche Vivo": superficie s1, radio 18 y un lomo de 5 dp a la
+ * izquierda con el color pleno del modo ([mode]`.solid`). Úsala para todo lo que pertenece a una relación
+ * de un modo concreto (simulación en curso, resultado listo, sugerencia, chat): el color del modo organiza
+ * la pantalla en vez de vivir solo en un chip. El lomo es decorativo: el modo debe decirse también en
+ * texto (p. ej. "· Estudio" o un `ModeChip`).
+ *
+ * Con [onClick] es un botón (área táctil ≥ 48 dp) y [onClickLabel] se lee en TalkBack.
+ */
+@Composable
+fun ModeSpineCard(
+    mode: ModeColors,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = ModeSpineCardDefaults.ContentPadding,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val colors = ParcheUTheme.colors
+    val shape = RoundedCornerShape(ParcheURadius.Card)
+    val spine = ParcheUSizes.ModeSpine
+    Column(
+        modifier =
+        modifier
+            .clip(shape)
+            .background(colors.s1, shape)
+            .drawBehind { drawRect(mode.solid, size = Size(spine.toPx(), size.height)) }
+            .then(
+                if (onClick != null) {
+                    Modifier.touchTarget().clickable(
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClickLabel = onClickLabel,
+                        onClick = onClick
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .padding(start = spine)
+            .padding(contentPadding),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        content = content
+    )
+}
+
+object ModeSpineCardDefaults {
+    /** 12 a la izquierda del lomo, 14 a la derecha y 12 arriba y abajo (mockup A · Inicio). */
+    val ContentPadding = PaddingValues(start = 12.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)
 }
 
 /**

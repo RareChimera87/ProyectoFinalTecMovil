@@ -25,7 +25,10 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.BlockedDto
 import me.santiagoreina.parcheu.core.error.AppError
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.StateProp
 import me.santiagoreina.parcheu.core.ui.UiState
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.OutlineButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
@@ -95,14 +98,16 @@ fun BlockedUsersScreen(
                 message =
                 "Si bloqueas a alguien desde un chat, un match o el grafo, aparecerá aquí " +
                     "para que puedas desbloquearlo.",
-                modifier = Modifier.testTag(BlockedUsersTags.EMPTY)
+                illustration = { StateIllustration(StateProp.Notebook) },
+                modifier = Modifier.fillMaxSize().testTag(BlockedUsersTags.EMPTY)
             )
             is UiState.Error -> ErrorState(
                 title = "No pudimos cargar tus bloqueos",
                 message = safetyErrorMessage(list.error),
                 retryLabel = "Reintentar",
                 onRetryClick = actions.onRetry,
-                modifier = Modifier.testTag(BlockedUsersTags.ERROR)
+                illustration = { StateIllustration(list.error.stateProp(), error = true) },
+                modifier = Modifier.fillMaxSize().testTag(BlockedUsersTags.ERROR)
             )
             is UiState.Loaded -> BlockedList(list.data, state, actions, now)
         }

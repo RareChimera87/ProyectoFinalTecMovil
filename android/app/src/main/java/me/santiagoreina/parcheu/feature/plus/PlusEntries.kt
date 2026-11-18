@@ -84,7 +84,7 @@ internal fun PaywallRoute(
                 onRestore = viewModel::onRestore,
                 onSelect = viewModel::onSelect,
                 onSubscribe = { context.findActivity()?.let(viewModel::onSubscribe) },
-                onRetry = viewModel::loadPlans,
+                onRetry = viewModel::retry,
                 onDismissMessage = viewModel::onDismissMessage
             )
         }

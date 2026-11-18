@@ -20,12 +20,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.santiagoreina.parcheu.contract.FeedbackPrompt
 import me.santiagoreina.parcheu.contract.MemoryDto
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChip
 import me.santiagoreina.parcheu.designsystem.components.base.ModeChipSize
+import me.santiagoreina.parcheu.designsystem.components.base.ModeChipStyle
+import me.santiagoreina.parcheu.designsystem.components.base.ModeSpineCard
 import me.santiagoreina.parcheu.designsystem.components.base.OutlineButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
@@ -34,6 +41,8 @@ import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
 import me.santiagoreina.parcheu.designsystem.components.base.SectionHeader
 import me.santiagoreina.parcheu.designsystem.components.base.TonalButton
 import me.santiagoreina.parcheu.designsystem.components.compound.ErrorState
+import me.santiagoreina.parcheu.designsystem.components.compound.HeroBlockDefaults
+import me.santiagoreina.parcheu.designsystem.mascot.TwinMascotGlyph
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.parche.fof.FofIcons
 import me.santiagoreina.parcheu.feature.safety.ReportAiContentAction
@@ -107,7 +116,8 @@ fun TrainTwinScreen(
                     message = state.error.message(),
                     retryLabel = "Reintentar",
                     onRetryClick = callbacks.onRetry,
-                    modifier = Modifier.testTag(TrainTwinTags.ERROR)
+                    illustration = { StateIllustration(state.error.stateProp(), error = true) },
+                    modifier = Modifier.fillMaxSize().testTag(TrainTwinTags.ERROR)
                 )
             is TrainTwinUiState.Loaded -> LoadedContent(state.content, callbacks)
         }
@@ -183,6 +193,10 @@ private fun EmptyNote(text: String, tag: String) {
     )
 }
 
+/**
+ * Pregunta de la semana como protagonista (dirección A): héroe violeta con la P que mira, la pregunta en
+ * Sora 800 y las opciones como botones tonales (prc/onprc sobre el violeta). Texto en onHero sólido.
+ */
 @Composable
 private fun ControlCard(
     prompt: FeedbackPrompt,
@@ -191,39 +205,67 @@ private fun ControlCard(
 ) {
     val colors = ParcheUTheme.colors
     val busy = prompt.id in content.busy
-    ParcheUCard(modifier = Modifier.testTag(TrainTwinTags.CONTROL)) {
-        SectionHeader(title = "Pregunta de la semana")
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(ParcheUTheme.shapes.hero)
+            .background(colors.hero, ParcheUTheme.shapes.hero)
+            .padding(HeroBlockDefaults.ContentPadding)
+            .testTag(TrainTwinTags.CONTROL),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Pregunta de la semana".uppercase(),
+                style = ParcheUTheme.textStyles.overline.copy(letterSpacing = 0.9.sp),
+                color = colors.onHero,
+                modifier = Modifier.weight(1f)
+            )
+            TwinMascotGlyph(width = 28.dp, color = colors.onHero, eyeColor = colors.hero)
+        }
+        Text(
+            prompt.text,
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+            color = colors.onHero,
+            modifier = Modifier.semantics { heading() }
+        )
         Text(
             "Tu gemelo ya adivinó qué responderías. Contesta tú y mira si acertó.",
             style = MaterialTheme.typography.bodySmall,
-            color = colors.mu
+            color = colors.onHero
         )
-        Text(
-            prompt.text,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = colors.tx
-        )
-        prompt.options.orEmpty().forEachIndexed { index, option ->
-            OutlineButton(
-                text = option,
-                onClick = { callbacks.onControlAnswer(prompt.id, index) },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth().testTag(TrainTwinTags.controlOption(index))
-            )
+        Column(
+            Modifier.padding(top = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            prompt.options.orEmpty().forEachIndexed { index, option ->
+                TonalButton(
+                    text = option,
+                    onClick = { callbacks.onControlAnswer(prompt.id, index) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().testTag(TrainTwinTags.controlOption(index))
+                )
+            }
         }
     }
 }
 
+/** El modo de la memoria en texto, en un chip tonal dentro de la tarjeta con lomo. */
 @Composable
 private fun MemoryHeader(memory: MemoryDto) {
     val colors = ParcheUTheme.colors
-    ModeChip(label = memory.mode.label(), mode = colors.forMode(memory.mode), size = ModeChipSize.S)
+    ModeChip(
+        label = memory.mode.label(),
+        mode = colors.forMode(memory.mode),
+        size = ModeChipSize.S,
+        style = ModeChipStyle.Tonal
+    )
 }
 
 @Composable
 private fun PendingMemoryCard(memory: MemoryDto, busy: Boolean, callbacks: TrainTwinCallbacks) {
     val colors = ParcheUTheme.colors
-    ParcheUCard {
+    ModeSpineCard(mode = colors.forMode(memory.mode), modifier = Modifier.fillMaxWidth()) {
         MemoryHeader(memory)
         Text(memory.text, style = MaterialTheme.typography.bodyMedium, color = colors.tx)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -248,7 +290,10 @@ private fun PendingMemoryCard(memory: MemoryDto, busy: Boolean, callbacks: Train
 @Composable
 private fun AcceptedMemoryCard(memory: MemoryDto) {
     val colors = ParcheUTheme.colors
-    ParcheUCard(modifier = Modifier.testTag(TrainTwinTags.accepted(memory.id))) {
+    ModeSpineCard(
+        mode = colors.forMode(memory.mode),
+        modifier = Modifier.fillMaxWidth().testTag(TrainTwinTags.accepted(memory.id))
+    ) {
         MemoryHeader(memory)
         Text(memory.text, style = MaterialTheme.typography.bodyMedium, color = colors.tx)
     }
@@ -257,7 +302,7 @@ private fun AcceptedMemoryCard(memory: MemoryDto) {
 @Composable
 private fun RatingCard(prompt: FeedbackPrompt, busy: Boolean, callbacks: TrainTwinCallbacks) {
     val colors = ParcheUTheme.colors
-    ParcheUCard {
+    ParcheUCard(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 "“${prompt.text}”",

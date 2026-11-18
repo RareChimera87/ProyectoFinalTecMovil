@@ -64,6 +64,23 @@ class PlusViewModelsTest {
     }
 
     @Test
+    fun retryAfterAFailedEntitlementReloadsItAndOpensManageForAPlusUser() = runTest {
+        val billing =
+            FakeBillingRepository(
+                plansResult = PlansResult.BillingUnavailable,
+                entitlementResult = ApiResult.Failure(AppError.Network)
+            )
+        val vm = paywall(billing)
+        assertEquals(1, billing.calls.count { it == "entitlement" })
+        billing.plansResult = PlansResult.Loaded(PlusTestData.plans)
+        billing.entitlementResult = ApiResult.Success(PlusTestData.activeAnnual)
+        vm.retry()
+        assertEquals(2, billing.calls.count { it == "entitlement" })
+        assertTrue(vm.state.value.plans is PlansUi.Loaded)
+        assertEquals(PaywallEffect.OpenManage, vm.effects.first())
+    }
+
+    @Test
     fun subscribeBuysTheSelectedPlanWithTheHashedAccountId() = runTest {
         val billing = loadedBilling()
         val vm = paywall(billing)

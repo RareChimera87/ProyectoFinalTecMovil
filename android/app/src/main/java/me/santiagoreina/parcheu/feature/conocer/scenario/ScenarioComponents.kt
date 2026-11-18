@@ -48,7 +48,7 @@ fun ScenarioPinnedCard(state: ScenarioUiState, modifier: Modifier = Modifier) {
         modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .background(colors.prc, RoundedCornerShape(16.dp))
+            .background(colors.prc, ParcheUTheme.shapes.card)
             .padding(14.dp)
             .testTag(ScenarioTags.CARD),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -56,15 +56,15 @@ fun ScenarioPinnedCard(state: ScenarioUiState, modifier: Modifier = Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = session.title ?: "Escenario",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
                 color = colors.onprc,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = ScenarioStrings.clock(state.remainingSec),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
                 color = if (state.remainingSec in 1..60) colors.coralt else colors.onprc,
                 modifier = Modifier.testTag(ScenarioTags.TIMER)
             )

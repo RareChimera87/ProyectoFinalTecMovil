@@ -325,6 +325,19 @@ class PlusScreenTest {
     }
 
     @Test
+    fun manualPlusIsNeutralAndNeverTalksAboutGooglePlay() {
+        manage(loadedManage(PlusTestData.manualGrant))
+        composeRule.onNodeWithText("ParcheU+ activo").assertIsDisplayed()
+        composeRule.onNodeWithText("Vence el 21 de octubre de 2027").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Cancelada").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Google Play", substring = true).assertCountEquals(0)
+        composeRule.onAllNodesWithTag(PlusTags.MANAGE_CANCEL).assertCountEquals(0)
+        composeRule.onAllNodesWithTag(PlusTags.MANAGE_FIX).assertCountEquals(0)
+        composeRule.onAllNodesWithTag(PlusTags.MANAGE_CHANGE).assertCountEquals(0)
+        composeRule.onAllNodesWithTag(PlusTags.MANAGE_SUBSCRIBE).assertCountEquals(0)
+    }
+
+    @Test
     fun graceExplainsThePaymentProblem() {
         manage(loadedManage(PlusTestData.grace))
         composeRule.onNodeWithText("Pago pendiente").assertIsDisplayed()

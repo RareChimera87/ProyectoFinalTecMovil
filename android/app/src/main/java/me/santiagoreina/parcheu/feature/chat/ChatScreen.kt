@@ -38,6 +38,7 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChatTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUIconButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
+import me.santiagoreina.parcheu.feature.modes.colors
 
 /** Acciones de F9 que la pantalla delega (la ruta las conecta al ViewModel y a la navegación). */
 data class ChatActions(
@@ -76,7 +77,13 @@ fun ChatScreen(
             onNavigationClick = actions.onBack,
             avatar = {
                 if (header != null) {
-                    ChatAvatar(header.initials, header.name, header.anonymous, size = 36.dp)
+                    ChatAvatar(
+                        header.initials,
+                        header.name,
+                        header.anonymous,
+                        size = 36.dp,
+                        mode = header.mode.colors()
+                    )
                 }
             },
             subtitle =

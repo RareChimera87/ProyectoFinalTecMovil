@@ -80,11 +80,14 @@ class ChatScreenshotTest(private val dark: Boolean) {
         initials: String,
         text: String,
         unread: Int,
-        hidden: Boolean = false
+        hidden: Boolean = false,
+        mode: Mode = Mode.AMISTAD,
+        muted: Boolean = false
     ) = ChatSummary(
         id = id,
         type = ChatType.DIRECT,
-        mode = Mode.AMISTAD,
+        mode = mode,
+        muted = muted,
         other = PersonRef(id = "u-$id", label = name, initials = initials),
         lastMessage = MessageDto("m-$id", null, text, at, hidden),
         unread = unread
@@ -158,9 +161,24 @@ class ChatScreenshotTest(private val dark: Boolean) {
         ChatListScreen(
             UiState.Loaded(
                 listOf(
-                    chat("1", "Laura Pinzón", "LP", "¿Armamos grupo para el parcial?", unread = 2),
+                    chat(
+                        "1",
+                        "Laura Pinzón",
+                        "LP",
+                        "¿Armamos grupo para el parcial?",
+                        unread = 2,
+                        mode = Mode.ESTUDIO
+                    ),
                     chat("2", "Camilo Rojas", "CR", "texto moderado", unread = 0, hidden = true),
-                    chat("3", "Valentina Gómez", "VG", "Nos vemos mañana", unread = 0)
+                    chat(
+                        "3",
+                        "Valentina Gómez",
+                        "VG",
+                        "Nos vemos mañana",
+                        unread = 0,
+                        mode = Mode.PAREJA,
+                        muted = true
+                    )
                 )
             ),
             onOpenChat = {},
@@ -171,6 +189,11 @@ class ChatScreenshotTest(private val dark: Boolean) {
     @Test
     fun chatListEmpty() = capture("chat_list_empty") {
         ChatListScreen(UiState.Empty, onOpenChat = {}, onRetry = {})
+    }
+
+    @Test
+    fun chatListOffline() = capture("chat_list_sin_conexion") {
+        ChatListScreen(UiState.Error(AppError.Network), onOpenChat = {}, onRetry = {})
     }
 
     /** Barra de envío con texto (botón habilitado, violeta pleno) y vacía (deshabilitado, s2 con borde). */

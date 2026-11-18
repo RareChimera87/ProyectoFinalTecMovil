@@ -95,7 +95,6 @@
     <!-- G4 · Gestionar suscripción -->
     <string name="plus_manage_title">Suscripción</string>
     <string name="plus_manage_back">Volver</string>
-    <string name="plus_manage_loading">Cargando tu suscripción…</string>
     <string name="plus_manage_error_title">No pudimos cargar tu suscripción</string>
     <string name="plus_manage_error_message">Revisa tu conexión e inténtalo de nuevo.</string>
     <string name="plus_manage_status_active">Activa</string>
@@ -103,6 +102,11 @@
     <string name="plus_manage_status_grace">Pago pendiente</string>
     <string name="plus_manage_status_on_hold">En pausa</string>
     <string name="plus_manage_status_inactive">Sin suscripción</string>
+    <!-- ParcheU+ sin suscripción de Play (concesión manual): estado neutro, sin mencionar Google Play. -->
+    <string name="plus_manage_status_granted">Activo</string>
+    <string name="plus_manage_plan_granted">ParcheU+ activo</string>
+    <string name="plus_manage_expires">Vence el %1$s</string>
+    <string name="plus_manage_info_granted">Cuando venza, pasas al plan gratis. No pierdes tu parche.</string>
     <string name="plus_manage_plan_annual_price">Plan anual · %1$s</string>
     <string name="plus_manage_plan_monthly_price">Plan mensual · %1$s</string>
     <string name="plus_manage_plan_annual">Plan anual</string>

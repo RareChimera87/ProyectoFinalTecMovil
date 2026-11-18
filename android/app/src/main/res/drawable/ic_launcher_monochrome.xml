@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Capa monocroma (iconos temáticos de Android 13+): misma silueta y geometría del AppIcon en un solo color. -->
+<!-- Capa monocroma (iconos temáticos de Android 13+): la misma P de ic_launcher_foreground en un solo color, con el ojo y la boca como huecos. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:pathData="M41.625,37.5L41.625,56.75L54,69.125L66.375,56.75L66.375,37.5"
-        android:strokeColor="#FF000000"
-        android:strokeWidth="2.75"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M36.8125,37.5a4.8125,4.8125 0,1 1,9.625,0a4.8125,4.8125 0,1 1,-9.625,0zM37.5,56.75a4.125,4.125 0,1 1,8.25,0a4.125,4.125 0,1 1,-8.25,0zM62.25,56.75a4.125,4.125 0,1 1,8.25,0a4.125,4.125 0,1 1,-8.25,0zM61.5625,37.5a4.8125,4.8125 0,1 1,9.625,0a4.8125,4.8125 0,1 1,-9.625,0zM48.5,69.125a5.5,5.5 0,1 1,11,0a5.5,5.5 0,1 1,-11,0z" />
+    <group
+        android:scaleX="0.6"
+        android:scaleY="0.6"
+        android:translateX="29.4"
+        android:translateY="25.8">
+        <path
+            android:fillColor="#FF000000"
+            android:fillType="evenOdd"
+            android:pathData="M10,20Q10,8 22,8H44A28,28 0,0 1,44 64H34V76Q34,86 22,86Q10,86 10,76Z M37,32a10,12.5 0,1 0,20 0a10,12.5 0,1 0,-20 0Z M40.5,51A6.5,5.5 0,0 0,53.5 51Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M47.6,26.5a3.4,3.4 0,1 0,6.8 0a3.4,3.4 0,1 0,-6.8 0Z" />
+    </group>
 </vector>

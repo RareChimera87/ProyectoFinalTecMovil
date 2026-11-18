@@ -77,7 +77,8 @@ class InvitesScreenTest {
         val vm = InvitesViewModel(repo, null, { "Mariana Gómez" }, "parcheu-dev.web.app")
         show(vm, FakeCodeScanner(ScanResult.Cancelled))
 
-        composeRule.onNodeWithTag(InvitesTags.QR).assertIsDisplayed()
+        // Con invitaciones pendientes, la lista va primero y el QR queda más abajo.
+        composeRule.onNodeWithTag(InvitesTags.QR).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag(
             InvitesTags.CODE,
             useUnmergedTree = true

@@ -35,6 +35,13 @@ class TwinMascotTest {
         assertEquals(listOf(30f, 56f, 80f, 116f), TwinMascotSize.entries.map { it.width.value })
     }
 
+    /** Regla de la mascota pequeña: solo S (30 dp) y menores usan la variante simplificada. */
+    @Test
+    fun onlySizeSIsSimplified() {
+        val simplified = TwinMascotSize.entries.filter { it.width <= MASCOT_SIMPLIFIED_MAX_WIDTH }
+        assertEquals(listOf(TwinMascotSize.S), simplified)
+    }
+
     @Test
     fun renderedBoundsKeepTheRatio() {
         val current = mutableStateOf(TwinMascotSize.S)

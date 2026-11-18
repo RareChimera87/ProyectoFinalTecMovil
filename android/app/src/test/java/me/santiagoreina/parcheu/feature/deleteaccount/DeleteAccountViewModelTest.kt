@@ -6,7 +6,9 @@ import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.data.account.FakeAccountRepository
 import me.santiagoreina.parcheu.data.auth.FakeAuthRepository
+import me.santiagoreina.parcheu.data.billing.FakeBillingRepository
 import me.santiagoreina.parcheu.feature.MainDispatcherRule
+import me.santiagoreina.parcheu.feature.plus.PlusTestData
 import me.santiagoreina.parcheu.navigation.ExportData
 import me.santiagoreina.parcheu.navigation.Onboarding
 import org.junit.Assert.assertEquals
@@ -22,7 +24,9 @@ class DeleteAccountViewModelTest {
     private val account = FakeAccountRepository()
     private val auth = FakeAuthRepository(signedIn = true)
 
-    private fun viewModel() = DeleteAccountViewModel(account, auth)
+    private val billing = FakeBillingRepository()
+
+    private fun viewModel() = DeleteAccountViewModel(account, auth, billing)
 
     @Test
     fun withoutConfirmingNothingIsDeleted() {
@@ -75,5 +79,28 @@ class DeleteAccountViewModelTest {
             vm.onManageSubscription()
             assertEquals(DeleteAccountEffect.OpenPlaySubscriptions, awaitItem())
         }
+    }
+
+    @Test
+    fun withoutAKnownEntitlementThePlusNoticeIsNeutral() {
+        val vm = viewModel()
+        assertEquals(DeletePlusNotice.Neutral, vm.state.value.plusNotice)
+        assertEquals(emptyList<String>(), billing.calls)
+    }
+
+    @Test
+    fun aPlaySubscriptionKeepsTheNeutralNoticeWithGooglePlay() {
+        billing.entitlementFlow.value = PlusTestData.activeAnnual
+        assertEquals(DeletePlusNotice.Neutral, viewModel().state.value.plusNotice)
+    }
+
+    @Test
+    fun aPlusGrantedWithoutPlayShowsItsExpiryAndNoPlay() {
+        val vm = viewModel()
+        billing.entitlementFlow.value = PlusTestData.manualGrant
+        assertEquals(
+            DeletePlusNotice.Granted(PlusTestData.manualGrant.expiresAt),
+            vm.state.value.plusNotice
+        )
     }
 }

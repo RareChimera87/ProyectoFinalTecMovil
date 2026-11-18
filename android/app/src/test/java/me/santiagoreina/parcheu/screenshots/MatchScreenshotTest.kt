@@ -9,11 +9,13 @@ import kotlin.time.Instant
 import me.santiagoreina.parcheu.contract.MatchChoice
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Usage
+import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundScreen
 import me.santiagoreina.parcheu.feature.conocer.match.MatchFoundUiState
 import me.santiagoreina.parcheu.feature.conocer.match.MatchQueueScreen
 import me.santiagoreina.parcheu.feature.conocer.match.MatchQueueUiState
+import me.santiagoreina.parcheu.feature.conocer.match.QueuePhase
 import me.santiagoreina.parcheu.feature.conocer.match.testMatch
 import org.junit.Rule
 import org.junit.Test
@@ -68,6 +70,60 @@ class MatchScreenshotTest(private val dark: Boolean) {
             onRetry = {},
             onOpenMatch = {},
             animate = false
+        )
+    }
+
+    @Composable
+    private fun Queue(state: MatchQueueUiState) = MatchQueueScreen(
+        state = state,
+        onModeSelected = {},
+        onCancel = {},
+        onRetry = {},
+        onOpenMatch = {},
+        animate = false
+    )
+
+    private val quota = Usage(used = 0, limit = 1, resetsAt = Instant.fromEpochSeconds(0))
+
+    @Test
+    fun f1Unlimited() = capture("f1_sin_limite") {
+        Queue(
+            MatchQueueUiState(
+                mode = Mode.PAREJA,
+                dailyQuota = quota.copy(used = 3, limit = null)
+            )
+        )
+    }
+
+    @Test
+    fun f1AlreadyUsed() = capture("f1_ya_usado") {
+        Queue(
+            MatchQueueUiState(
+                mode = Mode.ESTUDIO,
+                phase = QueuePhase.AlreadyUsed("m1"),
+                dailyQuota = quota.copy(used = 1)
+            )
+        )
+    }
+
+    @Test
+    fun f1Error() = capture("f1_error") {
+        Queue(MatchQueueUiState(mode = Mode.PAREJA, phase = QueuePhase.Error(AppError.Underage)))
+    }
+
+    @Test
+    fun f1Expired() = capture("f1_vencido") {
+        Queue(MatchQueueUiState(mode = Mode.AMISTAD, phase = QueuePhase.Expired))
+    }
+
+    @Test
+    fun f2Expired() = capture("f2_vencido") {
+        Found(
+            MatchFoundUiState.Loaded(
+                testMatch(scenarioAvailable = false, mode = Mode.PAREJA),
+                MatchChoice.SIMULATION,
+                expired = true
+            )
         )
     }
 

@@ -26,12 +26,13 @@ import me.santiagoreina.parcheu.designsystem.components.base.ModeFilterChip
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUIconButton
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheURootTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.SecondaryFilterChip
-import me.santiagoreina.parcheu.designsystem.components.base.StatCard
 import me.santiagoreina.parcheu.designsystem.graph.PU_GRAPH_DEFAULT_SIZE
 import me.santiagoreina.parcheu.designsystem.graph.PuGraph
+import me.santiagoreina.parcheu.designsystem.graph.PuGraphStyle
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.presentar.PresentarIcons
 import me.santiagoreina.parcheu.feature.presentar.rememberPresentarIcon
+import me.santiagoreina.parcheu.feature.simulation.forMode
 
 /** Acciones que D1-D5 le pide al ViewModel y a la navegación. */
 data class ParcheCallbacks(
@@ -111,6 +112,7 @@ fun ParcheScreen(
 
 @Composable
 private fun LoadedContent(state: ParcheUiState.Loaded, callbacks: ParcheCallbacks) {
+    val colors = ParcheUTheme.colors
     val filters = state.filters
     val stats = state.content.graph.stats
     Box(Modifier.fillMaxSize()) {
@@ -135,7 +137,7 @@ private fun LoadedContent(state: ParcheUiState.Loaded, callbacks: ParcheCallback
                         label = mode.label(),
                         selected = filters.mode == mode,
                         onClick = { callbacks.onMode(mode) },
-                        icon = parcheIconPainter(mode.icon())
+                        dotColor = colors.forMode(mode).solid
                     )
                 }
             }
@@ -176,24 +178,25 @@ private fun LoadedContent(state: ParcheUiState.Loaded, callbacks: ParcheCallback
                     size = graphSize,
                     selectedId = state.sheet?.node?.id,
                     dimmedIds = state.dimmedIds,
+                    style = PuGraphStyle.ParcheVivo,
                     onNodeClick = callbacks.onNodeClick
                 )
             }
             GraphEdgeLegend()
             Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier.padding(horizontal = 16.dp).padding(top = 6.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.blockGapTight)
             ) {
                 Row(
                     modifier = Modifier.height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(ParcheUTheme.spacing.blockGapTight)
                 ) {
-                    StatCard(
+                    ParcheStatTile(
                         "${stats.connections}",
                         "conexiones",
                         Modifier.weight(1f).fillMaxHeight()
                     )
-                    StatCard(
+                    ParcheStatTile(
                         "${stats.simulated + stats.pending}",
                         "simulaciones abiertas",
                         Modifier.weight(1f).fillMaxHeight()

@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.feature.deleteaccount
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +16,9 @@ import me.santiagoreina.parcheu.core.network.ApiResult
 import me.santiagoreina.parcheu.data.account.AccountRepository
 import me.santiagoreina.parcheu.data.auth.AuthRepository
 import me.santiagoreina.parcheu.data.auth.LOGIN_PAGE
+import me.santiagoreina.parcheu.data.billing.BillingRepository
+import me.santiagoreina.parcheu.feature.plus.SubscriptionStatus
+import me.santiagoreina.parcheu.feature.plus.status
 import me.santiagoreina.parcheu.navigation.AppRoute
 import me.santiagoreina.parcheu.navigation.ExportData
 import me.santiagoreina.parcheu.navigation.Onboarding
@@ -25,9 +29,26 @@ data class DeleteAccountUiState(
     val deleting: Boolean = false,
     val error: AppError? = null,
     /** La API aceptó el borrado y la sesión local ya se cerró. */
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
+    /** Qué aviso de ParcheU+ mostrar; depende del último derecho conocido (si lo hay). */
+    val plusNotice: DeletePlusNotice = DeletePlusNotice.Neutral
 ) {
     val canDelete: Boolean get() = confirmed && !deleting && !deleted
+}
+
+/** Aviso de ParcheU+ en la confirmación de borrado. */
+sealed interface DeletePlusNotice {
+    /**
+     * Sin derecho conocido, gratis o con suscripción de Play: un texto que es cierto en cualquier caso y el
+     * botón a Google Play (si la persona paga ParcheU+ allí, borrar la cuenta no lo cancela).
+     */
+    data object Neutral : DeletePlusNotice
+
+    /**
+     * ParcheU+ concedido sin suscripción de Play ([SubscriptionStatus.Granted]): no hay nada que cancelar,
+     * así que no se manda a Google Play. [expiresAt] nulo = sin fecha conocida.
+     */
+    data class Granted(val expiresAt: Instant?) : DeletePlusNotice
 }
 
 sealed interface DeleteAccountEffect {
@@ -44,17 +65,33 @@ sealed interface DeleteAccountEffect {
 /**
  * Confirmación de borrado (E8.3, pantalla nueva). Borrar llama `DELETE /v1/me` (borrado lógico inmediato;
  * el servidor purga después) y, si responde, cierra la sesión local ([AuthRepository.signOut] borra cachés y
- * credenciales) y muestra la confirmación; 'Listo' vuelve a A4 sin historial.
+ * credenciales) y muestra la confirmación; 'Listo' vuelve a A4 sin historial. El aviso de ParcheU+ sale del
+ * último derecho conocido de [BillingRepository.entitlement] ([DeletePlusNotice]).
  */
 class DeleteAccountViewModel(
     private val account: AccountRepository,
-    private val auth: AuthRepository
+    private val auth: AuthRepository,
+    private val billing: BillingRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow(DeleteAccountUiState())
     val state: StateFlow<DeleteAccountUiState> = _state.asStateFlow()
 
     private val _effects = Channel<DeleteAccountEffect>(Channel.BUFFERED)
     val effects: Flow<DeleteAccountEffect> = _effects.receiveAsFlow()
+
+    init {
+        // Solo lee el derecho que ya conoce la app (G1/G4 o la conciliación al volver): no pide nada nuevo.
+        viewModelScope.launch {
+            billing.entitlement.collect { entitlement ->
+                val notice = if (entitlement?.status() == SubscriptionStatus.Granted) {
+                    DeletePlusNotice.Granted(entitlement.expiresAt)
+                } else {
+                    DeletePlusNotice.Neutral
+                }
+                _state.update { it.copy(plusNotice = notice) }
+            }
+        }
+    }
 
     fun setConfirmed(value: Boolean) {
         _state.update {

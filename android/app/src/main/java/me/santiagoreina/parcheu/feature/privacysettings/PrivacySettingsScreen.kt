@@ -28,6 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.santiagoreina.parcheu.contract.Mode
 import me.santiagoreina.parcheu.contract.Visibility
+import me.santiagoreina.parcheu.core.ui.StateIllustration
+import me.santiagoreina.parcheu.core.ui.stateProp
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheURadioRow
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUSwitch
@@ -125,6 +127,7 @@ fun PrivacySettingsScreen(
                 state.loadError != null -> ErrorState(
                     title = "No pudimos cargar tus ajustes",
                     message = settingsLoadErrorMessage(state.loadError),
+                    illustration = { StateIllustration(state.loadError.stateProp(), error = true) },
                     retryLabel = "Reintentar",
                     onRetryClick = actions.onRetry,
                     modifier = Modifier.weight(1f).testTag(PrivacySettingsTags.ERROR)

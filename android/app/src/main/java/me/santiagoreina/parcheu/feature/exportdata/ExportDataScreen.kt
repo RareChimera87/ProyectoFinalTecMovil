@@ -81,7 +81,7 @@ fun ExportDataScreen(
         ) {
             Text(
                 "Una copia de todo lo tuyo",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineLarge,
                 color = colors.tx,
                 modifier = Modifier.semantics { heading() }
             )
