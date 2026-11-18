@@ -10,7 +10,7 @@ import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.twinquestions.TwinQuestionsContent
 import me.santiagoreina.parcheu.feature.twinquestions.TwinQuestionsPhase
 import me.santiagoreina.parcheu.feature.twinquestions.TwinQuestionsUiState
-import me.santiagoreina.parcheu.feature.twinquestions.sampleQuestions
+import me.santiagoreina.parcheu.feature.twinquestions.seedQuestions
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,7 +18,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Capturas de B1 (ADR-0022) en las preguntas 1, 4 y 12 y en el estado de error. */
+/** Capturas de B1 (ADR-0022) en las preguntas 1, 4 y 12 (con sus fotos) y en el estado de error. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h800dp-night-xhdpi")
@@ -32,13 +32,8 @@ class TwinQuestionsScreenshotTest {
         error: AppError? = null
     ) = TwinQuestionsUiState(
         phase = phase,
-        questions = sampleQuestions().map {
-            it.copy(
-                text = "Un viernes por la noche, ¿qué prefieres? (${it.id})",
-                optionA = "Salir con todo el parche",
-                optionB = "Serie y comida en casa"
-            )
-        },
+        // Las preguntas reales de la semilla: cada una con sus dos fotos.
+        questions = seedQuestions,
         answers = (1..answered).associateWith { TwinAnswer.A },
         error = error
     )

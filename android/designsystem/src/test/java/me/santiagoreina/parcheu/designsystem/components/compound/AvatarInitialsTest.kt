@@ -62,4 +62,29 @@ class AvatarInitialsTest {
         assertEquals("L", initialsOf("luis"))
         assertEquals("", initialsOf("   "))
     }
+
+    @Test
+    fun inicialesIgnoranPalabrasQueNoEmpiezanPorLetraODigito() {
+        assertEquals("V", initialsOf("Valentina (demo)"))
+        assertEquals("SR", initialsOf("Santiago Reina"))
+        assertEquals("", initialsOf(""))
+        assertEquals("ÁÑ", initialsOf("álvaro ñuñez"))
+        assertEquals("ÉO", initialsOf("Émilie  Ortiz"))
+        assertEquals("AR", initialsOf("😀 Ana  🎉  Ruiz"))
+        assertEquals("SR", initialsOf("  Santiago   Reina  "))
+        assertEquals("L2", initialsOf("Laura 2do"))
+        assertEquals("", initialsOf("(demo) -- 😀"))
+        assertEquals("P", initialsOf("¿Camila? Pérez"))
+    }
+
+    @Test
+    fun inicialesDelServidorSeLimpianDeSignos() {
+        assertEquals("V", displayInitials("V(", "Valentina (demo)"))
+        assertEquals("SR", displayInitials("SR", "Santiago Reina"))
+        assertEquals("LP", displayInitials("", "Laura Pinzón"))
+        assertEquals("?", displayInitials("?", "Alguien"))
+        assertEquals("A", displayInitials("A", "Alguien de la UIS"))
+        assertEquals("?", displayInitials("", ""))
+        assertEquals("Á", displayInitials("á(", "álvaro (demo)"))
+    }
 }

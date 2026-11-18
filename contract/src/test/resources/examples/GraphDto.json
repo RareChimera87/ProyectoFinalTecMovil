@@ -8,7 +8,8 @@
     "mode": "AMISTAD",
     "state": "CONNECTED",
     "anonymous": false,
-    "isDemo": false
+    "isDemo": false,
+    "affinityMeasured": true
   },
   "nodes": [
     {
@@ -20,7 +21,8 @@
       "mode": "AMISTAD",
       "state": "CONNECTED",
       "anonymous": false,
-      "isDemo": false
+      "isDemo": false,
+      "affinityMeasured": true
     },
     {
       "id": "n-anon-1",
@@ -30,7 +32,19 @@
       "mode": "ESTUDIO",
       "state": "SIMULATED",
       "anonymous": true,
-      "isDemo": false
+      "isDemo": false,
+      "affinityMeasured": true
+    },
+    {
+      "id": "c3d5e7f9-2a4b-4c6d-8e0f-1a3b5c7d9e2f",
+      "label": "Camilo Ardila",
+      "initials": "CA",
+      "affinity": 0,
+      "mode": "ESTUDIO",
+      "state": "CONNECTED",
+      "anonymous": false,
+      "isDemo": false,
+      "affinityMeasured": false
     }
   ],
   "edges": [
@@ -38,17 +52,26 @@
       "otherId": "a2b4c6d8-1e3f-4a5b-8c7d-9e0f1a2b3c4d",
       "mode": "AMISTAD",
       "state": "CONNECTED",
-      "affinity": 87
+      "affinity": 87,
+      "affinityMeasured": true
     },
     {
       "otherId": "n-anon-1",
       "mode": "ESTUDIO",
       "state": "SIMULATED",
-      "affinity": 64
+      "affinity": 64,
+      "affinityMeasured": true
+    },
+    {
+      "otherId": "c3d5e7f9-2a4b-4c6d-8e0f-1a3b5c7d9e2f",
+      "mode": "ESTUDIO",
+      "state": "CONNECTED",
+      "affinity": 0,
+      "affinityMeasured": false
     }
   ],
   "stats": {
-    "connections": 1,
+    "connections": 2,
     "simulated": 1,
     "pending": 0,
     "avgAffinity": 76

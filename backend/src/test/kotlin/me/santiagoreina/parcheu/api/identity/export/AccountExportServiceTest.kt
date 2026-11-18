@@ -6,6 +6,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.NO_PLUS
 import me.santiagoreina.parcheu.api.TEST_LEGAL_VERSION
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.identity.ConsentRecord
@@ -57,7 +58,7 @@ class AccountExportServiceTest : FunSpec({
     )
 
     fun service() = AccountExportService(
-        IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION),
+        IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION, NO_PLUS),
         { rows },
         signer,
         { null },
@@ -102,7 +103,7 @@ class AccountExportServiceTest : FunSpec({
             ),
         )
         val svc = AccountExportService(
-            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION), { extra }, signer, { null }, FIXED_CLOCK,
+            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION, NO_PLUS), { extra }, signer, { null }, FIXED_CLOCK,
         )
         val dto = svc.build(me, meDto, extra, null)
         val json = ContractJson.encodeToString(ExportDto.serializer(), dto)
@@ -125,7 +126,7 @@ class AccountExportServiceTest : FunSpec({
             ),
         )
         val svc = AccountExportService(
-            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION), { extra }, signer, { null }, FIXED_CLOCK,
+            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION, NO_PLUS), { extra }, signer, { null }, FIXED_CLOCK,
         )
         val dto = svc.build(me, meDto, extra, null)
         dto.notifications.first().actor shouldBe null
@@ -144,7 +145,7 @@ class AccountExportServiceTest : FunSpec({
             ),
         )
         val svc = AccountExportService(
-            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION), { extra }, signer, { null }, FIXED_CLOCK,
+            IdentityService(InMemoryIdentityRepository(), FIXED_CLOCK, TEST_LEGAL_VERSION, NO_PLUS), { extra }, signer, { null }, FIXED_CLOCK,
         )
         svc.build(me, meDto, extra, null).introductions.map { it.status } shouldContainExactly
             listOf(IntroductionStatus.PROPOSED, IntroductionStatus.DECLINED, IntroductionStatus.CONNECTED)

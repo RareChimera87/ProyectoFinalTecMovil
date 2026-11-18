@@ -52,13 +52,14 @@ import me.santiagoreina.parcheu.designsystem.graph.layout.GraphLayout
 import me.santiagoreina.parcheu.designsystem.graph.layout.LayoutNode
 import me.santiagoreina.parcheu.designsystem.graph.layout.PlacedNode
 import me.santiagoreina.parcheu.designsystem.graph.layout.RadialLayout
+import me.santiagoreina.parcheu.designsystem.theme.AFFINITY_UNMEASURED_LABEL
 import me.santiagoreina.parcheu.designsystem.theme.AvatarColors
 import me.santiagoreina.parcheu.designsystem.theme.InterFontFamily
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUColors
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUPalette
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.SoraFontFamily
-import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
+import me.santiagoreina.parcheu.designsystem.theme.affinityAlphaOrNeutral
 import me.santiagoreina.parcheu.designsystem.theme.avatarColors
 
 /** Modo de una conexión. Mismos nombres que `contract.Mode` para mapear con `valueOf(dto.mode.name)`. */
@@ -77,14 +78,15 @@ enum class GraphEdgeState(val label: String) {
 
 /**
  * Conexión directa del usuario. [name] es la etiqueta visible ("Laura P."); si [anonymous] es true
- * no se muestran nombre ni iniciales ("Alguien", "?"). [affinity] va de 0 a 100.
+ * no se muestran nombre ni iniciales ("Alguien", "?"). [affinity] va de 0 a 100; `null` = aún sin
+ * simular: alpha neutro ([AFFINITY_ALPHA_UNMEASURED]), anillo exterior y "sin simular" en TalkBack.
  */
 @Immutable
 data class GraphNode(
     val id: String,
     val name: String,
     val initials: String,
-    val affinity: Int,
+    val affinity: Int?,
     val mode: GraphMode,
     val state: GraphEdgeState,
     val anonymous: Boolean = false
@@ -124,10 +126,11 @@ internal object GraphAlpha {
     const val FOF_EDGE = 0.8f
 }
 
-/** Texto de TalkBack de un nodo: "Laura P., 87 % afín, Estudio, conectados". */
+/** Texto de TalkBack de un nodo: "Laura P., 87 % afín, Estudio, conectados" o "…, sin simular, …". */
 fun graphNodeDescription(node: GraphNode): String {
     val who = if (node.anonymous) "Alguien" else node.name
-    return "$who, ${node.affinity} % afín, ${node.mode.label}, ${node.state.label}"
+    val affinity = node.affinity?.let { "$it % afín" } ?: AFFINITY_UNMEASURED_LABEL.lowercase()
+    return "$who, $affinity, ${node.mode.label}, ${node.state.label}"
 }
 
 /** Texto de TalkBack de un amigo de amigo: "Alguien, 87 % afín estimada, amigo de amigo". */
@@ -171,7 +174,7 @@ internal fun textAlpha(dimmed: Boolean): Float = if (dimmed) GraphAlpha.NODE_DIM
  * queda compuesto sobre el fondo del tema y el blanco pleno podría no llegar a AA (ADR-0030).
  */
 internal fun nodeAvatarColors(node: GraphNode, isDark: Boolean): AvatarColors {
-    val fillAlpha = affinityAlpha(node.affinity)
+    val fillAlpha = affinityAlphaOrNeutral(node.affinity)
     val effective = if (node.state ==
         GraphEdgeState.PENDING
     ) {
@@ -495,7 +498,7 @@ private fun SemanticNodes(
     onClick: (String) -> Unit
 ) {
     val ordered = layout.nodes.sortedWith(
-        compareByDescending<PlacedNode> { nodes[it.id]?.affinity ?: 0 }.thenBy { it.id }
+        compareByDescending<PlacedNode> { nodes[it.id]?.affinity ?: -1 }.thenBy { it.id }
     ) + layout.fof.sortedWith(
         compareByDescending<PlacedNode> { fof[it.id]?.affinity ?: 0 }.thenBy { it.id }
     )

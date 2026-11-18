@@ -34,6 +34,7 @@ object TwinReadyTags {
     const val SCREEN = "twinready"
     const val VIEW_PARCHE = "twinready:parche"
     const val GO_HOME = "twinready:home"
+    const val LEVEL = "twinready:level"
 
     fun chip(name: String) = "twinready:chip:$name"
 }
@@ -89,12 +90,15 @@ fun TwinReadyScreen(
                         }
                     }
                 }
-                // Al terminar B1 el gemelo siempre está en el nivel 1 con las 12 respuestas.
-                Text(
-                    "Nivel 1 · 12 respuestas",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.mu
-                )
+                // Nivel real de `GET /v1/twin`; sin dato (cargando o con error) no se muestra nada.
+                state.twinLevel?.let { level ->
+                    Text(
+                        "Nivel $level",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.mu,
+                        modifier = Modifier.testTag(TwinReadyTags.LEVEL)
+                    )
+                }
             }
         }
         Column(

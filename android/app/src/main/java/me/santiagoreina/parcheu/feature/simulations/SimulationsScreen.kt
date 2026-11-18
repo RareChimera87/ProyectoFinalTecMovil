@@ -30,6 +30,7 @@ import me.santiagoreina.parcheu.designsystem.components.base.ParcheUCard
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUChildTopBar
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
 import me.santiagoreina.parcheu.designsystem.components.base.PrimaryButton
+import me.santiagoreina.parcheu.designsystem.components.compound.displayInitials
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.feature.simulation.SimulationIcons
 import me.santiagoreina.parcheu.feature.simulation.SimulationMascot
@@ -160,7 +161,7 @@ private fun SimulationRow(item: SimulationSummary, onOpen: (SimulationSummary) -
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    item.other.initials,
+                    displayInitials(item.other.initials, item.other.label),
                     style = ParcheUTheme.textStyles.initials,
                     color = colors.onMode
                 )

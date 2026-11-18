@@ -272,12 +272,14 @@ class PlatformTest : FunSpec({
         llamadas shouldBe 0
     }
 
-    test("Mode.parse reconoce los cuatro modos y usa serve por defecto") {
+    test("Mode.parse reconoce los seis modos y usa serve por defecto") {
         Mode.parse(null) shouldBe Mode.SERVE
         Mode.parse("serve") shouldBe Mode.SERVE
         Mode.parse("migrate") shouldBe Mode.MIGRATE
         Mode.parse("seed-demo") shouldBe Mode.SEED_DEMO
         Mode.parse("purge-demo") shouldBe Mode.PURGE_DEMO
+        Mode.parse("grant-plus") shouldBe Mode.GRANT_PLUS
+        Mode.parse("revoke-plus") shouldBe Mode.REVOKE_PLUS
         Mode.parse("otro") shouldBe null
     }
 })

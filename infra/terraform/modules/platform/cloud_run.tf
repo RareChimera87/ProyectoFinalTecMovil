@@ -19,11 +19,14 @@ locals {
     # Topes diarios de gasto de IA (AiConfig.kt): total y por persona, en USD.
     AI_DAILY_BUDGET_USD      = var.ai_daily_budget_usd
     AI_USER_DAILY_BUDGET_USD = var.ai_user_daily_budget_usd
+    # Proveedor de IA (AiConfig.kt, ADR-0008): gemini (Vertex), claude (Claude en Vertex) o anthropic (API directa).
+    AI_PROVIDER = var.ai_provider
     # Nombres completos de los secretos; la API lee la versión `latest` con la
     # API de Secret Manager (no se montan para que Cloud Run no falle mientras
     # el secreto no tenga versión).
-    SECRET_HMAC_ANON_KEY = google_secret_manager_secret.this["hmac-anon-key"].id
-    SECRET_PLAY_SA       = google_secret_manager_secret.this["play-sa"].id
+    SECRET_HMAC_ANON_KEY     = google_secret_manager_secret.this["hmac-anon-key"].id
+    SECRET_PLAY_SA           = google_secret_manager_secret.this["play-sa"].id
+    SECRET_ANTHROPIC_API_KEY = google_secret_manager_secret.this["anthropic-api-key"].id
   }
 
   # Cuenta que la API suplanta para la API de Play (E7.1, solo prod); sin ella usa SECRET_PLAY_SA.
@@ -35,6 +38,9 @@ locals {
     "migrate"    = { args = ["migrate"], timeout = "600s" }
     "seed-demo"  = { args = ["seed-demo"], timeout = "900s" }
     "purge-demo" = { args = ["purge-demo"], timeout = "900s" }
+    # Plus manual acotado (enmienda de ADR-0013). El argumento por defecto falla a propósito (falta --email o --uid):
+    # se ejecuta con `--args=grant-plus,--email=<correo>,--days=7` (o `revoke-plus,...`), ver docs/operacion.md.
+    "grant-plus" = { args = ["grant-plus"], timeout = "300s" }
   }
 }
 
@@ -123,7 +129,7 @@ resource "google_cloud_run_v2_service_iam_member" "tasks_invoker" {
   member   = "serviceAccount:${data.google_service_account.tasks.email}"
 }
 
-# Tres Cloud Run Jobs con la misma imagen y distinto argumento (ADR-0011, ADR-0027).
+# Cuatro Cloud Run Jobs con la misma imagen y distinto argumento (ADR-0011, ADR-0027 y la enmienda de ADR-0013).
 resource "google_cloud_run_v2_job" "this" {
   for_each            = local.jobs
   project             = var.project_id

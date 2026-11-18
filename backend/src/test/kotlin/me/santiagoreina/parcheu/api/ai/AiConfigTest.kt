@@ -4,6 +4,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import me.santiagoreina.parcheu.api.platform.AppContainer
 import me.santiagoreina.parcheu.api.platform.config.AppConfig
@@ -19,6 +20,54 @@ class AiConfigTest : FunSpec({
         config.provider shouldBe AiProvider.CLAUDE
         config.models.lite shouldBe "claude-haiku-5-5"
         AiModule.createClient(config).shouldBeInstanceOf<ClaudeVertexClient>()
+    }
+
+    test("AI_PROVIDER=anthropic con SECRET_ANTHROPIC_API_KEY instancia ClaudeApiClient sin proyecto de Vertex") {
+        val secret = "projects/parcheu-prod/secrets/anthropic-api-key"
+        val config = AiConfig.fromEnv(mapOf("AI_PROVIDER" to "anthropic", "SECRET_ANTHROPIC_API_KEY" to secret), Env.PROD)
+        config.provider shouldBe AiProvider.ANTHROPIC
+        config.models shouldBe AiModels("claude-sonnet-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
+        config.prices.hasPrice("claude-sonnet-5-5") shouldBe true
+        // La clave no se lee al arrancar (lectura diferida) ni aparece en el toString de la configuración.
+        config.toString() shouldNotContain "sk-ant"
+        AiModule.createClient(config).shouldBeInstanceOf<ClaudeApiClient>().provider shouldBe AiProvider.ANTHROPIC
+        val overridden = AiConfig.fromEnv(
+            mapOf("AI_PROVIDER" to "anthropic", "SECRET_ANTHROPIC_API_KEY" to secret, "AI_MODEL_CHAT" to "claude-opus-5-5"),
+            Env.DEV,
+        )
+        overridden.models.chat shouldBe "claude-opus-5-5"
+    }
+
+    test("AI_PROVIDER=anthropic en local admite ANTHROPIC_API_KEY y nunca la muestra") {
+        val config = AiConfig.fromEnv(mapOf("AI_PROVIDER" to "anthropic", "ANTHROPIC_API_KEY" to "sk-ant-local-falsa"), Env.LOCAL)
+        config.anthropicApiKey!!.value() shouldBe "sk-ant-local-falsa"
+        config.toString() shouldNotContain "sk-ant-local-falsa"
+        AiModule.createClient(config).shouldBeInstanceOf<ClaudeApiClient>()
+    }
+
+    test("AI_PROVIDER=anthropic sin clave no arranca, y ANTHROPIC_API_KEY no vale fuera de local") {
+        shouldThrow<IllegalArgumentException> {
+            AiConfig.fromEnv(mapOf("AI_PROVIDER" to "anthropic"), Env.PROD)
+        }.message shouldContain "SECRET_ANTHROPIC_API_KEY"
+        shouldThrow<IllegalArgumentException> {
+            AiConfig.fromEnv(mapOf("AI_PROVIDER" to "anthropic", "ANTHROPIC_API_KEY" to "sk-ant-x"), Env.DEV)
+        }.message.let {
+            it shouldContain "ENV=local"
+            it shouldNotContain "sk-ant-x"
+        }
+        shouldThrow<IllegalArgumentException> { AiConfig.fromEnv(mapOf("AI_PROVIDER" to "anthropic"), Env.LOCAL) }
+            .message shouldContain "ANTHROPIC_API_KEY"
+        // Igual que las otras validaciones: corta AppContainer.fromConfig, lo que llama Main en modo serve.
+        val appConfig = AppConfig.fromEnv(mapOf("ENV" to "local", "ALLOW_FAKE_AUTH" to "true", "DB_NAME" to "parcheu", "DB_URL" to "jdbc:postgresql://127.0.0.1:1/parcheu"))
+        shouldThrow<IllegalArgumentException> {
+            AppContainer.fromConfig(appConfig, mapOf("ENV" to "local", "AI_PROVIDER" to "anthropic"))
+        }
+    }
+
+    test("con gemini el secreto de Anthropic se ignora (Terraform lo pasa siempre)") {
+        val config = AiConfig.fromEnv(base + ("SECRET_ANTHROPIC_API_KEY" to "projects/p/secrets/anthropic-api-key"), Env.PROD)
+        config.provider shouldBe AiProvider.GEMINI
+        config.anthropicApiKey shouldBe null
     }
 
     test("AI_PROVIDER=gemini instancia GeminiVertexClient y Gemini es el predeterminado") {

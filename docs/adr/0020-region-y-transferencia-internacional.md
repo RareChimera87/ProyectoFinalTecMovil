@@ -18,3 +18,11 @@ Los usuarios están en Bucaramanga. No hay región de GCP en Colombia; Vertex AI
 ## Consecuencias
 - Latencia extra de red de unos 80-120 ms por petición desde Bucaramanga (verificar con el uptime check); aceptable porque el tiempo real va por Firestore y la simulación es asíncrona.
 - Si la SIC cambia su lista, basta con reforzar el texto de autorización; la arquitectura no cambia.
+
+## Enmienda (12 nov 2026): API directa de Anthropic fuera de GCP
+
+Con `AI_PROVIDER=anthropic` ([ADR-0008](0008-ia-vertex-proveedores-intercambiables.md), enmienda del 12 nov 2026) los prompts del gemelo, la simulación, el juez y la moderación (respuestas, mensajes y datos de perfil ya delimitados con `PromptData`) **no se procesan en Vertex AI dentro de GCP**: viajan a la API de Anthropic, PBC (EE. UU.), un encargado distinto de Google con sus propias condiciones de uso y retención de datos. Es una transferencia internacional a otro destinatario que el texto actual no cubre: A4 y `/privacidad` solo nombran la IA de Google Cloud.
+
+- Con `gemini` (el predeterminado) y `claude` (Vertex) nada cambia.
+- **Pendiente humano, antes de activar `anthropic` en prod:** (1) actualizar `/privacidad` (sección 'Transferencia internacional' y lista de encargados) y el aviso A4 para nombrar a Anthropic como encargado en EE. UU.; (2) actualizar la declaración de Data safety de Play (datos compartidos con un tercero para procesamiento de IA); (3) revisar las condiciones comerciales y de retención de datos de la cuenta de Anthropic; (4) decidir si hace falta pedir de nuevo la autorización registrada en `consents` (cambió el destinatario). Detalle en `docs/pendientes-humanos.md` ("Proveedor anthropic").
+- Volver a `gemini` corta la transferencia hacia Anthropic desde ese momento; lo ya enviado queda sujeto a la retención de Anthropic.

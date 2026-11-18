@@ -6,7 +6,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.santiagoreina.parcheu.navigation.AppNavigator
-import me.santiagoreina.parcheu.navigation.Home
 import me.santiagoreina.parcheu.navigation.Results
 import me.santiagoreina.parcheu.navigation.Simulation
 import org.koin.compose.viewmodel.koinViewModel
@@ -42,7 +41,7 @@ fun SimulationRoute(
         onClose = { navigator.back() },
         onReload = viewModel::onReload,
         onRetry = viewModel::onRetry,
-        onHome = { navigator.navigateToTopLevel(Home) },
+        onHome = { navigator.leaveTopLevel() },
         modifier = modifier
     )
 }

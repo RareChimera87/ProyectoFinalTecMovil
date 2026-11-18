@@ -19,7 +19,6 @@ import me.santiagoreina.parcheu.R
 import me.santiagoreina.parcheu.data.billing.PlayStoreLinks
 import me.santiagoreina.parcheu.navigation.AppNavigator
 import me.santiagoreina.parcheu.navigation.FriendsOfFriends
-import me.santiagoreina.parcheu.navigation.Home
 import me.santiagoreina.parcheu.navigation.ManageSubscription
 import me.santiagoreina.parcheu.navigation.Paywall
 import me.santiagoreina.parcheu.navigation.PurchaseSuccess
@@ -107,7 +106,7 @@ fun PurchaseSuccessEntry(
         actions =
         PurchaseSuccessActions(
             onExplore = { navigator.navigateReplacing(FriendsOfFriends, PurchaseSuccess::class) },
-            onHome = { navigator.navigateToTopLevel(Home) }
+            onHome = { navigator.leaveTopLevel() }
         ),
         modifier = modifier
     )

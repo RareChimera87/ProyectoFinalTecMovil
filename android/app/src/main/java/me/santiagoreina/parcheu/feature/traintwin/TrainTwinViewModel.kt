@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import me.santiagoreina.parcheu.contract.FeedbackKind
 import me.santiagoreina.parcheu.contract.FeedbackPrompt
 import me.santiagoreina.parcheu.contract.MemoryDto
+import me.santiagoreina.parcheu.core.error.AI_BUDGET_MESSAGE
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.core.network.ApiResult
 
@@ -220,5 +221,6 @@ fun AppError.message(): String = when (this) {
     AppError.Network -> "Revisa tu conexión e intenta de nuevo."
     AppError.Conflict -> "Esa ya la habías respondido."
     AppError.NotFound -> "Eso ya no está disponible."
+    is AppError.AiBudget -> AI_BUDGET_MESSAGE
     else -> "Algo salió mal. Intenta de nuevo en un momento."
 }

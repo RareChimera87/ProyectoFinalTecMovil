@@ -41,6 +41,7 @@ object MatchQueueTags {
     const val SEARCHING = "match_queue_searching"
     const val CANCEL = "match_queue_cancel"
     const val RETRY = "match_queue_retry"
+    const val TODAY_COUNT = "match_queue_today_count"
 }
 
 /** F1 · Match al azar, en la fila (13a). El match diario agotado abre la G2 de E7.3 desde la ruta. */
@@ -95,7 +96,8 @@ private fun QueueBody(
     animate: Boolean
 ) {
     val colors = ParcheUTheme.colors
-    val matched = state.phase is QueuePhase.Matched
+    val used = state.phase is QueuePhase.AlreadyUsed
+    val matched = state.phase is QueuePhase.Matched || used
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Column(
             modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -111,7 +113,9 @@ private fun QueueBody(
             )
             Spacer(Modifier.height(24.dp))
             Text(
-                text = if (matched) {
+                text = if (used) {
+                    MatchStrings.ALREADY_USED_MESSAGE
+                } else if (matched) {
                     MatchStrings.MATCHED_MESSAGE
                 } else {
                     MatchStrings.searching(MatchStrings.modeName(state.mode))
@@ -125,23 +129,27 @@ private fun QueueBody(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = MatchStrings.COMPARING,
+                text = if (used) MatchStrings.ALREADY_USED_NOTE else MatchStrings.COMPARING,
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.mu,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(24.dp))
-            ParcheUCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    MatchStrings.TODAY,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.tx
-                )
-                Text(
-                    MatchStrings.TODAY_COUNT,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = colors.prt
-                )
+            // Cupo real del día (`GET /v1/home`); sin dato (cargando o con error) se omite la tarjeta.
+            state.dailyQuota?.let { quota ->
+                ParcheUCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        MatchStrings.TODAY,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.tx
+                    )
+                    Text(
+                        MatchStrings.todayCount(quota, alreadyCounted = used),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.prt,
+                        modifier = Modifier.testTag(MatchQueueTags.TODAY_COUNT)
+                    )
+                }
             }
         }
         Column(

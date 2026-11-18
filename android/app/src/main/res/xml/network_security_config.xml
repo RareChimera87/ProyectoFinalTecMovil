@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Todo el tráfico va cifrado (HTTPS), también en Android 7-8.1 donde el tráfico en claro está permitido por defecto.
+     devDebug lo reemplaza con src/devDebug/res/xml/network_security_config.xml, que permite HTTP solo a 10.0.2.2. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

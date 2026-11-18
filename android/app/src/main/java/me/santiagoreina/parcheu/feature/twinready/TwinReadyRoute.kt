@@ -26,7 +26,7 @@ fun TwinReadyRoute(
         state = state,
         onViewParche = {
             navigator.replaceAll(Home)
-            navigator.navigateToTopLevel(Parche())
+            navigator.openTopLevel(Parche())
         },
         onGoHome = { navigator.replaceAll(Home) },
         modifier = modifier

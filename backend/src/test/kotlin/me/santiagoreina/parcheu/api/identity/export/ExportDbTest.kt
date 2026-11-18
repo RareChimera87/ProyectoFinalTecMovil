@@ -8,6 +8,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.coroutines.runBlocking
 import me.santiagoreina.parcheu.api.FIXED_CLOCK
+import me.santiagoreina.parcheu.api.NO_PLUS
 import me.santiagoreina.parcheu.api.graph.AnonIdSigner
 import me.santiagoreina.parcheu.api.identity.ExposedIdentityRepository
 import me.santiagoreina.parcheu.api.identity.IdentityService
@@ -100,7 +101,7 @@ class ExportDbTest : FunSpec({
             }
 
             val signer = AnonIdSigner.forTests()
-            val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, "2026-10-29")
+            val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, "2026-10-29", NO_PLUS)
             val twins = ExposedTwinRepository(db)
             val service = AccountExportService(identity, ExposedExportRepository(db), signer, twins::state, FIXED_CLOCK)
             val dto = runBlocking { service.export(FirebaseUser(anaUid, "ana@example.com", "Ana Gómez")) }
@@ -270,7 +271,7 @@ class ExportDbTest : FunSpec({
             }
 
             val signer = AnonIdSigner.forTests()
-            val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, "2026-10-29")
+            val identity = IdentityService(ExposedIdentityRepository(db), FIXED_CLOCK, "2026-10-29", NO_PLUS)
             val service = AccountExportService(identity, ExposedExportRepository(db), signer, ExposedTwinRepository(db)::state, FIXED_CLOCK)
             val dto = runBlocking { service.export(FirebaseUser(anaUid, "ana@example.com", "Ana Gómez")) }
             val json = ContractJson.encodeToString(ExportDto.serializer(), dto)

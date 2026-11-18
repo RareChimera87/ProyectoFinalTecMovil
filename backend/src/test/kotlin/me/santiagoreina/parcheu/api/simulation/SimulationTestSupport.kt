@@ -17,6 +17,8 @@ import me.santiagoreina.parcheu.api.graph.PersonRow
 import me.santiagoreina.parcheu.api.graph.inMemoryGraphModule
 import me.santiagoreina.parcheu.api.platform.tasks.FakeTaskQueue
 import me.santiagoreina.parcheu.api.quota.ChargeResult
+import me.santiagoreina.parcheu.api.quota.DevPlusGranter
+import me.santiagoreina.parcheu.api.quota.EntitlementService
 import me.santiagoreina.parcheu.api.quota.InMemoryDevEntitlementService
 import me.santiagoreina.parcheu.api.quota.InMemoryUsageRepository
 import me.santiagoreina.parcheu.api.quota.QuotaWindow
@@ -89,6 +91,8 @@ class SimFixture(
     inline: Boolean = true,
     /** `DEMO_USERS_ENABLED` de la simulación (E4.9). */
     demoUsersEnabled: Boolean = true,
+    /** De dónde sale Plus; por defecto la concesión de dev en memoria (la auditoría E7.4 prueba también la manual). */
+    val entitlements: EntitlementService = InMemoryDevEntitlementService(),
 ) {
     val requests = CopyOnWriteArrayList<LlmRequest>()
     val fake = FakeLlmClient(
@@ -97,7 +101,6 @@ class SimFixture(
     )
     val aiUsage = InMemoryAiUsageStore()
     val ai = testGateway(fake, aiUsage)
-    val entitlements = InMemoryDevEntitlementService()
     val quota = inMemoryQuotaModule(FIXED_CLOCK, usage = usage, entitlements = entitlements)
     val graph = inMemoryGraphModule(FIXED_CLOCK, graphRepo, isPlus = { quota.service.isPlus(it) })
     val mirror = RecordingSimulationMirror()
@@ -108,7 +111,7 @@ class SimFixture(
     /** Agota el presupuesto del día de la pasarela de pruebas (10 USD). */
     fun exhaustBudget() = aiUsage.seedSpent(AI_DAY, 10_000_000)
 
-    fun plus(userId: UUID) = entitlements.grantPlus(userId, 30, FIXED_CLOCK.instant())
+    fun plus(userId: UUID) = (entitlements as DevPlusGranter).grantPlus(userId, 30, FIXED_CLOCK.instant())
 
     /** Persona con gemelo listo, modos activos y fila en el grafo. */
     fun person(

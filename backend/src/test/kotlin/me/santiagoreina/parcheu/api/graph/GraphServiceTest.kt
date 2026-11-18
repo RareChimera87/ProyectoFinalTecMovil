@@ -147,6 +147,29 @@ class GraphServiceTest : FunSpec({
         ambos.nodes.map { it.id } shouldContainExactlyInAnyOrder listOf(a.id.toString())
     }
 
+    test("una conexión sin simular sale con affinityMeasured false y no cuenta en el promedio ni en minAffinity") {
+        val invitado = person(1)
+        val simulado = person(2)
+        val repo = memoryRepo(me, invitado, simulado)
+        repo.putEdge(me.id, invitado.id, Mode.AMISTAD, EdgeState.CONNECTED, null)
+        repo.putEdge(me.id, simulado.id, Mode.AMISTAD, EdgeState.SIMULATED, 80)
+        val service = graphService(repo)
+
+        val graph = service.graph(me.id, GraphFilter())
+        val nodo = graph.nodes.single { it.id == invitado.id.toString() }
+        nodo.affinityMeasured shouldBe false
+        nodo.measuredAffinity shouldBe null
+        nodo.affinity shouldBe 0
+        graph.edges.single { it.otherId == invitado.id.toString() }.measuredAffinity shouldBe null
+        // Sin conexión mutua el nodo simulado sale con su anonId: se ubica por estado.
+        graph.nodes.single { it.state == EdgeState.SIMULATED }.measuredAffinity shouldBe 80
+        graph.stats.avgAffinity shouldBe 80
+        service.node(me.id, invitado.id.toString()).node.measuredAffinity shouldBe null
+
+        service.graph(me.id, GraphFilter(minAffinity = 0)).nodes.map { it.state } shouldContainExactlyInAnyOrder
+            listOf(EdgeState.SIMULATED)
+    }
+
     test("el filtro community solo deja miembros y solo si el observador es miembro") {
         val a = person(1)
         val b = person(2)

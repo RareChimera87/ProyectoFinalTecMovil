@@ -58,6 +58,13 @@ variable "simulations_max_concurrent_dispatches" {
   default     = 10
 }
 
+# Se queda en "gemini" salvo que se pase -var ai_provider=anthropic (o claude) al aplicar; ver el módulo abajo.
+variable "ai_provider" {
+  description = "Proveedor de IA de prod (AI_PROVIDER): gemini (predeterminado), claude o anthropic."
+  type        = string
+  default     = "gemini"
+}
+
 # Obligatoria: sin correo, las políticas de alerta de prod se crean sin canal y nadie se entera.
 # Se pasa con -var o un .tfvars local (el `apply` de prod lo hace solo el usuario).
 variable "alert_emails" {
@@ -91,7 +98,7 @@ module "platform" {
 
   # Conexiones a Postgres por instancia. db-f1-micro admite max_connections = 25 (tabla de Cloud SQL por memoria,
   # 0,6 GB; aprox., parte la reserva Cloud SQL para su propio usuario): presupuesto del 80 % ≈ 20.
-  #   - Régimen: 2 instancias × 4 + los tres jobs a la vez × 2 = 14 ≤ 20.
+  #   - Régimen: 2 instancias × 4 + los cuatro jobs a la vez × 2 = 16 ≤ 20 (grant-plus casi nunca corre).
   #   - Despliegue: la revisión vieja y la nueva conviven un momento (hasta 2 + 2 instancias) más migrate:
   #     4 × 4 + 2 = 18 ≤ 20.
   # Con 10 (el valor por defecto) eran 2 × 10 + 2 = 22 en régimen y hasta 42 en un despliegue: por encima de 25.
@@ -131,6 +138,13 @@ module "platform" {
   # el peor mes (más que el presupuesto de 10 USD; en la práctica son centavos por simulación, ver docs/operacion.md).
   ai_daily_budget_usd      = "1"
   ai_user_daily_budget_usd = "0.25"
+
+  # Proveedor de IA: gemini (Vertex, con los créditos de GCP) por defecto. Para pasar a la API directa de Anthropic
+  # (clave en el secreto anthropic-api-key, cargada con ANTHROPIC_KEY_FILE=<ruta> scripts/cargar-secretos.sh prod):
+  #   terraform apply -var ai_provider=anthropic
+  # y para volver: terraform apply -var ai_provider=gemini. Pasos y reversión rápida en docs/operacion.md
+  # ("Cambiar de proveedor de IA"). Con anthropic los datos salen de GCP hacia Anthropic (ADR-0020).
+  ai_provider = var.ai_provider
 
   # sa-play: verify/RTDN del backend (E7.1) y publicación desde CI (E10.2).
   play_service_account_enabled = true

@@ -1,5 +1,6 @@
 package me.santiagoreina.parcheu.navigation
 
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import kotlin.reflect.KClass
 
@@ -25,10 +26,31 @@ interface AppNavigator {
      */
     fun navigateAsNew(route: AppRoute, replacing: KClass<out AppRoute>) = navigate(route)
 
-    /** Cambia de pestaña de la NavBar conservando el estado de cada raíz. */
+    /**
+     * Cambia de pestaña de la NavBar conservando el estado de cada raíz. Si [route] es la pestaña activa,
+     * vuelve a su raíz (quita lo que tenga encima).
+     */
     fun navigateToTopLevel(route: AppRoute)
 
-    /** Deja [route] como única pantalla de la pila (fin del onboarding, cierre de sesión). */
+    /**
+     * Abre la raíz [route] desde el contenido de una pantalla (botón "Match al azar" de C1, un deep link),
+     * como cambio de pestaña pero sin restaurar la pila guardada de esa pestaña: el usuario pidió empezar
+     * ahí, no volver a donde la dejó. Por defecto es [navigateToTopLevel].
+     */
+    fun openTopLevel(route: AppRoute) = navigateToTopLevel(route)
+
+    /**
+     * Sale de la pestaña activa a Inicio sin guardar su pila: sus pantallas y ViewModels se descartan y volver
+     * a tocarla empieza de cero. Para salidas terminales (la X de F1, "Ir a inicio" de F5 y G3), donde
+     * restaurar la pantalla mostraría un estado que ya no existe (p. ej. "Buscando…" sin ticket ni listener).
+     * Por defecto es [navigateToTopLevel] a Inicio.
+     */
+    fun leaveTopLevel() = navigateToTopLevel(Home)
+
+    /**
+     * Deja [route] como única pantalla de la pila (fin del onboarding, cierre de sesión, 401, suspensión) y
+     * borra las pilas guardadas de todas las pestañas: nada de la sesión anterior se puede restaurar.
+     */
     fun replaceAll(route: AppRoute)
 
     /** Vuelve atrás; `false` si no había adónde volver. */
@@ -39,8 +61,9 @@ interface AppNavigator {
 }
 
 class NavControllerNavigator(private val navController: NavHostController) : AppNavigator {
+    /** Una raíz de la NavBar nunca se apila como hija: se abre como pestaña (deep links, efectos, botones). */
     override fun navigate(route: AppRoute) {
-        navController.navigate(route)
+        if (route.isTopLevelRoute()) openTopLevel(route) else navController.navigate(route)
     }
 
     override fun navigateReplacing(route: AppRoute, replacing: KClass<out AppRoute>) {
@@ -56,12 +79,80 @@ class NavControllerNavigator(private val navController: NavHostController) : App
         navController.navigate(route)
     }
 
-    override fun navigateToTopLevel(route: AppRoute) {
+    override fun navigateToTopLevel(route: AppRoute) = toTopLevel(route, restore = true)
+
+    override fun openTopLevel(route: AppRoute) = toTopLevel(route, restore = false)
+
+    override fun leaveTopLevel() {
+        val tab = currentTab()
+        // Sin Home en la pila (no debería pasar) se arranca de cero en Inicio.
+        if (!navController.popBackStack<Home>(
+                inclusive = false,
+                saveState = false
+            )
+        ) {
+            replaceAll(Home)
+        }
+        // Por si la pestaña tenía además una pila guardada de antes (p. ej. abierta luego con openTopLevel).
+        if (tab != Home::class) clearSavedTab(tab)
+    }
+
+    /**
+     * Las raíces se abren siempre encima de Home, así que en la pila hay a lo sumo una raíz distinta de Home:
+     * esa es la pestaña activa (o Home si no hay ninguna). currentBackStack es API restringida.
+     */
+    private fun currentTab(): KClass<out AppRoute> = TopLevelDestination.entries
+        .filter { it.routeClass != Home::class }
+        .firstOrNull { runCatching { navController.getBackStackEntry(it.routeClass) }.isSuccess }
+        ?.routeClass ?: Home::class
+
+    /**
+     * Borra la pila guardada (pantallas y ViewModels) de la pestaña [tab]. Navigation la restaura encima de la
+     * pila actual y la quita sin guardarla; por eso nunca se usa con Home: su id también apunta a la pila de
+     * otra pestaña (pop no inclusivo hasta Home) y el pop final se llevaría el Home vivo. Borrar por la raíz
+     * de la pestaña quita igualmente esa referencia desde Home.
+     */
+    private fun clearSavedTab(tab: KClass<out AppRoute>) {
+        navController.graph
+            .filter { it.hasRoute(tab) }
+            .forEach { navController.clearBackStack(it.id) }
+    }
+
+    /**
+     * Cada pestaña vive encima de Home: [Home, raíz de la pestaña, hijas...]. Las raíces se abren siempre
+     * con esta función (nunca con navigate), de modo que la pila guardada de una pestaña solo contiene sus
+     * propias hijas; antes C1 abría F1 con navigate, F1 quedaba guardada en la pila de Inicio y tocar
+     * Inicio la restauraba (ADR-0006).
+     */
+    private fun toTopLevel(route: AppRoute, restore: Boolean) {
+        val target = route::class
+        val currentTab = currentTab()
+        if (currentTab == target) {
+            if (restore) {
+                // Volver a tocar la pestaña activa: queda solo su raíz.
+                navController.popBackStack(target, inclusive = false)
+            } else {
+                // Desde el contenido, la raíz se reabre con los argumentos nuevos (p. ej. el modo de F1).
+                navController.navigate(route) {
+                    popUpTo(target) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+            return
+        }
+        // Inicio no se "navega": basta con quitar lo que hay encima de Home. Con navigate + restoreState,
+        // Navigation restauraría la pila guardada al hacer popUpTo<Home>, que queda asociada también al id
+        // de Home (la de otra pestaña), y tocar Inicio mostraba esa otra pestaña.
+        if (target == Home::class &&
+            navController.popBackStack<Home>(inclusive = false, saveState = restore)
+        ) {
+            return
+        }
         navController.navigate(route) {
             // Home es la raíz real tras replaceAll; Splash ya no está en la pila y Navigation ignoraría el popUpTo.
-            popUpTo<Home> { saveState = true }
+            popUpTo<Home> { saveState = restore }
             launchSingleTop = true
-            restoreState = true
+            restoreState = restore
         }
     }
 
@@ -70,6 +161,11 @@ class NavControllerNavigator(private val navController: NavHostController) : App
             popUpTo(navController.graph.id) { inclusive = true }
             launchSingleTop = true
         }
+        // popUpTo no toca lo que cambiar de pestaña guardó: sin esto, tras cerrar sesión y entrar con otra
+        // cuenta, tocar Chats restauraba el chat (y el ViewModel) de la cuenta anterior.
+        TopLevelDestination.entries
+            .filter { it.routeClass != Home::class }
+            .forEach { clearSavedTab(it.routeClass) }
     }
 
     override fun back(): Boolean = navController.popBackStack()
@@ -78,3 +174,7 @@ class NavControllerNavigator(private val navController: NavHostController) : App
     override fun canGoBack(): Boolean = navController.previousBackStackEntry != null &&
         !navController.currentDestination.isTopLevel()
 }
+
+/** `true` si [this] es la ruta de una raíz de la NavBar. */
+fun AppRoute.isTopLevelRoute(): Boolean =
+    TopLevelDestination.entries.any { it.routeClass == this::class }

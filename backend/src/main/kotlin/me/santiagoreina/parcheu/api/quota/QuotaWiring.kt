@@ -25,6 +25,7 @@ fun quotaModule(env: Env, db: Database?, clock: Clock, limits: QuotaLimits = Quo
         devPlus = if (env == Env.PROD) null else entitlements,
         clock = clock,
         daily = DailyLimiter(ExposedDailyCounterRepository(db), entitlements, limits, clock),
+        entitlements = entitlements,
     )
 }
 
@@ -45,4 +46,5 @@ fun inMemoryQuotaModule(
     devPlus = devPlus,
     clock = clock,
     daily = DailyLimiter(counters, entitlements, limits, clock),
+    entitlements = entitlements,
 )

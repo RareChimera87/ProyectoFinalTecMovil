@@ -10,9 +10,9 @@ import kotlin.math.sin
 
 /**
  * Nodo de entrada del layout. [mode] es el nombre del modo (ordena el ángulo) y [affinity]
- * va de 0 a 100.
+ * va de 0 a 100 (`null` = sin medir).
  */
-data class LayoutNode(val id: String, val mode: String, val affinity: Int)
+data class LayoutNode(val id: String, val mode: String, val affinity: Int?)
 
 /** Amigo de amigo: se ubica siempre en la capa exterior. */
 data class FofNode(val id: String, val mode: String = "")
@@ -76,8 +76,9 @@ object RadialLayout {
     private const val MAX_SHRINK_STEPS = 60
     private const val MAX_NODE_R = 18f
 
-    /** Anillo (1..3) según afinidad: >=85, 70-84, <70. */
-    fun ringOf(affinity: Int): Int = when {
+    /** Anillo (1..3) según afinidad: >=85, 70-84, <70; sin medir (`null`) va al exterior. */
+    fun ringOf(affinity: Int?): Int = when {
+        affinity == null -> 3
         affinity >= 85 -> 1
         affinity >= 70 -> 2
         else -> 3

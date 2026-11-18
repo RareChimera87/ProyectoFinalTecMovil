@@ -2,6 +2,7 @@ package me.santiagoreina.parcheu.feature.conocer.match
 
 import androidx.compose.runtime.Composable
 import me.santiagoreina.parcheu.contract.Mode
+import me.santiagoreina.parcheu.contract.Usage
 import me.santiagoreina.parcheu.core.error.AppError
 import me.santiagoreina.parcheu.designsystem.theme.ModeColors
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
@@ -11,7 +12,7 @@ internal object MatchStrings {
     const val QUEUE_TITLE = "Match al azar"
     const val COMPARING = "Comparando gustos con tu gemelo…"
     const val TODAY = "Este es tu match al azar de hoy"
-    const val TODAY_COUNT = "1 de 1"
+    const val TODAY_UNLIMITED = "Sin límite diario"
     const val CANCEL_SEARCH = "Cancelar búsqueda"
     const val CANCEL_NOTE = "Si cancelas no se descuenta."
     const val CLOSE = "Cerrar"
@@ -20,6 +21,8 @@ internal object MatchStrings {
     const val EXPIRED_TITLE = "No encontramos a nadie"
     const val EXPIRED_MESSAGE = "Pasaron 24 horas sin match. No se descontó tu match del día."
     const val MATCHED_MESSAGE = "¡Encontramos a alguien!"
+    const val ALREADY_USED_MESSAGE = "Ya usaste tu match al azar de hoy"
+    const val ALREADY_USED_NOTE = "Mañana te buscamos a alguien nuevo."
     const val SEE_MATCH = "Ver match"
 
     const val FOUND = "¡ENCONTRAMOS A ALGUIEN!"
@@ -35,6 +38,17 @@ internal object MatchStrings {
     const val MATCH_EXPIRED_TITLE = "El match venció"
     const val MATCH_EXPIRED_MESSAGE = "Nadie eligió a tiempo. Puedes buscar a alguien más."
     const val LOADING = "Cargando match…"
+
+    /**
+     * "N de límite" para quien tiene límite diario; "Sin límite diario" en Plus. Mientras se busca, el match
+     * cuenta al encontrarse (`used + 1`); con [alreadyCounted] (F1 en "ya usado") el backend ya lo cobró y
+     * `used` lo incluye.
+     */
+    fun todayCount(usage: Usage, alreadyCounted: Boolean = false): String {
+        val limit = usage.limit ?: return TODAY_UNLIMITED
+        val current = if (alreadyCounted) usage.used.coerceAtLeast(1) else usage.used + 1
+        return "${current.coerceAtMost(limit)} de $limit"
+    }
 
     fun searching(modeName: String) = "Buscando a alguien con $modeName activo…"
 

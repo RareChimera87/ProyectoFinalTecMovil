@@ -1,6 +1,7 @@
 package me.santiagoreina.parcheu.feature.conocer.match
 
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flow
@@ -58,6 +59,9 @@ class FakeMatchRepository : MatchRepository {
     val tickets = MutableSharedFlow<TicketDto?>(replay = 1)
     val enqueued = mutableListOf<Mode>()
     var cancelCalls = 0
+
+    /** Si no es nulo, `cancel()` espera a que la prueba lo complete (DELETE en vuelo). */
+    var cancelGate: CompletableDeferred<Unit>? = null
     var currentTicketCalls = 0
     var failListener = false
     override var lastMode: Mode? = null
@@ -77,6 +81,7 @@ class FakeMatchRepository : MatchRepository {
 
     override suspend fun cancel(): ApiResult<Unit> {
         cancelCalls++
+        cancelGate?.await()
         return cancelResult
     }
 

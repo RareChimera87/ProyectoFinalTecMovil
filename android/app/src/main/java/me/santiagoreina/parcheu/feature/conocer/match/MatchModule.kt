@@ -2,6 +2,8 @@ package me.santiagoreina.parcheu.feature.conocer.match
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import me.santiagoreina.parcheu.data.auth.SessionCleaner
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import retrofit2.Retrofit
 
@@ -16,4 +18,9 @@ val conocerMatchDataModule =
             )
         }
         single<MatchRepository> { MatchRepositoryImpl(get(), get(), get()) }
+        // Cerrar sesión olvida el último modo de F1: es de la persona, no del teléfono.
+        single<SessionCleaner>(named("match-last-mode")) {
+            val repository = get<MatchRepository>()
+            SessionCleaner { repository.lastMode = null }
+        }
     }

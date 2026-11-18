@@ -9,6 +9,7 @@ import me.santiagoreina.parcheu.contract.QuotaDto
 import me.santiagoreina.parcheu.contract.ReportDto
 import me.santiagoreina.parcheu.contract.Usage
 import me.santiagoreina.parcheu.core.network.ApiResult
+import me.santiagoreina.parcheu.designsystem.components.compound.initialsOf
 
 val SAMPLE_FRIENDS = listOf(
     FriendOption("u-vale", "Valentina Ruiz", "VR", 95),
@@ -18,7 +19,7 @@ val SAMPLE_FRIENDS = listOf(
 )
 
 fun person(id: String?, label: String, anonId: String? = null) =
-    PersonRef(id = id, anonId = anonId, label = label, initials = label.take(1))
+    PersonRef(id = id, anonId = anonId, label = label, initials = initialsOf(label))
 
 /** Informe gratis de E2/E3: sin razones (el servidor las omite), con conteos. */
 fun introLockedReport(unlockAvailable: Boolean = true) = ReportDto(

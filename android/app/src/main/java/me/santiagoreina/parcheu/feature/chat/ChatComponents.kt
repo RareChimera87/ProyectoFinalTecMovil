@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +46,8 @@ import java.util.Date
 import kotlin.time.Instant
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUButtonSize
 import me.santiagoreina.parcheu.designsystem.components.base.ParcheUTextButton
+import me.santiagoreina.parcheu.designsystem.components.compound.displayInitials
+import me.santiagoreina.parcheu.designsystem.theme.ParcheUColors
 import me.santiagoreina.parcheu.designsystem.theme.ParcheUTheme
 import me.santiagoreina.parcheu.designsystem.theme.affinityAlpha
 import me.santiagoreina.parcheu.designsystem.theme.avatarColors
@@ -123,7 +126,7 @@ internal fun ChatAvatar(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = initials,
+                text = displayInitials(initials, name),
                 color = onAvatarColor(alpha, colors.isDark),
                 fontSize = (size.value * 0.38f).sp,
                 fontWeight = FontWeight.SemiBold,
@@ -291,6 +294,22 @@ internal fun DemoBanner(modifier: Modifier = Modifier) {
 }
 
 /** Entrada de F9: píldora s2 de 48dp y botón de enviar circular de 48dp, deshabilitado sin texto. */
+
+/** Colores del botón de enviar: relleno, borde e icono. */
+internal data class SendButtonColors(val container: Color, val border: Color, val icon: Color)
+
+/**
+ * Habilitado: violeta pleno (`primary`, contraste ≥ 3:1 con el fondo en ambos temas) con el icono blanco.
+ * Deshabilitado: superficie s2 con borde ln y el icono en mu, tenue pero distinguible; antes se dejaba el
+ * violeta y solo se atenuaba el icono, y en claro parecía apagado aunque se pudiera enviar.
+ */
+internal fun sendButtonColors(colors: ParcheUColors, canSend: Boolean): SendButtonColors =
+    if (canSend) {
+        SendButtonColors(colors.primary, colors.primary, colors.onPrimary)
+    } else {
+        SendButtonColors(colors.s2, colors.ln, colors.mu)
+    }
+
 @Composable
 internal fun ChatInputBar(
     value: String,
@@ -348,13 +367,14 @@ internal fun ChatInputBar(
                 }
             )
         }
+        val send = sendButtonColors(colors, canSend)
         Box(
             modifier =
             Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(colors.primary, CircleShape)
-                .alpha(if (canSend) 1f else 0.38f)
+                .background(send.container, CircleShape)
+                .border(1.dp, send.border, CircleShape)
                 .testTag(ChatTags.SEND)
                 .clickable(enabled = canSend, role = Role.Button, onClick = onSend),
             contentAlignment = Alignment.Center
@@ -362,7 +382,7 @@ internal fun ChatInputBar(
             Icon(
                 painter = rememberVectorPainter(SendIcon),
                 contentDescription = "Enviar",
-                tint = colors.onPrimary,
+                tint = send.icon,
                 modifier = Modifier.size(22.dp)
             )
         }

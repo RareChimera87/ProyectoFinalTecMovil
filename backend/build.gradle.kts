@@ -89,6 +89,8 @@ tasks.test {
     useJUnitPlatform {
         excludeTags("e2e")
         if (!providers.gradleProperty("vertex").isPresent) excludeTags("vertex")
+        // Humo contra la API directa de Anthropic (@Tag("anthropic"), gasta saldo de la clave): solo con -Panthropic.
+        if (!providers.gradleProperty("anthropic").isPresent) excludeTags("anthropic")
     }
     if (sinContenedores) systemProperty("sinContenedores", "true")
     // Semilla de la suite de privacidad (E3.5): es entrada de la tarea para que cambiarla vuelva a
@@ -122,7 +124,7 @@ tasks.register<Test>("e2eTest") {
 }
 
 // Imagen sin daemon de Docker: `./gradlew jibBuildTar`. La misma imagen sirve para el servicio
-// y para los Cloud Run Jobs (migrate, seed-demo, purge-demo); el modo se pasa como argumento.
+// y para los Cloud Run Jobs (migrate, seed-demo, purge-demo, grant-plus); el modo se pasa como argumento.
 jib {
     from {
         // Tag verificado en Docker Hub el 22-oct-2026 (eclipse-temurin:21-jre existe).
