@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.santiagoreina.parcheu.feature.safety.SafetyEntryHost
 import me.santiagoreina.parcheu.feature.safety.SafetyTarget
@@ -39,6 +41,8 @@ fun ParcheRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var safetyTarget by remember { mutableStateOf<SafetyTarget?>(null) }
     LaunchedEffect(route.community) { viewModel.start(route.community) }
+    // Al volver a la pestaña tras conectar con alguien se recarga el grafo (la carga inicial ya la hace start).
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {

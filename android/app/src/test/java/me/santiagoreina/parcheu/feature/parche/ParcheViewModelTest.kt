@@ -288,4 +288,40 @@ class ParcheViewModelTest {
         vm.start()
         assertEquals(1, fake.graphCalls.size)
     }
+
+    @Test
+    fun refreshBringsTheNewNodeAndKeepsTheOpenSheet() {
+        val extra = ParcheSamples.nodes[1].copy(id = "nuevo", label = "Nueva persona")
+        val grown = ParcheSamples.content.copy(
+            graph = ParcheSamples.graph.copy(nodes = ParcheSamples.nodes + extra)
+        )
+        val fake = repo(ApiResult.Success(ParcheSamples.content), ApiResult.Success(grown))
+        val vm = ParcheViewModel(fake)
+        vm.start()
+        vm.onNodeClick(ParcheSamples.nodes[1].id)
+
+        vm.refresh()
+
+        assertEquals(2, fake.graphCalls.size)
+        assertTrue(loaded(vm).content.graph.nodes.any { it.id == "nuevo" })
+        assertEquals(ParcheSamples.nodes[1].id, loaded(vm).sheet?.node?.id)
+    }
+
+    @Test
+    fun failedRefreshKeepsThePreviousGraph() {
+        val vm = ParcheViewModel(repo(ApiResult.Success(ParcheSamples.content), failure()))
+        vm.start()
+
+        vm.refresh()
+
+        assertEquals(ParcheSamples.content, loaded(vm).content)
+    }
+
+    @Test
+    fun refreshBeforeTheFirstLoadDoesNothing() {
+        val fake = repo(ApiResult.Success(ParcheSamples.content))
+        val vm = ParcheViewModel(fake)
+        vm.refresh()
+        assertTrue(fake.graphCalls.isEmpty())
+    }
 }
