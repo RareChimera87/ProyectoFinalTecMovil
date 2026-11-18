@@ -41,15 +41,8 @@ fun ParcheRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var safetyTarget by remember { mutableStateOf<SafetyTarget?>(null) }
     LaunchedEffect(route.community) { viewModel.start(route.community) }
-    // Solo se refresca al volver de una pausa real: el ON_RESUME de la entrada ya lo cubre start.
-    var paused by remember { mutableStateOf(false) }
-    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { paused = true }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        if (paused) {
-            paused = false
-            viewModel.refresh()
-        }
-    }
+    // La decisión vive en el ViewModel (sobrevive al cambio de pestaña; la composición no).
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResumed() }
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {

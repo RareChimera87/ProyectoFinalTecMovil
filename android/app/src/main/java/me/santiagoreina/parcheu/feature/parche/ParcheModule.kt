@@ -6,7 +6,7 @@ import kotlinx.serialization.json.Json
 import me.santiagoreina.parcheu.data.auth.FirebaseAuthSource
 import me.santiagoreina.parcheu.data.auth.SessionCleaner
 import org.koin.android.ext.koin.androidContext
-import org.koin.core.module.dsl.viewModelOf
+import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import retrofit2.Retrofit
 
@@ -26,5 +26,5 @@ val parcheModule =
             val cache = get<GraphCache>()
             SessionCleaner { cache.clear() }
         }
-        viewModelOf(::ParcheViewModel)
+        viewModel { ParcheViewModel(get()) }
     }

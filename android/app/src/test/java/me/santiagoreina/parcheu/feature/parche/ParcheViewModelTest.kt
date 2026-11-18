@@ -27,6 +27,10 @@ class ParcheViewModelTest {
     private fun repo(vararg results: ApiResult<ParcheContent>, cached: ParcheContent? = null) =
         FakeGraphRepository(cached).apply { graphReturns(*results) }
 
+    private var clock = 1_000L
+
+    private fun now() = clock
+
     private fun loaded(vm: ParcheViewModel) = vm.state.value as ParcheUiState.Loaded
 
     @Test
@@ -296,11 +300,12 @@ class ParcheViewModelTest {
             graph = ParcheSamples.graph.copy(nodes = ParcheSamples.nodes + extra)
         )
         val fake = repo(ApiResult.Success(ParcheSamples.content), ApiResult.Success(grown))
-        val vm = ParcheViewModel(fake)
+        val vm = ParcheViewModel(fake, ::now)
         vm.start()
         vm.onNodeClick(ParcheSamples.nodes[1].id)
 
-        vm.refresh()
+        clock += 5_000
+        vm.onResumed()
 
         assertEquals(2, fake.graphCalls.size)
         assertTrue(loaded(vm).content.graph.nodes.any { it.id == "nuevo" })
@@ -309,10 +314,11 @@ class ParcheViewModelTest {
 
     @Test
     fun failedRefreshKeepsThePreviousGraph() {
-        val vm = ParcheViewModel(repo(ApiResult.Success(ParcheSamples.content), failure()))
+        val vm = ParcheViewModel(repo(ApiResult.Success(ParcheSamples.content), failure()), ::now)
         vm.start()
 
-        vm.refresh()
+        clock += 5_000
+        vm.onResumed()
 
         assertEquals(ParcheSamples.content, loaded(vm).content)
     }
@@ -320,8 +326,9 @@ class ParcheViewModelTest {
     @Test
     fun refreshBeforeTheFirstLoadDoesNothing() {
         val fake = repo(ApiResult.Success(ParcheSamples.content))
-        val vm = ParcheViewModel(fake)
-        vm.refresh()
+        val vm = ParcheViewModel(fake, ::now)
+        clock += 5_000
+        vm.onResumed()
         assertTrue(fake.graphCalls.isEmpty())
     }
 
@@ -329,12 +336,64 @@ class ParcheViewModelTest {
     fun refreshKeepsTheActiveCommunityFilter() {
         val fake =
             repo(ApiResult.Success(ParcheSamples.content), ApiResult.Success(ParcheSamples.content))
-        val vm = ParcheViewModel(fake)
+        val vm = ParcheViewModel(fake, ::now)
         vm.start(community = "c1")
 
-        vm.refresh()
+        clock += 5_000
+        vm.onResumed()
 
         assertEquals(listOf<String?>("c1", "c1"), fake.graphCalls)
         assertEquals("c1", loaded(vm).filters.communityId)
+    }
+
+    @Test
+    fun resumeRightAfterTheInitialLoadDoesNotCallAgain() {
+        val fake = repo(ApiResult.Success(ParcheSamples.content))
+        val vm = ParcheViewModel(fake, ::now)
+        vm.start()
+
+        vm.onResumed()
+        clock += 2_999
+        vm.onResumed()
+
+        assertEquals(1, fake.graphCalls.size)
+    }
+
+    @Test
+    fun resumeEveryTimeAfterTheIntervalReloads() {
+        val fake = repo(ApiResult.Success(ParcheSamples.content))
+        val vm = ParcheViewModel(fake, ::now)
+        vm.start()
+
+        clock += 3_000
+        vm.onResumed()
+        vm.onResumed()
+        clock += 3_000
+        vm.onResumed()
+
+        assertEquals(3, fake.graphCalls.size)
+    }
+
+    @Test
+    fun resumeDoesNotOverlapAnInFlightLoad() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var calls = 0
+        val repository =
+            object : GraphRepository by repo(ApiResult.Success(ParcheSamples.content)) {
+                override suspend fun graph(community: String?): ApiResult<ParcheContent> {
+                    calls++
+                    if (calls > 1) gate.await()
+                    return ApiResult.Success(ParcheSamples.content)
+                }
+            }
+        val vm = ParcheViewModel(repository, ::now)
+        vm.start()
+
+        clock += 5_000
+        vm.onResumed()
+        vm.onResumed()
+        gate.complete(Unit)
+
+        assertEquals(2, calls)
     }
 }
